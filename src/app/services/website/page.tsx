@@ -18,6 +18,7 @@ import {
   HelpCircle
 } from "lucide-react"
 import { useState } from "react"
+import { cn } from "@/lib/utils"
 
 type WebsiteStatus = "not_found" | "external" | "waiting_for_changes" | "ready_and_published"
 
@@ -128,7 +129,7 @@ export default function WebsiteManagementPage() {
                               req.status === "Pending" ? "bg-amber-50 text-amber-600 border-amber-100" :
                               "bg-slate-100 text-slate-500 border-slate-200"
                             )}>
-                              [{req.status}]
+                              {req.status}
                             </Badge>
                           </TableCell>
                         </TableRow>

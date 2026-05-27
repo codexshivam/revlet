@@ -5,7 +5,7 @@ import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Edit2, Globe, Activity, AlertCircle } from "lucide-react"
+import { Pencil, Globe, Activity, CircleAlert } from "lucide-react"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 
@@ -38,7 +38,7 @@ export default function AccountHomePage() {
                   className="h-8 w-8 text-slate-400 hover:text-primary"
                   onClick={() => setIsEditing(true)}
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <Pencil className="w-4 h-4" />
                 </Button>
               </>
             )}
@@ -88,7 +88,7 @@ export default function AccountHomePage() {
             <CardContent>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 p-2 bg-red-50 rounded border border-red-100">
-                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <CircleAlert className="w-4 h-4 text-red-500" />
                   <span className="text-xs font-bold text-red-700">3 Overdue Invoices</span>
                 </div>
                 <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-100">

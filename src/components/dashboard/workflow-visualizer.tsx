@@ -4,9 +4,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { 
-  CheckCircle2, 
+  CircleCheck, 
   Clock, 
-  AlertCircle, 
+  CircleAlert, 
   ArrowRight,
   Send,
   Globe
@@ -30,10 +30,10 @@ const getStatusStyles = (status: string) => {
 
 const getStatusIcon = (status: string) => {
   switch (status) {
-    case "Published": return <CheckCircle2 className="h-3.5 w-3.5" />
+    case "Published": return <CircleCheck className="h-3.5 w-3.5" />
     case "Waiting": return <Clock className="h-3.5 w-3.5" />
     case "Ready": return <Send className="h-3.5 w-3.5" />
-    default: return <AlertCircle className="h-3.5 w-3.5" />
+    default: return <CircleAlert className="h-3.5 w-3.5" />
   }
 }
 

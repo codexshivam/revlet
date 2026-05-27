@@ -8,14 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { 
-  AlertCircle, 
+  CircleAlert, 
   ExternalLink, 
   Clock, 
-  CheckCircle2, 
+  CircleCheck, 
   History, 
   Rocket,
-  PlusCircle,
-  HelpCircle
+  CirclePlus,
+  CircleHelp
 } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -44,7 +44,7 @@ export default function WebsiteManagementPage() {
           <Card className="bg-slate-50 border-slate-200 border-dashed">
             <CardContent className="p-12 flex flex-col items-center text-center gap-4">
               <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
-                <AlertCircle className="w-8 h-8 text-slate-400" />
+                <CircleAlert className="w-8 h-8 text-slate-400" />
               </div>
               <div>
                 <h3 className="text-xl font-headline font-bold text-slate-900">Website Not Found</h3>
@@ -100,7 +100,7 @@ export default function WebsiteManagementPage() {
                 <CardHeader className="bg-slate-50 border-b border-slate-200 flex flex-row items-center justify-between">
                   <CardTitle className="text-sm font-bold text-slate-600">Change History Ledger</CardTitle>
                   <Button size="sm" className="font-bold h-8">
-                    <PlusCircle className="w-3.5 h-3.5 mr-1.5" />
+                    <CirclePlus className="w-3.5 h-3.5 mr-1.5" />
                     Request New Website Change
                   </Button>
                 </CardHeader>
@@ -157,7 +157,7 @@ export default function WebsiteManagementPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <CircleCheck className="w-4 h-4 text-emerald-600" />
                     <span className="text-xs font-bold text-emerald-700">Environment: Published</span>
                   </div>
                 </CardContent>

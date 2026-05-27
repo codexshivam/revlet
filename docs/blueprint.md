@@ -1,20 +1,53 @@
-# **App Name**: EduSphere IT Portal
+# EduSphere IT Portal Blueprint
 
-## Core Features:
+## 1. Project Overview
+**EduSphere IT Portal** is a high-density B2B SaaS multi-tenant infrastructure management platform designed for educational institutions. It allows administrators to manage domains, websites, Google Workspace deployments, and institutional billing.
 
-- Multi-Tenant Organization Selection: A top-level organization context switcher to manage individual dashboard data for specific schools and colleges.
-- Global Administrative Search: A unified search interface providing instant access to organization records, administrative settings, and help documentation across the portal.
-- Workflow State Visualizer: An interactive funnel tracking systems through nested statuses such as 'Waiting for changes' and 'Ready and Published' for website and Google Workspace deployment.
-- Nepal-Ready Billing System: Localized invoice tracking with NPR denominations and a proof-of-payment upload system for regional gateway confirmations.
-- Infrastructure Control Center: Management panels for high-density information including DNS records, external service badges, and organizational health metrics.
-- Site Update & Quota History: A precise history table and remaining change counter for monitoring website management tasks across school properties.
-- Recursive Service Tree: A structural collapsible left sidebar categorized by Account, Organizations, Services, and Admin workflows.
+## 2. Technical Stack
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **UI/UX**: ShadCN UI + Tailwind CSS
+- **Design Pattern**: High information density, professional SaaS aesthetic.
+- **Typography**:
+  - **Headlines**: Space Grotesk
+  - **Body**: Inter
+- **AI Engine**: Genkit (Pre-configured for Google AI/Gemini)
 
-## Style Guidelines:
+## 3. Global Design DNA
+- **Container**: The entire application is wrapped in a macOS-inspired window frame (`DashboardShell`) with top-left window controls.
+- **Theme**: Light mode with deep white backgrounds (#FFFFFF) and ultra-light grey cards (#F8FAFC).
+- **Navigation**:
+  - **Top Header**: Search bar and Support triggers.
+  - **Left Sidebar**: Collapsible, multi-tiered tree navigation.
+- **Accents**: Interactive primary blue (#2563EB) used for primary actions and highlights.
 
-- 'Clarity in Knowledge' theme with a crisp primary blue (#3160C4) on a clean, lightly-tinted grey-blue background (#F2F5FB).
-- Analogous cyan-based accent color (#1994B2) for interactive status badges and secondary actions.
-- Pairing 'Space Grotesk' for tech-forward headlines with 'Inter' for body text and data-dense tables for professional readability.
-- Dense B2B SaaS dashboard structure featuring a persistent multi-tier collapsible sidebar and modular grid cards, inspired by high-density cloud administration interfaces.
-- Thin-line monochrome iconography that emphasizes clarity and precision over decorative elements for a professional academic context.
-- Discrete micro-transitions on status badge updates and collapsible section movements to signify state changes without distracting from complex data views.
+## 4. Feature Architecture & Navigation
+### ACCOUNT
+- **Account Home**: Central dashboard for the active IT Administrator. Features an editable profile header and a unified institution table.
+- **Manage Payments**: Financial ledger displaying pending NPR balances and historical invoices. Includes a "Submit Payment" modal with bank details and voucher upload functionality.
+
+### ORGANIZATIONS
+- **Organization Directory**: A comprehensive table of all managed institutions, their domains, and active services.
+
+### SERVICES (Context-Aware)
+*All service pages include a persistent "Organization Selector" widget to toggle institutional context.*
+- **DNS Management**: CRUD interface for managing A, CNAME, MX, and TXT records.
+- **Website Management**: A 4-state machine governing UI rendering:
+  1. `not_found`: Setup initialization.
+  2. `external`: External hosting info with upgrade path.
+  3. `waiting_for_changes`: Locked state during deployment.
+  4. `ready_and_published`: Operational panel with change quotas and request history.
+- **Google Workspace**: A 3-state deployment machine:
+  1. `Unregistered`: Benefits highlight and application trigger.
+  2. `Pending`: Locked state during Google verification.
+  3. `Active`: Full management dashboard with storage metrics.
+
+### MANAGEMENT
+- **Team Management**: RBAC (Role-Based Access Control) table for IT staff (Admin, IT Support, Billing Manager).
+- **Settings**: Security controls for administrative email and password updates.
+
+## 5. Implementation Status
+- **Auth Flow**: Fully implemented Login, Signup, and Forgot Password pages with professional spacing and shadows.
+- **Layout**: `DashboardShell` provides consistent navigation and layout across all routes.
+- **Components**: Utilizes customized ShadCN components for tables, badges, and modals to maintain the high-density professional look.
+- **Data Model**: Strictly enforces a 1-organization to 1-domain mapping for simplified infrastructure oversight.

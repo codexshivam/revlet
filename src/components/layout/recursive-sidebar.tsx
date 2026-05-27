@@ -5,14 +5,14 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { 
-  LayoutDashboard, 
   Globe, 
   Database, 
   Mail, 
   Users, 
   Settings, 
   ShieldCheck,
-  Briefcase
+  Briefcase,
+  LayoutDashboard
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -45,7 +45,7 @@ const navItems: NavItem[] = [
     title: "MANAGEMENT",
     icon: ShieldCheck,
     children: [
-      { title: "Team Management", icon: Users, href: "/management/team" },
+      { title: "Team Managmenet", icon: Users, href: "/management/team" },
       { title: "Settings", icon: Settings, href: "/management/settings" },
     ]
   }
@@ -102,17 +102,6 @@ export function RecursiveSidebar() {
           </div>
         ))}
       </nav>
-
-      <div className="p-4 border-t border-slate-200 bg-white/50">
-        <div className="flex items-center gap-3 p-2">
-          <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden border border-slate-300">
-            <img src="https://picsum.photos/seed/admin/40" alt="Avatar" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-slate-900 truncate">Main IT Administrator</p>
-          </div>
-        </div>
-      </div>
     </aside>
   )
 }

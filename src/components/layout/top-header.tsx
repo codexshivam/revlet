@@ -1,7 +1,7 @@
 
 "use client"
 
-import { Search, Sparkles, LifeBuoy, ChevronDown, User } from "lucide-react"
+import { Search, LifeBuoy, MoreHorizontal, LogOut, Settings, User } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -26,10 +26,6 @@ export function TopHeader() {
       </div>
 
       <div className="flex items-center gap-3">
-        <Button variant="outline" size="sm" className="h-9 gap-2 text-slate-600 border-slate-200 hover:bg-slate-50 font-medium">
-          <Sparkles className="w-4 h-4 text-primary" />
-          Ask AI
-        </Button>
         <Link href="/support">
           <Button variant="ghost" size="sm" className="h-9 gap-2 text-slate-600 hover:bg-slate-50 font-medium">
             <LifeBuoy className="w-4 h-4" />
@@ -39,29 +35,34 @@ export function TopHeader() {
         
         <div className="w-px h-4 bg-slate-200 mx-2" />
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-9 px-2 gap-2 hover:bg-slate-50">
-              <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="w-4 h-4 text-primary" />
-              </div>
-              <span className="text-sm font-semibold text-slate-700">IT Admin</span>
-              <ChevronDown className="w-4 h-4 text-slate-400" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/account/home">Account Home</Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/management/settings">Settings</Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Log out</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2 pr-2">
+          <span className="text-sm font-semibold text-slate-700">IT Admin</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900">
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                My Account
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/management/settings" className="flex items-center gap-2 w-full">
+                  <Settings className="w-4 h-4" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive flex items-center gap-2">
+                <LogOut className="w-4 h-4" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
   )

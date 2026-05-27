@@ -6,15 +6,11 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { 
   LayoutDashboard, 
-  CreditCard, 
-  Building2, 
   Globe, 
   Database, 
   Mail, 
   Users, 
   Settings, 
-  ChevronRight, 
-  ChevronDown,
   ShieldCheck,
   Briefcase
 } from "lucide-react"
@@ -37,26 +33,19 @@ const navItems: NavItem[] = [
     ]
   },
   {
-    title: "ORGANIZATIONS",
-    icon: Building2,
-    children: [
-      { title: "Organization Directory", href: "/organizations" },
-    ]
-  },
-  {
     title: "SERVICES",
     icon: LayoutDashboard,
     children: [
       { title: "DNS Management", icon: Globe, href: "/services/dns" },
       { title: "Website Management", icon: Database, href: "/services/website" },
-      { title: "Google Workspace for Ed.", icon: Mail, href: "/services/workspace" },
+      { title: "Google Workspace", icon: Mail, href: "/services/workspace" },
     ]
   },
   {
     title: "MANAGEMENT",
     icon: ShieldCheck,
     children: [
-      { title: "Team Management Panel", icon: Users, href: "/management/team" },
+      { title: "Team Management", icon: Users, href: "/management/team" },
       { title: "Settings", icon: Settings, href: "/management/settings" },
     ]
   }
@@ -68,14 +57,14 @@ export function RecursiveSidebar() {
   return (
     <aside className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col pt-12 shrink-0">
       <div className="px-6 mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+        <Link href="/account/home" className="flex items-center gap-3 group">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20 transition-transform group-hover:scale-105">
             <Globe className="text-white w-5 h-5" />
           </div>
           <span className="font-headline font-bold text-xl tracking-tight text-slate-900 uppercase">
             EduSphere
           </span>
-        </div>
+        </Link>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar">
@@ -121,7 +110,6 @@ export function RecursiveSidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-slate-900 truncate">Main IT Administrator</p>
-            <p className="text-[10px] text-slate-500 font-medium">Enterprise Access</p>
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { History, ShieldAlert } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 const activity = [
   { action: "DNS Record Modified", user: "S. Poudel", time: "12m ago", change: "-1 quota" },

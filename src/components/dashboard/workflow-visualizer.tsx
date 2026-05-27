@@ -11,6 +11,7 @@ import {
   Send,
   Globe
 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 const workflows = [
   { id: 1, name: "Academic CMS Update", status: "Published", institution: "KU" },

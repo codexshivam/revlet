@@ -5,25 +5,25 @@
 
 @layer base {
   :root {
-    --background: 220 43% 96.5%;
+    --background: 0 0% 100%;
     --foreground: 222 47% 11.2%;
-    --card: 0 0% 100%;
+    --card: 210 40% 98.5%;
     --card-foreground: 222 47% 11.2%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11.2%;
-    --primary: 221 60% 48.5%;
+    --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222 47% 11.2%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 192 75% 39.5%;
+    --accent: 221 83% 53%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221 60% 48.5%;
+    --ring: 221 83% 53%;
     --radius: 0.5rem;
   }
 }
@@ -33,9 +33,22 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-body;
+    @apply bg-slate-100 text-foreground font-body antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-headline;
   }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-300;
 }

@@ -115,7 +115,11 @@ export default function WebsiteManagementPage() {
     const unsub = onSnapshot(q, (snap) => {
       const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SiteModification[]
       // Sort by requestedAt descending
-      setModifications(fetched.sort((a, b) => b.requestedAt?.toMillis() - a.requestedAt?.toMillis()))
+      setModifications(fetched.sort((a, b) => {
+        const timeA = a.requestedAt?.toMillis() || 0
+        const timeB = b.requestedAt?.toMillis() || 0
+        return timeB - timeA
+      }))
     })
 
     return unsub
@@ -205,7 +209,7 @@ export default function WebsiteManagementPage() {
       })
   }
 
-  // Quota Calculation (Simplified: Count modifications in current month)
+  // Quota Calculation
   const currentMonthMods = useMemo(() => {
     const now = new Date()
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -251,7 +255,7 @@ export default function WebsiteManagementPage() {
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {/* 1. ACTIVE CONTROL PANEL: siteActiveOn === true */}
+        {/* 1. ACTIVE CONTROL PANEL */}
         {selectedOrg?.siteActiveOn === true && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
@@ -375,26 +379,11 @@ export default function WebsiteManagementPage() {
                   </div>
                 </CardContent>
               </Card>
-
-              <Card className="bg-slate-900 text-white shadow-xl shadow-slate-200">
-                <CardContent className="p-6 space-y-4">
-                  <ShieldCheck className="w-8 h-8 text-primary" />
-                  <h4 className="font-headline font-bold text-lg leading-tight">Infrastructure Active</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                    Your site is optimized for global edge delivery. All modifications are implementation-guaranteed within 24 hours.
-                  </p>
-                  <Link href="/support" className="block w-full">
-                    <Button variant="outline" className="w-full border-slate-700 text-white hover:bg-slate-800 text-xs font-bold h-10">
-                      Technical Consultation
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
             </div>
           </div>
         )}
 
-        {/* 2. PENDING STATUS: siteActiveOn === false */}
+        {/* 2. PENDING STATUS */}
         {selectedOrg?.siteActiveOn === false && (
           <div className="max-w-4xl mx-auto py-20">
             <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
@@ -426,7 +415,7 @@ export default function WebsiteManagementPage() {
           </div>
         )}
 
-        {/* 3. INITIAL DECLARATION: No status or declaration found */}
+        {/* 3. INITIAL DECLARATION */}
         {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === undefined && (
           <Card className="bg-slate-50 border-slate-200 border-dashed">
             <CardContent className="p-16 flex flex-col items-center text-center gap-6">
@@ -462,7 +451,7 @@ export default function WebsiteManagementPage() {
           </Card>
         )}
 
-        {/* 4. UPGRADE PATH: hasWebsite declared but not on managed infra yet */}
+        {/* 4. UPGRADE PATH */}
         {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite !== undefined && (
           <div className="space-y-12">
             <div className="max-w-5xl mx-auto space-y-12 text-center animate-in slide-in-from-bottom-4 duration-500">

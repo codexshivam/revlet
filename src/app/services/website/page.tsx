@@ -116,7 +116,7 @@ export default function WebsiteManagementPage() {
       siteActiveOn: false
     }).then(() => {
       toast({
-        title: "Request Logged",
+        title: "Upgrade Requested",
         description: "Your request for managed hosting is being processed by the infrastructure team.",
       })
     }).catch(async (error) => {
@@ -152,7 +152,7 @@ export default function WebsiteManagementPage() {
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {/* 1. CONTROL PANEL: If siteActiveOn is true (Priority) */}
+        {/* 1. CONTROL PANEL: If siteActiveOn is true */}
         {selectedOrg?.siteActiveOn === true && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
@@ -251,10 +251,6 @@ export default function WebsiteManagementPage() {
                   </Button>
                 </CardContent>
               </Card>
-              
-              <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-destructive">
-                Switch to External Hosting
-              </Button>
             </div>
           </div>
         )}
@@ -280,21 +276,18 @@ export default function WebsiteManagementPage() {
                 </div>
                 <div className="flex gap-3">
                   <Link href="/support">
-                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-6">
+                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-8">
                       <MessageSquare className="w-4 h-4" />
-                      Contact DevOps Desk
+                      Contact Support
                     </Button>
                   </Link>
-                  <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    Cancel & Switch to External
-                  </Button>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* 3. DECLARATION: If hasWebsite is undefined (and siteActiveOn is not active) */}
+        {/* 3. DECLARATION: If status is unknown */}
         {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === undefined && (
           <Card className="bg-slate-50 border-slate-200 border-dashed">
             <CardContent className="p-16 flex flex-col items-center text-center gap-6">
@@ -330,9 +323,9 @@ export default function WebsiteManagementPage() {
           </Card>
         )}
 
-        {/* 4. EXTERNAL VIEW: If hasWebsite is true (and siteActiveOn is not active) */}
+        {/* 4. EXTERNAL/UPGRADE VIEW: If hasWebsite is true (and not active/pending) */}
         {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === true && (
-          <div className="space-y-6">
+          <div className="space-y-12">
             <Card className="bg-primary/5 border-primary/20 shadow-sm">
               <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex items-start gap-4">
@@ -345,19 +338,58 @@ export default function WebsiteManagementPage() {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <Button onClick={handleRequestUpgrade} disabled={isUpdating} className="font-bold px-8 shadow-lg shadow-primary/20">
-                    {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Request Managed Migration"}
-                  </Button>
                   <Button variant="outline" onClick={() => handleDeclareWebsite(false)} className="border-slate-200 h-11 px-6 font-bold text-slate-500 hover:text-destructive">
                     Remove Declaration
                   </Button>
                 </div>
               </CardContent>
             </Card>
+
+            <div className="max-w-5xl mx-auto space-y-12 text-center animate-in slide-in-from-bottom-4 duration-500">
+              <div className="space-y-4">
+                <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
+                  Request an Upgrade
+                </h2>
+                <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto font-medium">
+                  Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
+                {[
+                  { title: "Ultra-Fast Performance", desc: "Optimized server-side rendering and global CDN for lightning-quick loading.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
+                  { title: "Automated Security", desc: "Built-in DDoS protection, automatic SSL, and weekly infrastructure patches.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
+                  { title: "Managed Updates", desc: "Our engineering team handles all content changes and technical updates.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
+                  { title: "Enterprise Reliability", desc: "Redundant cloud infrastructure with 99.9% uptime for your organization.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
+                ].map((feature) => (
+                  <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
+                    <div className="p-3 bg-white rounded-xl shadow-sm shrink-0">
+                      <feature.icon className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-base font-bold">{feature.title}</h4>
+                      <p className="text-xs opacity-80 leading-relaxed font-medium">{feature.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-8 flex flex-col items-center">
+                <Button 
+                  onClick={handleRequestUpgrade} 
+                  size="lg" 
+                  disabled={isUpdating}
+                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
+                >
+                  {isUpdating ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Rocket className="w-5 h-5 mr-3 group-hover:translate-y-[-2px] transition-transform" />}
+                  Request Managed Upgrade
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* 5. UPGRADE PATH: If hasWebsite is false (and siteActiveOn is not active) */}
+        {/* 5. NO WEBSITE VIEW: If hasWebsite is false (and not active/pending) */}
         {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === false && (
           <div className="max-w-5xl mx-auto py-8 animate-in slide-in-from-bottom-4 duration-500">
             <div className="space-y-12 text-center">

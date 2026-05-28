@@ -11,14 +11,14 @@ import {
   Edit3, 
   Trash2, 
   Search, 
-  Info, 
   ShieldCheck, 
   RefreshCw, 
   CheckCircle2, 
   Loader2, 
   Server,
   Globe,
-  AlertCircle
+  AlertCircle,
+  Activity
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -96,7 +96,7 @@ export default function DNSManagementPage() {
   const zoneId = selectedOrg?.cloudflareZoneId
 
   const fetchDNSData = useCallback(async () => {
-    if (!zoneId) return
+    if (!zoneId || zoneId.startsWith('initialized-')) return
     setIsLoadingRecords(true)
     try {
       const [zone, dns] = await Promise.all([
@@ -106,13 +106,16 @@ export default function DNSManagementPage() {
       setZoneDetails(zone)
       setRecords(dns)
     } catch (error: any) {
-      // If it's a mock ID or network error, we still want to show the UI
-      console.warn('DNS sync issue:', error.message)
-      // Provide fallback data for prototype visibility if needed
+      console.warn('Network sync issue:', error.message)
+      toast({
+        variant: "destructive",
+        title: "Sync Error",
+        description: "Could not fetch data from the network edge. Please verify your API configuration."
+      })
     } finally {
       setIsLoadingRecords(false)
     }
-  }, [zoneId])
+  }, [zoneId, toast])
 
   // Fetch Orgs
   useEffect(() => {
@@ -131,7 +134,7 @@ export default function DNSManagementPage() {
 
   // Initial fetch on org change
   useEffect(() => {
-    if (zoneId) {
+    if (zoneId && !zoneId.startsWith('initialized-')) {
       fetchDNSData()
     } else {
       setRecords([])
@@ -140,7 +143,7 @@ export default function DNSManagementPage() {
   }, [zoneId, fetchDNSData])
 
   const handleRefreshActivation = useCallback(async () => {
-    if (!zoneId) return
+    if (!zoneId || zoneId.startsWith('initialized-')) return
     setIsRefreshing(true)
     try {
       await checkZoneActivation(zoneId)
@@ -161,13 +164,16 @@ export default function DNSManagementPage() {
   }, [zoneId, fetchDNSData, toast])
 
   const handleSaveRecord = async () => {
-    if (!zoneId) return
+    if (!zoneId || zoneId.startsWith('initialized-')) {
+      toast({ variant: "destructive", title: "Setup Required", description: "Please complete domain setup before managing records." })
+      return
+    }
     
     if (!formData.name || !formData.content) {
       toast({ 
         variant: "destructive", 
         title: "Missing Details", 
-        description: "Please provide both a name and a value for the setting." 
+        description: "Please provide both a name and a value for the record." 
       })
       return
     }
@@ -176,10 +182,10 @@ export default function DNSManagementPage() {
     try {
       if (editingRecord) {
         await updateDNSRecord(zoneId, editingRecord.id, formData)
-        toast({ title: "Setting Updated", description: "Your changes have been deployed to our global nodes." })
+        toast({ title: "Record Updated", description: "Changes have been deployed globally." })
       } else {
         await createDNSRecord(zoneId, formData)
-        toast({ title: "Setting Created", description: "The new setting is now propagating across the network." })
+        toast({ title: "Record Created", description: "The new record is now propagating." })
       }
       setIsDialogOpen(false)
       fetchDNSData()
@@ -187,7 +193,7 @@ export default function DNSManagementPage() {
       toast({ 
         variant: "destructive", 
         title: "Update Error", 
-        description: "Could not save the setting. Please check your network connection." 
+        description: error.message || "Could not save the record." 
       })
     } finally {
       setIsSubmitting(false)
@@ -195,18 +201,18 @@ export default function DNSManagementPage() {
   }
 
   const handleDeleteRecord = async (id: string) => {
-    if (!zoneId) return
-    if (!confirm("Are you sure you want to permanently remove this setting? This may cause downtime.")) return
+    if (!zoneId || zoneId.startsWith('initialized-')) return
+    if (!confirm("Are you sure you want to permanently remove this record?")) return
 
     try {
       await deleteDNSRecord(zoneId, id)
-      toast({ title: "Setting Removed", description: "The configuration has been deleted from our edge nodes." })
+      toast({ title: "Record Removed", description: "The configuration has been deleted." })
       fetchDNSData()
     } catch (error: any) {
       toast({ 
         variant: "destructive", 
         title: "Delete Failed", 
-        description: "Could not remove the setting at this time." 
+        description: "Could not remove the record." 
       })
     }
   }
@@ -227,23 +233,18 @@ export default function DNSManagementPage() {
     if (!selectedOrg) return
     setIsSettingUp(true)
     
-    // In a real scenario, this Server Action would create the zone.
-    // For this prototype, we update the Firestore doc with a mock zone ID to unlock the UI.
+    // In production, this would use a Cloudflare Zone creation action.
     const orgRef = doc(db, "organizations", selectedOrg.id)
     updateDoc(orgRef, {
       cloudflareZoneId: "initialized-" + Math.random().toString(36).substring(7)
     }).then(() => {
       toast({
         title: "Infrastructure Initialized",
-        description: "Your domain is now ready for setup. Please update your nameservers as shown below.",
+        description: "Domain setup started. Please point your domain to our global nodes.",
       })
       setIsSettingUp(false)
     }).catch((e) => {
-      toast({
-        variant: "destructive",
-        title: "Setup Failed",
-        description: "Could not initialize the domain record."
-      })
+      toast({ variant: "destructive", title: "Setup Failed" })
       setIsSettingUp(false)
     })
   }
@@ -285,7 +286,7 @@ export default function DNSManagementPage() {
                {zoneId && (
                  <Button onClick={openAddDialog} className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200">
                    <Plus className="w-4 h-4 mr-2" />
-                   Add New Setting
+                   Add Record
                  </Button>
                )}
             </div>
@@ -301,7 +302,7 @@ export default function DNSManagementPage() {
               <div className="space-y-2">
                 <h3 className="text-2xl font-headline font-bold text-slate-900">Initialize Domain Setup</h3>
                 <p className="text-slate-500 max-w-lg mx-auto leading-relaxed text-sm">
-                  The domain <span className="font-bold text-slate-900">{selectedOrg.domain}</span> is ready for deployment. Connect it to our global edge network to enable web and mail services.
+                  Connect <span className="font-bold text-slate-900">{selectedOrg.domain}</span> to our global edge network to enable web and mail services.
                 </p>
               </div>
               <Button 
@@ -316,10 +317,10 @@ export default function DNSManagementPage() {
             </CardContent>
           </Card>
         ) : selectedOrg && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-8">
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {/* Server Nodes Status */}
-              <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
+              <Card className="md:col-span-2 bg-white border-slate-200 shadow-sm overflow-hidden">
                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                   <div className="flex items-center gap-2">
                     <Server className="w-4 h-4 text-slate-400" />
@@ -329,185 +330,160 @@ export default function DNSManagementPage() {
                     "text-[9px] font-bold px-2 py-0.5 border shadow-none",
                     zoneDetails?.status === 'active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
                   )}>
-                    {zoneDetails?.status === 'active' ? "ACTIVE & ROUTED" : "SETUP IN PROGRESS"}
+                    {zoneDetails?.status === 'active' ? "ACTIVE" : "PENDING SETUP"}
                   </Badge>
                 </CardHeader>
-                <CardContent className="p-8">
+                <CardContent className="p-6">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     <div className="space-y-4">
-                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight text-center md:text-left">Your Assigned Nodes</p>
+                     <div className="space-y-3">
+                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Required Nameservers</p>
                        <div className="space-y-2">
                          {(zoneDetails?.nameServers || ["ns1.edusphere.np", "ns2.edusphere.np"]).map((ns: string) => (
-                           <div key={ns} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group hover:border-primary/20 transition-all">
+                           <div key={ns} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group">
                              <code className="text-xs font-mono font-bold text-slate-700">{ns}</code>
-                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                            </div>
                          ))}
                        </div>
                      </div>
-                     <div className="space-y-6 flex flex-col justify-center border-l border-slate-100 pl-8">
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-bold text-slate-900">Connection Policy</h4>
-                          <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                            {zoneDetails?.status === 'active' 
-                              ? "Your domain is successfully connected. All changes are live globally."
-                              : "To activate, log in to your domain registrar and update your nameservers to the nodes listed here."}
+                     <div className="space-y-4 flex flex-col justify-center border-l border-slate-100 pl-8">
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-bold text-slate-900">Activation Status</h4>
+                          <p className="text-xs text-slate-500 leading-relaxed">
+                            Point your domain to the nodes listed here to activate global routing and security.
                           </p>
                         </div>
                         <Button 
                           onClick={handleRefreshActivation} 
-                          disabled={isRefreshing}
-                          className="w-full bg-slate-900 text-white font-bold gap-2 h-11 shadow-lg shadow-slate-200"
+                          disabled={isRefreshing || !zoneId || zoneId.startsWith('initialized-')}
+                          className="w-full bg-slate-900 text-white font-bold gap-2 h-10 shadow-lg"
                         >
                           {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                          Refresh Connection Status
+                          Check Connection
                         </Button>
                      </div>
                    </div>
                 </CardContent>
               </Card>
 
-              {/* Settings Table */}
-              <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-                <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Domain Settings</CardTitle>
-                    <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white border-slate-200">{records.length}</Badge>
+              {/* Quick Health Card */}
+              <Card className="bg-slate-900 text-white shadow-xl border-none">
+                <CardContent className="p-8 space-y-4 flex flex-col justify-between h-full">
+                  <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-primary" />
                   </div>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <Input 
-                      placeholder="Search settings..." 
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-8 pl-8 text-xs w-48 bg-white border-slate-200 font-medium" 
-                    />
+                  <div>
+                    <h4 className="font-headline font-bold text-lg">Edge Status</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed mt-1">
+                      Your domain is protected by our global security layer, ensuring 100% uptime and threat mitigation.
+                    </p>
                   </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {isLoadingRecords ? (
-                    <div className="flex flex-col items-center justify-center py-32 gap-3">
-                      <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Settings...</p>
-                    </div>
-                  ) : filteredRecords.length === 0 ? (
-                    <div className="p-24 text-center space-y-3">
-                      <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mx-auto">
-                        <Info className="w-6 h-6 text-slate-200" />
-                      </div>
-                      <p className="text-sm font-bold text-slate-400">No settings found. Click 'Add New' to start.</p>
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader className="bg-slate-50/50">
-                        <TableRow className="border-b border-slate-100">
-                          <TableHead className="text-[10px] font-bold uppercase py-4 pl-6 w-20">Type</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4 w-40">Name</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4">Value</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4 w-24">Shield</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-32">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredRecords.map((rec) => (
-                          <TableRow key={rec.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                            <TableCell className="pl-6 py-4">
-                              <Badge className={cn(
-                                "font-mono text-[9px] font-bold px-2 py-0 h-5 border shadow-none",
-                                rec.type === "A" ? "bg-blue-50 text-blue-600 border-blue-100" :
-                                rec.type === "MX" ? "bg-amber-50 text-amber-600 border-amber-100" :
-                                rec.type === "TXT" ? "bg-slate-50 text-slate-500 border-slate-200" :
-                                "bg-emerald-50 text-emerald-600 border-emerald-100"
-                              )}>
-                                {rec.type}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="font-bold text-xs text-slate-800">
-                              {rec.name.split('.')[0] === selectedOrg?.domain.split('.')[0] ? "@" : rec.name.replace(`.${selectedOrg?.domain}`, '')}
-                            </TableCell>
-                            <TableCell className="max-w-md">
-                              <div className="flex flex-col gap-0.5">
-                                <span className="font-mono text-[11px] text-slate-500 truncate max-w-[250px]">{rec.content}</span>
-                                {rec.priority !== undefined && <span className="text-[9px] font-bold text-slate-400 uppercase">Priority: {rec.priority}</span>}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                               {rec.proxied ? (
-                                 <div className="flex items-center gap-1.5 text-amber-500" title="Infrastructure Shield Active">
-                                   <ShieldCheck className="w-3.5 h-3.5" />
-                                   <span className="text-[9px] font-bold uppercase tracking-tighter">On</span>
-                                 </div>
-                               ) : (
-                                 <div className="flex items-center gap-1.5 text-slate-300" title="Shield Disabled">
-                                   <Globe className="w-3.5 h-3.5" />
-                                   <span className="text-[9px] font-bold uppercase tracking-tighter">Off</span>
-                                 </div>
-                               )}
-                            </TableCell>
-                            <TableCell className="text-right pr-6">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 text-slate-300 hover:text-primary transition-colors"
-                                  onClick={() => openEditDialog(rec)}
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 text-slate-300 hover:text-destructive transition-colors"
-                                  onClick={() => handleDeleteRecord(rec.id)}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
                 </CardContent>
               </Card>
             </div>
 
-            <div className="space-y-8">
-               <Card className="bg-slate-900 text-white shadow-xl shadow-slate-200 overflow-hidden relative border-none">
-                  <div className="absolute top-0 right-0 p-8 opacity-10">
-                    <Globe className="w-24 h-24" />
+            {/* Records Table */}
+            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
+              <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">DNS Records</CardTitle>
+                  <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white border-slate-200">{records.length}</Badge>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <Input 
+                    placeholder="Search records..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-8 pl-8 text-xs w-48 bg-white border-slate-200 font-medium" 
+                  />
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isLoadingRecords ? (
+                  <div className="flex flex-col items-center justify-center py-32 gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Records...</p>
                   </div>
-                  <CardContent className="p-8 space-y-6 relative z-10">
-                    <div className="space-y-2">
-                      <h4 className="font-headline font-bold text-xl">Edge Performance</h4>
-                      <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                        Your institution's domain is routed through our global network, ensuring 100% uptime and protection.
-                      </p>
-                    </div>
-                    <div className="flex flex-col gap-3">
-                       <Button variant="outline" className="w-full border-slate-700 hover:bg-slate-800 text-xs font-bold gap-2 text-white h-10">
-                         <Info className="w-3.5 h-3.5" />
-                         Domain User Guide
-                       </Button>
-                    </div>
-                  </CardContent>
-               </Card>
-
-               <Card className="bg-white border-slate-200 shadow-sm">
-                 <CardHeader className="pb-2">
-                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Network Safety</CardTitle>
-                 </CardHeader>
-                 <CardContent className="space-y-4">
-                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 flex gap-3">
-                       <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-                       <p className="text-[10px] text-amber-700 leading-relaxed font-bold uppercase tracking-tight">
-                         Warning: Changes to domain settings apply instantly. Incorrect values may cause services to go offline.
-                       </p>
-                    </div>
-                 </CardContent>
-               </Card>
-            </div>
+                ) : filteredRecords.length === 0 ? (
+                  <div className="p-24 text-center space-y-3">
+                    <AlertCircle className="w-8 h-8 text-slate-100 mx-auto" />
+                    <p className="text-sm font-bold text-slate-400">No DNS records found.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader className="bg-slate-50/50">
+                      <TableRow className="border-b border-slate-100">
+                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-6 w-20">Type</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 w-40">Name</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4">Value</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 w-24">Shield</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-32">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRecords.map((rec) => (
+                        <TableRow key={rec.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
+                          <TableCell className="pl-6 py-4">
+                            <Badge className={cn(
+                              "font-mono text-[9px] font-bold px-2 py-0 h-5 border shadow-none",
+                              rec.type === "A" ? "bg-blue-50 text-blue-600 border-blue-100" :
+                              rec.type === "MX" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                              rec.type === "TXT" ? "bg-slate-50 text-slate-500 border-slate-200" :
+                              "bg-emerald-50 text-emerald-600 border-emerald-100"
+                            )}>
+                              {rec.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-bold text-xs text-slate-800">
+                            {rec.name.split('.')[0] === selectedOrg?.domain.split('.')[0] ? "@" : rec.name.replace(`.${selectedOrg?.domain}`, '')}
+                          </TableCell>
+                          <TableCell className="max-w-md">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-mono text-[11px] text-slate-500 truncate max-w-[250px]">{rec.content}</span>
+                              {rec.priority !== undefined && <span className="text-[9px] font-bold text-slate-400 uppercase">Priority: {rec.priority}</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                             {rec.proxied ? (
+                               <div className="flex items-center gap-1.5 text-amber-500" title="Security Shield Active">
+                                 <ShieldCheck className="w-3.5 h-3.5" />
+                                 <span className="text-[9px] font-bold uppercase tracking-tighter">On</span>
+                               </div>
+                             ) : (
+                               <div className="flex items-center gap-1.5 text-slate-300" title="Shield Disabled">
+                                 <Globe className="w-3.5 h-3.5" />
+                                 <span className="text-[9px] font-bold uppercase tracking-tighter">Off</span>
+                               </div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right pr-6">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-slate-300 hover:text-primary transition-colors"
+                                onClick={() => openEditDialog(rec)}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-slate-300 hover:text-destructive transition-colors"
+                                onClick={() => handleDeleteRecord(rec.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -515,14 +491,14 @@ export default function DNSManagementPage() {
           <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
             <DialogHeader className="bg-slate-900 text-white p-6">
               <DialogTitle className="font-headline font-bold text-xl">
-                {editingRecord ? "Edit Domain Setting" : "Add New Setting"}
+                {editingRecord ? "Edit Record" : "Add Record"}
               </DialogTitle>
-              <p className="text-slate-400 text-xs mt-1">Configure parameters for {selectedOrg?.domain}.</p>
+              <p className="text-slate-400 text-xs mt-1">Configure DNS parameters for {selectedOrg?.domain}.</p>
             </DialogHeader>
             <div className="p-8 space-y-6">
               <div className="grid grid-cols-1 gap-5">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Record Type</Label>
+                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Type</Label>
                   <Select 
                     value={formData.type} 
                     onValueChange={(v) => setFormData({...formData, type: v})}
@@ -556,7 +532,7 @@ export default function DNSManagementPage() {
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Value</Label>
                   <Input 
-                    placeholder="e.g. IP Address or Hostname" 
+                    placeholder="e.g. 192.168.1.1" 
                     className="col-span-3 h-10 font-bold text-xs border-slate-200" 
                     value={formData.content}
                     onChange={(e) => setFormData({...formData, content: e.target.value})}
@@ -584,7 +560,6 @@ export default function DNSManagementPage() {
                     <SelectContent>
                       <SelectItem value="Auto" className="text-xs font-bold">Auto</SelectItem>
                       <SelectItem value="60" className="text-xs font-bold">1 minute</SelectItem>
-                      <SelectItem value="300" className="text-xs font-bold">5 minutes</SelectItem>
                       <SelectItem value="3600" className="text-xs font-bold">1 hour</SelectItem>
                     </SelectContent>
                   </Select>
@@ -605,7 +580,7 @@ export default function DNSManagementPage() {
             <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
               <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
               <Button onClick={handleSaveRecord} disabled={isSubmitting} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11 shadow-lg shadow-slate-200">
-                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Apply Setting"}
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Add Record"}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
@@ -18,7 +17,9 @@ import {
   Server,
   Globe,
   AlertCircle,
-  Activity
+  Activity,
+  Copy,
+  Check
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -43,7 +44,8 @@ import {
   createDNSRecord, 
   updateDNSRecord, 
   deleteDNSRecord,
-  checkZoneActivation 
+  checkZoneActivation,
+  createZone
 } from "@/app/actions/cloudflare-dns"
 
 type DNSRecord = {
@@ -82,6 +84,7 @@ export default function DNSManagementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingRecord, setEditingRecord] = useState<DNSRecord | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [copiedNS, setCopiedNS] = useState<string | null>(null)
   
   const [formData, setFormData] = useState<Partial<DNSRecord>>({
     type: "A",
@@ -96,21 +99,21 @@ export default function DNSManagementPage() {
   const zoneId = selectedOrg?.cloudflareZoneId
 
   const fetchDNSData = useCallback(async () => {
-    if (!zoneId || zoneId.startsWith('initialized-')) return
+    if (!zoneId) return
     setIsLoadingRecords(true)
     try {
-      const [zone, dns] = await Promise.all([
-        getZoneDetails(zoneId),
-        listDNSRecords(zoneId)
-      ])
+      const zone = await getZoneDetails(zoneId)
       setZoneDetails(zone)
+      
+      // Only fetch records if the zone is active or we want to allow pending management
+      const dns = await listDNSRecords(zoneId)
       setRecords(dns)
     } catch (error: any) {
       console.warn('Network sync issue:', error.message)
       toast({
         variant: "destructive",
         title: "Sync Error",
-        description: "Could not fetch data from the network edge. Please verify your API configuration."
+        description: "Could not fetch data from the network edge."
       })
     } finally {
       setIsLoadingRecords(false)
@@ -134,7 +137,7 @@ export default function DNSManagementPage() {
 
   // Initial fetch on org change
   useEffect(() => {
-    if (zoneId && !zoneId.startsWith('initialized-')) {
+    if (zoneId) {
       fetchDNSData()
     } else {
       setRecords([])
@@ -143,20 +146,20 @@ export default function DNSManagementPage() {
   }, [zoneId, fetchDNSData])
 
   const handleRefreshActivation = useCallback(async () => {
-    if (!zoneId || zoneId.startsWith('initialized-')) return
+    if (!zoneId) return
     setIsRefreshing(true)
     try {
       await checkZoneActivation(zoneId)
       await fetchDNSData()
       toast({
         title: "Connection Checked",
-        description: "We have requested a refresh of your global server nodes."
+        description: "Node status check initiated. This may take a few minutes to update globally."
       })
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Check Failed",
-        description: "Could not verify node status. Please ensure your nodes are updated at your registrar."
+        description: "Could not verify node status."
       })
     } finally {
       setIsRefreshing(false)
@@ -164,10 +167,7 @@ export default function DNSManagementPage() {
   }, [zoneId, fetchDNSData, toast])
 
   const handleSaveRecord = async () => {
-    if (!zoneId || zoneId.startsWith('initialized-')) {
-      toast({ variant: "destructive", title: "Setup Required", description: "Please complete domain setup before managing records." })
-      return
-    }
+    if (!zoneId) return
     
     if (!formData.name || !formData.content) {
       toast({ 
@@ -201,7 +201,7 @@ export default function DNSManagementPage() {
   }
 
   const handleDeleteRecord = async (id: string) => {
-    if (!zoneId || zoneId.startsWith('initialized-')) return
+    if (!zoneId) return
     if (!confirm("Are you sure you want to permanently remove this record?")) return
 
     try {
@@ -217,36 +217,36 @@ export default function DNSManagementPage() {
     }
   }
 
-  const openAddDialog = () => {
-    setEditingRecord(null)
-    setFormData({ type: "A", name: "", content: "", ttl: "Auto", proxied: true, priority: 10 })
-    setIsDialogOpen(true)
-  }
-
-  const openEditDialog = (record: DNSRecord) => {
-    setEditingRecord(record)
-    setFormData(record)
-    setIsDialogOpen(true)
-  }
-
   const handleSetupDNS = async () => {
     if (!selectedOrg) return
     setIsSettingUp(true)
     
-    // In production, this would use a Cloudflare Zone creation action.
-    const orgRef = doc(db, "organizations", selectedOrg.id)
-    updateDoc(orgRef, {
-      cloudflareZoneId: "initialized-" + Math.random().toString(36).substring(7)
-    }).then(() => {
+    try {
+      const newZone = await createZone(selectedOrg.domain)
+      const orgRef = doc(db, "organizations", selectedOrg.id)
+      await updateDoc(orgRef, {
+        cloudflareZoneId: newZone.id
+      })
       toast({
         title: "Infrastructure Initialized",
-        description: "Domain setup started. Please point your domain to our global nodes.",
+        description: "Domain added to the global network. Please update your nodes as shown.",
       })
+    } catch (error: any) {
+      toast({ 
+        variant: "destructive", 
+        title: "Setup Failed",
+        description: error.message || "Ensure the domain is valid and not already managed."
+      })
+    } finally {
       setIsSettingUp(false)
-    }).catch((e) => {
-      toast({ variant: "destructive", title: "Setup Failed" })
-      setIsSettingUp(false)
-    })
+    }
+  }
+
+  const handleCopyNS = (ns: string) => {
+    navigator.clipboard.writeText(ns)
+    setCopiedNS(ns)
+    setTimeout(() => setCopiedNS(null), 2000)
+    toast({ title: "Copied", description: "Node address copied to clipboard." })
   }
 
   const filteredRecords = records.filter(r => 
@@ -283,8 +283,12 @@ export default function DNSManagementPage() {
                    ))}
                  </SelectContent>
                </Select>
-               {zoneId && (
-                 <Button onClick={openAddDialog} className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200">
+               {zoneId && zoneDetails?.status === 'active' && (
+                 <Button onClick={() => {
+                   setEditingRecord(null)
+                   setFormData({ type: "A", name: "", content: "", ttl: "Auto", proxied: true, priority: 10 })
+                   setIsDialogOpen(true)
+                 }} className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200">
                    <Plus className="w-4 h-4 mr-2" />
                    Add Record
                  </Button>
@@ -319,7 +323,6 @@ export default function DNSManagementPage() {
         ) : selectedOrg && (
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {/* Server Nodes Status */}
               <Card className="md:col-span-2 bg-white border-slate-200 shadow-sm overflow-hidden">
                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                   <div className="flex items-center gap-2">
@@ -330,59 +333,67 @@ export default function DNSManagementPage() {
                     "text-[9px] font-bold px-2 py-0.5 border shadow-none",
                     zoneDetails?.status === 'active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
                   )}>
-                    {zoneDetails?.status === 'active' ? "ACTIVE" : "PENDING SETUP"}
+                    {zoneDetails?.status?.toUpperCase() || "PENDING"}
                   </Badge>
                 </CardHeader>
                 <CardContent className="p-6">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      <div className="space-y-3">
-                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Required Nameservers</p>
+                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Nodes</p>
                        <div className="space-y-2">
-                         {(zoneDetails?.nameServers || ["ns1.edusphere.np", "ns2.edusphere.np"]).map((ns: string) => (
+                         {(zoneDetails?.nameServers || []).map((ns: string) => (
                            <div key={ns} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group">
                              <code className="text-xs font-mono font-bold text-slate-700">{ns}</code>
-                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                             <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-slate-400 hover:text-primary"
+                                onClick={() => handleCopyNS(ns)}
+                              >
+                                {copiedNS === ns ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                              </Button>
                            </div>
                          ))}
+                         {!zoneDetails?.nameServers?.length && <p className="text-xs text-slate-400 italic">Nodes will appear once initialized.</p>}
                        </div>
                      </div>
                      <div className="space-y-4 flex flex-col justify-center border-l border-slate-100 pl-8">
                         <div className="space-y-1">
-                          <h4 className="text-sm font-bold text-slate-900">Activation Status</h4>
+                          <h4 className="text-sm font-bold text-slate-900">Infrastructure Connection</h4>
                           <p className="text-xs text-slate-500 leading-relaxed">
-                            Point your domain to the nodes listed here to activate global routing and security.
+                            Point your domain at your registrar to these nodes. Propagation can take up to 24 hours.
                           </p>
                         </div>
                         <Button 
                           onClick={handleRefreshActivation} 
-                          disabled={isRefreshing || !zoneId || zoneId.startsWith('initialized-')}
+                          disabled={isRefreshing}
                           className="w-full bg-slate-900 text-white font-bold gap-2 h-10 shadow-lg"
                         >
                           {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                          Check Connection
+                          Check Node Connection
                         </Button>
                      </div>
                    </div>
                 </CardContent>
               </Card>
 
-              {/* Quick Health Card */}
               <Card className="bg-slate-900 text-white shadow-xl border-none">
                 <CardContent className="p-8 space-y-4 flex flex-col justify-between h-full">
                   <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
                     <Activity className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="font-headline font-bold text-lg">Edge Status</h4>
+                    <h4 className="font-headline font-bold text-lg">Network Edge Health</h4>
                     <p className="text-xs text-slate-400 leading-relaxed mt-1">
-                      Your domain is protected by our global security layer, ensuring 100% uptime and threat mitigation.
+                      {zoneDetails?.status === 'active' 
+                        ? "Your domain is fully integrated and protected by the global security layer."
+                        : "Waiting for nameserver updates. DNS records will sync once the nodes are active."}
                     </p>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Records Table */}
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                 <div className="flex items-center gap-2">
@@ -404,6 +415,16 @@ export default function DNSManagementPage() {
                   <div className="flex flex-col items-center justify-center py-32 gap-3">
                     <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
                     <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Records...</p>
+                  </div>
+                ) : zoneDetails?.status !== 'active' ? (
+                  <div className="p-24 text-center space-y-4">
+                    <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Clock className="w-6 h-6 text-amber-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">Activation Required</h4>
+                      <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1">Record management will be available once the global nodes are successfully connected.</p>
+                    </div>
                   </div>
                 ) : filteredRecords.length === 0 ? (
                   <div className="p-24 text-center space-y-3">
@@ -436,7 +457,7 @@ export default function DNSManagementPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="font-bold text-xs text-slate-800">
-                            {rec.name.split('.')[0] === selectedOrg?.domain.split('.')[0] ? "@" : rec.name.replace(`.${selectedOrg?.domain}`, '')}
+                            {rec.name}
                           </TableCell>
                           <TableCell className="max-w-md">
                             <div className="flex flex-col gap-0.5">
@@ -463,7 +484,11 @@ export default function DNSManagementPage() {
                                 variant="ghost" 
                                 size="icon" 
                                 className="h-8 w-8 text-slate-300 hover:text-primary transition-colors"
-                                onClick={() => openEditDialog(rec)}
+                                onClick={() => {
+                                  setEditingRecord(rec)
+                                  setFormData(rec)
+                                  setIsDialogOpen(true)
+                                }}
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </Button>
@@ -519,13 +544,10 @@ export default function DNSManagementPage() {
                   <div className="col-span-3 relative">
                     <Input 
                       placeholder="e.g. www or @" 
-                      className="h-10 font-bold text-xs border-slate-200 pr-12" 
+                      className="h-10 font-bold text-xs border-slate-200" 
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
                     />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-300 pointer-events-none uppercase">
-                      {selectedOrg?.domain}
-                    </div>
                   </div>
                 </div>
 

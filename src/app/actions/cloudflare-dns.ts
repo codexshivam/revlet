@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -28,6 +27,23 @@ async function cfFetch(path: string, options: RequestInit = {}) {
     throw new Error(data.errors?.[0]?.message || 'Network API error');
   }
   return data;
+}
+
+export async function createZone(domain: string) {
+  try {
+    const data = await cfFetch('/zones', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: domain,
+        jump_start: true,
+        type: 'full'
+      }),
+    });
+    return data.result;
+  } catch (error: any) {
+    console.error('Error creating infrastructure zone:', error);
+    throw error;
+  }
 }
 
 export async function getZoneDetails(zoneId: string) {

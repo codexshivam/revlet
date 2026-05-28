@@ -60,9 +60,6 @@ export function RecursiveSidebar() {
           <span className="font-body font-black text-2xl tracking-[0.2em] text-slate-900 leading-none ml-[0.2em]">
             REVLET
           </span>
-          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1.5 leading-tight">
-            Enterprise Infrastructure Management
-          </span>
         </Link>
       </div>
 
@@ -101,12 +98,6 @@ export function RecursiveSidebar() {
           </div>
         ))}
       </nav>
-      
-      <div className="p-4 border-t border-slate-200 bg-slate-50/50">
-        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest text-center">
-          © 2026 Revlet Platform • hello@revlet.me
-        </p>
-      </div>
     </aside>
   )
 }

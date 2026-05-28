@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,11 @@ import {
   Clock,
   MessageSquare,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Download,
+  Upload,
+  FileText,
+  X
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -71,10 +76,14 @@ interface Organization {
   dnsRequested?: boolean
 }
 
+const SUPPORTED_TYPES = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA", "PTR", "NAPTR"]
+const PROXY_SUPPORTED_TYPES = ["A", "AAAA", "CNAME"]
+
 export default function DNSManagementPage() {
   const { toast } = useToast()
   const { user } = useUser()
   const db = useFirestore()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string>("")
@@ -86,6 +95,7 @@ export default function DNSManagementPage() {
   const [isRequesting, setIsRequesting] = useState(false)
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingRecord, setEditingRecord] = useState<DNSRecord | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -98,6 +108,10 @@ export default function DNSManagementPage() {
     proxied: true,
     priority: 10
   })
+
+  // Import state
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [proxyAllImported, setProxyAllImported] = useState(true)
 
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
   const zoneId = selectedOrg?.cloudflareZoneId
@@ -158,8 +172,8 @@ export default function DNSManagementPage() {
     if (!formData.name || !formData.content) {
       toast({ 
         variant: "destructive", 
-        title: "Missing Details", 
-        description: "Please provide both a name and a value for the record." 
+        title: "Validation Failed", 
+        description: "Standard DNS requirements: Name and Value fields cannot be empty." 
       })
       return
     }
@@ -242,10 +256,78 @@ export default function DNSManagementPage() {
     toast({ title: "Copied to Clipboard", description: `"${text.substring(0, 30)}${text.length > 30 ? '...' : ''}" copied.` })
   }
 
+  const handleExportBIND = () => {
+    if (!selectedOrg) return
+    const content = records.map(r => {
+      const ttl = r.ttl === 'Auto' ? '1' : r.ttl
+      return `${r.name}\t${ttl}\tIN\t${r.type}\t${r.content}`
+    }).join('\n')
+    
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${selectedOrg.domain}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    
+    toast({ title: "Export Complete", description: "BIND zone file has been generated." })
+  }
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) setImportFile(file)
+  }
+
+  const processImport = async () => {
+    if (!importFile || !zoneId) return
+    setIsSubmitting(true)
+    
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const text = e.target?.result as string
+      const lines = text.split('\n')
+      let count = 0
+      
+      for (const line of lines) {
+        const parts = line.split(/\s+/)
+        if (parts.length >= 4) {
+          // Very basic BIND parser: name [ttl] IN type content
+          const name = parts[0]
+          const type = parts.includes('IN') ? parts[parts.indexOf('IN') + 1] : parts[2]
+          const content = parts.slice(parts.indexOf(type) + 1).join(' ')
+          
+          if (SUPPORTED_TYPES.includes(type)) {
+            const isProxied = proxyAllImported && PROXY_SUPPORTED_TYPES.includes(type)
+            await createDNSRecord(zoneId, {
+              name,
+              type,
+              content,
+              ttl: "Auto",
+              proxied: isProxied
+            })
+            count++
+          }
+        }
+      }
+      
+      toast({ title: "Import Complete", description: `Successfully queued ${count} records for propagation.` })
+      setIsImportDialogOpen(false)
+      setImportFile(null)
+      fetchDNSData()
+      setIsSubmitting(false)
+    }
+    reader.readAsText(importFile)
+  }
+
   const filteredRecords = records.filter(r => 
     r.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     r.content.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  const isProxyAllowed = (type: string) => PROXY_SUPPORTED_TYPES.includes(type)
 
   if (isLoadingOrgs) {
     return (
@@ -277,14 +359,24 @@ export default function DNSManagementPage() {
                  </SelectContent>
                </Select>
                {zoneId && (
-                 <Button onClick={() => {
-                   setEditingRecord(null)
-                   setFormData({ type: "A", name: "", content: "", ttl: "Auto", proxied: true, priority: 10 })
-                   setIsDialogOpen(true)
-                 }} className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200">
-                   <Plus className="w-4 h-4 mr-2" />
-                   Add Record
-                 </Button>
+                 <div className="flex gap-2">
+                   <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="h-10 font-bold text-xs border-slate-200">
+                     <Upload className="w-4 h-4 mr-2" />
+                     Import
+                   </Button>
+                   <Button variant="outline" onClick={handleExportBIND} className="h-10 font-bold text-xs border-slate-200">
+                     <Download className="w-4 h-4 mr-2" />
+                     Export
+                   </Button>
+                   <Button onClick={() => {
+                     setEditingRecord(null)
+                     setFormData({ type: "A", name: "", content: "", ttl: "Auto", proxied: true, priority: 10 })
+                     setIsDialogOpen(true)
+                   }} className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200">
+                     <Plus className="w-4 h-4 mr-2" />
+                     Add Record
+                   </Button>
+                 </div>
                )}
             </div>
           </div>
@@ -298,7 +390,7 @@ export default function DNSManagementPage() {
                   Premium Domain Infrastructure
                 </h2>
                 <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto">
-                  Unlock advanced security, ultra-fast propagation, and centralized management by activating your institution's global network context.
+                  Unlock advanced security, ultra-fast propagation, and centralized management by activating your organization's global network context.
                 </p>
               </div>
 
@@ -329,7 +421,7 @@ export default function DNSManagementPage() {
                   className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
                 >
                   {isRequesting ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Globe className="w-5 h-5 mr-3 group-hover:rotate-12 transition-transform" />}
-                  Activate DNS Management
+                  Activate Global Network
                 </Button>
               </div>
             </div>
@@ -552,89 +644,100 @@ export default function DNSManagementPage() {
         )}
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-2xl p-0 overflow-hidden border-none shadow-2xl bg-white">
+          <DialogContent className="max-w-lg p-0 overflow-hidden border-none shadow-2xl bg-white">
             <DialogHeader className="bg-slate-900 text-white p-6">
               <DialogTitle className="font-headline font-bold text-xl">
                 {editingRecord ? "Edit Record" : "Add Record"}
               </DialogTitle>
               <p className="text-slate-400 text-xs mt-1">Configure DNS parameters for {selectedOrg?.domain}.</p>
             </DialogHeader>
-            <div className="p-8 space-y-6">
-              <div className="grid grid-cols-1 gap-5">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Type</Label>
+            <div className="p-6 space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">Record Type</Label>
                   <Select 
                     value={formData.type} 
-                    onValueChange={(v) => setFormData({...formData, type: v})}
+                    onValueChange={(v) => {
+                      const isStandardProxy = PROXY_SUPPORTED_TYPES.includes(v)
+                      setFormData({...formData, type: v, proxied: isStandardProxy})
+                    }}
                   >
-                    <SelectTrigger className="col-span-3 h-10 font-bold border-slate-200">
+                    <SelectTrigger className="h-10 font-bold border-slate-200">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV"].map(t => (
+                      {SUPPORTED_TYPES.map(t => (
                         <SelectItem key={t} value={t} className="text-xs font-bold">{t}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Name</Label>
-                  <div className="col-span-3">
-                    <Input 
-                      placeholder="e.g. www or @" 
-                      className="h-10 font-bold text-xs border-slate-200" 
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">Name (e.g. @ or www)</Label>
+                  <Input 
+                    placeholder="e.g. www" 
+                    className="h-10 font-bold text-xs border-slate-200" 
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  />
+                  {formData.name === "" && <p className="text-[9px] text-red-500 font-bold mt-1 uppercase">Field required</p>}
                 </div>
 
-                <div className="grid grid-cols-4 items-start gap-4">
-                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500 mt-2.5">Value</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">Value / Target</Label>
                   <Textarea 
-                    placeholder="e.g. 192.168.1.1 or mail.example.com" 
-                    className="col-span-3 min-h-[100px] font-bold text-xs border-slate-200 leading-relaxed" 
+                    placeholder="e.g. 192.168.1.1" 
+                    className="min-h-[100px] font-bold text-xs border-slate-200 leading-relaxed" 
                     value={formData.content}
                     onChange={(e) => setFormData({...formData, content: e.target.value})}
                   />
+                  {formData.content === "" && <p className="text-[9px] text-red-500 font-bold mt-1 uppercase">Field required</p>}
                 </div>
 
-                {formData.type === "MX" && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Priority</Label>
-                    <Input 
-                      type="number" 
-                      className="col-span-3 h-10 font-bold text-xs border-slate-200" 
-                      value={formData.priority}
-                      onChange={(e) => setFormData({...formData, priority: parseInt(e.target.value) || 0})}
-                    />
+                <div className="grid grid-cols-2 gap-4">
+                  {formData.type === "MX" && (
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-bold uppercase text-slate-500">Priority</Label>
+                      <Input 
+                        type="number" 
+                        className="h-10 font-bold text-xs border-slate-200" 
+                        value={formData.priority}
+                        onChange={(e) => setFormData({...formData, priority: parseInt(e.target.value) || 0})}
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold uppercase text-slate-500">TTL</Label>
+                    <Select value={formData.ttl} onValueChange={(v) => setFormData({...formData, ttl: v})}>
+                      <SelectTrigger className="h-10 text-xs font-bold border-slate-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Auto" className="text-xs font-bold">Auto</SelectItem>
+                        <SelectItem value="60" className="text-xs font-bold">1 minute</SelectItem>
+                        <SelectItem value="300" className="text-xs font-bold">5 minutes</SelectItem>
+                        <SelectItem value="3600" className="text-xs font-bold">1 hour</SelectItem>
+                        <SelectItem value="86400" className="text-xs font-bold">1 day</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
-
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500">TTL</Label>
-                  <Select value={formData.ttl} onValueChange={(v) => setFormData({...formData, ttl: v})}>
-                    <SelectTrigger className="col-span-3 h-10 text-xs font-bold border-slate-200">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Auto" className="text-xs font-bold">Auto</SelectItem>
-                      <SelectItem value="60" className="text-xs font-bold">1 minute</SelectItem>
-                      <SelectItem value="3600" className="text-xs font-bold">1 hour</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg mt-2">
+                <div className={cn(
+                  "flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg transition-opacity",
+                  !isProxyAllowed(formData.type!) && "opacity-40 pointer-events-none"
+                )}>
                    <div className="space-y-0.5">
                      <div className="flex items-center gap-2">
                         <Label className="text-xs font-bold text-slate-900">Proxied</Label>
                         <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
                      </div>
-                     <p className="text-[10px] text-slate-400 font-medium">Hides your server's IP and protects it from direct threats via our security layer.</p>
+                     <p className="text-[10px] text-slate-400 font-medium">Route traffic through the secure network edge.</p>
                    </div>
                    <Switch 
+                    disabled={!isProxyAllowed(formData.type!)}
                     checked={formData.proxied} 
                     onCheckedChange={(v) => setFormData({...formData, proxied: v})} 
                   />
@@ -644,7 +747,60 @@ export default function DNSManagementPage() {
             <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
               <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
               <Button onClick={handleSaveRecord} disabled={isSubmitting} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11 shadow-lg shadow-slate-200">
-                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Add Record"}
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Save Record"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Import Dialog */}
+        <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
+            <DialogHeader className="bg-slate-900 text-white p-6">
+              <DialogTitle className="font-headline font-bold text-xl">Import DNS Records</DialogTitle>
+              <p className="text-slate-400 text-xs mt-1">Upload a BIND zone file to bulk import records.</p>
+            </DialogHeader>
+            <div className="p-6 space-y-6">
+              <div 
+                className={cn(
+                  "border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer",
+                  importFile ? "border-primary bg-primary/5" : "border-slate-200 hover:border-primary hover:bg-slate-50"
+                )}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  accept=".txt,.zone" 
+                  onChange={handleImportFile} 
+                />
+                <div className="p-4 bg-white rounded-full shadow-sm">
+                  <FileText className={cn("w-8 h-8", importFile ? "text-primary" : "text-slate-300")} />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-slate-700">
+                    {importFile ? importFile.name : "Select a file or drag it here"}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-widest">Supports BIND Zone Format</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg">
+                <div className="space-y-0.5">
+                  <Label className="text-xs font-bold text-slate-900">Proxy imported records</Label>
+                  <p className="text-[10px] text-slate-400 font-medium">Apply network proxying where supported.</p>
+                </div>
+                <Switch 
+                  checked={proxyAllImported} 
+                  onCheckedChange={setProxyAllImported} 
+                />
+              </div>
+            </div>
+            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
+              <Button variant="ghost" onClick={() => setIsImportDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Abort</Button>
+              <Button onClick={processImport} disabled={isSubmitting || !importFile} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11">
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Start Import"}
               </Button>
             </DialogFooter>
           </DialogContent>

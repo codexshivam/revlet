@@ -18,8 +18,7 @@ import {
   Clock,
   MessageSquare,
   Info,
-  CheckCircle2,
-  Shield
+  CheckCircle2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -335,9 +334,6 @@ export default function DNSManagementPage() {
                   {isRequesting ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Globe className="w-5 h-5 mr-3 group-hover:rotate-12 transition-transform" />}
                   Activate Global Network
                 </Button>
-                <p className="text-[10px] text-slate-400 mt-6 font-medium uppercase tracking-widest">
-                  Estimated Setup Time: 2-4 Hours • Managed Activation
-                </p>
               </div>
             </div>
           </div>

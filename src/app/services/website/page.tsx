@@ -1,4 +1,3 @@
-
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -47,7 +46,7 @@ interface Organization {
 }
 
 export default function WebsiteManagementPage() {
-  const { user } = useUser()
+  const { user } = userUser()
   const db = useFirestore()
   
   const [orgs, setOrgs] = useState<Organization[]>([])
@@ -55,13 +54,14 @@ export default function WebsiteManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   
-  // For demo/UI states - in a real app these would be derived from more complex logic
-  const [status, setStatus] = useState<WebsiteStatus>("ready_and_published")
+  // For demo/UI states - derived from organization data
+  const [status, setStatus] = useState<WebsiteStatus>("not_found")
 
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
   useEffect(() => {
-    if (!user) return
+    const { user, loading: authLoading } = useUser()
+    if (authLoading || !user) return
     const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
     const unsub = onSnapshot(q, (snap) => {
       const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Organization[]
@@ -72,7 +72,7 @@ export default function WebsiteManagementPage() {
       setIsLoading(false)
     })
     return unsub
-  }, [user, db, selectedOrgId])
+  }, [db, selectedOrgId])
 
   // Determine status based on organization data
   useEffect(() => {
@@ -80,10 +80,8 @@ export default function WebsiteManagementPage() {
       if (selectedOrg.hasWebsite === undefined) {
         setStatus("not_found")
       } else if (selectedOrg.hasWebsite === true) {
-        // Here we'd check if we manage it or not. For now, logic flow:
         setStatus("external")
       } else {
-        // No website declared, maybe they are waiting for us to build one
         setStatus("waiting_for_changes")
       }
     }
@@ -109,7 +107,6 @@ export default function WebsiteManagementPage() {
       })
       errorEmitter.emit('permission-error', permissionError)
     }).finally(() => {
-      setIsUpdating(true)
       setIsUpdating(false)
     })
   }
@@ -181,10 +178,6 @@ export default function WebsiteManagementPage() {
                   No website yet
                 </Button>
               </div>
-              
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-4">
-                This selection will update your organization's infrastructure context.
-              </p>
             </CardContent>
           </Card>
         )}
@@ -361,3 +354,5 @@ export default function WebsiteManagementPage() {
     </DashboardShell>
   )
 }
+
+import { useUser } from "@/firebase/auth/use-user"

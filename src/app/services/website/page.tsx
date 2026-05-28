@@ -46,7 +46,7 @@ interface Organization {
 }
 
 export default function WebsiteManagementPage() {
-  const { user } = userUser()
+  const { user, loading: authLoading } = useUser()
   const db = useFirestore()
   
   const [orgs, setOrgs] = useState<Organization[]>([])
@@ -60,8 +60,8 @@ export default function WebsiteManagementPage() {
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
   useEffect(() => {
-    const { user, loading: authLoading } = useUser()
     if (authLoading || !user) return
+
     const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
     const unsub = onSnapshot(q, (snap) => {
       const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Organization[]
@@ -72,7 +72,7 @@ export default function WebsiteManagementPage() {
       setIsLoading(false)
     })
     return unsub
-  }, [db, selectedOrgId])
+  }, [user, authLoading, db, selectedOrgId])
 
   // Determine status based on organization data
   useEffect(() => {
@@ -118,7 +118,7 @@ export default function WebsiteManagementPage() {
     })
   }
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">
@@ -354,5 +354,3 @@ export default function WebsiteManagementPage() {
     </DashboardShell>
   )
 }
-
-import { useUser } from "@/firebase/auth/use-user"

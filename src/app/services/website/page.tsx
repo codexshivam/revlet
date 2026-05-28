@@ -1,6 +1,8 @@
 
 "use client"
 
+import * as React from "react"
+import { useState, useEffect, useMemo } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { OrgSelector } from "@/components/org/org-selector"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,7 +39,6 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useState, useEffect, useMemo } from "react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useUser, useFirestore } from "@/firebase"
@@ -86,7 +87,6 @@ export default function WebsiteManagementPage() {
 
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
-  // Fetch Organizations
   useEffect(() => {
     if (authLoading || !user) return
 
@@ -108,7 +108,6 @@ export default function WebsiteManagementPage() {
     return unsub
   }, [user, authLoading, db, selectedOrgId])
 
-  // Fetch Modifications for selected org
   useEffect(() => {
     if (!selectedOrgId || !user) return
 
@@ -120,7 +119,6 @@ export default function WebsiteManagementPage() {
 
     const unsub = onSnapshot(q, (snap) => {
       const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SiteModification[]
-      // Sort by requestedAt descending
       setModifications(fetched.sort((a, b) => {
         const timeA = a.requestedAt?.toMillis() || 0
         const timeB = b.requestedAt?.toMillis() || 0
@@ -139,7 +137,7 @@ export default function WebsiteManagementPage() {
     updateDoc(orgRef, {
       hasWebsite: hasWebsite,
       usedWebEdits: 0,
-      maxWebEdits: 5 // Default quota
+      maxWebEdits: 5
     }).then(() => {
       toast({
         title: "Status Updated",
@@ -163,7 +161,7 @@ export default function WebsiteManagementPage() {
     
     const orgRef = doc(db, "organizations", selectedOrgId)
     updateDoc(orgRef, {
-      siteActiveOn: false // Setting to false triggers "Pending" state
+      siteActiveOn: false
     }).then(() => {
       toast({
         title: "Upgrade Requested",
@@ -258,8 +256,7 @@ export default function WebsiteManagementPage() {
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {/* 1. ACTIVE CONTROL PANEL */}
-        {selectedOrg?.siteActiveOn === true && (
+        {selectedOrg?.siteActiveOn === true ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
               <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
@@ -415,10 +412,7 @@ export default function WebsiteManagementPage() {
               </Card>
             </div>
           </div>
-        )}
-
-        {/* 2. PENDING STATUS */}
-        {selectedOrg?.siteActiveOn === false && (
+        ) : selectedOrg?.siteActiveOn === false ? (
           <div className="max-w-4xl mx-auto py-20">
             <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
               <CardContent className="p-20 flex flex-col items-center text-center gap-6">
@@ -447,10 +441,7 @@ export default function WebsiteManagementPage() {
               </CardContent>
             </Card>
           </div>
-        )}
-
-        {/* 3. INITIAL DECLARATION */}
-        {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === undefined && (
+        ) : selectedOrg?.hasWebsite === undefined ? (
           <Card className="bg-slate-50 border-slate-200 border-dashed">
             <CardContent className="p-16 flex flex-col items-center text-center gap-6">
               <div className="w-16 h-16 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center">
@@ -483,10 +474,7 @@ export default function WebsiteManagementPage() {
               </div>
             </CardContent>
           </Card>
-        )}
-
-        {/* 4. UPGRADE PATH */}
-        {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite !== undefined && (
+        ) : (
           <div className="space-y-12">
             <div className="max-w-5xl mx-auto space-y-12 text-center animate-in slide-in-from-bottom-4 duration-500">
               <div className="space-y-4">

@@ -7,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ShieldAlert, Lock, Mail, Loader2 } from "lucide-react"
+import { ShieldAlert, Lock, Mail, Loader2, Info } from "lucide-react"
 import { useUser, useAuth } from "@/firebase"
-import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth"
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail } from "firebase/auth"
 import { toast } from "@/hooks/use-toast"
 
 export default function SettingsPage() {
@@ -29,7 +29,11 @@ export default function SettingsPage() {
 
   const handleUpdateEmail = async () => {
     if (!user || !newEmail || !emailConfirmPass) {
-      toast({ variant: "destructive", title: "Incomplete fields", description: "Please provide the new email and your current password." })
+      toast({ 
+        variant: "destructive", 
+        title: "Missing Information", 
+        description: "Please provide both your new email and your current password." 
+      })
       return
     }
 
@@ -39,15 +43,32 @@ export default function SettingsPage() {
       const credential = EmailAuthProvider.credential(user.email!, emailConfirmPass)
       await reauthenticateWithCredential(user, credential)
       
-      await updateEmail(user, newEmail)
-      toast({ title: "Email Updated", description: "Your administrative email has been changed successfully." })
+      // Send verification to the new email
+      await verifyBeforeUpdateEmail(user, newEmail)
+      
+      toast({ 
+        title: "Verification Sent", 
+        description: "A verification link has been sent to your new email address. The change will take effect only after you verify the email." 
+      })
       setNewEmail("")
       setEmailConfirmPass("")
     } catch (error: any) {
+      let errorMessage = "We couldn't update your email. Please try again."
+      
+      if (error.code === "auth/wrong-password") {
+        errorMessage = "Your current password is invalid."
+      } else if (error.code === "auth/email-already-in-use") {
+        errorMessage = "This email address is already associated with another account."
+      } else if (error.code === "auth/invalid-email") {
+        errorMessage = "The new email address provided is not valid."
+      } else if (error.code === "auth/too-many-requests") {
+        errorMessage = "Too many attempts. Please try again later."
+      }
+
       toast({ 
         variant: "destructive", 
         title: "Update Failed", 
-        description: error.code === "auth/wrong-password" ? "Incorrect password provided." : error.message 
+        description: errorMessage 
       })
     } finally {
       setIsUpdatingEmail(false)
@@ -56,12 +77,20 @@ export default function SettingsPage() {
 
   const handleUpdatePassword = async () => {
     if (!user || !currentPassword || !newPassword || !confirmPassword) {
-      toast({ variant: "destructive", title: "Incomplete fields", description: "Please fill in all password fields." })
+      toast({ 
+        variant: "destructive", 
+        title: "Incomplete Form", 
+        description: "Please fill in all the password fields to proceed." 
+      })
       return
     }
 
     if (newPassword !== confirmPassword) {
-      toast({ variant: "destructive", title: "Mismatch", description: "New passwords do not match." })
+      toast({ 
+        variant: "destructive", 
+        title: "Passwords Mismatch", 
+        description: "The new password and confirmation do not match." 
+      })
       return
     }
 
@@ -72,15 +101,26 @@ export default function SettingsPage() {
       await reauthenticateWithCredential(user, credential)
       
       await updatePassword(user, newPassword)
-      toast({ title: "Password Updated", description: "Your security credentials have been successfully updated." })
+      toast({ 
+        title: "Password Updated", 
+        description: "Your security credentials have been successfully updated." 
+      })
       setCurrentPassword("")
       setNewPassword("")
       setConfirmPassword("")
     } catch (error: any) {
+      let errorMessage = "We couldn't update your password. Please try again."
+
+      if (error.code === "auth/wrong-password") {
+        errorMessage = "Your current password is invalid."
+      } else if (error.code === "auth/weak-password") {
+        errorMessage = "The new password is too weak. Please use at least 6 characters."
+      }
+
       toast({ 
         variant: "destructive", 
         title: "Security Update Failed", 
-        description: error.code === "auth/wrong-password" ? "Current password is incorrect." : error.message 
+        description: errorMessage
       })
     } finally {
       setIsUpdatingPassword(false)
@@ -90,49 +130,60 @@ export default function SettingsPage() {
   return (
     <DashboardShell>
       <div className="space-y-6">
-        <h1 className="text-3xl font-headline font-bold text-slate-900">Security & Account Settings</h1>
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Management</span>
+          <h1 className="text-3xl font-headline font-bold text-slate-900">Account Security</h1>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <Card className="bg-white border-slate-200 shadow-sm h-fit">
             <CardHeader>
               <div className="flex items-center gap-2 text-primary mb-1">
                 <Mail className="w-5 h-5" />
-                <CardTitle className="text-lg font-headline font-bold">Change Email Address</CardTitle>
+                <CardTitle className="text-lg font-headline font-bold">Administrative Email</CardTitle>
               </div>
-              <CardDescription className="text-xs">Update your primary administrative contact email.</CardDescription>
+              <CardDescription className="text-xs">Update your primary contact. Verification is required for changes to apply.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="current-email" className="text-xs font-bold text-slate-500 uppercase">Current Email</Label>
-                <Input id="current-email" value={user?.email || "Loading..."} disabled className="bg-slate-50 border-slate-200" />
+                <Label htmlFor="current-email" className="text-xs font-bold text-slate-500 uppercase">Currently Active</Label>
+                <Input id="current-email" value={user?.email || "Loading..."} disabled className="bg-slate-50 border-slate-200 text-xs" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="new-email" className="text-xs font-bold text-slate-700 uppercase">New Email Address</Label>
+                <Label htmlFor="new-email" className="text-xs font-bold text-slate-700 uppercase">Proposed New Email</Label>
                 <Input 
                   id="new-email" 
-                  placeholder="Enter new email..." 
+                  placeholder="new.admin@institution.edu.np" 
                   className="border-slate-200" 
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="verify-pass" className="text-xs font-bold text-slate-700 uppercase">Account Password Verification</Label>
+                <Label htmlFor="verify-pass" className="text-xs font-bold text-slate-700 uppercase">Confirm Identity (Current Password)</Label>
                 <Input 
                   id="verify-pass" 
                   type="password" 
-                  placeholder="Confirm with password..." 
+                  placeholder="Enter current password..." 
                   className="border-slate-200" 
                   value={emailConfirmPass}
                   onChange={(e) => setEmailConfirmPass(e.target.value)}
                 />
               </div>
+              
+              <div className="flex items-center gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100 mb-2">
+                <Info className="w-4 h-4 text-primary shrink-0" />
+                <p className="text-[10px] text-primary leading-tight font-medium">
+                  We will send a verification link to the new email. The change will finalize automatically once verified.
+                </p>
+              </div>
+
               <Button 
-                className="w-full font-bold h-11" 
+                className="w-full font-bold h-11 shadow-lg shadow-primary/10" 
                 onClick={handleUpdateEmail}
                 disabled={isUpdatingEmail}
               >
-                {isUpdatingEmail ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Update Email"}
+                {isUpdatingEmail ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Verify & Update Email"}
               </Button>
             </CardContent>
           </Card>
@@ -141,13 +192,13 @@ export default function SettingsPage() {
             <CardHeader>
               <div className="flex items-center gap-2 text-primary mb-1">
                 <Lock className="w-5 h-5" />
-                <CardTitle className="text-lg font-headline font-bold">Update Security Password</CardTitle>
+                <CardTitle className="text-lg font-headline font-bold">Access Credentials</CardTitle>
               </div>
-              <CardDescription className="text-xs">Ensure your account uses a strong, unique password.</CardDescription>
+              <CardDescription className="text-xs">Ensure your account is protected by a rotating strong password.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="old-pass" className="text-xs font-bold text-slate-700 uppercase">Current Password</Label>
+                <Label htmlFor="old-pass" className="text-xs font-bold text-slate-700 uppercase">Existing Password</Label>
                 <Input 
                   id="old-pass" 
                   type="password" 
@@ -158,33 +209,33 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="new-pass" className="text-xs font-bold text-slate-700 uppercase">New Password</Label>
+                <Label htmlFor="new-pass" className="text-xs font-bold text-slate-700 uppercase">New Secure Password</Label>
                 <Input 
                   id="new-pass" 
                   type="password" 
-                  placeholder="New password..." 
+                  placeholder="Minimum 6 characters..." 
                   className="border-slate-200" 
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="confirm-pass" className="text-xs font-bold text-slate-700 uppercase">Confirm New Password</Label>
+                <Label htmlFor="confirm-pass" className="text-xs font-bold text-slate-700 uppercase">Re-type New Password</Label>
                 <Input 
                   id="confirm-pass" 
                   type="password" 
-                  placeholder="Repeat new password..." 
+                  placeholder="Confirm new password..." 
                   className="border-slate-200" 
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
               <Button 
-                className="w-full font-bold h-11 bg-slate-900 hover:bg-black text-white" 
+                className="w-full font-bold h-11 bg-slate-900 hover:bg-black text-white shadow-lg" 
                 onClick={handleUpdatePassword}
                 disabled={isUpdatingPassword}
               >
-                {isUpdatingPassword ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Update Password"}
+                {isUpdatingPassword ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Commit Password Change"}
               </Button>
             </CardContent>
           </Card>
@@ -194,8 +245,8 @@ export default function SettingsPage() {
           <CardContent className="p-6 flex items-center gap-4">
             <ShieldAlert className="w-6 h-6 text-red-500 shrink-0" />
             <div className="flex-1">
-              <h4 className="text-sm font-bold text-red-900">Security Notice</h4>
-              <p className="text-xs text-red-700/80">Updating critical credentials will invalidate active sessions on other devices. You will be required to re-authenticate.</p>
+              <h4 className="text-sm font-bold text-red-900">Security Enforcement Notice</h4>
+              <p className="text-xs text-red-700/80">Updating your master credentials will immediately invalidate all other active administrative sessions across devices for your protection.</p>
             </div>
           </CardContent>
         </Card>

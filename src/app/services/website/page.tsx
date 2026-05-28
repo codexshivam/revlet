@@ -37,7 +37,6 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -576,9 +575,6 @@ export default function WebsiteManagementPage() {
                     <p className="text-slate-500 text-[11px] leading-relaxed font-medium">
                       Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure. This is not an AI-built website or a generic template. Our engineering team provides consistent, long-term support so you never feel lost.
                     </p>
-                    <p className="text-slate-400 text-[10px] leading-relaxed font-medium italic">
-                      We train AI using your website data after building it once, so that modifications get easier for us to do, ensuring rapid turnaround for your requests.
-                    </p>
                   </div>
                 </div>
 
@@ -620,7 +616,7 @@ export default function WebsiteManagementPage() {
                 </Button>
                 <div className="flex items-center gap-2 mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   <Shield className="w-3 h-3" />
-                  Full Administrative Control Guaranteed
+                  Full administrative control guaranteed
                 </div>
               </div>
             </div>

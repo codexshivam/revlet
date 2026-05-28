@@ -22,7 +22,9 @@ import {
   MessageSquare,
   Sparkles,
   Cloud,
-  Shield
+  Shield,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react"
 import {
   Dialog,
@@ -50,14 +52,17 @@ interface Organization {
   domain: string
   hasWebsite?: boolean
   siteActiveOn?: boolean
+  maxWebEdits?: number
+  usedWebEdits?: number
 }
 
 interface SiteModification {
   id: string
   title: string
   description: string
-  status: "Pending" | "Completed" | "Rejected"
+  status: "Not started" | "Pending" | "Completed" | "Rejected"
   requestedAt: Timestamp
+  updatedAt?: Timestamp
   organizationId: string
   ownerId: string
 }
@@ -72,6 +77,7 @@ export default function WebsiteManagementPage() {
   const [modifications, setModifications] = useState<SiteModification[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [expandedModId, setExpandedModId] = useState<string | null>(null)
   
   // Modification Form State
   const [modTitle, setModTitle] = useState("")
@@ -131,7 +137,9 @@ export default function WebsiteManagementPage() {
     
     const orgRef = doc(db, "organizations", selectedOrgId)
     updateDoc(orgRef, {
-      hasWebsite: hasWebsite
+      hasWebsite: hasWebsite,
+      usedWebEdits: 0,
+      maxWebEdits: 5 // Default quota
     }).then(() => {
       toast({
         title: "Status Updated",
@@ -182,7 +190,7 @@ export default function WebsiteManagementPage() {
       ownerId: user.uid,
       title: modTitle,
       description: modDesc,
-      status: "Pending",
+      status: "Not started",
       requestedAt: serverTimestamp()
     }
 
@@ -209,17 +217,12 @@ export default function WebsiteManagementPage() {
       })
   }
 
-  // Quota Calculation
-  const currentMonthMods = useMemo(() => {
-    const now = new Date()
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-    return modifications.filter(m => {
-      const date = m.requestedAt?.toDate()
-      return date && date >= firstDay
-    }).length
-  }, [modifications])
+  const toggleRow = (id: string) => {
+    setExpandedModId(expandedModId === id ? null : id)
+  }
 
-  const quotaTotal = 5
+  const maxEdits = selectedOrg?.maxWebEdits || 5
+  const usedEdits = selectedOrg?.usedWebEdits || 0
 
   if (isLoading || authLoading) {
     return (
@@ -263,7 +266,7 @@ export default function WebsiteManagementPage() {
                 <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between px-6 py-4">
                   <div className="space-y-1">
                     <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Change Ledger</CardTitle>
-                    <p className="text-[10px] text-slate-500 font-medium">Tracking all technical and content modifications.</p>
+                    <p className="text-[10px] text-slate-500 font-medium">Click a row to view modification details.</p>
                   </div>
                   <Dialog open={isModDialogOpen} onOpenChange={setIsModDialogOpen}>
                     <DialogTrigger asChild>
@@ -316,36 +319,63 @@ export default function WebsiteManagementPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50/30 border-b border-slate-100">
-                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-6">Modification Detail</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4">Timestamp</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-6">Request Title</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4">Request Date</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4">Updated On</TableHead>
                         <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {modifications.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={3} className="py-12 text-center text-slate-400 text-xs italic font-medium">
+                          <TableCell colSpan={4} className="py-12 text-center text-slate-400 text-xs italic font-medium">
                             No modifications logged in the global ledger.
                           </TableCell>
                         </TableRow>
                       ) : (
                         modifications.map((mod) => (
-                          <TableRow key={mod.id} className="hover:bg-slate-50/30 border-b border-b-slate-50 last:border-0">
-                            <TableCell className="font-bold text-slate-800 text-sm pl-6">{mod.title}</TableCell>
-                            <TableCell className="text-slate-400 text-xs font-medium">
-                              {mod.requestedAt?.toDate?.().toLocaleString() || 'Pending Sync...'}
-                            </TableCell>
-                            <TableCell className="text-right pr-6">
-                              <Badge className={cn(
-                                "text-[9px] font-bold px-2 py-0.5 border shadow-none",
-                                mod.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
-                                mod.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" :
-                                "bg-amber-50 text-amber-600 border-amber-100"
-                              )}>
-                                {mod.status}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
+                          <React.Fragment key={mod.id}>
+                            <TableRow 
+                              className="hover:bg-slate-50/50 border-b border-b-slate-50 cursor-pointer transition-colors"
+                              onClick={() => toggleRow(mod.id)}
+                            >
+                              <TableCell className="font-bold text-slate-800 text-sm pl-6">
+                                <div className="flex items-center gap-2">
+                                  {expandedModId === mod.id ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                                  {mod.title}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-slate-500 text-[11px] font-medium">
+                                {mod.requestedAt?.toDate?.().toLocaleDateString() || 'Pending...'}
+                              </TableCell>
+                              <TableCell className="text-slate-400 text-[11px] font-medium">
+                                {mod.updatedAt?.toDate?.().toLocaleDateString() || '--'}
+                              </TableCell>
+                              <TableCell className="text-right pr-6">
+                                <Badge className={cn(
+                                  "text-[9px] font-bold px-2 py-0.5 border shadow-none",
+                                  mod.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                                  mod.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" :
+                                  mod.status === "Pending" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                                  "bg-slate-50 text-slate-500 border-slate-200"
+                                )}>
+                                  {mod.status}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                            {expandedModId === mod.id && (
+                              <TableRow className="bg-slate-50/50 border-b border-slate-100">
+                                <TableCell colSpan={4} className="p-6">
+                                  <div className="space-y-2">
+                                    <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Modification Details</h5>
+                                    <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
+                                      {mod.description}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </React.Fragment>
                         ))
                       )}
                     </TableBody>
@@ -363,15 +393,19 @@ export default function WebsiteManagementPage() {
                   <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Monthly Modifications</p>
                     <div className="flex items-end justify-between mt-2">
-                      <span className="text-3xl font-headline font-bold text-primary">{currentMonthMods} / {quotaTotal}</span>
+                      <span className="text-3xl font-headline font-bold text-primary">{usedEdits} / {maxEdits}</span>
                       <span className="text-[10px] font-bold text-slate-400 pb-1">Units Consumed</span>
                     </div>
                     <div className="h-1.5 w-full bg-slate-200 rounded-full mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-primary transition-all duration-700" 
-                        style={{ width: `${(currentMonthMods / quotaTotal) * 100}%` }} 
+                        style={{ width: `${(usedEdits / maxEdits) * 100}%` }} 
                       />
                     </div>
+                    <p className="text-[9px] text-slate-400 mt-3 font-medium flex items-center gap-1.5">
+                      <Clock className="w-3 h-3" />
+                      Quota resets every 30 days.
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-lg border border-emerald-100 shadow-sm">
                     <CircleCheck className="w-4 h-4 text-emerald-600" />

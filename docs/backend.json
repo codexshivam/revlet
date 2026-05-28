@@ -35,6 +35,8 @@
         "code": { "type": "string" },
         "ownerId": { "type": "string" },
         "outstandingAmount": { "type": "number", "description": "The current unpaid balance for this institution." },
+        "maxWebEdits": { "type": "number", "description": "Maximum allowed website modifications per month." },
+        "usedWebEdits": { "type": "number", "description": "Consumed website modifications in the current cycle." },
         "createdAt": { "type": "string", "format": "date-time" }
       }
     },
@@ -77,8 +79,9 @@
         "organizationId": { "type": "string" },
         "title": { "type": "string" },
         "description": { "type": "string" },
-        "status": { "type": "string", "enum": ["Pending", "Completed", "Rejected"] },
+        "status": { "type": "string", "enum": ["Not started", "Pending", "Completed", "Rejected"] },
         "requestedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
         "ownerId": { "type": "string" }
       }
     }

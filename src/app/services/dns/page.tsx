@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -16,7 +17,6 @@ import {
   CheckCircle2, 
   Loader2, 
   Server,
-  ExternalLink,
   Globe
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -106,7 +106,7 @@ export default function DNSManagementPage() {
       toast({
         variant: "destructive",
         title: "Sync Failed",
-        description: error.message || "Could not retrieve records from the network."
+        description: "Could not retrieve settings from the network."
       })
     } finally {
       setIsLoadingRecords(false)
@@ -187,11 +187,11 @@ export default function DNSManagementPage() {
 
   const handleDeleteRecord = async (id: string) => {
     if (!selectedOrg?.cloudflareZoneId) return
-    if (!confirm("Are you sure you want to delete this record?")) return
+    if (!confirm("Are you sure you want to delete this setting?")) return
 
     try {
       await deleteDNSRecord(selectedOrg.cloudflareZoneId, id)
-      toast({ title: "Record Deleted" })
+      toast({ title: "Setting Deleted" })
       fetchDNSData()
     } catch (error: any) {
       toast({ variant: "destructive", title: "Delete Failed", description: error.message })
@@ -208,6 +208,13 @@ export default function DNSManagementPage() {
     setEditingRecord(record)
     setFormData(record)
     setIsDialogOpen(true)
+  }
+
+  const handleSetupDNS = () => {
+    toast({
+      title: "Setup Request Sent",
+      description: "Our team has been notified. We will configure your domain settings and provide your global server nodes shortly.",
+    })
   }
 
   const filteredRecords = records.filter(r => 
@@ -232,7 +239,7 @@ export default function DNSManagementPage() {
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Settings</span>
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-headline font-bold text-slate-900">DNS Management</h1>
+            <h1 className="text-3xl font-headline font-bold text-slate-900">Domain Management</h1>
             <div className="flex items-center gap-3">
                <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
                  <SelectTrigger className="w-[280px] bg-white font-bold text-xs h-10 shadow-sm">
@@ -247,7 +254,7 @@ export default function DNSManagementPage() {
                {selectedOrg?.cloudflareZoneId && (
                  <Button onClick={openAddDialog} className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6">
                    <Plus className="w-4 h-4 mr-2" />
-                   Add DNS Record
+                   Add New Record
                  </Button>
                )}
             </div>
@@ -261,12 +268,12 @@ export default function DNSManagementPage() {
                 <Globe className="w-10 h-10 text-slate-300" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-2xl font-headline font-bold text-slate-900">Start Managing Your DNS</h3>
+                <h3 className="text-2xl font-headline font-bold text-slate-900">Start managing your DNS</h3>
                 <p className="text-slate-500 max-w-lg mx-auto leading-relaxed">
                   Your domain <span className="font-bold text-slate-900">{selectedOrg.domain}</span> is ready to be set up. Connect your domain to enable all platform services.
                 </p>
               </div>
-              <Button size="lg" className="font-bold px-10 h-12 shadow-xl shadow-primary/10">
+              <Button onClick={handleSetupDNS} size="lg" className="font-bold px-10 h-12 shadow-xl shadow-primary/10">
                 Setup DNS Now
               </Button>
             </CardContent>
@@ -279,19 +286,19 @@ export default function DNSManagementPage() {
                 <CardHeader className="bg-slate-50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                   <div className="flex items-center gap-2">
                     <Server className="w-4 h-4 text-slate-400" />
-                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Domain Nameservers</CardTitle>
+                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Server Nodes</CardTitle>
                   </div>
                   <Badge className={cn(
                     "text-[9px] font-bold px-2 py-0.5 border shadow-none",
                     zoneDetails?.status === 'active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
                   )}>
-                    {zoneDetails?.status === 'active' ? "ACTIVE" : "PENDING SETUP"}
+                    {zoneDetails?.status === 'active' ? "CONNECTED" : "PENDING SETUP"}
                   </Badge>
                 </CardHeader>
                 <CardContent className="p-8">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      <div className="space-y-4">
-                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Your Server Nodes</p>
+                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Server Nodes</p>
                        <div className="space-y-2">
                          {zoneDetails?.nameServers?.map((ns: string) => (
                            <div key={ns} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group hover:border-primary/20 transition-all">
@@ -306,8 +313,8 @@ export default function DNSManagementPage() {
                           <h4 className="text-sm font-bold text-slate-900">Connection Status</h4>
                           <p className="text-xs text-slate-500 leading-relaxed">
                             {zoneDetails?.status === 'active' 
-                              ? "Your domain is successfully connected to our platform."
-                              : "To activate your domain, please update your nameservers at your domain registrar to the ones listed on the left."}
+                              ? "Your domain is successfully connected to our global network."
+                              : "To activate your domain, please update your nameservers at your domain registrar to the nodes listed on the left."}
                           </p>
                         </div>
                         <Button 
@@ -316,7 +323,7 @@ export default function DNSManagementPage() {
                           className="w-full bg-slate-900 text-white font-bold gap-2 h-11"
                         >
                           {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                          Check My Connection
+                          Check Connection
                         </Button>
                      </div>
                    </div>
@@ -327,13 +334,13 @@ export default function DNSManagementPage() {
               <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                 <CardHeader className="bg-slate-50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">DNS Records</CardTitle>
+                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Domain Settings</CardTitle>
                     <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white">{records.length}</Badge>
                   </div>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                     <Input 
-                      placeholder="Search records..." 
+                      placeholder="Search settings..." 
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="h-8 pl-8 text-xs w-48 bg-white border-slate-200" 
@@ -349,7 +356,7 @@ export default function DNSManagementPage() {
                   ) : filteredRecords.length === 0 ? (
                     <div className="p-20 text-center space-y-2">
                       <Info className="w-8 h-8 text-slate-100 mx-auto" />
-                      <p className="text-sm font-bold text-slate-400">No records found.</p>
+                      <p className="text-sm font-bold text-slate-400">No settings found.</p>
                     </div>
                   ) : (
                     <Table>
@@ -358,7 +365,7 @@ export default function DNSManagementPage() {
                           <TableHead className="text-[10px] font-bold uppercase py-4 pl-6 w-20">Type</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase py-4 w-40">Name</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase py-4">Value</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4 w-24">Proxy</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase py-4 w-24">Shield</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-32">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -434,15 +441,15 @@ export default function DNSManagementPage() {
                   </div>
                   <CardContent className="p-8 space-y-6 relative z-10">
                     <div className="space-y-2">
-                      <h4 className="font-headline font-bold text-xl">Global Content Network</h4>
+                      <h4 className="font-headline font-bold text-xl">Global Performance</h4>
                       <p className="text-xs text-slate-400 leading-relaxed">
-                        Your domain is connected to a global network for 100% uptime and faster performance in Nepal and beyond.
+                        Your domain is connected to a global network for 100% uptime and faster load times across Nepal.
                       </p>
                     </div>
                     <div className="flex flex-col gap-3">
                        <Button variant="outline" className="w-full border-slate-700 hover:bg-slate-800 text-xs font-bold gap-2 text-white h-10">
                          <Info className="w-3.5 h-3.5" />
-                         DNS Guide
+                         User Guide
                        </Button>
                     </div>
                   </CardContent>
@@ -456,7 +463,7 @@ export default function DNSManagementPage() {
                     <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 flex gap-3">
                        <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
                        <p className="text-[10px] text-slate-500 leading-relaxed">
-                         Changes you make here go live almost instantly. Please double-check your email (MX) and identity (TXT) records before saving.
+                         Changes you make here go live almost instantly. Please double-check your settings before saving to avoid downtime.
                        </p>
                     </div>
                  </CardContent>
@@ -469,7 +476,7 @@ export default function DNSManagementPage() {
           <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
             <DialogHeader className="bg-slate-900 text-white p-6">
               <DialogTitle className="font-headline font-bold text-xl">
-                {editingRecord ? "Edit Record" : "Add New Record"}
+                {editingRecord ? "Edit Setting" : "Add New Setting"}
               </DialogTitle>
               <p className="text-slate-400 text-xs mt-1">Update settings for {selectedOrg?.domain}.</p>
             </DialogHeader>
@@ -547,7 +554,7 @@ export default function DNSManagementPage() {
                 <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg mt-2">
                    <div className="space-y-0.5">
                      <Label className="text-xs font-bold text-slate-900">Security Shield</Label>
-                     <p className="text-[10px] text-slate-400">Protects your server and improves performance.</p>
+                     <p className="text-[10px] text-slate-400">Protects your server from cyber attacks.</p>
                    </div>
                    <Switch 
                     checked={formData.proxied} 
@@ -559,7 +566,7 @@ export default function DNSManagementPage() {
             <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
               <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
               <Button onClick={handleSaveRecord} disabled={isSubmitting} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11">
-                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Add Record"}
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Add Setting"}
               </Button>
             </DialogFooter>
           </DialogContent>

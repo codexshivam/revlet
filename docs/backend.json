@@ -24,6 +24,7 @@
         "phone": { "type": "string" },
         "currentEmail": { "type": "string" },
         "domain": { "type": "string" },
+        "cloudflareZoneId": { "type": "string", "description": "The Cloudflare Zone ID associated with this domain." },
         "hasWebsite": { "type": "boolean" },
         "contactName": { "type": "string" },
         "contactPhone": { "type": "string" },

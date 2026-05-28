@@ -52,6 +52,7 @@ interface Organization {
   phone: string
   currentEmail: string
   domain: string
+  cloudflareZoneId: string
   hasWebsite: boolean
   contactName: string
   contactPhone: string
@@ -83,6 +84,7 @@ export default function AccountHomePage() {
     phone: "",
     currentEmail: "",
     domain: "",
+    cloudflareZoneId: "",
     hasWebsite: false,
     contactName: "",
     contactPhone: "",
@@ -148,6 +150,7 @@ export default function AccountHomePage() {
       phone: org.phone,
       currentEmail: org.currentEmail,
       domain: org.domain,
+      cloudflareZoneId: org.cloudflareZoneId || "",
       hasWebsite: org.hasWebsite,
       contactName: org.contactName,
       contactPhone: org.contactPhone,
@@ -166,6 +169,7 @@ export default function AccountHomePage() {
       phone: "",
       currentEmail: "",
       domain: "",
+      cloudflareZoneId: "",
       hasWebsite: false,
       contactName: "",
       contactPhone: "",
@@ -365,12 +369,12 @@ export default function AccountHomePage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <Label htmlFor="org-phone" className="text-[10px] font-bold text-slate-500 uppercase">Institutional Phone</Label>
+                            <Label htmlFor="cf-zone" className="text-[10px] font-bold text-slate-500 uppercase">Cloudflare Zone ID</Label>
                             <Input 
-                              id="org-phone" 
-                              placeholder="+977-1-XXXXXX" 
-                              value={formData.phone}
-                              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                              id="cf-zone" 
+                              placeholder="e.g. 7c5f... (Cloudflare Console)" 
+                              value={formData.cloudflareZoneId}
+                              onChange={(e) => setFormData({ ...formData, cloudflareZoneId: e.target.value })}
                             />
                           </div>
                           <div className="space-y-1.5">

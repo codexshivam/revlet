@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Plus, Building2, ExternalLink, Edit2, LogOut, Globe, Loader2, Info } from "lucide-react"
+import { MoreVertical, Plus, Building2, ExternalLink, Edit2, LogOut, Globe, Loader2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore } from "@/firebase"
 import { signOut, updateProfile } from "firebase/auth"
@@ -60,25 +60,34 @@ export default function AccountHomePage() {
   const [isAddingOrg, setIsAddingOrg] = useState(false)
   const [isUpdatingAccount, setIsUpdatingAccount] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditNameOpen, setIsEditNameOpen] = useState(false)
   
   const [newOrgName, setNewOrgName] = useState("")
   const [newOrgDomain, setNewOrgDomain] = useState("")
   const [accountName, setAccountName] = useState("")
+  const [localDisplayName, setLocalDisplayName] = useState("")
 
-  // Real-time listener for organizations
+  // Update local display name state when user data loads
+  useEffect(() => {
+    if (user) {
+      setLocalDisplayName(user.displayName || "Administrative Portal")
+      setAccountName(user.displayName || "")
+    }
+  }, [user])
+
+  // Real-time listener for organizations with optimized dependency
+  const userId = user?.uid
   useEffect(() => {
     if (authLoading) return
-    if (!user) {
-      router.push("/login")
+    if (!userId) {
+      if (!authLoading) router.push("/login")
       return
     }
-
-    setAccountName(user.displayName || "")
 
     const orgsRef = collection(db, "organizations")
     const q = query(
       orgsRef, 
-      where("ownerId", "==", user.uid),
+      where("ownerId", "==", userId),
       orderBy("createdAt", "desc")
     )
 
@@ -91,16 +100,19 @@ export default function AccountHomePage() {
       setIsLoadingOrgs(false)
     }, (error) => {
       console.error("Error fetching organizations:", error)
-      toast({
-        variant: "destructive",
-        title: "Connection Error",
-        description: "Failed to sync your organizations with the database."
-      })
+      // Only show error if it's not a missing index error (which we handle in README)
+      if (!error.message.includes("index")) {
+        toast({
+          variant: "destructive",
+          title: "Connection Error",
+          description: "Failed to sync your organizations. Check your internet connection."
+        })
+      }
       setIsLoadingOrgs(false)
     })
 
     return () => unsubscribe()
-  }, [user, authLoading, db, router])
+  }, [userId, authLoading, db, router])
 
   const handleAddOrg = async () => {
     if (!user) return
@@ -128,7 +140,7 @@ export default function AccountHomePage() {
 
       toast({
         title: "Organization Registered",
-        description: `${newOrgName} has been successfully added to your management dashboard.`
+        description: `${newOrgName} has been successfully added.`
       })
       
       setNewOrgName("")
@@ -151,9 +163,11 @@ export default function AccountHomePage() {
     setIsUpdatingAccount(true)
     try {
       await updateProfile(user, { displayName: accountName })
+      setLocalDisplayName(accountName)
+      setIsEditNameOpen(false)
       toast({
         title: "Profile Updated",
-        description: "Your administrative display name has been updated."
+        description: "Your administrative name has been updated successfully."
       })
     } catch (error: any) {
       toast({
@@ -179,8 +193,9 @@ export default function AccountHomePage() {
   if (authLoading) {
     return (
       <DashboardShell>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="flex flex-col items-center justify-center h-96 gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Initializing Secure Session...</p>
         </div>
       </DashboardShell>
     )
@@ -188,12 +203,12 @@ export default function AccountHomePage() {
 
   return (
     <DashboardShell>
-      <div className="space-y-8">
+      <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account home</span>
           <div className="flex items-center justify-between">
             <h1 className="text-4xl font-headline font-bold text-slate-900 tracking-tight">
-              {user?.displayName || "Administrative Portal"}
+              {localDisplayName}
             </h1>
             <div className="flex items-center gap-3">
               <DropdownMenu>
@@ -203,35 +218,13 @@ export default function AccountHomePage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer gap-2 py-2.5">
-                        <Edit2 className="w-4 h-4 text-slate-400" />
-                        <span className="font-medium">Edit account name</span>
-                      </DropdownMenuItem>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Edit Account Name</DialogTitle>
-                      </DialogHeader>
-                      <div className="py-4 space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="acc-name">Name</Label>
-                          <Input 
-                            id="acc-name" 
-                            value={accountName} 
-                            onChange={(e) => setAccountName(e.target.value)}
-                            placeholder="e.g. Sagar Poudel"
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount}>
-                          {isUpdatingAccount ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Save Changes"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                  <DropdownMenuItem 
+                    onSelect={() => setIsEditNameOpen(true)}
+                    className="cursor-pointer gap-2 py-2.5"
+                  >
+                    <Edit2 className="w-4 h-4 text-slate-400" />
+                    <span className="font-medium">Edit account name</span>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer gap-2 py-2.5 text-destructive focus:text-destructive">
                     <LogOut className="w-4 h-4" />
@@ -239,6 +232,31 @@ export default function AccountHomePage() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Update Profile Name</DialogTitle>
+                  </DialogHeader>
+                  <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="acc-name">Display Name</Label>
+                      <Input 
+                        id="acc-name" 
+                        value={accountName} 
+                        onChange={(e) => setAccountName(e.target.value)}
+                        placeholder="e.g. Sagar Poudel"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsEditNameOpen(false)}>Cancel</Button>
+                    <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount}>
+                      {isUpdatingAccount ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Save Changes"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
               
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
@@ -273,6 +291,7 @@ export default function AccountHomePage() {
                     </div>
                   </div>
                   <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                     <Button onClick={handleAddOrg} disabled={isAddingOrg}>
                       {isAddingOrg ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Complete Registration"}
                     </Button>
@@ -364,7 +383,7 @@ export default function AccountHomePage() {
             {!isLoadingOrgs && orgs.length > 0 && (
               <div className="py-4 px-8 border-t border-slate-50 bg-slate-50/30">
                 <p className="text-[10px] text-slate-400 font-medium">
-                  Total Organizations: {orgs.length} • Showing all records synchronized from Firestore
+                  Total Organizations: {orgs.length} • Real-time synchronization active
                 </p>
               </div>
             )}

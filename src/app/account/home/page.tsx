@@ -507,7 +507,7 @@ export default function AccountHomePage() {
                             <div className="space-y-1">
                               <p className="text-sm font-bold text-red-900">Request Organization Deletion</p>
                               <p className="text-xs text-red-700/80 leading-relaxed">
-                                This action is permanent and cannot be reversed. All associated DNS configurations, website data, and Workspace settings will be wiped from our infrastructure.
+                                This action is permanent and cannot be reversed. All associated DNS configurations, website data, and workspace settings will be wiped from our infrastructure.
                               </p>
                             </div>
                             <Button 
@@ -543,7 +543,7 @@ export default function AccountHomePage() {
                         Are you absolutely sure? This will permanently remove "{editingOrg?.name}".
                       </p>
                       <p className="text-xs text-slate-500">
-                        By confirming, you acknowledge that all DNS, Website, and Workspace services for this organization will be decommissioned immediately.
+                        By confirming, you acknowledge that all DNS, Website, and workspace services for this organization will be decommissioned immediately.
                       </p>
                       <div className="space-y-2 pt-2">
                         <Label className="text-[10px] font-bold uppercase">To confirm, type "{editingOrg?.name}" below:</Label>

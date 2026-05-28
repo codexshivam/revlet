@@ -22,6 +22,7 @@ async function cfFetch(path: string, options: RequestInit = {}) {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+      cache: 'no-store',
     });
 
     const text = await response.text();
@@ -29,7 +30,10 @@ async function cfFetch(path: string, options: RequestInit = {}) {
     try {
       data = JSON.parse(text);
     } catch (e) {
-      throw new Error(`Invalid response from infrastructure API: ${text.substring(0, 100)}`);
+      if (!response.ok) {
+        throw new Error(`API error (${response.status}): ${text.substring(0, 100)}`);
+      }
+      return text;
     }
 
     if (!response.ok) {
@@ -53,9 +57,9 @@ export async function createZone(domain: string) {
         type: 'full'
       }),
     });
-    return data.result;
+    return { success: true, data: data.result };
   } catch (error: any) {
-    throw new Error(error.message || 'Failed to initialize domain infrastructure');
+    return { success: false, error: error.message || 'Failed to initialize domain infrastructure' };
   }
 }
 
@@ -63,40 +67,46 @@ export async function getZoneDetails(zoneId: string) {
   try {
     const data = await cfFetch(`/zones/${zoneId}`);
     return {
-      status: data.result.status,
-      nameServers: data.result.name_servers,
-      originalNameServers: data.result.original_name_servers,
-      paused: data.result.paused,
-      type: data.result.type,
+      success: true,
+      data: {
+        status: data.result.status,
+        nameServers: data.result.name_servers,
+        originalNameServers: data.result.original_name_servers,
+        paused: data.result.paused,
+        type: data.result.type,
+      }
     };
   } catch (error: any) {
-    throw new Error(error.message || 'Failed to fetch domain details');
+    return { success: false, error: error.message || 'Failed to fetch domain details' };
   }
 }
 
 export async function checkZoneActivation(zoneId: string) {
   try {
     const data = await cfFetch(`/zones/${zoneId}/activation_check`, { method: 'PUT' });
-    return data.success;
+    return { success: true, data: data.success };
   } catch (error: any) {
-    throw new Error(error.message || 'Failed to initiate connection check');
+    return { success: false, error: error.message || 'Failed to initiate connection check' };
   }
 }
 
 export async function listDNSRecords(zoneId: string) {
   try {
     const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100`);
-    return data.result.map((r: any) => ({
-      id: r.id,
-      type: r.type,
-      name: r.name,
-      content: r.content,
-      ttl: r.ttl === 1 ? 'Auto' : r.ttl.toString(),
-      proxied: r.proxied,
-      priority: r.priority,
-    }));
+    return {
+      success: true,
+      data: data.result.map((r: any) => ({
+        id: r.id,
+        type: r.type,
+        name: r.name,
+        content: r.content,
+        ttl: r.ttl === 1 ? 'Auto' : r.ttl.toString(),
+        proxied: r.proxied,
+        priority: r.priority,
+      }))
+    };
   } catch (error: any) {
-    throw new Error(error.message || 'Failed to list domain settings');
+    return { success: false, error: error.message || 'Failed to list domain settings' };
   }
 }
 
@@ -113,9 +123,9 @@ export async function createDNSRecord(zoneId: string, record: any) {
         priority: record.priority,
       }),
     });
-    return data.result;
+    return { success: true, data: data.result };
   } catch (error: any) {
-    throw new Error(error.message || 'Failed to apply domain setting');
+    return { success: false, error: error.message || 'Failed to apply domain setting' };
   }
 }
 
@@ -132,9 +142,9 @@ export async function updateDNSRecord(zoneId: string, recordId: string, record: 
         priority: record.priority,
       }),
     });
-    return data.result;
+    return { success: true, data: data.result };
   } catch (error: any) {
-    throw new Error(error.message || 'Failed to update domain setting');
+    return { success: false, error: error.message || 'Failed to update domain setting' };
   }
 }
 
@@ -143,8 +153,8 @@ export async function deleteDNSRecord(zoneId: string, recordId: string) {
     const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {
       method: 'DELETE',
     });
-    return data.result;
+    return { success: true, data: data.result };
   } catch (error: any) {
-    throw new Error(error.message || 'Failed to remove domain setting');
+    return { success: false, error: error.message || 'Failed to remove domain setting' };
   }
 }

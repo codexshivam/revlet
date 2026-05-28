@@ -12,7 +12,6 @@ import {
   Search, 
   ShieldCheck, 
   RefreshCw, 
-  CheckCircle2, 
   Loader2, 
   Server,
   Globe,
@@ -103,11 +102,19 @@ export default function DNSManagementPage() {
     if (!zoneId) return
     setIsLoadingRecords(true)
     try {
-      const zone = await getZoneDetails(zoneId)
-      setZoneDetails(zone)
+      const zoneRes = await getZoneDetails(zoneId)
+      if (zoneRes.success) {
+        setZoneDetails(zoneRes.data)
+      } else {
+        throw new Error(zoneRes.error)
+      }
       
-      const dns = await listDNSRecords(zoneId)
-      setRecords(dns)
+      const dnsRes = await listDNSRecords(zoneId)
+      if (dnsRes.success) {
+        setRecords(dnsRes.data)
+      } else {
+        throw new Error(dnsRes.error)
+      }
     } catch (error: any) {
       console.warn('Network sync issue:', error.message)
       toast({
@@ -147,7 +154,9 @@ export default function DNSManagementPage() {
     if (!zoneId) return
     setIsRefreshing(true)
     try {
-      await checkZoneActivation(zoneId)
+      const res = await checkZoneActivation(zoneId)
+      if (!res.success) throw new Error(res.error)
+      
       await fetchDNSData()
       toast({
         title: "Connection Checked",
@@ -178,15 +187,20 @@ export default function DNSManagementPage() {
 
     setIsSubmitting(true)
     try {
+      let res;
       if (editingRecord) {
-        await updateDNSRecord(zoneId, editingRecord.id, formData)
-        toast({ title: "Record Updated", description: "Changes have been deployed globally." })
+        res = await updateDNSRecord(zoneId, editingRecord.id, formData)
       } else {
-        await createDNSRecord(zoneId, formData)
-        toast({ title: "Record Created", description: "The new record is now propagating." })
+        res = await createDNSRecord(zoneId, formData)
       }
-      setIsDialogOpen(false)
-      fetchDNSData()
+      
+      if (res.success) {
+        toast({ title: editingRecord ? "Record Updated" : "Record Created", description: "Changes have been deployed globally." })
+        setIsDialogOpen(false)
+        fetchDNSData()
+      } else {
+        throw new Error(res.error)
+      }
     } catch (error: any) {
       toast({ 
         variant: "destructive", 
@@ -203,9 +217,13 @@ export default function DNSManagementPage() {
     if (!confirm("Are you sure you want to permanently remove this record?")) return
 
     try {
-      await deleteDNSRecord(zoneId, id)
-      toast({ title: "Record Removed", description: "The configuration has been deleted." })
-      fetchDNSData()
+      const res = await deleteDNSRecord(zoneId, id)
+      if (res.success) {
+        toast({ title: "Record Removed", description: "The configuration has been deleted." })
+        fetchDNSData()
+      } else {
+        throw new Error(res.error)
+      }
     } catch (error: any) {
       toast({ 
         variant: "destructive", 
@@ -220,20 +238,25 @@ export default function DNSManagementPage() {
     setIsSettingUp(true)
     
     try {
-      const newZone = await createZone(selectedOrg.domain)
-      if (!newZone?.id) {
-        throw new Error("Initialization succeeded but no infrastructure ID was returned.");
+      const res = await createZone(selectedOrg.domain)
+      if (res.success) {
+        const newZone = res.data;
+        if (!newZone?.id) {
+          throw new Error("Initialization succeeded but no infrastructure ID was returned.");
+        }
+        
+        const orgRef = doc(db, "organizations", selectedOrg.id)
+        await updateDoc(orgRef, {
+          cloudflareZoneId: newZone.id
+        })
+        
+        toast({
+          title: "Infrastructure Initialized",
+          description: "Domain added to the global network. Please update your nodes as shown.",
+        })
+      } else {
+        throw new Error(res.error)
       }
-      
-      const orgRef = doc(db, "organizations", selectedOrg.id)
-      await updateDoc(orgRef, {
-        cloudflareZoneId: newZone.id
-      })
-      
-      toast({
-        title: "Infrastructure Initialized",
-        description: "Domain added to the global network. Please update your nodes as shown.",
-      })
     } catch (error: any) {
       toast({ 
         variant: "destructive", 

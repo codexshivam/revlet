@@ -206,7 +206,7 @@ export default function WebsiteManagementPage() {
     }).then(() => {
       toast({
         title: "Upgrade Requested",
-        description: "Your infrastructure upgrade request has been logged successfully.",
+        description: "Your website upgrade request has been logged successfully.",
       })
       setIsUpgradeConfirmOpen(false)
     }).catch(async (error) => {
@@ -522,12 +522,12 @@ export default function WebsiteManagementPage() {
                   <div className="space-y-2">
                     <h3 className="text-2xl font-headline font-bold text-amber-900">Provisioning Managed Infrastructure</h3>
                     <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
-                      Our engineering team is building your secure institution portal for <span className="font-bold">{selectedOrg.domain}</span>. This process typically initializes within 24 hours.
+                      Our engineering team is building your managed website for <span className="font-bold">{selectedOrg.domain}</span>. This process typically initializes within 24 hours.
                     </p>
                   </div>
                   <div className="bg-amber-100/50 p-4 rounded-lg border border-amber-200/50 max-w-lg mx-auto">
                     <p className="text-xs text-amber-800 font-bold leading-relaxed">
-                      Our team will reach out to you to clarify your doubts and get a proper concept of your website before we finalise the deployment.
+                      Our team will reach out to you to clarify your doubts and get a proper concept of your website before we finalize the deployment.
                     </p>
                   </div>
                 </div>
@@ -581,11 +581,11 @@ export default function WebsiteManagementPage() {
               <div className="space-y-6">
                 <div className="space-y-4">
                   <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
-                    {selectedOrg.hasWebsite ? "Upgrade Your Institutional Presence" : "Get Your Professional Website"}
+                    {selectedOrg.hasWebsite ? "Upgrade Your Website Presence" : "Get Your Managed Website"}
                   </h2>
                   <div className="max-w-3xl mx-auto space-y-4">
                     <p className="text-slate-500 text-[11px] leading-relaxed font-medium">
-                      Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure. This is not an AI-built website or a generic template. Our engineering team provides consistent, long-term support so you never feel lost.
+                      Launch a high-performance, secure website for your organization on our optimized enterprise infrastructure. This is not an AI-built site or a generic template. Our engineering team provides consistent, long-term support so you never feel lost.
                     </p>
                   </div>
                 </div>
@@ -599,7 +599,7 @@ export default function WebsiteManagementPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
                 {[
-                  { title: "Custom Development", desc: "No templates or AI generation. We build professional, hand-coded portals tailored for institutions.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
+                  { title: "Custom Development", desc: "We build professional, hand-coded websites tailored for your organization.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
                   { title: "Peace of Mind", desc: "Always have full control. Modify your content or request technical changes anytime via our central dashboard.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
                   { title: "No Hidden Costs", desc: "Stay away from unwanted charges just to make small changes. Our monthly quota includes everything you need for regular maintenance.", icon: CreditCard, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
                   { title: "Enterprise Speed", desc: "Ultra-fast global performance with Cloudflare edge caching for superior student and faculty access.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
@@ -630,10 +630,10 @@ export default function WebsiteManagementPage() {
                 <AlertDialog open={isUpgradeConfirmOpen} onOpenChange={setIsUpgradeConfirmOpen}>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle className="font-headline font-bold">Confirm Infrastructure Upgrade?</AlertDialogTitle>
+                      <AlertDialogTitle className="font-headline font-bold">Confirm Website Upgrade?</AlertDialogTitle>
                       <AlertDialogDescription className="text-sm leading-relaxed">
-                        This will initiate the provisioning process for your managed website infrastructure. 
-                        Our engineering team will contact you directly to discuss your specific requirements and institutional vision before we finalize the deployment.
+                        This will initiate the provisioning process for your managed website. 
+                        Our engineering team will contact you directly to discuss your specific requirements and website vision before we finalize the deployment.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

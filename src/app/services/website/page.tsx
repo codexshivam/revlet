@@ -38,6 +38,16 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -83,6 +93,7 @@ export default function WebsiteManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [expandedModId, setExpandedModId] = useState<string | null>(null)
+  const [isUpgradeConfirmOpen, setIsUpgradeConfirmOpen] = useState(false)
   
   // Modification Form State
   const [modTitle, setModTitle] = useState("")
@@ -197,6 +208,7 @@ export default function WebsiteManagementPage() {
         title: "Upgrade Requested",
         description: "Your infrastructure upgrade request has been logged successfully.",
       })
+      setIsUpgradeConfirmOpen(false)
     }).catch(async (error) => {
       const permissionError = new FirestorePermissionError({
         path: orgRef.path,
@@ -606,7 +618,7 @@ export default function WebsiteManagementPage() {
 
               <div className="pt-8 flex flex-col items-center gap-4">
                 <Button 
-                  onClick={handleRequestUpgrade} 
+                  onClick={() => setIsUpgradeConfirmOpen(true)} 
                   size="lg" 
                   disabled={isUpdating}
                   className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
@@ -614,6 +626,28 @@ export default function WebsiteManagementPage() {
                   {isUpdating ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Rocket className="w-5 h-5 mr-3 group-hover:translate-y-[-2px] transition-transform" />}
                   Request Managed Website
                 </Button>
+                
+                <AlertDialog open={isUpgradeConfirmOpen} onOpenChange={setIsUpgradeConfirmOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="font-headline font-bold">Confirm Infrastructure Upgrade?</AlertDialogTitle>
+                      <AlertDialogDescription className="text-sm leading-relaxed">
+                        This will initiate the provisioning process for your managed website infrastructure. 
+                        Our engineering team will contact you directly to discuss your specific requirements and institutional vision before we finalize the deployment.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleRequestUpgrade}
+                        className="bg-slate-900 text-white font-bold"
+                      >
+                        Proceed with Upgrade
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
                 <div className="flex items-center gap-2 mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   <Shield className="w-3 h-3" />
                   Full administrative control guaranteed

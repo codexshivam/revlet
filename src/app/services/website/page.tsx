@@ -1,3 +1,4 @@
+
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -15,7 +16,8 @@ import {
   CirclePlus,
   Loader2,
   Globe,
-  Ban
+  Ban,
+  MessageSquare
 } from "lucide-react"
 import {
   Dialog,
@@ -54,10 +56,21 @@ export default function WebsiteManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   
-  // For demo/UI states - derived from organization data
-  const [status, setStatus] = useState<WebsiteStatus>("not_found")
+  // Local status override for demo/testing purposes
+  const [testStatus, setTestStatus] = useState<WebsiteStatus | null>(null)
 
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
+
+  // Determine active status based on Firestore data or test override
+  const status = useMemo(() => {
+    if (testStatus) return testStatus
+    if (!selectedOrg) return "not_found"
+    
+    if (selectedOrg.hasWebsite === undefined) return "not_found"
+    if (selectedOrg.hasWebsite === true) return "external"
+    // If hasWebsite is explicitly false, it means they want it managed/built by us
+    return "ready_and_published" // In a real app, this would check another field like 'isPublished'
+  }, [selectedOrg, testStatus])
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -70,22 +83,15 @@ export default function WebsiteManagementPage() {
         setSelectedOrgId(fetched[0].id)
       }
       setIsLoading(false)
+    }, (error) => {
+      const permissionError = new FirestorePermissionError({
+        path: 'organizations',
+        operation: 'list',
+      });
+      errorEmitter.emit('permission-error', permissionError);
     })
     return unsub
   }, [user, authLoading, db, selectedOrgId])
-
-  // Determine status based on organization data
-  useEffect(() => {
-    if (selectedOrg) {
-      if (selectedOrg.hasWebsite === undefined) {
-        setStatus("not_found")
-      } else if (selectedOrg.hasWebsite === true) {
-        setStatus("external")
-      } else {
-        setStatus("waiting_for_changes")
-      }
-    }
-  }, [selectedOrg])
 
   const handleDeclareWebsite = async (hasWebsite: boolean) => {
     if (!selectedOrgId) return
@@ -96,9 +102,10 @@ export default function WebsiteManagementPage() {
       hasWebsite: hasWebsite
     }).then(() => {
       toast({
-        title: "Status Updated",
-        description: `Organization website preference has been registered.`,
+        title: "Infrastructure Context Updated",
+        description: `Website preference for ${selectedOrg?.name} has been registered.`,
       })
+      setTestStatus(null) // Reset test status to show live data
     }).catch(async (error) => {
       const permissionError = new FirestorePermissionError({
         path: orgRef.path,
@@ -114,7 +121,7 @@ export default function WebsiteManagementPage() {
   const handleRequestChange = () => {
     toast({
       title: "Request Submitted",
-      description: "Our developers will review your website change request.",
+      description: "Your modification request has been queued for review by the DevOps team.",
     })
   }
 
@@ -123,7 +130,7 @@ export default function WebsiteManagementPage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synchronizing Directory...</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synchronizing Infrastructure...</p>
         </div>
       </DashboardShell>
     )
@@ -137,10 +144,11 @@ export default function WebsiteManagementPage() {
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Website Management</h1>
             <div className="flex gap-2 bg-white p-1 border border-slate-200 rounded-lg shadow-sm">
-               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setStatus("not_found")}>Test: Not Found</Button>
-               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setStatus("external")}>Test: External</Button>
-               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setStatus("waiting_for_changes")}>Test: Waiting</Button>
-               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setStatus("ready_and_published")}>Test: Ready</Button>
+               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setTestStatus("not_found")}>Test: Not Found</Button>
+               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setTestStatus("external")}>Test: External</Button>
+               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setTestStatus("waiting_for_changes")}>Test: Waiting</Button>
+               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setTestStatus("ready_and_published")}>Test: Ready</Button>
+               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold text-primary" onClick={() => setTestStatus(null)}>Reset to Live</Button>
             </div>
           </div>
         </div>
@@ -156,7 +164,7 @@ export default function WebsiteManagementPage() {
               <div className="space-y-2">
                 <h3 className="text-2xl font-headline font-bold text-slate-900">Infrastructure Declaration Required</h3>
                 <p className="text-slate-500 max-w-sm mx-auto text-sm leading-relaxed">
-                  We currently have no managed website records for <span className="font-bold text-slate-900">{selectedOrg?.name}</span>. Please declare the current status to initialize services.
+                  No managed website records exist for <span className="font-bold text-slate-900">{selectedOrg?.name}</span>. Please declare the current status to initialize services.
                 </p>
               </div>
               
@@ -192,7 +200,7 @@ export default function WebsiteManagementPage() {
                   </div>
                   <div>
                     <h3 className="text-lg font-headline font-bold text-slate-900">External Hosting Active</h3>
-                    <p className="text-slate-500 text-sm mt-1 max-w-md">The website for <span className="font-bold">{selectedOrg?.domain}</span> is hosted externally. Core management features are restricted.</p>
+                    <p className="text-slate-500 text-sm mt-1 max-w-md">The website for <span className="font-bold">{selectedOrg?.domain}</span> is hosted on external infrastructure. Advanced edge controls are restricted.</p>
                   </div>
                 </div>
                 <Dialog>
@@ -217,7 +225,7 @@ export default function WebsiteManagementPage() {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button onClick={() => toast({ title: "Migration request logged" })} className="font-bold px-8">Confirm Migration Request</Button>
+                      <Button onClick={() => toast({ title: "Migration request logged", description: "A technical lead will contact you within 24 hours." })} className="font-bold px-8">Confirm Migration Request</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -236,8 +244,8 @@ export default function WebsiteManagementPage() {
                 <Clock className="w-6 h-6 text-amber-600" />
               </div>
               <div>
-                <h3 className="text-lg font-headline font-bold text-amber-900">Provisioning in Progress</h3>
-                <p className="text-amber-700/80 text-sm mt-1 max-w-lg">Our infrastructure team is currently deploying the base platform for {selectedOrg?.domain}. Access controls will unlock once the edge cache is initialized.</p>
+                <h3 className="text-lg font-headline font-bold text-amber-900">Infrastructure Provisioning</h3>
+                <p className="text-amber-700/80 text-sm mt-1 max-w-lg">Our engineering team is currently deploying the edge environment for {selectedOrg?.domain}. Access controls will unlock once propagation is verified.</p>
               </div>
             </CardContent>
           </Card>
@@ -338,7 +346,7 @@ export default function WebsiteManagementPage() {
               <Card className="bg-slate-900 text-white shadow-xl shadow-slate-200">
                 <CardContent className="p-6 space-y-4">
                   <Rocket className="w-8 h-8 text-primary" />
-                  <h4 className="font-headline font-bold text-lg leading-tight">Advanced Technical Support</h4>
+                  <h4 className="font-headline font-bold text-lg leading-tight">Advanced Engineering Support</h4>
                   <p className="text-xs text-slate-400 leading-relaxed">
                     Require custom API integrations or complex database architectures? Our engineering team is available for deep-tech consultations.
                   </p>

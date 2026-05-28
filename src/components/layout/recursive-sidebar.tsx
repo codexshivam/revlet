@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -58,7 +57,7 @@ export function RecursiveSidebar() {
     <aside className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col pt-12 shrink-0">
       <div className="px-6 mb-8">
         <Link href="/account/home" className="flex flex-col gap-0 group">
-          <span className="font-body font-black text-2xl tracking-[0.15em] text-slate-900 leading-none ml-[0.15em]">
+          <span className="font-body font-black text-2xl tracking-[0.2em] text-slate-900 leading-none ml-[0.2em]">
             REVLET
           </span>
           <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1.5 leading-tight">

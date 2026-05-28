@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Plus, Building2, ExternalLink, Edit2, LogOut, Globe, Loader2, Info } from "lucide-react"
+import { MoreVertical, Plus, Building2, Edit2, LogOut, Globe, Loader2, Info } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore } from "@/firebase"
 import { signOut, updateProfile } from "firebase/auth"
@@ -91,6 +91,7 @@ export default function AccountHomePage() {
   
   const [accountName, setAccountName] = useState("")
   const [localDisplayName, setLocalDisplayName] = useState("")
+  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -239,8 +240,6 @@ export default function AccountHomePage() {
       setIsUpdatingAccount(false)
     }
   }
-
-  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -522,26 +521,15 @@ export default function AccountHomePage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right pr-8">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-slate-100 transition-all shadow-sm"
-                            onClick={() => handleOpenEdit(org)}
-                          >
-                            <Edit2 className="w-3 h-3" />
-                            Edit
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm"
-                            onClick={() => router.push(`/services/dns?org=${org.id}`)}
-                          >
-                            Manage
-                            <ExternalLink className="w-3 h-3" />
-                          </Button>
-                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm"
+                          onClick={() => handleOpenEdit(org)}
+                        >
+                          Modify Details
+                          <Edit2 className="w-3 h-3" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}

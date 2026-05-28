@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper to check if the user is the owner of the resource
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Organizations
+    match /organizations/{orgId} {
+      allow create: if request.auth != null;
+      allow read, update: if isOwner(resource.data.ownerId);
+      allow delete: if false; // Deletion is handled by platform admin
+    }
+
+    // Payment Vouchers
+    match /paymentVouchers/{voucherId} {
+      allow create: if request.auth != null;
+      allow read: if isOwner(resource.data.ownerId);
+      allow update, delete: if false; // History is immutable for users
+    }
+
+    // Team Members
+    match /teamMembers/{memberId} {
+      allow create: if request.auth != null;
+      allow read, update: if isOwner(resource.data.ownerId);
+      allow delete: if isOwner(resource.data.ownerId);
+    }
+  }
+}

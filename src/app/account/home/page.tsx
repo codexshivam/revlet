@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore } from "@/firebase"
 import { signOut, updateProfile } from "firebase/auth"
@@ -38,8 +38,12 @@ import {
   where, 
   onSnapshot, 
   addDoc, 
+  updateDoc,
+  doc,
   serverTimestamp,
 } from "firebase/firestore"
+import { errorEmitter } from '@/firebase/error-emitter'
+import { FirestorePermissionError } from '@/firebase/errors'
 
 interface Organization {
   id: string
@@ -53,7 +57,6 @@ interface Organization {
   contactPhone: string
   contactEmail: string
   description: string
-  services: string[]
   code: string
   ownerId: string
   createdAt: any
@@ -67,10 +70,10 @@ export default function AccountHomePage() {
   
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(true)
-  const [isAddingOrg, setIsAddingOrg] = useState(false)
-  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditNameOpen, setIsEditNameOpen] = useState(false)
+  const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
   
   // Form State
   const [formData, setFormData] = useState({
@@ -105,7 +108,6 @@ export default function AccountHomePage() {
       return
     }
 
-    // Real-time synchronization with Firestore
     const orgsRef = collection(db, "organizations")
     const q = query(orgsRef, where("ownerId", "==", user.uid))
 
@@ -115,7 +117,6 @@ export default function AccountHomePage() {
         ...doc.data()
       })) as Organization[]
 
-      // Client-side sort by createdAt or fallback to ID
       const sortedOrgs = fetchedOrgs.sort((a, b) => {
         const timeA = a.createdAt?.toMillis?.() || 0
         const timeB = b.createdAt?.toMillis?.() || 0
@@ -124,26 +125,53 @@ export default function AccountHomePage() {
 
       setOrgs(sortedOrgs)
       setIsLoadingOrgs(false)
-    }, (error: any) => {
-      console.error("Firestore sync error:", error)
+    }, async (error: any) => {
+      const permissionError = new FirestorePermissionError({
+        path: 'organizations',
+        operation: 'list',
+      });
+      errorEmitter.emit('permission-error', permissionError);
       setIsLoadingOrgs(false)
-      
-      let message = "Failed to connect to the database."
-      if (error.code === 'permission-denied') {
-        message = "Permission denied. Please ensure you are logged in and authorized."
-      }
-
-      toast({
-        variant: "destructive",
-        title: "Sync Failure",
-        description: message
-      })
     })
 
     return () => unsubscribe()
   }, [user, authLoading, db, router])
 
-  const handleAddOrg = async () => {
+  const handleOpenEdit = (org: Organization) => {
+    setEditingOrg(org)
+    setFormData({
+      name: org.name,
+      address: org.address,
+      phone: org.phone,
+      currentEmail: org.currentEmail,
+      domain: org.domain,
+      hasWebsite: org.hasWebsite,
+      contactName: org.contactName,
+      contactPhone: org.contactPhone,
+      contactEmail: org.contactEmail,
+      description: org.description
+    })
+    setIsDialogOpen(true)
+  }
+
+  const handleOpenCreate = () => {
+    setEditingOrg(null)
+    setFormData({
+      name: "",
+      address: "",
+      phone: "",
+      currentEmail: "",
+      domain: "",
+      hasWebsite: false,
+      contactName: "",
+      contactPhone: "",
+      contactEmail: "",
+      description: ""
+    })
+    setIsDialogOpen(true)
+  }
+
+  const handleSaveOrg = async () => {
     if (!user) return
     
     if (!formData.name || !formData.domain || !formData.contactEmail) {
@@ -155,51 +183,50 @@ export default function AccountHomePage() {
       return
     }
 
-    setIsAddingOrg(true)
+    setIsSubmitting(true)
     try {
-      const orgCode = `${formData.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`
-      
-      await addDoc(collection(db, "organizations"), {
-        ...formData,
-        services: ["DNS", "Hosting"],
-        code: orgCode,
-        ownerId: user.uid,
-        createdAt: serverTimestamp()
-      })
-
-      toast({
-        title: "Success",
-        description: `${formData.name} registered successfully.`
-      })
-      
-      setFormData({
-        name: "",
-        address: "",
-        phone: "",
-        currentEmail: "",
-        domain: "",
-        hasWebsite: false,
-        contactName: "",
-        contactPhone: "",
-        contactEmail: "",
-        description: ""
-      })
+      if (editingOrg) {
+        const orgRef = doc(db, "organizations", editingOrg.id)
+        updateDoc(orgRef, {
+          ...formData,
+          updatedAt: serverTimestamp()
+        }).catch(async (error) => {
+          const permissionError = new FirestorePermissionError({
+            path: orgRef.path,
+            operation: 'update',
+            requestResourceData: formData,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        })
+        toast({ title: "Updated", description: "Institution details saved." })
+      } else {
+        const orgCode = `${formData.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`
+        const orgsRef = collection(db, "organizations")
+        addDoc(orgsRef, {
+          ...formData,
+          code: orgCode,
+          ownerId: user.uid,
+          createdAt: serverTimestamp()
+        }).catch(async (error) => {
+          const permissionError = new FirestorePermissionError({
+            path: 'organizations',
+            operation: 'create',
+            requestResourceData: formData,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        })
+        toast({ title: "Success", description: "Institution registered." })
+      }
       setIsDialogOpen(false)
     } catch (error: any) {
-      console.error("Add org error:", error)
-      toast({
-        variant: "destructive",
-        title: "Registration Error",
-        description: "Failed to save organization. Please verify your internet connection and permissions."
-      })
+      toast({ variant: "destructive", title: "Operation Failed" })
     } finally {
-      setIsAddingOrg(false)
+      setIsSubmitting(false)
     }
   }
 
   const handleUpdateAccountName = async () => {
     if (!user || !accountName) return
-
     setIsUpdatingAccount(true)
     try {
       await updateProfile(user, { displayName: accountName })
@@ -212,6 +239,8 @@ export default function AccountHomePage() {
       setIsUpdatingAccount(false)
     }
   }
+
+  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -289,15 +318,17 @@ export default function AccountHomePage() {
               
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="bg-primary hover:bg-primary/90 text-white font-bold h-10 px-6 shadow-md shadow-primary/10">
+                  <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 text-white font-bold h-10 px-6 shadow-md shadow-primary/10">
                     <Plus className="w-4 h-4 mr-2" />
                     Register Institution
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden">
                   <DialogHeader className="bg-slate-900 text-white p-6">
-                    <DialogTitle className="font-headline font-bold text-xl">Onboard New Institution</DialogTitle>
-                    <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-bold">Secure Registration Protocol</p>
+                    <DialogTitle className="font-headline font-bold text-xl">
+                      {editingOrg ? "Edit Institutional Details" : "Onboard New Institution"}
+                    </DialogTitle>
+                    <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-bold">Secure Data Protocol</p>
                   </DialogHeader>
                   
                   <ScrollArea className="max-h-[70vh]">
@@ -428,8 +459,8 @@ export default function AccountHomePage() {
 
                   <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
                     <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-xs font-bold uppercase tracking-widest text-slate-400">Abort</Button>
-                    <Button onClick={handleAddOrg} disabled={isAddingOrg} className="px-8 font-bold h-11 bg-slate-900 hover:bg-black text-white shadow-xl">
-                      {isAddingOrg ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Confirm Registration"}
+                    <Button onClick={handleSaveOrg} disabled={isSubmitting} className="px-8 font-bold h-11 bg-slate-900 hover:bg-black text-white shadow-xl">
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingOrg ? "Update Details" : "Confirm Registration"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -455,7 +486,7 @@ export default function AccountHomePage() {
                   <h3 className="text-lg font-headline font-bold text-slate-900">No Institutions Registered</h3>
                   <p className="text-sm text-slate-500 max-w-xs">Start by registering your first educational institution.</p>
                 </div>
-                <Button variant="outline" onClick={() => setIsDialogOpen(true)} className="mt-2 font-bold">
+                <Button variant="outline" onClick={handleOpenCreate} className="mt-2 font-bold">
                   Add First Organization
                 </Button>
               </div>
@@ -465,7 +496,6 @@ export default function AccountHomePage() {
                   <TableRow className="bg-slate-50 hover:bg-slate-50 border-b border-slate-200">
                     <TableHead className="text-[10px] font-bold uppercase py-5 pl-8 text-slate-400 tracking-widest">Institution Name</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Managed Domain</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Active Services</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -491,25 +521,27 @@ export default function AccountHomePage() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1.5">
-                          {org.services?.map((s) => (
-                            <Badge key={s} variant="secondary" className="bg-slate-100 text-[9px] font-bold text-slate-500 border-slate-200 py-0.5 h-5 px-2 tracking-tight uppercase">
-                              {s}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
                       <TableCell className="text-right pr-8">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm"
-                          onClick={() => router.push(`/services/dns?org=${org.id}`)}
-                        >
-                          Manage
-                          <ExternalLink className="w-3 h-3" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-slate-100 transition-all shadow-sm"
+                            onClick={() => handleOpenEdit(org)}
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            Edit
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm"
+                            onClick={() => router.push(`/services/dns?org=${org.id}`)}
+                          >
+                            Manage
+                            <ExternalLink className="w-3 h-3" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -6,7 +5,18 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Plus, Building2, Edit2, LogOut, Globe, Loader2, Info } from "lucide-react"
+import { 
+  MoreVertical, 
+  Plus, 
+  Building2, 
+  Edit2, 
+  LogOut, 
+  Globe, 
+  Loader2, 
+  Info,
+  Trash2,
+  AlertTriangle
+} from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,11 +32,22 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
 import { useState, useEffect } from "react"
 import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore } from "@/firebase"
@@ -40,6 +61,7 @@ import {
   addDoc, 
   updateDoc,
   doc,
+  deleteDoc,
   serverTimestamp,
   getDocs
 } from "firebase/firestore"
@@ -61,7 +83,6 @@ interface Organization {
   description: string
   code: string
   ownerId: string
-  outstandingAmount: number
   createdAt: any
 }
 
@@ -76,7 +97,9 @@ export default function AccountHomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditNameOpen, setIsEditNameOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
+  const [deleteConfirmName, setDeleteConfirmName] = useState("")
   
   // Form State
   const [formData, setFormData] = useState({
@@ -89,8 +112,7 @@ export default function AccountHomePage() {
     contactName: "",
     contactPhone: "",
     contactEmail: "",
-    description: "",
-    outstandingAmount: 0
+    description: ""
   })
   
   const [accountName, setAccountName] = useState("")
@@ -154,8 +176,7 @@ export default function AccountHomePage() {
       contactName: org.contactName,
       contactPhone: org.contactPhone,
       contactEmail: org.contactEmail,
-      description: org.description,
-      outstandingAmount: org.outstandingAmount || 0
+      description: org.description
     })
     setIsDialogOpen(true)
   }
@@ -172,8 +193,7 @@ export default function AccountHomePage() {
       contactName: "",
       contactPhone: "",
       contactEmail: "",
-      description: "",
-      outstandingAmount: 0
+      description: ""
     })
     setIsDialogOpen(true)
   }
@@ -250,6 +270,29 @@ export default function AccountHomePage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleDeleteOrg = async () => {
+    if (!editingOrg) return
+    setIsSubmitting(true)
+    
+    const orgRef = doc(db, "organizations", editingOrg.id)
+    deleteDoc(orgRef)
+      .then(() => {
+        toast({ title: "Organization Removed", description: "The organization and all its data have been deleted." })
+        setIsDeleteDialogOpen(false)
+        setIsDialogOpen(false)
+      })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: orgRef.path,
+          operation: 'delete'
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setIsSubmitting(false)
+      })
   }
 
   const handleUpdateAccountName = async () => {
@@ -353,7 +396,6 @@ export default function AccountHomePage() {
                     <DialogTitle className="font-headline font-bold text-xl">
                       {editingOrg ? "Edit Organization Details" : "Register Organization"}
                     </DialogTitle>
-                    <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-bold">Secure Data Protocol</p>
                   </DialogHeader>
                   
                   <ScrollArea className="max-h-[70vh]">
@@ -374,7 +416,7 @@ export default function AccountHomePage() {
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="org-domain" className="text-[10px] font-bold text-slate-500 uppercase">Primary Domain</Label>
+                            <Label htmlFor="org-domain" className="text-[10px] font-bold text-slate-500 uppercase">Domain</Label>
                             <Input 
                               id="org-domain" 
                               placeholder="e.g. revlet.me" 
@@ -395,24 +437,14 @@ export default function AccountHomePage() {
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="org-balance" className="text-[10px] font-bold text-slate-500 uppercase">Outstanding Balance (NPR)</Label>
+                            <Label htmlFor="org-address" className="text-[10px] font-bold text-slate-500 uppercase">Physical Office Address</Label>
                             <Input 
-                              id="org-balance" 
-                              type="number"
-                              placeholder="e.g. 15000" 
-                              value={formData.outstandingAmount}
-                              onChange={(e) => setFormData({ ...formData, outstandingAmount: parseFloat(e.target.value) || 0 })}
+                              id="org-address" 
+                              placeholder="Street, City, Country" 
+                              value={formData.address}
+                              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                             />
                           </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="org-address" className="text-[10px] font-bold text-slate-500 uppercase">Physical Office Address</Label>
-                          <Input 
-                            id="org-address" 
-                            placeholder="Street, City, Country" 
-                            value={formData.address}
-                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                          />
                         </div>
                       </div>
 
@@ -480,6 +512,33 @@ export default function AccountHomePage() {
                           </div>
                         </div>
                       </div>
+
+                      {editingOrg && (
+                        <div className="space-y-4 pt-4">
+                          <Separator />
+                          <div className="flex items-center gap-2 text-destructive">
+                            <AlertTriangle className="w-4 h-4" />
+                            <h3 className="text-[10px] font-bold uppercase tracking-wider">Danger Zone</h3>
+                          </div>
+                          <div className="p-4 bg-red-50 border border-red-100 rounded-lg flex flex-col gap-4">
+                            <div className="space-y-1">
+                              <p className="text-sm font-bold text-red-900">Request Organization Deletion</p>
+                              <p className="text-xs text-red-700/80 leading-relaxed">
+                                This action is permanent and cannot be reversed. All associated DNS configurations, website data, and Workspace settings will be wiped from our infrastructure.
+                              </p>
+                            </div>
+                            <Button 
+                              variant="destructive" 
+                              size="sm" 
+                              className="w-fit font-bold gap-2"
+                              onClick={() => setIsDeleteDialogOpen(true)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Remove Organization
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </ScrollArea>
 
@@ -491,6 +550,42 @@ export default function AccountHomePage() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+
+              <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent className="max-w-md">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-red-600">Irreversible Action</AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-4">
+                      <p className="font-bold text-slate-900">
+                        Are you absolutely sure? This will permanently remove "{editingOrg?.name}".
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        By confirming, you acknowledge that all DNS, Website, and Workspace services for this organization will be decommissioned immediately.
+                      </p>
+                      <div className="space-y-2 pt-2">
+                        <Label className="text-[10px] font-bold uppercase">To confirm, type "{editingOrg?.name}" below:</Label>
+                        <Input 
+                          placeholder="Type organization name" 
+                          value={deleteConfirmName}
+                          onChange={(e) => setDeleteConfirmName(e.target.value)}
+                          className="border-red-200 focus-visible:ring-red-500"
+                        />
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setDeleteConfirmName("")}>Cancel</AlertDialogCancel>
+                    <Button 
+                      variant="destructive" 
+                      onClick={handleDeleteOrg}
+                      disabled={deleteConfirmName !== editingOrg?.name || isSubmitting}
+                      className="font-bold"
+                    >
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Confirm Deletion"}
+                    </Button>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         </div>
@@ -554,7 +649,7 @@ export default function AccountHomePage() {
                           className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm"
                           onClick={() => handleOpenEdit(org)}
                         >
-                          Modify Details
+                          Manage
                           <Edit2 className="w-3 h-3" />
                         </Button>
                       </TableCell>

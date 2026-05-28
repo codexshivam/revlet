@@ -9,8 +9,7 @@ service cloud.firestore {
     // Organizations
     match /organizations/{orgId} {
       allow create: if request.auth != null;
-      allow read, update: if isOwner(resource.data.ownerId);
-      allow delete: if false; // Deletion is handled by platform admin
+      allow read, update, delete: if isOwner(resource.data.ownerId);
     }
 
     // Payment Vouchers
@@ -23,8 +22,7 @@ service cloud.firestore {
     // Team Members
     match /teamMembers/{memberId} {
       allow create: if request.auth != null;
-      allow read, update: if isOwner(resource.data.ownerId);
-      allow delete: if isOwner(resource.data.ownerId);
+      allow read, update, delete: if isOwner(resource.data.ownerId);
     }
   }
 }

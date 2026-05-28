@@ -23,24 +23,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /organizations/{orgId} {
-      // Allow read, update, or delete only if the user is the owner
       allow read, update, delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
-      
-      // Allow creation if the user is authenticated and sets themselves as the owner
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+    }
+    match /paymentVouchers/{voucherId} {
+      allow read, create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+    }
+    match /teamMembers/{memberId} {
+      allow read, create, update: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
     }
   }
 }
 ```
 
-### 4. Firestore Indexes
-Create this index in **Firestore > Indexes** for the dashboard queries:
+## Infrastructure Integration (Cloudflare)
 
-*   **Collection ID**: `organizations`
-*   **Fields**:
-    *   `ownerId`: Ascending
-    *   `createdAt`: Descending
-*   **Query Scope**: Collection
+To enable DNS and domain management features, you must provide a Cloudflare API Token.
+
+1.  **Generate Token**: Go to your Cloudflare Dashboard -> My Profile -> API Tokens. Create a token with "Edit Zone DNS" permissions for all zones (or specific ones).
+2.  **Environment Variable**: Create a `.env.local` file in the root of the project and add:
+    ```bash
+    CLOUDFLARE_API_TOKEN=your_api_token_here
+    ```
+    This token is used by server-side actions and is never exposed to the client.
 
 ## Getting Started
 
@@ -55,7 +60,7 @@ Create this index in **Firestore > Indexes** for the dashboard queries:
     ```
 
 ## Features
-- **Centralized Dashboard**: Real-time Firestore synchronization with owner-based isolation.
-- **DNS Management**: Full CRUD for authoritative record types.
-- **Service Provisioning**: Integrated workflows for Workspace and Hosting.
-- **Secure Authentication**: Robust Firebase Auth integration with profile management.
+- **Account Home**: Real-time Firestore synchronization with owner-based isolation.
+- **DNS Management**: Simple CRUD for domain records with edge protection.
+- **Team Management**: Staff invitation and organization assignment.
+- **Billing**: Payment voucher submission and balance tracking.

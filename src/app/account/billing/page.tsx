@@ -79,11 +79,20 @@ export default function BillingPage() {
   }
 
   const handleDownloadPDF = (id: string) => {
+    // Simulate PDF generation and download
+    const element = document.createElement("a");
+    const mockContent = `EduSphere Invoice: ${id}\nAmount: NPR 45,500.00\nDate: May 12, 2024\nStatus: UNPAID`;
+    const file = new Blob([mockContent], {type: 'application/pdf'});
+    element.href = URL.createObjectURL(file);
+    element.download = `${id}.pdf`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+
     toast({
       title: "Downloading Invoice",
-      description: `Preparing ${id} for download...`,
+      description: `Invoice ${id} has been saved to your downloads.`,
     })
-    // Simulate download
   }
 
   return (
@@ -105,7 +114,7 @@ export default function BillingPage() {
                     Submit Payment
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-3xl bg-white p-0 overflow-hidden border-none shadow-2xl">
+                <DialogContent className="max-w-3xl bg-white p-0 overflow-hidden border-none shadow-2xl [&>button]:text-white">
                   <DialogHeader className="p-6 bg-slate-900 text-white">
                     <DialogTitle className="text-xl font-headline font-bold">Payment Submission Portal</DialogTitle>
                     <p className="text-slate-400 text-xs">Upload your bank transfer receipt for verification.</p>
@@ -174,13 +183,13 @@ export default function BillingPage() {
                         </div>
                       </div>
                       
-                      <Button 
+                      <button 
                         onClick={handleConfirmSubmission} 
-                        className="w-full h-12 font-bold shadow-lg shadow-primary/10"
+                        className="w-full bg-primary text-white font-bold h-12 rounded-lg shadow-lg shadow-primary/10 hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={isSubmitting || !selectedFile}
                       >
                         {isSubmitting ? "Processing..." : "Confirm & Send Submission"}
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 </DialogContent>
@@ -213,7 +222,7 @@ export default function BillingPage() {
                   <TableRow key={inv.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
                     <TableCell className="font-bold text-slate-700 py-4 pl-6 text-xs">{inv.id}</TableCell>
                     <TableCell className="text-slate-400 text-xs font-medium">{inv.date}</TableCell>
-                    <TableCell className="font-mono font-bold text-slate-900 text-xs">रू {inv.amount}</TableCell>
+                    <TableCell className="font-mono font-bold text-slate-900 text-[10px]">रू {inv.amount}</TableCell>
                     <TableCell>
                       <Badge className={`text-[10px] px-2 py-0 h-5 font-bold shadow-none ${inv.status === "Paid" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-red-50 text-red-600 border-red-100"}`}>
                         {inv.status}

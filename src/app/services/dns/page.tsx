@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -15,7 +14,6 @@ import {
   ShieldCheck, 
   RefreshCw, 
   CheckCircle2, 
-  AlertCircle, 
   Loader2, 
   Server,
   ExternalLink,
@@ -140,7 +138,7 @@ export default function DNSManagementPage() {
     }
   }, [selectedOrg, fetchDNSData])
 
-  const handleRefreshActivation = async () => {
+  const handleRefreshActivation = useCallback(async () => {
     if (!selectedOrg?.cloudflareZoneId) return
     setIsRefreshing(true)
     try {

@@ -18,9 +18,6 @@ import {
   Clock,
   MessageSquare,
   Info,
-  Zap,
-  Shield,
-  LayoutGrid,
   CheckCircle2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -295,48 +292,32 @@ export default function DNSManagementPage() {
 
         {selectedOrg && !selectedOrg.dnsRequested && !zoneId ? (
           <div className="max-w-4xl mx-auto py-12 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="space-y-8 text-center">
+            <div className="space-y-12 text-center">
               <div className="space-y-4">
                 <Badge variant="secondary" className="bg-primary/10 text-primary font-bold px-3 py-1">
                   Premium Infrastructure
                 </Badge>
                 <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
-                  High-Performance Domain Management
+                  Professional Domain Infrastructure
                 </h2>
                 <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto">
                   Connect your institution's domain to our professional global network. Unlock advanced security, performance, and simplified management.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-left mt-12">
-                <div className="space-y-3 p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
-                    <Shield className="w-5 h-5 text-emerald-600" />
+              <div className="flex flex-col items-center justify-center space-y-4 text-left max-w-md mx-auto">
+                {[
+                  "Advanced Security & DDoS Protection",
+                  "Ultra-Fast Global DNS Propagation",
+                  "Simplified MX, CNAME & TXT Management",
+                  "Enterprise-Grade 99.9% Uptime SLA",
+                  "One-Click Proxy & Security Shields"
+                ].map((feature) => (
+                  <div key={feature} className="flex items-center gap-3 w-full p-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                    <span className="text-sm font-bold text-slate-700">{feature}</span>
                   </div>
-                  <h4 className="font-bold text-slate-900">Advanced Security</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">Built-in DDoS protection and security filtering for all your web traffic.</p>
-                </div>
-                <div className="space-y-3 p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100">
-                    <Zap className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <h4 className="font-bold text-slate-900">Ultra-Fast DNS</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">Lightning-fast record propagation across our global edge infrastructure.</p>
-                </div>
-                <div className="space-y-3 p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-100">
-                    <LayoutGrid className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <h4 className="font-bold text-slate-900">Easy Management</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">Simple interface for A, CNAME, MX, and TXT records with one-click proxying.</p>
-                </div>
-                <div className="space-y-3 p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-                  <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center border border-purple-100">
-                    <CheckCircle2 className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <h4 className="font-bold text-slate-900">99.9% Uptime</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">Enterprise-grade reliability for your institution's critical web presence.</p>
-                </div>
+                ))}
               </div>
 
               <div className="pt-8 flex flex-col items-center">
@@ -356,32 +337,34 @@ export default function DNSManagementPage() {
             </div>
           </div>
         ) : selectedOrg && selectedOrg.dnsRequested && !zoneId ? (
-          <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
-            <CardContent className="p-20 flex flex-col items-center text-center gap-6">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
-                  <Clock className="w-10 h-10 text-amber-500" />
-                  <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white">
-                    PENDING
-                  </Badge>
+          <div className="max-w-4xl mx-auto py-20">
+            <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
+              <CardContent className="p-20 flex flex-col items-center text-center gap-6">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
+                    <Clock className="w-10 h-10 text-amber-500" />
+                    <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white">
+                      PENDING
+                    </Badge>
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-headline font-bold text-amber-900">Infrastructure Provisioning</h3>
-                <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
-                  We are currently configuring your secure edge environment for <span className="font-bold">{selectedOrg.domain}</span>. Once complete, your assigned network nodes will appear here.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <Link href="/support">
-                  <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-6">
-                    <MessageSquare className="w-4 h-4" />
-                    Contact Network Desk
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-headline font-bold text-amber-900">Infrastructure Provisioning</h3>
+                  <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
+                    We are currently configuring your secure edge environment for <span className="font-bold">{selectedOrg.domain}</span>. Once complete, your assigned network nodes will appear here.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Link href="/support">
+                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-6">
+                      <MessageSquare className="w-4 h-4" />
+                      Contact Network Desk
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         ) : selectedOrg && zoneId && (
           <div className="space-y-8 animate-in fade-in duration-700">
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
@@ -476,7 +459,7 @@ export default function DNSManagementPage() {
                                 <TooltipTrigger asChild>
                                   <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 cursor-help transition-colors" />
                                 </TooltipTrigger>
-                                <TooltipContent className="max-w-xs p-3">
+                                <TooltipContent className="max-w-xs p-3 shadow-xl">
                                   <p className="text-xs font-medium leading-relaxed">
                                     Cloudflare responds to DNS queries. HTTP/S traffic is sent to the Cloudflare network and handled by security, caching, performance, and the developer platform.
                                   </p>

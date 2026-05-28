@@ -1,4 +1,3 @@
-
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -199,9 +198,12 @@ export default function AccountHomePage() {
           });
           errorEmitter.emit('permission-error', permissionError);
         })
-        toast({ title: "Updated", description: "Institution details saved." })
+        toast({ title: "Updated", description: "Organization details saved." })
       } else {
-        const orgCode = `${formData.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`
+        // Enhanced uniqueness for institution code
+        const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+        const orgCode = `${formData.name.substring(0, 3).toUpperCase()}-${uniqueSuffix}`
+        
         const orgsRef = collection(db, "organizations")
         addDoc(orgsRef, {
           ...formData,
@@ -216,7 +218,7 @@ export default function AccountHomePage() {
           });
           errorEmitter.emit('permission-error', permissionError);
         })
-        toast({ title: "Success", description: "Institution registered." })
+        toast({ title: "Success", description: "Organization registered." })
       }
       setIsDialogOpen(false)
     } catch (error: any) {
@@ -233,7 +235,7 @@ export default function AccountHomePage() {
       await updateProfile(user, { displayName: accountName })
       setLocalDisplayName(accountName)
       setIsEditNameOpen(false)
-      toast({ title: "Name Updated" })
+      toast({ title: "Account Name Updated" })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed" })
     } finally {
@@ -265,7 +267,7 @@ export default function AccountHomePage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Institutional Portal</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account Home</span>
           <div className="flex items-center justify-between">
             <h1 className="text-4xl font-headline font-bold text-slate-900 tracking-tight">
               {localDisplayName}
@@ -280,7 +282,7 @@ export default function AccountHomePage() {
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuItem onSelect={() => setIsEditNameOpen(true)} className="gap-2 py-2.5">
                     <Edit2 className="w-4 h-4 text-slate-400" />
-                    <span>Update display name</span>
+                    <span>Update account name</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="gap-2 py-2.5 text-destructive">
@@ -293,11 +295,11 @@ export default function AccountHomePage() {
               <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Admin Display Name</DialogTitle>
+                    <DialogTitle>Account Name</DialogTitle>
                   </DialogHeader>
                   <div className="py-4 space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="acc-name">New Display Name</Label>
+                      <Label htmlFor="acc-name">New Account Name</Label>
                       <Input 
                         id="acc-name" 
                         value={accountName} 
@@ -319,13 +321,13 @@ export default function AccountHomePage() {
                 <DialogTrigger asChild>
                   <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 text-white font-bold h-10 px-6 shadow-md shadow-primary/10">
                     <Plus className="w-4 h-4 mr-2" />
-                    Register Institution
+                    Register Organization
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden">
                   <DialogHeader className="bg-slate-900 text-white p-6">
                     <DialogTitle className="font-headline font-bold text-xl">
-                      {editingOrg ? "Edit Institutional Details" : "Onboard New Institution"}
+                      {editingOrg ? "Edit Organization Details" : "Register Organization"}
                     </DialogTitle>
                     <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-bold">Secure Data Protocol</p>
                   </DialogHeader>
@@ -482,8 +484,8 @@ export default function AccountHomePage() {
                   <Building2 className="w-8 h-8 text-slate-200" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-lg font-headline font-bold text-slate-900">No Institutions Registered</h3>
-                  <p className="text-sm text-slate-500 max-w-xs">Start by registering your first educational institution.</p>
+                  <h3 className="text-lg font-headline font-bold text-slate-900">No Organizations Registered</h3>
+                  <p className="text-sm text-slate-500 max-w-xs">Start by registering your first organization.</p>
                 </div>
                 <Button variant="outline" onClick={handleOpenCreate} className="mt-2 font-bold">
                   Add First Organization
@@ -493,7 +495,7 @@ export default function AccountHomePage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50 hover:bg-slate-50 border-b border-slate-200">
-                    <TableHead className="text-[10px] font-bold uppercase py-5 pl-8 text-slate-400 tracking-widest">Institution Name</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-5 pl-8 text-slate-400 tracking-widest">Organization Name</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Managed Domain</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
                   </TableRow>
@@ -535,13 +537,6 @@ export default function AccountHomePage() {
                   ))}
                 </TableBody>
               </Table>
-            )}
-            {!isLoadingOrgs && orgs.length > 0 && (
-              <div className="py-4 px-8 border-t border-slate-50 bg-slate-50/30">
-                <p className="text-[10px] text-slate-400 font-medium">
-                  Synchronization active • {orgs.length} records retrieved
-                </p>
-              </div>
             )}
           </CardContent>
         </Card>

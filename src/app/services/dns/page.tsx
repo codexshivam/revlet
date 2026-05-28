@@ -113,7 +113,7 @@ export default function DNSManagementPage() {
       toast({
         variant: "destructive",
         title: "Sync Error",
-        description: "Could not fetch data from the network edge."
+        description: error.message || "Could not fetch data from the network edge."
       })
     } finally {
       setIsLoadingRecords(false)
@@ -157,7 +157,7 @@ export default function DNSManagementPage() {
       toast({
         variant: "destructive",
         title: "Check Failed",
-        description: "Could not verify node status."
+        description: error.message || "Could not verify node status."
       })
     } finally {
       setIsRefreshing(false)
@@ -210,7 +210,7 @@ export default function DNSManagementPage() {
       toast({ 
         variant: "destructive", 
         title: "Delete Failed", 
-        description: "Could not remove the record." 
+        description: error.message || "Could not remove the record." 
       })
     }
   }
@@ -221,10 +221,15 @@ export default function DNSManagementPage() {
     
     try {
       const newZone = await createZone(selectedOrg.domain)
+      if (!newZone?.id) {
+        throw new Error("Initialization succeeded but no infrastructure ID was returned.");
+      }
+      
       const orgRef = doc(db, "organizations", selectedOrg.id)
       await updateDoc(orgRef, {
         cloudflareZoneId: newZone.id
       })
+      
       toast({
         title: "Infrastructure Initialized",
         description: "Domain added to the global network. Please update your nodes as shown.",

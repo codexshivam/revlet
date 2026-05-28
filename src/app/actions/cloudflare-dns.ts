@@ -6,27 +6,42 @@
  */
 
 const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
-const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 
 async function cfFetch(path: string, options: RequestInit = {}) {
+  const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+  
   if (!API_TOKEN) {
-    throw new Error('Infrastructure API token is not configured.');
+    throw new Error('Infrastructure API token is not configured. Please add CLOUDFLARE_API_TOKEN to your environment variables.');
   }
 
-  const response = await fetch(`${CLOUDFLARE_API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Authorization': `Bearer ${API_TOKEN}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  try {
+    const response = await fetch(`${CLOUDFLARE_API_URL}${path}`, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${API_TOKEN}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.errors?.[0]?.message || 'Network API error');
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`Invalid response from infrastructure API: ${text.substring(0, 100)}`);
+    }
+
+    if (!response.ok) {
+      const message = data.errors?.[0]?.message || data.message || `API error (${response.status})`;
+      throw new Error(message);
+    }
+    
+    return data;
+  } catch (error: any) {
+    console.error(`Infrastructure API failure [${path}]:`, error.message);
+    throw error;
   }
-  return data;
 }
 
 export async function createZone(domain: string) {
@@ -35,14 +50,12 @@ export async function createZone(domain: string) {
       method: 'POST',
       body: JSON.stringify({
         name: domain,
-        jump_start: true,
         type: 'full'
       }),
     });
     return data.result;
   } catch (error: any) {
-    console.error('Error creating infrastructure zone:', error);
-    throw error;
+    throw new Error(error.message || 'Failed to initialize domain infrastructure');
   }
 }
 
@@ -57,8 +70,7 @@ export async function getZoneDetails(zoneId: string) {
       type: data.result.type,
     };
   } catch (error: any) {
-    console.error('Error fetching domain details:', error);
-    throw error;
+    throw new Error(error.message || 'Failed to fetch domain details');
   }
 }
 
@@ -67,8 +79,7 @@ export async function checkZoneActivation(zoneId: string) {
     const data = await cfFetch(`/zones/${zoneId}/activation_check`, { method: 'PUT' });
     return data.success;
   } catch (error: any) {
-    console.error('Error initiating connection check:', error);
-    throw error;
+    throw new Error(error.message || 'Failed to initiate connection check');
   }
 }
 
@@ -85,8 +96,7 @@ export async function listDNSRecords(zoneId: string) {
       priority: r.priority,
     }));
   } catch (error: any) {
-    console.error('Error listing domain settings:', error);
-    throw error;
+    throw new Error(error.message || 'Failed to list domain settings');
   }
 }
 
@@ -105,8 +115,7 @@ export async function createDNSRecord(zoneId: string, record: any) {
     });
     return data.result;
   } catch (error: any) {
-    console.error('Error applying domain setting:', error);
-    throw error;
+    throw new Error(error.message || 'Failed to apply domain setting');
   }
 }
 
@@ -125,8 +134,7 @@ export async function updateDNSRecord(zoneId: string, recordId: string, record: 
     });
     return data.result;
   } catch (error: any) {
-    console.error('Error updating domain setting:', error);
-    throw error;
+    throw new Error(error.message || 'Failed to update domain setting');
   }
 }
 
@@ -137,7 +145,6 @@ export async function deleteDNSRecord(zoneId: string, recordId: string) {
     });
     return data.result;
   } catch (error: any) {
-    console.error('Error removing domain setting:', error);
-    throw error;
+    throw new Error(error.message || 'Failed to remove domain setting');
   }
 }

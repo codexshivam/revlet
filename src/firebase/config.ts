@@ -1,9 +1,10 @@
 
 export const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_AUTH_DOMAIN",
-  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
-  storageBucket: "REPLACE_WITH_YOUR_STORAGE_BUCKET",
-  messagingSenderId: "REPLACE_WITH_YOUR_MESSAGING_SENDER_ID",
-  appId: "REPLACE_WITH_YOUR_APP_ID"
+  apiKey: "AIzaSyAx0B88DiaS8n1HfaKX1ouBB22rAR7P-Io",
+  authDomain: "academicplatform.firebaseapp.com",
+  projectId: "academicplatform",
+  storageBucket: "academicplatform.firebasestorage.app",
+  messagingSenderId: "533107881962",
+  appId: "1:533107881962:web:1a5939b9fb63b098446493",
+  measurementId: "G-J26MDE9258"
 };

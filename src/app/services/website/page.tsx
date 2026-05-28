@@ -372,7 +372,7 @@ export default function WebsiteManagementPage() {
                   </DialogTrigger>
                   <DialogContent className="max-w-md border-none shadow-2xl bg-white p-0 overflow-hidden [&>button]:text-white [&>button]:opacity-100">
                     <DialogHeader className="bg-slate-900 text-white p-6 relative">
-                      <DialogTitle className="font-headline font-bold text-xl">Request Infrastructure Change</DialogTitle>
+                      <DialogTitle className="font-headline font-bold text-xl">Request Website Modification</DialogTitle>
                       <div className="flex items-center gap-1.5 mt-1 text-[10px] text-primary font-bold uppercase tracking-widest">
                         <MessageSquare className="w-3 h-3" />
                         Processed within 24 business hours
@@ -499,7 +499,7 @@ export default function WebsiteManagementPage() {
             <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
               <CardContent className="p-20 flex flex-col items-center text-center gap-6">
                 <div className="relative">
-                  <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
+                  <div className="w-20 h-20 rounded-full bg-white border-primary/20 flex items-center justify-center shadow-sm relative">
                     <Clock className="w-10 h-10 text-amber-500" />
                     <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white uppercase text-[9px]">
                       PENDING

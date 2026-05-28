@@ -1,3 +1,4 @@
+
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -15,7 +16,11 @@ import {
   CirclePlus,
   Loader2,
   Globe,
-  Ban
+  Ban,
+  ShieldCheck,
+  Zap,
+  Server,
+  MessageSquare
 } from "lucide-react"
 import {
   Dialog,
@@ -35,14 +40,14 @@ import { useUser, useFirestore } from "@/firebase"
 import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
-
-type WebsiteStatus = "not_found" | "external" | "ready_and_published"
+import Link from "next/link"
 
 interface Organization {
   id: string
   name: string
   domain: string
   hasWebsite?: boolean
+  siteActiveOn?: boolean
 }
 
 export default function WebsiteManagementPage() {
@@ -55,14 +60,6 @@ export default function WebsiteManagementPage() {
   const [isUpdating, setIsUpdating] = useState(false)
 
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
-
-  // Real-world status logic based on Firestore data
-  const status = useMemo((): WebsiteStatus => {
-    if (!selectedOrg) return "not_found"
-    if (selectedOrg.hasWebsite === undefined) return "not_found"
-    if (selectedOrg.hasWebsite === true) return "external"
-    return "ready_and_published"
-  }, [selectedOrg])
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -109,6 +106,31 @@ export default function WebsiteManagementPage() {
     })
   }
 
+  const handleRequestUpgrade = () => {
+    if (!selectedOrgId) return
+    setIsUpdating(true)
+    
+    const orgRef = doc(db, "organizations", selectedOrgId)
+    // When a user requests an upgrade, we mark siteActiveOn as false (pending)
+    updateDoc(orgRef, {
+      siteActiveOn: false
+    }).then(() => {
+      toast({
+        title: "Upgrade Request Logged",
+        description: "Your request for managed hosting is being processed by the provisioning team.",
+      })
+    }).catch(async (error) => {
+      const permissionError = new FirestorePermissionError({
+        path: orgRef.path,
+        operation: 'update',
+        requestResourceData: { siteActiveOn: false }
+      })
+      errorEmitter.emit('permission-error', permissionError)
+    }).finally(() => {
+      setIsUpdating(false)
+    })
+  }
+
   const handleRequestChange = () => {
     toast({
       title: "Request Submitted",
@@ -139,7 +161,8 @@ export default function WebsiteManagementPage() {
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {status === "not_found" && (
+        {/* STATE 1: No Declaration Found */}
+        {selectedOrg?.hasWebsite === undefined && (
           <Card className="bg-slate-50 border-slate-200 border-dashed">
             <CardContent className="p-16 flex flex-col items-center text-center gap-6">
               <div className="w-16 h-16 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center">
@@ -147,7 +170,7 @@ export default function WebsiteManagementPage() {
               </div>
               <div className="space-y-2">
                 <h3 className="text-2xl font-headline font-bold text-slate-900">Infrastructure Declaration Required</h3>
-                <p className="text-slate-500 max-w-sm mx-auto text-sm leading-relaxed">
+                <p className="text-slate-500 max-w-sm mx-auto text-sm leading-relaxed font-medium">
                   No managed website records exist for <span className="font-bold text-slate-900">{selectedOrg?.name}</span>. Please declare the current status to initialize services.
                 </p>
               </div>
@@ -174,7 +197,8 @@ export default function WebsiteManagementPage() {
           </Card>
         )}
 
-        {status === "external" && (
+        {/* STATE 2: External Hosting Active */}
+        {selectedOrg?.hasWebsite === true && (
           <div className="space-y-6">
             <Card className="bg-primary/5 border-primary/20 shadow-sm">
               <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -184,7 +208,7 @@ export default function WebsiteManagementPage() {
                   </div>
                   <div>
                     <h3 className="text-lg font-headline font-bold text-slate-900">External Hosting Active</h3>
-                    <p className="text-slate-500 text-sm mt-1 max-w-md">The website for <span className="font-bold">{selectedOrg?.domain}</span> is hosted on external infrastructure. Advanced edge controls are restricted.</p>
+                    <p className="text-slate-500 text-sm mt-1 max-w-md font-medium">The website for <span className="font-bold">{selectedOrg?.domain}</span> is hosted on external infrastructure. Advanced edge controls are restricted.</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
@@ -199,7 +223,7 @@ export default function WebsiteManagementPage() {
                         <DialogTitle className="font-headline font-bold">Managed Hosting Migration</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
-                        <p className="text-sm text-slate-500">Transition to our high-performance enterprise infrastructure. Our technical team handles the entire migration process.</p>
+                        <p className="text-sm text-slate-500 font-medium leading-relaxed">Transition to our high-performance enterprise infrastructure. Our technical team handles the entire migration process.</p>
                         <div className="grid gap-2">
                           <Label htmlFor="current-url" className="text-xs font-bold uppercase text-slate-500">Target URL</Label>
                           <Input id="current-url" defaultValue={`https://${selectedOrg?.domain}`} className="font-bold" />
@@ -223,7 +247,93 @@ export default function WebsiteManagementPage() {
           </div>
         )}
 
-        {status === "ready_and_published" && (
+        {/* STATE 3: No Site + No provision started (Get website with us) */}
+        {selectedOrg?.hasWebsite === false && selectedOrg?.siteActiveOn === undefined && (
+          <div className="max-w-5xl mx-auto py-8 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-12 text-center">
+              <div className="space-y-4">
+                <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
+                  Get your website with us
+                </h2>
+                <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto font-medium">
+                  Decommission legacy hosting and launch your professional presence on our optimized enterprise network.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
+                {[
+                  { title: "Ultra-Fast Performance", desc: "Optimized server-side rendering and global CDN for lightning-quick loading.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
+                  { title: "Automated Security", desc: "Built-in DDoS protection, automatic SSL, and weekly infrastructure patches.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
+                  { title: "Professional Support", desc: "Our development team handles all content changes and technical updates.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
+                  { title: "Enterprise Reliability", desc: "Redundant cloud infrastructure with 99.9% uptime for your organization.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
+                ].map((feature) => (
+                  <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
+                    <div className="p-3 bg-white rounded-xl shadow-sm shrink-0">
+                      <feature.icon className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-base font-bold">{feature.title}</h4>
+                      <p className="text-xs opacity-80 leading-relaxed font-medium">{feature.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-8 flex flex-col items-center gap-4">
+                <Button 
+                  onClick={handleRequestUpgrade} 
+                  size="lg" 
+                  disabled={isUpdating}
+                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
+                >
+                  {isUpdating ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Rocket className="w-5 h-5 mr-3 group-hover:translate-y-[-2px] transition-transform" />}
+                  Request Managed Website
+                </Button>
+                <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Switch to External Hosting
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STATE 4: Provisioning in Progress (Pending Status) */}
+        {selectedOrg?.hasWebsite === false && selectedOrg?.siteActiveOn === false && (
+          <div className="max-w-4xl mx-auto py-20">
+            <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
+              <CardContent className="p-20 flex flex-col items-center text-center gap-6">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
+                    <Clock className="w-10 h-10 text-amber-500" />
+                    <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white">
+                      PENDING
+                    </Badge>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-headline font-bold text-amber-900">Provisioning Website Infrastructure</h3>
+                  <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
+                    We are currently building your enterprise website context for <span className="font-bold">{selectedOrg.domain}</span>. This typically takes 24-48 business hours.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Link href="/support">
+                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-6">
+                      <MessageSquare className="w-4 h-4" />
+                      Contact DevOps Desk
+                    </Button>
+                  </Link>
+                  <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Cancel & Switch to External
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* STATE 5: Website Active & Managed */}
+        {selectedOrg?.hasWebsite === false && selectedOrg?.siteActiveOn === true && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
               <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
@@ -316,7 +426,7 @@ export default function WebsiteManagementPage() {
                 <CardContent className="p-6 space-y-4">
                   <Rocket className="w-8 h-8 text-primary" />
                   <h4 className="font-headline font-bold text-lg leading-tight">Advanced Engineering Support</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-xs text-slate-400 leading-relaxed font-medium">
                     Require custom API integrations or complex database architectures? Our engineering team is available for deep-tech consultations.
                   </p>
                   <Button variant="outline" className="w-full border-slate-700 text-white hover:bg-slate-800 text-xs font-bold h-10">

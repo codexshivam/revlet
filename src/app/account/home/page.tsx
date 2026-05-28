@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Plus, Building2, ExternalLink, Edit2, LogOut, Globe, Loader2 } from "lucide-react"
+import { MoreVertical, Plus, Building2, ExternalLink, Edit2, LogOut, Globe, Loader2, Info } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +24,10 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { useState, useEffect, useRef } from "react"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { useState, useEffect } from "react"
 import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore } from "@/firebase"
 import { signOut, updateProfile } from "firebase/auth"
@@ -42,7 +45,15 @@ import {
 interface Organization {
   id: string
   name: string
+  address: string
+  phone: string
+  currentEmail: string
   domain: string
+  hasWebsite: boolean
+  contactName: string
+  contactPhone: string
+  contactEmail: string
+  description: string
   services: string[]
   code: string
   ownerId: string
@@ -62,12 +73,23 @@ export default function AccountHomePage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditNameOpen, setIsEditNameOpen] = useState(false)
   
-  const [newOrgName, setNewOrgName] = useState("")
-  const [newOrgDomain, setNewOrgDomain] = useState("")
+  // Form State
+  const [formData, setFormData] = useState({
+    name: "",
+    address: "",
+    phone: "",
+    currentEmail: "",
+    domain: "",
+    hasWebsite: false,
+    contactName: "",
+    contactPhone: "",
+    contactEmail: "",
+    description: ""
+  })
+  
   const [accountName, setAccountName] = useState("")
   const [localDisplayName, setLocalDisplayName] = useState("")
 
-  // Update local display name state when user data loads
   useEffect(() => {
     if (user) {
       setLocalDisplayName(user.displayName || "Administrative Portal")
@@ -75,7 +97,6 @@ export default function AccountHomePage() {
     }
   }, [user])
 
-  // Real-time listener for organizations with optimized dependency
   const userId = user?.uid
   useEffect(() => {
     if (authLoading) return
@@ -100,14 +121,6 @@ export default function AccountHomePage() {
       setIsLoadingOrgs(false)
     }, (error) => {
       console.error("Error fetching organizations:", error)
-      // Only show error if it's not a missing index error (which we handle in README)
-      if (!error.message.includes("index")) {
-        toast({
-          variant: "destructive",
-          title: "Connection Error",
-          description: "Failed to sync your organizations. Check your internet connection."
-        })
-      }
       setIsLoadingOrgs(false)
     })
 
@@ -116,23 +129,24 @@ export default function AccountHomePage() {
 
   const handleAddOrg = async () => {
     if (!user) return
-    if (!newOrgName || !newOrgDomain) {
+    
+    // Basic validation
+    if (!formData.name || !formData.domain || !formData.contactEmail) {
       toast({
         variant: "destructive",
-        title: "Incomplete Fields",
-        description: "Please provide both the name and domain for the institution."
+        title: "Missing Fields",
+        description: "Institution name, domain, and contact email are required."
       })
       return
     }
 
     setIsAddingOrg(true)
     try {
-      const orgCode = `${newOrgName.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`
+      const orgCode = `${formData.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`
       
       await addDoc(collection(db, "organizations"), {
-        name: newOrgName,
-        domain: newOrgDomain,
-        services: ["DNS", "Hosting"], // Default services
+        ...formData,
+        services: ["DNS", "Hosting"],
         code: orgCode,
         ownerId: user.uid,
         createdAt: serverTimestamp()
@@ -140,17 +154,27 @@ export default function AccountHomePage() {
 
       toast({
         title: "Organization Registered",
-        description: `${newOrgName} has been successfully added.`
+        description: `${formData.name} has been successfully added to your directory.`
       })
       
-      setNewOrgName("")
-      setNewOrgDomain("")
+      setFormData({
+        name: "",
+        address: "",
+        phone: "",
+        currentEmail: "",
+        domain: "",
+        hasWebsite: false,
+        contactName: "",
+        contactPhone: "",
+        contactEmail: "",
+        description: ""
+      })
       setIsDialogOpen(false)
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: "We couldn't register the institution. Please try again."
+        description: "We couldn't register the institution. Please check your connection."
       })
     } finally {
       setIsAddingOrg(false)
@@ -173,7 +197,7 @@ export default function AccountHomePage() {
       toast({
         variant: "destructive",
         title: "Update Failed",
-        description: "Failed to update profile name. Please try again."
+        description: "Failed to update profile name."
       })
     } finally {
       setIsUpdatingAccount(false)
@@ -186,7 +210,7 @@ export default function AccountHomePage() {
       toast({ title: "Logged out", description: "You have been securely signed out." })
       router.push("/login")
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Logout Failed", description: error.message })
+      toast({ variant: "destructive", title: "Logout Failed", description: "Error during sign out." })
     }
   }
 
@@ -195,7 +219,7 @@ export default function AccountHomePage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center h-96 gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Initializing Secure Session...</p>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Synchronizing Session...</p>
         </div>
       </DashboardShell>
     )
@@ -205,7 +229,7 @@ export default function AccountHomePage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account home</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Portal Overview</span>
           <div className="flex items-center justify-between">
             <h1 className="text-4xl font-headline font-bold text-slate-900 tracking-tight">
               {localDisplayName}
@@ -223,24 +247,24 @@ export default function AccountHomePage() {
                     className="cursor-pointer gap-2 py-2.5"
                   >
                     <Edit2 className="w-4 h-4 text-slate-400" />
-                    <span className="font-medium">Edit account name</span>
+                    <span className="font-medium text-sm">Update display name</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer gap-2 py-2.5 text-destructive focus:text-destructive">
                     <LogOut className="w-4 h-4" />
-                    <span className="font-medium">Logout</span>
+                    <span className="font-medium text-sm">Logout session</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
               <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Update Profile Name</DialogTitle>
+                    <DialogTitle className="font-headline font-bold">Administrative Display Name</DialogTitle>
                   </DialogHeader>
                   <div className="py-4 space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="acc-name">Display Name</Label>
+                      <Label htmlFor="acc-name" className="text-xs font-bold text-slate-500 uppercase">New Display Name</Label>
                       <Input 
                         id="acc-name" 
                         value={accountName} 
@@ -250,9 +274,9 @@ export default function AccountHomePage() {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsEditNameOpen(false)}>Cancel</Button>
-                    <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount}>
-                      {isUpdatingAccount ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Save Changes"}
+                    <Button variant="ghost" onClick={() => setIsEditNameOpen(false)} className="text-xs font-bold uppercase tracking-tight">Cancel</Button>
+                    <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount} className="font-bold">
+                      {isUpdatingAccount ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Commit Changes"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -262,37 +286,147 @@ export default function AccountHomePage() {
                 <DialogTrigger asChild>
                   <Button className="bg-primary hover:bg-primary/90 text-white font-bold h-10 px-6 shadow-md shadow-primary/10 transition-all hover:-translate-y-0.5 active:translate-y-0">
                     <Plus className="w-4 h-4 mr-2" />
-                    Add Organization
+                    Register Institution
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Register New Institution</DialogTitle>
+                <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden border-none shadow-2xl">
+                  <DialogHeader className="bg-slate-900 text-white p-6">
+                    <DialogTitle className="font-headline font-bold text-xl">Institution Onboarding</DialogTitle>
+                    <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-bold">Comprehensive Registration Protocol</p>
                   </DialogHeader>
-                  <div className="py-4 space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="org-name">Institution Name</Label>
-                      <Input 
-                        id="org-name" 
-                        placeholder="e.g. Tribhuvan University" 
-                        value={newOrgName}
-                        onChange={(e) => setNewOrgName(e.target.value)}
-                      />
+                  
+                  <ScrollArea className="max-h-[70vh]">
+                    <div className="p-8 space-y-8">
+                      {/* Section 1: Core Details */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-primary">
+                          <Building2 className="w-4 h-4" />
+                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Institution Core Details</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="org-name" className="text-[10px] font-bold text-slate-500 uppercase">Legal Institution Name</Label>
+                            <Input 
+                              id="org-name" 
+                              placeholder="e.g. Kathmandu University" 
+                              value={formData.name}
+                              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="org-domain" className="text-[10px] font-bold text-slate-500 uppercase">Primary Domain</Label>
+                            <Input 
+                              id="org-domain" 
+                              placeholder="e.g. ku.edu.np" 
+                              value={formData.domain}
+                              onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="org-phone" className="text-[10px] font-bold text-slate-500 uppercase">Institutional Phone</Label>
+                            <Input 
+                              id="org-phone" 
+                              placeholder="+977-1-XXXXXX" 
+                              value={formData.phone}
+                              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="org-email" className="text-[10px] font-bold text-slate-500 uppercase">General Contact Email</Label>
+                            <Input 
+                              id="org-email" 
+                              type="email"
+                              placeholder="info@institution.edu.np" 
+                              value={formData.currentEmail}
+                              onChange={(e) => setFormData({ ...formData, currentEmail: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="org-address" className="text-[10px] font-bold text-slate-500 uppercase">Physical Office Address</Label>
+                          <Input 
+                            id="org-address" 
+                            placeholder="Street, City, Province, Nepal" 
+                            value={formData.address}
+                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Section 2: Technical Status */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-primary">
+                          <Globe className="w-4 h-4" />
+                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Infrastructure & Status</h3>
+                        </div>
+                        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="has-website" className="text-sm font-bold text-slate-900">Active Website?</Label>
+                            <p className="text-[10px] text-slate-400">Is there an existing live platform for this domain?</p>
+                          </div>
+                          <Switch 
+                            id="has-website"
+                            checked={formData.hasWebsite}
+                            onCheckedChange={(checked) => setFormData({ ...formData, hasWebsite: checked })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="org-desc" className="text-[10px] font-bold text-slate-500 uppercase">Institutional Brief / Level</Label>
+                          <Textarea 
+                            id="org-desc" 
+                            placeholder="e.g. Higher Secondary, Bachelor/Masters Programs, Technical Vocational..." 
+                            value={formData.description}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                            className="min-h-[100px]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Section 3: Point of Contact */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-primary">
+                          <Info className="w-4 h-4" />
+                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Primary Administrative Contact</h3>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="contact-name" className="text-[10px] font-bold text-slate-500 uppercase">Contact Person Full Name</Label>
+                          <Input 
+                            id="contact-name" 
+                            placeholder="Authorized Representative Name" 
+                            value={formData.contactName}
+                            onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="contact-phone" className="text-[10px] font-bold text-slate-500 uppercase">Contact Mobile/Direct</Label>
+                            <Input 
+                              id="contact-phone" 
+                              placeholder="+977-98XXXXXXXX" 
+                              value={formData.contactPhone}
+                              onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="contact-email" className="text-[10px] font-bold text-slate-500 uppercase">Direct Administrative Email</Label>
+                            <Input 
+                              id="contact-email" 
+                              type="email"
+                              placeholder="admin.contact@domain.edu.np" 
+                              value={formData.contactEmail}
+                              onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="org-domain">Primary Managed Domain</Label>
-                      <Input 
-                        id="org-domain" 
-                        placeholder="e.g. tu.edu.np" 
-                        value={newOrgDomain}
-                        onChange={(e) => setNewOrgDomain(e.target.value)}
-                      />
-                      <p className="text-[10px] text-slate-400">One organization handles exactly one primary domain for infrastructure management.</p>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleAddOrg} disabled={isAddingOrg}>
+                  </ScrollArea>
+
+                  <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
+                    <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-xs font-bold uppercase tracking-widest text-slate-400">Abort</Button>
+                    <Button onClick={handleAddOrg} disabled={isAddingOrg} className="px-8 font-bold h-11 bg-slate-900 hover:bg-black text-white shadow-xl">
                       {isAddingOrg ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Complete Registration"}
                     </Button>
                   </DialogFooter>
@@ -357,7 +491,7 @@ export default function AccountHomePage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1.5">
-                          {org.services.map((s) => (
+                          {org.services?.map((s) => (
                             <Badge key={s} variant="secondary" className="bg-slate-100 text-[9px] font-bold text-slate-500 border-slate-200 py-0.5 h-5 px-2 tracking-tight group-hover:border-slate-300 transition-colors uppercase">
                               {s}
                             </Badge>
@@ -383,7 +517,7 @@ export default function AccountHomePage() {
             {!isLoadingOrgs && orgs.length > 0 && (
               <div className="py-4 px-8 border-t border-slate-50 bg-slate-50/30">
                 <p className="text-[10px] text-slate-400 font-medium">
-                  Total Organizations: {orgs.length} • Real-time synchronization active
+                  Total Managed Organizations: {orgs.length} • Real-time database synchronization active
                 </p>
               </div>
             )}

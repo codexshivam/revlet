@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { 
   CircleAlert, 
-  ExternalLink, 
   Clock, 
   CircleCheck, 
   Rocket,
@@ -159,7 +158,7 @@ export default function WebsiteManagementPage() {
               <div className="w-px h-3 bg-slate-200" />
               <div className="flex items-center gap-1.5 text-primary">
                 <Sparkles className="w-3 h-3" />
-                Engineering Support
+                Manage website content from our dashboard
               </div>
             </div>
           </div>
@@ -350,9 +349,14 @@ export default function WebsiteManagementPage() {
                 <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
                   {selectedOrg.hasWebsite ? "Upgrade Your Institutional Presence" : "Get Your Professional Website"}
                 </h2>
-                <p className="text-slate-500 text-lg leading-relaxed max-w-3xl mx-auto font-medium">
-                  Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure. This is <span className="text-slate-900 font-bold">not</span> an AI-built website or a generic template. Our engineering team provides consistent, long-term support so you never feel lost.
-                </p>
+                <div className="max-w-3xl mx-auto space-y-4">
+                  <p className="text-slate-500 text-sm leading-relaxed font-medium">
+                    Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure. This is not an AI-built website or a generic template. Our engineering team provides consistent, long-term support so you never feel lost.
+                  </p>
+                  <p className="text-slate-400 text-[11px] leading-relaxed font-medium italic">
+                    We train AI using your website data after building it once, so that modifications get easier for us to do, ensuring rapid turnaround for your requests.
+                  </p>
+                </div>
                 <div className="flex items-center justify-center gap-6 mt-6">
                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                      <Cloud className="w-4 h-4" />
@@ -369,7 +373,7 @@ export default function WebsiteManagementPage() {
                 {[
                   { title: "Custom Development", desc: "No templates or AI generation. We build professional, hand-coded portals tailored for institutions.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
                   { title: "24/7 Peace of Mind", desc: "Always have full control. Modify your content or request technical changes anytime, day or night.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
-                  { title: "Dedicated Engineers", desc: "Our developers don't disappear. We provide ongoing, reliable support so your infrastructure is always up-to-date.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
+                  { title: "24/7 Updates", desc: "Our platform ensures your digital presence is never stagnant. Request modifications and see them live within hours.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
                   { title: "Enterprise Speed", desc: "Ultra-fast global performance with Cloudflare edge caching for superior student and faculty access.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
                 ].map((feature) => (
                   <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>

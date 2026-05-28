@@ -477,7 +477,7 @@ export default function DNSManagementPage() {
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-xs p-3">
                                   <p className="text-xs font-medium leading-relaxed">
-                                    Protects your server by routing traffic through the platform's security layer. This masks your IP and prevents direct attacks.
+                                    The network responds to DNS queries. HTTP/S traffic is sent to the network and handled by security, caching, performance, and the developer platform.
                                   </p>
                                 </TooltipContent>
                               </Tooltip>

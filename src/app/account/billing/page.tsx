@@ -7,7 +7,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Upload, Landmark, Download, FileCheck, AlertCircle, Loader2, ReceiptText, MapPin } from "lucide-react"
+import { 
+  Upload, 
+  Landmark, 
+  FileCheck, 
+  AlertCircle, 
+  Loader2, 
+  ReceiptText, 
+  MapPin, 
+  Copy, 
+  Check, 
+  User as UserIcon,
+  CreditCard
+} from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -57,6 +69,7 @@ export default function BillingPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   
   // Voucher form state
   const [submissionData, setSubmissionData] = useState({
@@ -106,14 +119,21 @@ export default function BillingPage() {
     }
   }, [user, authLoading, db])
 
+  const handleCopyId = (id: string) => {
+    navigator.clipboard.writeText(id)
+    setCopiedId(id)
+    toast({ title: "Copied", description: "Voucher ID copied to clipboard." })
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      if (file.size > 3 * 1024 * 1024) {
+      if (file.size > 5 * 1024 * 1024) {
         toast({
           variant: "destructive",
           title: "File too large",
-          description: "Voucher must be smaller than 3MB.",
+          description: "Voucher must be smaller than 5MB.",
         })
         e.target.value = ""
         return
@@ -201,51 +221,73 @@ export default function BillingPage() {
                     Submit Payment Voucher
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-3xl bg-white p-0 overflow-hidden border-none shadow-2xl">
+                <DialogContent className="max-w-4xl bg-white p-0 overflow-hidden border-none shadow-2xl">
                   <DialogHeader className="p-6 bg-slate-900 text-white">
                     <DialogTitle className="text-xl font-headline font-bold">Payment Submission Portal</DialogTitle>
                     <p className="text-slate-400 text-xs">Verify your bank transfer and upload proof.</p>
                   </DialogHeader>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
-                    <div className="p-8 bg-slate-50 border-r border-slate-100 space-y-6">
-                      <div className="space-y-4">
+                    <div className="p-8 bg-slate-50 border-r border-slate-100 space-y-8">
+                      <div className="space-y-6">
                         <div className="flex items-center gap-2 text-primary">
                           <Landmark className="w-5 h-5" />
-                          <h3 className="font-bold text-sm uppercase">Global IME Bank</h3>
+                          <h3 className="font-bold text-sm uppercase tracking-wider">Authorised Bank Details</h3>
                         </div>
-                        <div className="space-y-3">
-                          <div>
-                            <p className="text-[10px] text-slate-400 uppercase font-bold">Account Name</p>
-                            <p className="text-xs font-bold text-slate-900 uppercase">EduSphere Tech Pvt. Ltd.</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-slate-400 uppercase font-bold">Account Number</p>
-                            <p className="text-sm font-mono font-bold text-primary">123000987654321</p>
-                          </div>
-                          <div className="flex items-start gap-1">
-                            <MapPin className="w-3 h-3 text-slate-400 mt-1" />
-                            <div>
-                              <p className="text-[10px] text-slate-400 uppercase font-bold">Branch</p>
-                              <p className="text-xs font-bold text-slate-700 uppercase">Kathmandu Main Branch, Kamaladi</p>
+                        
+                        <div className="space-y-4">
+                          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center">
+                                <UserIcon className="w-4 h-4 text-primary" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-tighter leading-none mb-1">Account Name</p>
+                                <p className="text-sm font-bold text-slate-900 uppercase">Shivam Yadav</p>
+                              </div>
                             </div>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-slate-400 uppercase font-bold">Reference Info</p>
-                            <p className="text-[10px] font-medium text-slate-500 italic leading-tight">
-                              Please include Institution ID in transfer remarks for auto-reconciliation.
-                            </p>
+
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center">
+                                <CreditCard className="w-4 h-4 text-primary" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-tighter leading-none mb-1">Account Number</p>
+                                <p className="text-base font-mono font-bold text-primary tracking-tight">16007010030603</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center">
+                                <Landmark className="w-4 h-4 text-primary" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-tighter leading-none mb-1">Bank</p>
+                                <p className="text-xs font-bold text-slate-700">Global IME Bank Limited</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center">
+                                <MapPin className="w-4 h-4 text-primary" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-tighter leading-none mb-1">Branch</p>
+                                <p className="text-xs font-bold text-slate-700 uppercase">Bhaisepati Branch</p>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
+                      
                       <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 flex gap-3">
                         <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
                         <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
-                          Voucher verification typically takes 2-4 business hours during institutional bank hours.
+                          Verification is manually processed by our accounts team. Please ensure the reference note includes your Institution Code.
                         </p>
                       </div>
                     </div>
                     
-                    <div className="p-8 space-y-5 flex flex-col justify-center">
+                    <div className="p-8 space-y-6 flex flex-col justify-center">
                       <div className="space-y-4">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-bold text-slate-500 uppercase">Institution</Label>
@@ -253,13 +295,13 @@ export default function BillingPage() {
                             value={submissionData.organizationId} 
                             onValueChange={(v) => setSubmissionData({...submissionData, organizationId: v})}
                           >
-                            <SelectTrigger className="h-10 text-xs font-bold">
+                            <SelectTrigger className="h-10 text-xs font-bold border-slate-200">
                               <SelectValue placeholder="Select institution" />
                             </SelectTrigger>
                             <SelectContent>
                               {orgs.map(org => (
                                 <SelectItem key={org.id} value={org.id} className="text-xs">
-                                  {org.name} (रू {org.outstandingAmount?.toLocaleString() || 0})
+                                  {org.name} (NPR {org.outstandingAmount?.toLocaleString() || 0})
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -270,8 +312,8 @@ export default function BillingPage() {
                           <Label className="text-[10px] font-bold text-slate-500 uppercase">Transfer Amount (NPR)</Label>
                           <Input 
                             type="number"
-                            placeholder="e.g. 45500"
-                            className="h-10 text-xs font-bold"
+                            placeholder="e.g. 15000"
+                            className="h-10 text-xs font-bold border-slate-200"
                             value={submissionData.amount}
                             onChange={(e) => setSubmissionData({...submissionData, amount: e.target.value})}
                           />
@@ -280,25 +322,28 @@ export default function BillingPage() {
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-bold text-slate-500 uppercase">Voucher Upload</Label>
                           <div 
-                            className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer group
+                            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer group
                               ${selectedFile ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 hover:border-primary hover:bg-slate-50'}`}
-                            onClick={() => document.getElementById('voucher')?.click()}
+                            onClick={() => document.getElementById('voucher-upload')?.click()}
                           >
-                            {selectedFile ? <FileCheck className="w-8 h-8 text-emerald-500" /> : <Upload className="w-8 h-8 text-slate-300" />}
-                            <p className="text-[10px] font-bold text-slate-700 truncate max-w-full">
-                              {selectedFile ? selectedFile.name : 'Click to attach receipt'}
-                            </p>
-                            <Input id="voucher" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} />
+                            {selectedFile ? <FileCheck className="w-10 h-10 text-emerald-500" /> : <Upload className="w-10 h-10 text-slate-300 group-hover:text-primary transition-colors" />}
+                            <div className="text-center">
+                              <p className="text-[11px] font-bold text-slate-700 truncate max-w-[200px]">
+                                {selectedFile ? selectedFile.name : 'Click to attach payment receipt'}
+                              </p>
+                              <p className="text-[9px] text-slate-400 mt-0.5">PDF, JPG or PNG (Max 5MB)</p>
+                            </div>
+                            <Input id="voucher-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} />
                           </div>
                         </div>
                       </div>
                       
                       <Button 
                         onClick={handleConfirmSubmission} 
-                        className="w-full bg-slate-900 text-white font-bold h-12 rounded-lg"
+                        className="w-full bg-slate-900 text-white font-bold h-12 rounded-lg hover:bg-black transition-all"
                         disabled={isSubmitting || !selectedFile || !submissionData.organizationId}
                       >
-                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Confirm & Send for Verification"}
+                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Submit for Verification"}
                       </Button>
                     </div>
                   </div>
@@ -343,14 +388,26 @@ export default function BillingPage() {
                 <TableBody>
                   {vouchers.map((v) => (
                     <TableRow key={v.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                      <TableCell className="font-bold text-slate-700 py-5 pl-8 text-xs">{v.id.substring(0, 8)}...</TableCell>
+                      <TableCell className="font-bold text-slate-700 py-5 pl-8">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono">{v.id.substring(0, 8)}...</span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 text-slate-300 hover:text-primary transition-colors"
+                            onClick={() => handleCopyId(v.id)}
+                          >
+                            {copiedId === v.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          </Button>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-slate-600 text-xs font-semibold">{v.organizationName}</TableCell>
                       <TableCell className="font-mono font-bold text-slate-900 text-xs">रू {v.amount.toLocaleString()}</TableCell>
                       <TableCell className="text-slate-400 text-xs font-medium">
                         {v.submittedAt?.toDate?.().toLocaleDateString() || 'N/A'}
                       </TableCell>
                       <TableCell>
-                        <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded
+                        <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border
                           ${v.status === "Verified" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
                             v.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" : 
                             "bg-amber-50 text-amber-600 border-amber-100"}`}>
@@ -362,7 +419,7 @@ export default function BillingPage() {
                           variant="ghost" 
                           size="sm" 
                           className="h-8 gap-1.5 text-slate-500 hover:text-primary hover:bg-primary/5 text-xs font-bold"
-                          onClick={() => toast({ title: "Opening File", description: v.voucherFileName })}
+                          onClick={() => toast({ title: "View Document", description: `File: ${v.voucherFileName}` })}
                         >
                           View Receipt
                         </Button>

@@ -38,8 +38,7 @@ import {
   where, 
   onSnapshot, 
   addDoc, 
-  serverTimestamp, 
-  orderBy 
+  serverTimestamp,
 } from "firebase/firestore"
 
 interface Organization {
@@ -99,17 +98,32 @@ export default function AccountHomePage() {
 
   const userId = user?.uid
   useEffect(() => {
+    // If auth is still loading, wait
     if (authLoading) return
+
+    // If no user, redirect to login
     if (!userId) {
-      if (!authLoading) router.push("/login")
+      setIsLoadingOrgs(false)
+      router.push("/login")
       return
     }
 
+    // Safety timeout to prevent infinite spinner
+    const timer = setTimeout(() => {
+      setIsLoadingOrgs(current => {
+        if (current) {
+          console.warn("Sync timeout reached")
+          return false
+        }
+        return false
+      })
+    }, 8000)
+
     const orgsRef = collection(db, "organizations")
+    // Simplified query to avoid index requirement during initial setup
     const q = query(
       orgsRef, 
-      where("ownerId", "==", userId),
-      orderBy("createdAt", "desc")
+      where("ownerId", "==", userId)
     )
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -117,14 +131,32 @@ export default function AccountHomePage() {
         id: doc.id,
         ...doc.data()
       })) as Organization[]
-      setOrgs(fetchedOrgs)
+
+      // Sort client-side to avoid index requirement
+      const sortedOrgs = fetchedOrgs.sort((a, b) => {
+        const dateA = a.createdAt?.seconds || 0
+        const dateB = b.createdAt?.seconds || 0
+        return dateB - dateA
+      })
+
+      setOrgs(sortedOrgs)
       setIsLoadingOrgs(false)
+      clearTimeout(timer)
     }, (error) => {
       console.error("Error fetching organizations:", error)
       setIsLoadingOrgs(false)
+      clearTimeout(timer)
+      toast({
+        variant: "destructive",
+        title: "Synchronization Error",
+        description: "Could not sync your institutions. Please check your connection."
+      })
     })
 
-    return () => unsubscribe()
+    return () => {
+      unsubscribe()
+      clearTimeout(timer)
+    }
   }, [userId, authLoading, db, router])
 
   const handleAddOrg = async () => {

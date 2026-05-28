@@ -393,11 +393,10 @@ export default function DNSManagementPage() {
                            <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="h-6 w-6 text-slate-400 hover:text-primary"
+                              className="h-7 w-7 text-slate-400 hover:text-primary transition-colors"
                               onClick={() => handleCopyText(ns)}
                             >
-                              <Link href="#" className="pointer-events-none opacity-0">Copy</Link>
-                              <Globe className="w-3.5 h-3.5" />
+                              <Globe className="w-4 h-4" />
                             </Button>
                          </div>
                        ))}
@@ -470,11 +469,11 @@ export default function DNSManagementPage() {
                           <TableHead className="text-[10px] font-bold uppercase py-4 w-40">Name</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase py-4">Value</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase py-4 w-28">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5">
                               Proxied
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Info className="w-3 h-3 text-slate-400 cursor-help" />
+                                  <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 cursor-help transition-colors" />
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-xs p-3">
                                   <p className="text-xs font-medium leading-relaxed">
@@ -502,7 +501,7 @@ export default function DNSManagementPage() {
                               </Badge>
                             </TableCell>
                             <TableCell 
-                              className="font-bold text-xs text-slate-800 cursor-pointer hover:text-primary transition-colors"
+                              className="font-bold text-xs text-slate-800 cursor-pointer hover:bg-slate-50/50 transition-all rounded p-2"
                               onClick={() => handleCopyText(rec.name)}
                             >
                               {rec.name}
@@ -525,12 +524,12 @@ export default function DNSManagementPage() {
                             <TableCell>
                                {rec.proxied ? (
                                  <div className="flex items-center gap-1.5 text-amber-500">
-                                   <ShieldCheck className="w-3.5 h-3.5" />
+                                   <ShieldCheck className="w-4 h-4" />
                                    <span className="text-[9px] font-bold uppercase tracking-tighter">On</span>
                                  </div>
                                ) : (
-                                 <div className="flex items-center gap-1.5 text-slate-300">
-                                   <Globe className="w-3.5 h-3.5" />
+                                 <div className="flex items-center gap-1.5 text-slate-400">
+                                   <Globe className="w-4 h-4" />
                                    <span className="text-[9px] font-bold uppercase tracking-tighter">Off</span>
                                  </div>
                                )}
@@ -540,22 +539,22 @@ export default function DNSManagementPage() {
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
-                                  className="h-8 w-8 text-slate-300 hover:text-primary transition-colors"
+                                  className="h-8 w-8 text-slate-400 hover:text-primary transition-colors"
                                   onClick={() => {
                                     setEditingRecord(rec)
                                     setFormData(rec)
                                     setIsDialogOpen(true)
                                   }}
                                 >
-                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <Edit3 className="w-4 h-4" />
                                 </Button>
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
-                                  className="h-8 w-8 text-slate-300 hover:text-destructive transition-colors"
+                                  className="h-8 w-8 text-slate-400 hover:text-destructive transition-colors"
                                   onClick={() => handleDeleteRecord(rec.id)}
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -599,7 +598,7 @@ export default function DNSManagementPage() {
 
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Name</Label>
-                  <div className="col-span-3 relative">
+                  <div className="col-span-3">
                     <Input 
                       placeholder="e.g. www or @" 
                       className="h-10 font-bold text-xs border-slate-200" 

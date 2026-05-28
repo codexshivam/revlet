@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Plus, Building2, Edit2, LogOut, Globe, Loader2, Info, Landmark } from "lucide-react"
+import { MoreVertical, Plus, Building2, Edit2, LogOut, Globe, Loader2, Info } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,7 +84,6 @@ export default function AccountHomePage() {
     phone: "",
     currentEmail: "",
     domain: "",
-    cloudflareZoneId: "",
     hasWebsite: false,
     contactName: "",
     contactPhone: "",
@@ -150,7 +149,6 @@ export default function AccountHomePage() {
       phone: org.phone,
       currentEmail: org.currentEmail,
       domain: org.domain,
-      cloudflareZoneId: org.cloudflareZoneId || "",
       hasWebsite: org.hasWebsite,
       contactName: org.contactName,
       contactPhone: org.contactPhone,
@@ -169,7 +167,6 @@ export default function AccountHomePage() {
       phone: "",
       currentEmail: "",
       domain: "",
-      cloudflareZoneId: "",
       hasWebsite: false,
       contactName: "",
       contactPhone: "",
@@ -369,15 +366,6 @@ export default function AccountHomePage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <Label htmlFor="cf-zone" className="text-[10px] font-bold text-slate-500 uppercase">Cloudflare Zone ID</Label>
-                            <Input 
-                              id="cf-zone" 
-                              placeholder="e.g. 7c5f... (Cloudflare Console)" 
-                              value={formData.cloudflareZoneId}
-                              onChange={(e) => setFormData({ ...formData, cloudflareZoneId: e.target.value })}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
                             <Label htmlFor="org-email" className="text-[10px] font-bold text-slate-500 uppercase">General Contact Email</Label>
                             <Input 
                               id="org-email" 
@@ -385,6 +373,16 @@ export default function AccountHomePage() {
                               placeholder="info@institution.edu.np" 
                               value={formData.currentEmail}
                               onChange={(e) => setFormData({ ...formData, currentEmail: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="org-balance" className="text-[10px] font-bold text-slate-500 uppercase">Outstanding Balance (रू)</Label>
+                            <Input 
+                              id="org-balance" 
+                              type="number"
+                              placeholder="e.g. 15000" 
+                              value={formData.outstandingAmount}
+                              onChange={(e) => setFormData({ ...formData, outstandingAmount: parseFloat(e.target.value) || 0 })}
                             />
                           </div>
                         </div>
@@ -395,16 +393,6 @@ export default function AccountHomePage() {
                             placeholder="Street, City, Province, Nepal" 
                             value={formData.address}
                             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="org-balance" className="text-[10px] font-bold text-slate-500 uppercase">Outstanding Balance (रू)</Label>
-                          <Input 
-                            id="org-balance" 
-                            type="number"
-                            placeholder="e.g. 15000" 
-                            value={formData.outstandingAmount}
-                            onChange={(e) => setFormData({ ...formData, outstandingAmount: parseFloat(e.target.value) || 0 })}
                           />
                         </div>
                       </div>

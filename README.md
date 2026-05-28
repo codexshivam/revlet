@@ -13,13 +13,15 @@ Since you are using a development domain (Cloud Workstations), you **MUST** add 
 *   Paste your workstation domain: `9000-firebase-studio-1779875082553.cluster-edb2jv34dnhjisxuq5m7l37ccy.cloudworkstations.dev` (without https://).
 
 ### 2. Infrastructure Integration (DNS Management)
-To enable real-time domain management for institutions, you must provide a Cloudflare API Token.
+To enable real-time domain management for institutions, you must provide Cloudflare API Tokens.
 
-1.  **Generate Token**: Go to your [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens).
-2.  **Create Token**: Use the "Edit zone DNS" template.
-3.  **Environment Variable**: Add the token to your `.env.local` file:
+1.  **Generate Tokens**: Go to your [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens).
+2.  **DNS Token**: Create a token with "Edit zone DNS" permissions for the relevant account.
+3.  **Infra Token**: Create a token with "Read zone" and "Read zone settings" permissions for status checks.
+4.  **Environment Variables**: Add the tokens to your `.env.local` file:
     ```bash
-    CLOUDFLARE_API_TOKEN=your_token_here
+    CLOUDFLARE_DNS_TOKEN=your_dns_edit_token_here
+    CLOUDFLARE_INFRA_TOKEN=your_infrastructure_read_token_here
     ```
 
 ### 3. Database Setup

@@ -4,15 +4,18 @@
 /**
  * @fileOverview Network Infrastructure Server Actions
  * Handles API interactions for domain status and edge record management.
+ * Uses dual-token security: DNS Token for CRUD, Infra Token for Status.
  */
 
 const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
 
-async function cfFetch(path: string, options: RequestInit = {}) {
-  const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: RequestInit = {}) {
+  const API_TOKEN = tokenType === 'DNS' 
+    ? process.env.CLOUDFLARE_DNS_TOKEN 
+    : process.env.CLOUDFLARE_INFRA_TOKEN;
   
   if (!API_TOKEN) {
-    throw new Error('Infrastructure API token is not configured. Please add CLOUDFLARE_API_TOKEN to your environment variables.');
+    throw new Error(`Cloudflare ${tokenType} token is not configured in environment variables.`);
   }
 
   try {
@@ -40,24 +43,9 @@ async function cfFetch(path: string, options: RequestInit = {}) {
   }
 }
 
-export async function createZone(domain: string) {
-  try {
-    const data = await cfFetch('/zones', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: domain,
-        type: 'full'
-      }),
-    });
-    return { success: true, data: data.result };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to initialize domain infrastructure' };
-  }
-}
-
 export async function getZoneDetails(zoneId: string) {
   try {
-    const data = await cfFetch(`/zones/${zoneId}`);
+    const data = await cfFetch(`/zones/${zoneId}`, 'INFRA');
     return {
       success: true,
       data: {
@@ -75,7 +63,7 @@ export async function getZoneDetails(zoneId: string) {
 
 export async function checkZoneActivation(zoneId: string) {
   try {
-    const data = await cfFetch(`/zones/${zoneId}/activation_check`, { method: 'PUT' });
+    const data = await cfFetch(`/zones/${zoneId}/activation_check`, 'INFRA', { method: 'PUT' });
     return { success: true, data: data.success };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to initiate connection check' };
@@ -84,7 +72,7 @@ export async function checkZoneActivation(zoneId: string) {
 
 export async function listDNSRecords(zoneId: string) {
   try {
-    const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100`);
+    const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100`, 'DNS');
     return {
       success: true,
       data: data.result.map((r: any) => ({
@@ -104,7 +92,7 @@ export async function listDNSRecords(zoneId: string) {
 
 export async function createDNSRecord(zoneId: string, record: any) {
   try {
-    const data = await cfFetch(`/zones/${zoneId}/dns_records`, {
+    const data = await cfFetch(`/zones/${zoneId}/dns_records`, 'DNS', {
       method: 'POST',
       body: JSON.stringify({
         type: record.type,
@@ -123,7 +111,7 @@ export async function createDNSRecord(zoneId: string, record: any) {
 
 export async function updateDNSRecord(zoneId: string, recordId: string, record: any) {
   try {
-    const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {
+    const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, 'DNS', {
       method: 'PATCH',
       body: JSON.stringify({
         type: record.type,
@@ -142,7 +130,7 @@ export async function updateDNSRecord(zoneId: string, recordId: string, record: 
 
 export async function deleteDNSRecord(zoneId: string, recordId: string) {
   try {
-    const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {
+    const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, 'DNS', {
       method: 'DELETE',
     });
     return { success: true, data: data.result };

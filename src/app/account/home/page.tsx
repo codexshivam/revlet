@@ -41,6 +41,7 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
+  getDocs
 } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
@@ -191,10 +192,28 @@ export default function AccountHomePage() {
 
     setIsSubmitting(true)
     try {
+      // Check for domain uniqueness if it's a new registration
+      if (!editingOrg) {
+        const orgsRef = collection(db, "organizations")
+        const q = query(orgsRef, where("domain", "==", formData.domain.toLowerCase()))
+        const querySnapshot = await getDocs(q)
+        
+        if (!querySnapshot.empty) {
+          toast({
+            variant: "destructive",
+            title: "Domain Already Registered",
+            description: "This domain is already associated with an institution in our network."
+          })
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       if (editingOrg) {
         const orgRef = doc(db, "organizations", editingOrg.id)
         updateDoc(orgRef, {
           ...formData,
+          domain: formData.domain.toLowerCase(),
           updatedAt: serverTimestamp()
         }).catch(async (error) => {
           const permissionError = new FirestorePermissionError({
@@ -212,6 +231,7 @@ export default function AccountHomePage() {
         const orgsRef = collection(db, "organizations")
         addDoc(orgsRef, {
           ...formData,
+          domain: formData.domain.toLowerCase(),
           code: orgCode,
           ownerId: user.uid,
           createdAt: serverTimestamp()
@@ -227,7 +247,7 @@ export default function AccountHomePage() {
       }
       setIsDialogOpen(false)
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Operation Failed" })
+      toast({ variant: "destructive", title: "Operation Failed", description: error.message })
     } finally {
       setIsSubmitting(false)
     }

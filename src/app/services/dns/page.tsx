@@ -92,7 +92,6 @@ export default function DNSManagementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingRecord, setEditingRecord] = useState<DNSRecord | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [copiedText, setCopiedText] = useState<string | null>(null)
   
   const [formData, setFormData] = useState<Partial<DNSRecord>>({
     type: "A",
@@ -266,8 +265,6 @@ export default function DNSManagementPage() {
 
   const handleCopyText = (text: string) => {
     navigator.clipboard.writeText(text)
-    setCopiedText(text)
-    setTimeout(() => setCopiedText(null), 2000)
     toast({ title: "Copied to Clipboard", description: `"${text.substring(0, 30)}${text.length > 30 ? '...' : ''}" copied.` })
   }
 

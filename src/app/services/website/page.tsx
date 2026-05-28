@@ -1,3 +1,4 @@
+
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -151,156 +152,8 @@ export default function WebsiteManagementPage() {
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {/* 1. DECLARATION STATE: If hasWebsite is undefined */}
-        {selectedOrg?.hasWebsite === undefined && (
-          <Card className="bg-slate-50 border-slate-200 border-dashed">
-            <CardContent className="p-16 flex flex-col items-center text-center gap-6">
-              <div className="w-16 h-16 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center">
-                <CircleAlert className="w-8 h-8 text-slate-400" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-headline font-bold text-slate-900">Infrastructure Declaration Required</h3>
-                <p className="text-slate-500 max-w-sm mx-auto text-sm leading-relaxed font-medium">
-                  Please declare the current website status for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span> to initialize service contexts.
-                </p>
-              </div>
-              
-              <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
-                <Button 
-                  onClick={() => handleDeclareWebsite(true)}
-                  disabled={isUpdating}
-                  className="flex-1 h-14 bg-white hover:bg-slate-50 text-slate-900 border-slate-200 border shadow-sm font-bold gap-3"
-                >
-                  <Globe className="w-5 h-5 text-primary" />
-                  We have a website
-                </Button>
-                <Button 
-                  onClick={() => handleDeclareWebsite(false)}
-                  disabled={isUpdating}
-                  className="flex-1 h-14 bg-slate-900 hover:bg-black text-white shadow-xl shadow-slate-200 font-bold gap-3"
-                >
-                  <Ban className="w-5 h-5 text-slate-400" />
-                  No website yet
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 2. EXTERNAL STATE: If hasWebsite is true */}
-        {selectedOrg?.hasWebsite === true && (
-          <div className="space-y-6">
-            <Card className="bg-primary/5 border-primary/20 shadow-sm">
-              <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-primary/10 rounded-lg shrink-0">
-                    <ExternalLink className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-headline font-bold text-slate-900">External Hosting Active</h3>
-                    <p className="text-slate-500 text-sm mt-1 max-w-md font-medium">Your website is currently hosted outside our managed network. Advanced edge controls are restricted.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <Button onClick={handleRequestUpgrade} disabled={isUpdating} className="font-bold px-8 shadow-lg shadow-primary/20">
-                    {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Request Managed Migration"}
-                  </Button>
-                  <Button variant="outline" onClick={() => handleDeclareWebsite(false)} className="border-slate-200 h-11 px-6 font-bold text-slate-500 hover:text-destructive">
-                    Remove Declaration
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* 3. UPGRADE STATE: If hasWebsite is false AND siteActiveOn is undefined */}
-        {selectedOrg?.hasWebsite === false && selectedOrg?.siteActiveOn === undefined && (
-          <div className="max-w-5xl mx-auto py-8 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="space-y-12 text-center">
-              <div className="space-y-4">
-                <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
-                  Get your website with us
-                </h2>
-                <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto font-medium">
-                  Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
-                {[
-                  { title: "Ultra-Fast Performance", desc: "Optimized server-side rendering and global CDN for lightning-quick loading.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
-                  { title: "Automated Security", desc: "Built-in DDoS protection, automatic SSL, and weekly infrastructure patches.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
-                  { title: "Managed Updates", desc: "Our engineering team handles all content changes and technical updates.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
-                  { title: "Enterprise Reliability", desc: "Redundant cloud infrastructure with 99.9% uptime for your organization.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
-                ].map((feature) => (
-                  <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
-                    <div className="p-3 bg-white rounded-xl shadow-sm shrink-0">
-                      <feature.icon className="w-6 h-6" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-base font-bold">{feature.title}</h4>
-                      <p className="text-xs opacity-80 leading-relaxed font-medium">{feature.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-8 flex flex-col items-center gap-4">
-                <Button 
-                  onClick={handleRequestUpgrade} 
-                  size="lg" 
-                  disabled={isUpdating}
-                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
-                >
-                  {isUpdating ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Rocket className="w-5 h-5 mr-3 group-hover:translate-y-[-2px] transition-transform" />}
-                  Request Managed Website
-                </Button>
-                <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                  Switch to External Hosting
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 4. PENDING STATE: If hasWebsite is false AND siteActiveOn is false */}
-        {selectedOrg?.hasWebsite === false && selectedOrg?.siteActiveOn === false && (
-          <div className="max-w-4xl mx-auto py-20">
-            <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
-              <CardContent className="p-20 flex flex-col items-center text-center gap-6">
-                <div className="relative">
-                  <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
-                    <Clock className="w-10 h-10 text-amber-500" />
-                    <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white uppercase text-[9px]">
-                      PENDING
-                    </Badge>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-headline font-bold text-amber-900">Provisioning Website Infrastructure</h3>
-                  <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
-                    We are building your enterprise site context for <span className="font-bold">{selectedOrg.domain}</span>. This typically takes 24-48 business hours.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <Link href="/support">
-                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-6">
-                      <MessageSquare className="w-4 h-4" />
-                      Contact DevOps Desk
-                    </Button>
-                  </Link>
-                  <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    Cancel & Switch to External
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* 5. ACTIVE STATE: If hasWebsite is false AND siteActiveOn is true */}
-        {selectedOrg?.hasWebsite === false && selectedOrg?.siteActiveOn === true && (
+        {/* 1. CONTROL PANEL: If siteActiveOn is true (Priority) */}
+        {selectedOrg?.siteActiveOn === true && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
               <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
@@ -402,6 +255,154 @@ export default function WebsiteManagementPage() {
               <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-destructive">
                 Switch to External Hosting
               </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 2. PENDING STATUS: If siteActiveOn is false */}
+        {selectedOrg?.siteActiveOn === false && (
+          <div className="max-w-4xl mx-auto py-20">
+            <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
+              <CardContent className="p-20 flex flex-col items-center text-center gap-6">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
+                    <Clock className="w-10 h-10 text-amber-500" />
+                    <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white uppercase text-[9px]">
+                      PENDING
+                    </Badge>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-headline font-bold text-amber-900">Provisioning Website Infrastructure</h3>
+                  <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
+                    We are building your enterprise site context for <span className="font-bold">{selectedOrg.domain}</span>. This typically takes 24-48 business hours.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Link href="/support">
+                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-6">
+                      <MessageSquare className="w-4 h-4" />
+                      Contact DevOps Desk
+                    </Button>
+                  </Link>
+                  <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Cancel & Switch to External
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* 3. DECLARATION: If hasWebsite is undefined (and siteActiveOn is not active) */}
+        {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === undefined && (
+          <Card className="bg-slate-50 border-slate-200 border-dashed">
+            <CardContent className="p-16 flex flex-col items-center text-center gap-6">
+              <div className="w-16 h-16 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center">
+                <CircleAlert className="w-8 h-8 text-slate-400" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-headline font-bold text-slate-900">Infrastructure Declaration Required</h3>
+                <p className="text-slate-500 max-w-sm mx-auto text-sm leading-relaxed font-medium">
+                  Please declare the current website status for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span> to initialize service contexts.
+                </p>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+                <Button 
+                  onClick={() => handleDeclareWebsite(true)}
+                  disabled={isUpdating}
+                  className="flex-1 h-14 bg-white hover:bg-slate-50 text-slate-900 border-slate-200 border shadow-sm font-bold gap-3"
+                >
+                  <Globe className="w-5 h-5 text-primary" />
+                  We have a website
+                </Button>
+                <Button 
+                  onClick={() => handleDeclareWebsite(false)}
+                  disabled={isUpdating}
+                  className="flex-1 h-14 bg-slate-900 hover:bg-black text-white shadow-xl shadow-slate-200 font-bold gap-3"
+                >
+                  <Ban className="w-5 h-5 text-slate-400" />
+                  No website yet
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 4. EXTERNAL VIEW: If hasWebsite is true (and siteActiveOn is not active) */}
+        {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === true && (
+          <div className="space-y-6">
+            <Card className="bg-primary/5 border-primary/20 shadow-sm">
+              <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-primary/10 rounded-lg shrink-0">
+                    <ExternalLink className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-headline font-bold text-slate-900">External Hosting Active</h3>
+                    <p className="text-slate-500 text-sm mt-1 max-w-md font-medium">Your website is currently hosted outside our managed network. Advanced edge controls are restricted.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Button onClick={handleRequestUpgrade} disabled={isUpdating} className="font-bold px-8 shadow-lg shadow-primary/20">
+                    {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Request Managed Migration"}
+                  </Button>
+                  <Button variant="outline" onClick={() => handleDeclareWebsite(false)} className="border-slate-200 h-11 px-6 font-bold text-slate-500 hover:text-destructive">
+                    Remove Declaration
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* 5. UPGRADE PATH: If hasWebsite is false (and siteActiveOn is not active) */}
+        {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === false && (
+          <div className="max-w-5xl mx-auto py-8 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-12 text-center">
+              <div className="space-y-4">
+                <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
+                  Get your website with us
+                </h2>
+                <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto font-medium">
+                  Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
+                {[
+                  { title: "Ultra-Fast Performance", desc: "Optimized server-side rendering and global CDN for lightning-quick loading.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
+                  { title: "Automated Security", desc: "Built-in DDoS protection, automatic SSL, and weekly infrastructure patches.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
+                  { title: "Managed Updates", desc: "Our engineering team handles all content changes and technical updates.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
+                  { title: "Enterprise Reliability", desc: "Redundant cloud infrastructure with 99.9% uptime for your organization.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
+                ].map((feature) => (
+                  <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
+                    <div className="p-3 bg-white rounded-xl shadow-sm shrink-0">
+                      <feature.icon className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-base font-bold">{feature.title}</h4>
+                      <p className="text-xs opacity-80 leading-relaxed font-medium">{feature.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-8 flex flex-col items-center gap-4">
+                <Button 
+                  onClick={handleRequestUpgrade} 
+                  size="lg" 
+                  disabled={isUpdating}
+                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
+                >
+                  {isUpdating ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Rocket className="w-5 h-5 mr-3 group-hover:translate-y-[-2px] transition-transform" />}
+                  Request Managed Website
+                </Button>
+                <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Switch to External Hosting
+                </Button>
+              </div>
             </div>
           </div>
         )}

@@ -2,20 +2,58 @@
 "use client"
 
 import Link from "next/link"
-import { Globe, User, Mail, Lock, ChevronLeft } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Globe, User, Mail, Lock, ChevronLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/hooks/use-toast"
+import { useState } from "react"
+import { useAuth } from "@/firebase"
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
 
 export default function SignupPage() {
-  const handleSignup = (e: React.FormEvent) => {
+  const router = useRouter()
+  const auth = useAuth()
+  const [isLoading, setIsLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: ""
+  })
+
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
-    toast({
-      title: "Account created",
-      description: "Welcome to EduSphere! Please verify your email to continue.",
-    })
+    if (!formData.name || !formData.email || !formData.password) {
+      toast({
+        variant: "destructive",
+        title: "Required fields missing",
+        description: "Please fill in all the details.",
+      })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password)
+      await updateProfile(userCredential.user, {
+        displayName: formData.name
+      })
+      toast({
+        title: "Account created",
+        description: "Welcome to EduSphere! Your profile is ready.",
+      })
+      router.push("/account/home")
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: error.message,
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -46,25 +84,52 @@ export default function SignupPage() {
                 <Label htmlFor="name" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Full Profile Name</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <Input id="name" placeholder="Sagar Poudel" required className="pl-10 h-11 border-slate-200 focus:ring-primary/10" />
+                  <Input 
+                    id="name" 
+                    placeholder="Sagar Poudel" 
+                    required 
+                    className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Work Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <Input id="email" type="email" placeholder="admin@institution.edu.np" required className="pl-10 h-11 border-slate-200 focus:ring-primary/10" />
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    placeholder="admin@institution.edu.np" 
+                    required 
+                    className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">New Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <Input id="password" type="password" placeholder="••••••••" required className="pl-10 h-11 border-slate-200 focus:ring-primary/10" />
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    required 
+                    className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  />
                 </div>
               </div>
-              <Button type="submit" className="w-full font-bold h-12 shadow-lg shadow-primary/20 text-sm mt-4">
-                Create Platform Account
+              <Button type="submit" className="w-full font-bold h-12 shadow-lg shadow-primary/20 text-sm mt-4" disabled={isLoading}>
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Create Platform Account"
+                )}
               </Button>
             </form>
           </CardContent>

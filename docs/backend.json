@@ -1,0 +1,20 @@
+
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Information about the registered institutional administrator.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique Firebase Auth UID." },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "institution": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    }
+  },
+  "auth": {
+    "providers": ["password"]
+  }
+}

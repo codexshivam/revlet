@@ -24,8 +24,11 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "@/hooks/use-toast"
+import { useAuth, useUser } from "@/firebase"
+import { signOut } from "firebase/auth"
+import { useRouter } from "next/navigation"
 
 const initialOrgs = [
   { 
@@ -49,8 +52,17 @@ const initialOrgs = [
 ]
 
 export default function AccountHomePage() {
+  const router = useRouter()
+  const auth = useAuth()
+  const { user, loading } = useUser()
   const [orgs, setOrgs] = useState(initialOrgs)
-  const [accountName, setAccountName] = useState("Revlet Platform")
+  const [accountName, setAccountName] = useState("EduSphere Platform")
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login")
+    }
+  }, [user, loading, router])
 
   const handleAddOrg = () => {
     toast({
@@ -66,6 +78,18 @@ export default function AccountHomePage() {
     })
   }
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth)
+      toast({ title: "Logged out", description: "You have been securely signed out." })
+      router.push("/login")
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Logout Failed", description: error.message })
+    }
+  }
+
+  if (loading) return null
+
   return (
     <DashboardShell>
       <div className="space-y-8">
@@ -73,7 +97,7 @@ export default function AccountHomePage() {
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account home</span>
           <div className="flex items-center justify-between">
             <h1 className="text-4xl font-headline font-bold text-slate-900 tracking-tight">
-              {accountName}
+              {user?.displayName || accountName}
             </h1>
             <div className="flex items-center gap-3">
               <DropdownMenu>
@@ -99,7 +123,7 @@ export default function AccountHomePage() {
                           <Label htmlFor="acc-name">Name</Label>
                           <Input 
                             id="acc-name" 
-                            defaultValue={accountName} 
+                            defaultValue={user?.displayName || accountName} 
                             onChange={(e) => setAccountName(e.target.value)}
                           />
                         </div>
@@ -110,7 +134,7 @@ export default function AccountHomePage() {
                     </DialogContent>
                   </Dialog>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="cursor-pointer gap-2 py-2.5 text-destructive focus:text-destructive">
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer gap-2 py-2.5 text-destructive focus:text-destructive">
                     <LogOut className="w-4 h-4" />
                     <span className="font-medium">Logout</span>
                   </DropdownMenuItem>

@@ -23,6 +23,21 @@ export default function SignupPage() {
     password: ""
   })
 
+  const getFriendlyErrorMessage = (errorCode: string) => {
+    switch (errorCode) {
+      case "auth/email-already-in-use":
+        return "This email address is already registered. Try logging in instead."
+      case "auth/invalid-email":
+        return "The email address provided is not valid."
+      case "auth/weak-password":
+        return "Your password must be at least 6 characters long."
+      case "auth/operation-not-allowed":
+        return "Email and password accounts are not enabled. Please contact support."
+      default:
+        return "An unexpected error occurred. Please try again later."
+    }
+  }
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name || !formData.email || !formData.password) {
@@ -49,7 +64,7 @@ export default function SignupPage() {
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: error.message,
+        description: getFriendlyErrorMessage(error.code),
       })
     } finally {
       setIsLoading(false)

@@ -30,6 +30,25 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [resetEmail, setResetEmail] = useState("")
 
+  const getFriendlyErrorMessage = (errorCode: string) => {
+    switch (errorCode) {
+      case "auth/invalid-email":
+        return "The email address provided is not valid."
+      case "auth/user-disabled":
+        return "This account has been disabled by an administrator."
+      case "auth/user-not-found":
+      case "auth/wrong-password":
+      case "auth/invalid-credential":
+        return "Invalid email or password. Please try again."
+      case "auth/too-many-requests":
+        return "Too many failed login attempts. Please try again later or reset your password."
+      case "auth/network-request-failed":
+        return "A network error occurred. Please check your internet connection."
+      default:
+        return "An unexpected error occurred during authentication."
+    }
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email || !password) {
@@ -53,7 +72,7 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Authentication Failed",
-        description: error.message || "Invalid email or password.",
+        description: getFriendlyErrorMessage(error.code),
       })
     } finally {
       setIsLoading(false)
@@ -76,7 +95,9 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message,
+        description: error.code === "auth/user-not-found" 
+          ? "No account found with this email address." 
+          : getFriendlyErrorMessage(error.code),
       })
     }
   }

@@ -294,8 +294,8 @@ export default function DNSManagementPage() {
         </div>
 
         {selectedOrg && !selectedOrg.dnsRequested && !zoneId ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="space-y-8">
+          <div className="max-w-4xl mx-auto py-12 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-8 text-center">
               <div className="space-y-4">
                 <Badge variant="secondary" className="bg-primary/10 text-primary font-bold px-3 py-1">
                   Premium Infrastructure
@@ -303,34 +303,34 @@ export default function DNSManagementPage() {
                 <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
                   High-Performance Domain Management
                 </h2>
-                <p className="text-slate-500 text-lg leading-relaxed">
+                <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto">
                   Connect your institution's domain to our professional global network. Unlock advanced security, performance, and simplified management.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-left mt-12">
+                <div className="space-y-3 p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
                   <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
                     <Shield className="w-5 h-5 text-emerald-600" />
                   </div>
                   <h4 className="font-bold text-slate-900">Advanced Security</h4>
                   <p className="text-xs text-slate-500 leading-relaxed">Built-in DDoS protection and security filtering for all your web traffic.</p>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-3 p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100">
                     <Zap className="w-5 h-5 text-blue-600" />
                   </div>
                   <h4 className="font-bold text-slate-900">Ultra-Fast DNS</h4>
                   <p className="text-xs text-slate-500 leading-relaxed">Lightning-fast record propagation across our global edge infrastructure.</p>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-3 p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
                   <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-100">
                     <LayoutGrid className="w-5 h-5 text-amber-600" />
                   </div>
                   <h4 className="font-bold text-slate-900">Easy Management</h4>
                   <p className="text-xs text-slate-500 leading-relaxed">Simple interface for A, CNAME, MX, and TXT records with one-click proxying.</p>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-3 p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
                   <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center border border-purple-100">
                     <CheckCircle2 className="w-5 h-5 text-purple-600" />
                   </div>
@@ -339,41 +339,21 @@ export default function DNSManagementPage() {
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-8 flex flex-col items-center">
                 <Button 
                   onClick={handleRequestDNS} 
                   size="lg" 
                   disabled={isRequesting}
-                  className="font-bold px-10 h-12 shadow-xl shadow-primary/20 text-lg group"
+                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
                 >
                   {isRequesting ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Globe className="w-5 h-5 mr-3 group-hover:rotate-12 transition-transform" />}
                   Activate Global Network
                 </Button>
-                <p className="text-[10px] text-slate-400 mt-4 font-medium uppercase tracking-widest">
+                <p className="text-[10px] text-slate-400 mt-6 font-medium uppercase tracking-widest">
                   Estimated Setup Time: 2-4 Hours • Included with your membership
                 </p>
               </div>
             </div>
-
-            <Card className="bg-white border-slate-200 overflow-hidden shadow-2xl relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
-              <img 
-                src="https://picsum.photos/seed/infra/1200/900" 
-                alt="Infrastructure Preview" 
-                className="w-full h-full object-cover grayscale opacity-30 group-hover:scale-105 transition-transform duration-1000" 
-              />
-              <div className="absolute inset-0 flex items-center justify-center p-12">
-                <div className="bg-white/90 backdrop-blur-md p-8 rounded-2xl border border-white shadow-2xl text-center max-w-sm space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto border-4 border-white shadow-lg">
-                    <Server className="w-8 h-8 text-primary" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="font-headline font-bold text-xl text-slate-900">Ready to Connect</h3>
-                    <p className="text-xs text-slate-500 leading-relaxed font-medium">Click activate to begin provisioning your secure edge environment for <span className="text-primary font-bold">{selectedOrg.domain}</span>.</p>
-                  </div>
-                </div>
-              </div>
-            </Card>
           </div>
         ) : selectedOrg && selectedOrg.dnsRequested && !zoneId ? (
           <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
@@ -498,7 +478,7 @@ export default function DNSManagementPage() {
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-xs p-3">
                                   <p className="text-xs font-medium leading-relaxed">
-                                    Global Network responds to DNS queries. HTTP/S traffic is sent to our edge network and handled by security, caching, and performance layers.
+                                    Cloudflare responds to DNS queries. HTTP/S traffic is sent to the Cloudflare network and handled by security, caching, performance, and the developer platform.
                                   </p>
                                 </TooltipContent>
                               </Tooltip>

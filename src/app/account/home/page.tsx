@@ -1,3 +1,4 @@
+
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -5,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Plus, Building2, Edit2, LogOut, Globe, Loader2, Info } from "lucide-react"
+import { MoreVertical, Plus, Building2, Edit2, LogOut, Globe, Loader2, Info, Landmark } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +59,7 @@ interface Organization {
   description: string
   code: string
   ownerId: string
+  outstandingAmount: number
   createdAt: any
 }
 
@@ -85,7 +87,8 @@ export default function AccountHomePage() {
     contactName: "",
     contactPhone: "",
     contactEmail: "",
-    description: ""
+    description: "",
+    outstandingAmount: 0
   })
   
   const [accountName, setAccountName] = useState("")
@@ -149,7 +152,8 @@ export default function AccountHomePage() {
       contactName: org.contactName,
       contactPhone: org.contactPhone,
       contactEmail: org.contactEmail,
-      description: org.description
+      description: org.description,
+      outstandingAmount: org.outstandingAmount || 0
     })
     setIsDialogOpen(true)
   }
@@ -166,7 +170,8 @@ export default function AccountHomePage() {
       contactName: "",
       contactPhone: "",
       contactEmail: "",
-      description: ""
+      description: "",
+      outstandingAmount: 0
     })
     setIsDialogOpen(true)
   }
@@ -200,7 +205,6 @@ export default function AccountHomePage() {
         })
         toast({ title: "Updated", description: "Organization details saved." })
       } else {
-        // Enhanced uniqueness for institution code
         const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
         const orgCode = `${formData.name.substring(0, 3).toUpperCase()}-${uniqueSuffix}`
         
@@ -389,6 +393,16 @@ export default function AccountHomePage() {
                             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                           />
                         </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="org-balance" className="text-[10px] font-bold text-slate-500 uppercase">Outstanding Balance (रू)</Label>
+                          <Input 
+                            id="org-balance" 
+                            type="number"
+                            placeholder="e.g. 15000" 
+                            value={formData.outstandingAmount}
+                            onChange={(e) => setFormData({ ...formData, outstandingAmount: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-4">
@@ -497,6 +511,7 @@ export default function AccountHomePage() {
                   <TableRow className="bg-slate-50 hover:bg-slate-50 border-b border-slate-200">
                     <TableHead className="text-[10px] font-bold uppercase py-5 pl-8 text-slate-400 tracking-widest">Organization Name</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Managed Domain</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Outstanding (रू)</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -521,6 +536,11 @@ export default function AccountHomePage() {
                             {org.domain}
                           </span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                         <span className="text-xs font-bold text-red-600">
+                           {org.outstandingAmount?.toLocaleString() || 0}
+                         </span>
                       </TableCell>
                       <TableCell className="text-right pr-8">
                         <Button 

@@ -31,21 +31,7 @@
         "description": { "type": "string" },
         "code": { "type": "string" },
         "ownerId": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      }
-    },
-    "Invoice": {
-      "title": "Invoice",
-      "description": "Billing statement for institutional services.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "organizationId": { "type": "string" },
-        "organizationName": { "type": "string" },
-        "amount": { "type": "number" },
-        "status": { "type": "string", "enum": ["Paid", "Unpaid", "Pending Verification"] },
-        "dueDate": { "type": "string", "format": "date" },
-        "ownerId": { "type": "string" },
+        "outstandingAmount": { "type": "number", "description": "The current unpaid balance for this institution." },
         "createdAt": { "type": "string", "format": "date-time" }
       }
     },
@@ -55,13 +41,13 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "invoiceId": { "type": "string" },
         "organizationId": { "type": "string" },
+        "organizationName": { "type": "string" },
         "amount": { "type": "number" },
         "submittedAt": { "type": "string", "format": "date-time" },
         "voucherFileName": { "type": "string" },
         "ownerId": { "type": "string" },
-        "status": { "type": "string", "enum": ["Submitted", "Verified", "Rejected"] }
+        "status": { "type": "string", "enum": ["Not verified", "Verified", "Rejected"] }
       }
     }
   },
@@ -72,10 +58,6 @@
     "/organizations/{orgId}": {
       "schema": "#/backend/entities/Organization",
       "description": "Root collection for educational institutions."
-    },
-    "/invoices/{invoiceId}": {
-      "schema": "#/backend/entities/Invoice",
-      "description": "Billing records accessible by organization owners."
     },
     "/paymentVouchers/{voucherId}": {
       "schema": "#/backend/entities/PaymentVoucher",

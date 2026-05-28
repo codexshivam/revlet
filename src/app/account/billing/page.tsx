@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Upload, Landmark, Download, FileCheck, AlertCircle, Loader2, ReceiptText } from "lucide-react"
+import { Upload, Landmark, Download, FileCheck, AlertCircle, Loader2, ReceiptText, MapPin } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -26,28 +26,33 @@ import {
   where, 
   onSnapshot, 
   addDoc, 
-  serverTimestamp,
-  orderBy 
+  serverTimestamp 
 } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
 
-interface Invoice {
+interface Organization {
+  id: string
+  name: string
+  outstandingAmount: number
+}
+
+interface PaymentVoucher {
   id: string
   organizationId: string
   organizationName: string
   amount: number
-  status: "Paid" | "Unpaid" | "Pending Verification"
-  dueDate: string
-  ownerId: string
-  createdAt: any
+  submittedAt: any
+  voucherFileName: string
+  status: "Not verified" | "Verified" | "Rejected"
 }
 
 export default function BillingPage() {
   const { user, loading: authLoading } = useUser()
   const db = useFirestore()
 
-  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [orgs, setOrgs] = useState<Organization[]>([])
+  const [vouchers, setVouchers] = useState<PaymentVoucher[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -55,43 +60,50 @@ export default function BillingPage() {
   
   // Voucher form state
   const [submissionData, setSubmissionData] = useState({
-    invoiceId: "",
+    organizationId: "",
     amount: ""
   })
 
   useEffect(() => {
-    if (authLoading) return
-    if (!user) return
+    if (authLoading || !user) return
 
-    const invoicesRef = collection(db, "invoices")
-    const q = query(
-      invoicesRef, 
-      where("ownerId", "==", user.uid)
-    )
+    // Fetch User Organizations
+    const orgsRef = collection(db, "organizations")
+    const qOrgs = query(orgsRef, where("ownerId", "==", user.uid))
+    
+    const unsubOrgs = onSnapshot(qOrgs, (snap) => {
+      setOrgs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Organization[])
+    })
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    // Fetch Vouchers
+    const vouchersRef = collection(db, "paymentVouchers")
+    const qVouchers = query(vouchersRef, where("ownerId", "==", user.uid))
+
+    const unsubVouchers = onSnapshot(qVouchers, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as Invoice[]
+      })) as PaymentVoucher[]
       
-      // Client-side sort if index isn't ready
-      setInvoices(fetched.sort((a, b) => {
-        const dateA = a.createdAt?.toMillis?.() || 0
-        const dateB = b.createdAt?.toMillis?.() || 0
+      setVouchers(fetched.sort((a, b) => {
+        const dateA = a.submittedAt?.toMillis?.() || 0
+        const dateB = b.submittedAt?.toMillis?.() || 0
         return dateB - dateA
       }))
       setIsLoading(false)
     }, async (error) => {
       const permissionError = new FirestorePermissionError({
-        path: 'invoices',
+        path: 'paymentVouchers',
         operation: 'list',
       });
       errorEmitter.emit('permission-error', permissionError);
       setIsLoading(false)
     })
 
-    return () => unsubscribe()
+    return () => {
+      unsubOrgs()
+      unsubVouchers()
+    }
   }, [user, authLoading, db])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,25 +125,27 @@ export default function BillingPage() {
 
   const handleConfirmSubmission = async () => {
     if (!user) return
-    if (!selectedFile || !submissionData.invoiceId || !submissionData.amount) {
+    if (!selectedFile || !submissionData.organizationId || !submissionData.amount) {
       toast({
         variant: "destructive",
         title: "Incomplete Details",
-        description: "Please select an invoice, enter amount and attach the voucher.",
+        description: "Please select an organization, enter amount and attach the voucher.",
       })
       return
     }
 
     setIsSubmitting(true)
     const vouchersRef = collection(db, "paymentVouchers")
+    const targetOrg = orgs.find(o => o.id === submissionData.organizationId)
     
     addDoc(vouchersRef, {
-      invoiceId: submissionData.invoiceId,
+      organizationId: submissionData.organizationId,
+      organizationName: targetOrg?.name || "Unknown Institution",
       amount: parseFloat(submissionData.amount),
       ownerId: user.uid,
       submittedAt: serverTimestamp(),
       voucherFileName: selectedFile.name,
-      status: "Submitted"
+      status: "Not verified"
     }).then(() => {
       toast({
         title: "Payment Submitted",
@@ -140,7 +154,7 @@ export default function BillingPage() {
       setIsSubmitting(false)
       setIsDialogOpen(false)
       setSelectedFile(null)
-      setSubmissionData({ invoiceId: "", amount: "" })
+      setSubmissionData({ organizationId: "", amount: "" })
     }).catch(async (error) => {
       const permissionError = new FirestorePermissionError({
         path: 'paymentVouchers',
@@ -152,25 +166,7 @@ export default function BillingPage() {
     })
   }
 
-  const handleDownloadPDF = (inv: Invoice) => {
-    toast({
-      title: "Generating Document",
-      description: `Downloading invoice ${inv.id} for ${inv.organizationName}.`,
-    })
-    // Mock PDF generation
-    const element = document.createElement("a");
-    const content = `EduSphere Invoice: ${inv.id}\nOrg: ${inv.organizationName}\nAmount: NPR ${inv.amount}\nStatus: ${inv.status}`;
-    const file = new Blob([content], {type: 'application/pdf'});
-    element.href = URL.createObjectURL(file);
-    element.download = `Invoice-${inv.id}.pdf`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  }
-
-  const pendingAmount = invoices
-    .filter(i => i.status === "Unpaid")
-    .reduce((sum, i) => sum + i.amount, 0)
+  const totalOutstanding = orgs.reduce((sum, o) => sum + (o.outstandingAmount || 0), 0)
 
   if (authLoading) {
     return (
@@ -188,15 +184,15 @@ export default function BillingPage() {
       <div className="space-y-8">
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Billing & Finance</span>
-          <h1 className="text-3xl font-headline font-bold text-slate-900">Manage Payments & Invoices</h1>
+          <h1 className="text-3xl font-headline font-bold text-slate-900">Manage Payments</h1>
         </div>
         
         <Card className="bg-white border-slate-200 shadow-sm">
           <CardContent className="pt-6">
             <div className="bg-red-50 border border-red-100 p-6 rounded-lg flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Outstanding Total Amount</span>
-                <p className="text-3xl font-headline font-bold text-red-700">रू {pendingAmount.toLocaleString()}</p>
+                <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Total Outstanding Balance</span>
+                <p className="text-3xl font-headline font-bold text-red-700">रू {totalOutstanding.toLocaleString()}</p>
               </div>
               
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -226,6 +222,13 @@ export default function BillingPage() {
                             <p className="text-[10px] text-slate-400 uppercase font-bold">Account Number</p>
                             <p className="text-sm font-mono font-bold text-primary">123000987654321</p>
                           </div>
+                          <div className="flex items-start gap-1">
+                            <MapPin className="w-3 h-3 text-slate-400 mt-1" />
+                            <div>
+                              <p className="text-[10px] text-slate-400 uppercase font-bold">Branch</p>
+                              <p className="text-xs font-bold text-slate-700 uppercase">Kathmandu Main Branch, Kamaladi</p>
+                            </div>
+                          </div>
                           <div>
                             <p className="text-[10px] text-slate-400 uppercase font-bold">Reference Info</p>
                             <p className="text-[10px] font-medium text-slate-500 italic leading-tight">
@@ -245,18 +248,18 @@ export default function BillingPage() {
                     <div className="p-8 space-y-5 flex flex-col justify-center">
                       <div className="space-y-4">
                         <div className="space-y-1.5">
-                          <Label className="text-[10px] font-bold text-slate-500 uppercase">Target Invoice</Label>
+                          <Label className="text-[10px] font-bold text-slate-500 uppercase">Institution</Label>
                           <Select 
-                            value={submissionData.invoiceId} 
-                            onValueChange={(v) => setSubmissionData({...submissionData, invoiceId: v})}
+                            value={submissionData.organizationId} 
+                            onValueChange={(v) => setSubmissionData({...submissionData, organizationId: v})}
                           >
                             <SelectTrigger className="h-10 text-xs font-bold">
-                              <SelectValue placeholder="Select outstanding invoice" />
+                              <SelectValue placeholder="Select institution" />
                             </SelectTrigger>
                             <SelectContent>
-                              {invoices.filter(i => i.status !== "Paid").map(inv => (
-                                <SelectItem key={inv.id} value={inv.id} className="text-xs">
-                                  {inv.id} - रू {inv.amount.toLocaleString()} ({inv.organizationName})
+                              {orgs.map(org => (
+                                <SelectItem key={org.id} value={org.id} className="text-xs">
+                                  {org.name} (रू {org.outstandingAmount?.toLocaleString() || 0})
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -293,7 +296,7 @@ export default function BillingPage() {
                       <Button 
                         onClick={handleConfirmSubmission} 
                         className="w-full bg-slate-900 text-white font-bold h-12 rounded-lg"
-                        disabled={isSubmitting || !selectedFile || !submissionData.invoiceId}
+                        disabled={isSubmitting || !selectedFile || !submissionData.organizationId}
                       >
                         {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Confirm & Send for Verification"}
                       </Button>
@@ -308,9 +311,9 @@ export default function BillingPage() {
         <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
           <CardHeader className="bg-slate-50/50 border-b border-slate-200 px-8 py-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Institutional Invoice History</CardTitle>
+              <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment Submission History</CardTitle>
               <Badge variant="outline" className="text-[10px] font-bold text-slate-400 h-5 px-2 bg-white">
-                {invoices.length} Statements
+                {vouchers.length} Records
               </Badge>
             </div>
           </CardHeader>
@@ -318,49 +321,50 @@ export default function BillingPage() {
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-32 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Statements...</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Submissions...</p>
               </div>
-            ) : invoices.length === 0 ? (
+            ) : vouchers.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32 text-center gap-3">
                 <ReceiptText className="w-12 h-12 text-slate-100" />
-                <p className="text-sm font-bold text-slate-400">No invoices found for your institutions.</p>
+                <p className="text-sm font-bold text-slate-400">No payment records found.</p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/50 border-b border-slate-200">
-                    <TableHead className="text-[10px] font-bold uppercase py-4 pl-8">Invoice Statement</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-4 pl-8">Voucher ID</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-4">Institution</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-4">Amount (NPR)</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4">Due Date</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-4">Submitted Date</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-4">Status</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Ledger</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((inv) => (
-                    <TableRow key={inv.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                      <TableCell className="font-bold text-slate-700 py-5 pl-8 text-xs">{inv.id}</TableCell>
-                      <TableCell className="text-slate-600 text-xs font-semibold">{inv.organizationName}</TableCell>
-                      <TableCell className="font-mono font-bold text-slate-900 text-xs">रू {inv.amount.toLocaleString()}</TableCell>
-                      <TableCell className="text-slate-400 text-xs font-medium">{inv.dueDate}</TableCell>
+                  {vouchers.map((v) => (
+                    <TableRow key={v.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
+                      <TableCell className="font-bold text-slate-700 py-5 pl-8 text-xs">{v.id.substring(0, 8)}...</TableCell>
+                      <TableCell className="text-slate-600 text-xs font-semibold">{v.organizationName}</TableCell>
+                      <TableCell className="font-mono font-bold text-slate-900 text-xs">रू {v.amount.toLocaleString()}</TableCell>
+                      <TableCell className="text-slate-400 text-xs font-medium">
+                        {v.submittedAt?.toDate?.().toLocaleDateString() || 'N/A'}
+                      </TableCell>
                       <TableCell>
-                        <Badge className={`text-[9px] px-2 py-0 h-5 font-bold shadow-none rounded
-                          ${inv.status === "Paid" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
-                            inv.status === "Unpaid" ? "bg-red-50 text-red-600 border-red-100" : 
+                        <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded
+                          ${v.status === "Verified" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
+                            v.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" : 
                             "bg-amber-50 text-amber-600 border-amber-100"}`}>
-                          {inv.status}
+                          {v.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right pr-8">
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="h-8 gap-1.5 text-primary hover:text-primary hover:bg-primary/5 text-xs font-bold"
-                          onClick={() => handleDownloadPDF(inv)}
+                          className="h-8 gap-1.5 text-slate-500 hover:text-primary hover:bg-primary/5 text-xs font-bold"
+                          onClick={() => toast({ title: "Opening File", description: v.voucherFileName })}
                         >
-                          <Download className="w-3 h-3" />
-                          PDF
+                          View Receipt
                         </Button>
                       </TableCell>
                     </TableRow>

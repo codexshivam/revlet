@@ -522,7 +522,6 @@ export default function AccountHomePage() {
                   <TableRow className="bg-slate-50 hover:bg-slate-50 border-b border-slate-200">
                     <TableHead className="text-[10px] font-bold uppercase py-5 pl-8 text-slate-400 tracking-widest">Organization Name</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Managed Domain</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Outstanding (NPR)</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -547,11 +546,6 @@ export default function AccountHomePage() {
                             {org.domain}
                           </span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                         <span className="text-xs font-bold text-red-600">
-                           {org.outstandingAmount?.toLocaleString() || 0}
-                         </span>
                       </TableCell>
                       <TableCell className="text-right pr-8">
                         <Button 

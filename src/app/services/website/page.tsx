@@ -48,10 +48,10 @@ export default function WebsiteManagementPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-headline font-bold text-slate-900">Website Management</h1>
           <div className="flex gap-2 bg-white p-1 border border-slate-200 rounded-lg shadow-sm">
-             <Button variant="ghost" size="xs" className="h-7 text-[10px] font-bold" onClick={() => setStatus("not_found")}>Test: Not Found</Button>
-             <Button variant="ghost" size="xs" className="h-7 text-[10px] font-bold" onClick={() => setStatus("external")}>Test: External</Button>
-             <Button variant="ghost" size="xs" className="h-7 text-[10px] font-bold" onClick={() => setStatus("waiting_for_changes")}>Test: Waiting</Button>
-             <Button variant="ghost" size="xs" className="h-7 text-[10px] font-bold" onClick={() => setStatus("ready_and_published")}>Test: Ready</Button>
+             <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setStatus("not_found")}>Test: Not Found</Button>
+             <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setStatus("external")}>Test: External</Button>
+             <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setStatus("waiting_for_changes")}>Test: Waiting</Button>
+             <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setStatus("ready_and_published")}>Test: Ready</Button>
           </div>
         </div>
         

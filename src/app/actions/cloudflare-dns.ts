@@ -15,7 +15,8 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
     : process.env.CLOUDFLARE_INFRA_TOKEN;
   
   if (!API_TOKEN) {
-    throw new Error(`Cloudflare ${tokenType} token is not configured in environment variables.`);
+    console.error(`[Infrastructure Action] Missing ${tokenType} token in environment variables.`);
+    throw new Error(`Cloudflare ${tokenType} token is not configured. Please add it to your .env.local file.`);
   }
 
   try {
@@ -29,10 +30,19 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
       cache: 'no-store',
     });
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type');
+    let data;
+
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      console.error(`[Infrastructure Action] Expected JSON from Cloudflare but received: ${text.substring(0, 100)}`);
+      throw new Error(`Cloudflare API returned an unexpected format (${response.status}).`);
+    }
 
     if (!response.ok) {
-      const message = data.errors?.[0]?.message || data.message || `API error (${response.status})`;
+      const message = data.errors?.[0]?.message || data.message || `Cloudflare API error (${response.status})`;
       throw new Error(message);
     }
     
@@ -44,6 +54,7 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
 }
 
 export async function getZoneDetails(zoneId: string) {
+  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
     const data = await cfFetch(`/zones/${zoneId}`, 'INFRA');
     return {
@@ -62,15 +73,17 @@ export async function getZoneDetails(zoneId: string) {
 }
 
 export async function checkZoneActivation(zoneId: string) {
+  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
     const data = await cfFetch(`/zones/${zoneId}/activation_check`, 'INFRA', { method: 'PUT' });
-    return { success: true, data: data.success };
+    return { success: true, data: data.success || data.result?.id ? true : false };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to initiate connection check' };
   }
 }
 
 export async function listDNSRecords(zoneId: string) {
+  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
     const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100`, 'DNS');
     return {
@@ -91,6 +104,7 @@ export async function listDNSRecords(zoneId: string) {
 }
 
 export async function createDNSRecord(zoneId: string, record: any) {
+  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
     const data = await cfFetch(`/zones/${zoneId}/dns_records`, 'DNS', {
       method: 'POST',
@@ -110,6 +124,7 @@ export async function createDNSRecord(zoneId: string, record: any) {
 }
 
 export async function updateDNSRecord(zoneId: string, recordId: string, record: any) {
+  if (!zoneId || !recordId) return { success: false, error: 'Missing Zone ID or Record ID' };
   try {
     const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, 'DNS', {
       method: 'PATCH',
@@ -129,6 +144,7 @@ export async function updateDNSRecord(zoneId: string, recordId: string, record: 
 }
 
 export async function deleteDNSRecord(zoneId: string, recordId: string) {
+  if (!zoneId || !recordId) return { success: false, error: 'Missing Zone ID or Record ID' };
   try {
     const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, 'DNS', {
       method: 'DELETE',

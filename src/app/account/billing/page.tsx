@@ -223,7 +223,7 @@ export default function BillingPage() {
                     Submit Payment Voucher
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-4xl bg-white p-0 overflow-hidden border-none shadow-2xl">
+                <DialogContent className="max-w-4xl bg-white p-0 overflow-hidden border-none shadow-2xl [&>button]:text-white [&>button]:opacity-100 [&>button]:transition-opacity [&>button]:hover:opacity-80">
                   <DialogHeader className="p-6 bg-slate-900 text-white relative">
                     <DialogTitle className="text-xl font-headline font-bold">Payment Submission Portal</DialogTitle>
                     <p className="text-slate-400 text-xs">Verify your bank transfer and upload proof.</p>
@@ -244,7 +244,7 @@ export default function BillingPage() {
                                 <CreditCard className="w-5 h-5 text-primary" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight leading-none mb-1.5">Account Number</p>
+                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight mb-1.5 leading-none">Account Number</p>
                                 <p className="text-lg font-mono font-bold text-slate-900 tracking-tight">16007010030603</p>
                               </div>
                             </div>
@@ -254,9 +254,9 @@ export default function BillingPage() {
                                 <Landmark className="w-5 h-5 text-primary" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight leading-none mb-1.5">Bank & Branch</p>
+                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight mb-1.5 leading-none">Bank & Branch</p>
                                 <p className="text-sm font-bold text-slate-900">Global IME Bank Limited</p>
-                                <p className="text-xs font-bold text-slate-500 uppercase mt-0.5">Bhaisepati Branch</p>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">Bhaisepati Branch, Lalitpur</p>
                               </div>
                             </div>
 
@@ -265,7 +265,7 @@ export default function BillingPage() {
                                 <UserIcon className="w-5 h-5 text-primary" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight leading-none mb-1.5">Account Name</p>
+                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight mb-1.5 leading-none">Account Name</p>
                                 <p className="text-sm font-bold text-slate-900 uppercase">Shivam Yadav</p>
                               </div>
                             </div>

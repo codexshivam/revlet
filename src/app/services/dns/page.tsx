@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,8 @@ import {
   CheckCircle2, 
   Loader2, 
   Server,
-  Globe
+  Globe,
+  AlertCircle
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -35,7 +36,7 @@ import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, onSnapshot } from "firebase/firestore"
+import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore"
 import { 
   getZoneDetails, 
   listDNSRecords, 
@@ -90,15 +91,16 @@ export default function DNSManagementPage() {
     priority: 10
   })
 
-  const selectedOrg = orgs.find(o => o.id === selectedOrgId)
+  const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
+  const zoneId = selectedOrg?.cloudflareZoneId
 
   const fetchDNSData = useCallback(async () => {
-    if (!selectedOrg?.cloudflareZoneId) return
+    if (!zoneId) return
     setIsLoadingRecords(true)
     try {
       const [zone, dns] = await Promise.all([
-        getZoneDetails(selectedOrg.cloudflareZoneId),
-        listDNSRecords(selectedOrg.cloudflareZoneId)
+        getZoneDetails(zoneId),
+        listDNSRecords(zoneId)
       ])
       setZoneDetails(zone)
       setRecords(dns)
@@ -106,12 +108,12 @@ export default function DNSManagementPage() {
       toast({
         variant: "destructive",
         title: "Sync Failed",
-        description: "Could not retrieve settings from the network."
+        description: "Could not retrieve settings from the network. Check your API token configuration."
       })
     } finally {
       setIsLoadingRecords(false)
     }
-  }, [selectedOrg?.cloudflareZoneId, toast])
+  }, [zoneId, toast])
 
   // Fetch Orgs
   useEffect(() => {
@@ -130,71 +132,83 @@ export default function DNSManagementPage() {
 
   // Initial fetch on org change
   useEffect(() => {
-    if (selectedOrg?.cloudflareZoneId) {
+    if (zoneId) {
       fetchDNSData()
     } else {
       setRecords([])
       setZoneDetails(null)
     }
-  }, [selectedOrg, fetchDNSData])
+  }, [zoneId, fetchDNSData])
 
   const handleRefreshActivation = useCallback(async () => {
-    if (!selectedOrg?.cloudflareZoneId) return
+    if (!zoneId) return
     setIsRefreshing(true)
     try {
-      await checkZoneActivation(selectedOrg.cloudflareZoneId)
+      await checkZoneActivation(zoneId)
       await fetchDNSData()
       toast({
-        title: "Checking Connection",
-        description: "We are checking if your domain is correctly pointed to our servers."
+        title: "Connection Checked",
+        description: "We have requested a refresh of your global server nodes."
       })
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Check Failed",
-        description: error.message
+        description: error.message || "Failed to initiate server node check."
       })
     } finally {
       setIsRefreshing(false)
     }
-  }, [selectedOrg?.cloudflareZoneId, fetchDNSData, toast])
+  }, [zoneId, fetchDNSData, toast])
 
   const handleSaveRecord = async () => {
-    if (!selectedOrg?.cloudflareZoneId) return
+    if (!zoneId) return
     
     if (!formData.name || !formData.content) {
-      toast({ variant: "destructive", title: "Missing details", description: "Name and content are required." })
+      toast({ 
+        variant: "destructive", 
+        title: "Missing Details", 
+        description: "Please provide both a name and a value for the setting." 
+      })
       return
     }
 
     setIsSubmitting(true)
     try {
       if (editingRecord) {
-        await updateDNSRecord(selectedOrg.cloudflareZoneId, editingRecord.id, formData)
-        toast({ title: "Updated", description: "Changes have been applied successfully." })
+        await updateDNSRecord(zoneId, editingRecord.id, formData)
+        toast({ title: "Setting Updated", description: "Your changes have been deployed to our global nodes." })
       } else {
-        await createDNSRecord(selectedOrg.cloudflareZoneId, formData)
-        toast({ title: "Created", description: "The new record has been added." })
+        await createDNSRecord(zoneId, formData)
+        toast({ title: "Setting Created", description: "The new setting is now propagating across the network." })
       }
       setIsDialogOpen(false)
       fetchDNSData()
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Update Error", description: error.message })
+      toast({ 
+        variant: "destructive", 
+        title: "Update Error", 
+        description: error.message || "An unexpected error occurred while saving." 
+      })
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const handleDeleteRecord = async (id: string) => {
-    if (!selectedOrg?.cloudflareZoneId) return
-    if (!confirm("Are you sure you want to delete this setting?")) return
+    if (!zoneId) return
+    if (!confirm("Are you sure you want to permanently remove this setting? This may cause downtime.")) return
 
     try {
-      await deleteDNSRecord(selectedOrg.cloudflareZoneId, id)
-      toast({ title: "Setting Deleted" })
+      await deleteDNSRecord(zoneId, id)
+      toast({ title: "Setting Removed", description: "The configuration has been deleted from our edge nodes." })
       fetchDNSData()
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Delete Failed", description: error.message })
+      toast({ 
+        variant: "destructive", 
+        title: "Delete Failed", 
+        description: error.message || "Failed to remove the setting." 
+      })
     }
   }
 
@@ -210,10 +224,14 @@ export default function DNSManagementPage() {
     setIsDialogOpen(true)
   }
 
-  const handleSetupDNS = () => {
+  const handleSetupDNS = async () => {
+    if (!selectedOrg) return
+    
+    // In a real scenario, this would create a zone in Cloudflare and update Firestore.
+    // For this prototype, we simulate the registration request.
     toast({
-      title: "Setup Request Sent",
-      description: "Our team has been notified. We will configure your domain settings and provide your global server nodes shortly.",
+      title: "Request Received",
+      description: "Our infrastructure team is provisioning your server nodes. This usually takes less than 4 hours.",
     })
   }
 
@@ -227,7 +245,7 @@ export default function DNSManagementPage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading Account Settings...</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synchronizing Infrastructure...</p>
         </div>
       </DashboardShell>
     )
@@ -237,12 +255,12 @@ export default function DNSManagementPage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Settings</span>
-          <div className="flex items-center justify-between">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Network</span>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Domain Management</h1>
             <div className="flex items-center gap-3">
                <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
-                 <SelectTrigger className="w-[280px] bg-white font-bold text-xs h-10 shadow-sm">
+                 <SelectTrigger className="w-full md:w-[280px] bg-white font-bold text-xs h-10 shadow-sm border-slate-200">
                    <SelectValue placeholder="Select Institution" />
                  </SelectTrigger>
                  <SelectContent>
@@ -251,39 +269,39 @@ export default function DNSManagementPage() {
                    ))}
                  </SelectContent>
                </Select>
-               {selectedOrg?.cloudflareZoneId && (
-                 <Button onClick={openAddDialog} className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6">
+               {zoneId && (
+                 <Button onClick={openAddDialog} className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200">
                    <Plus className="w-4 h-4 mr-2" />
-                   Add New Record
+                   Add New Setting
                  </Button>
                )}
             </div>
           </div>
         </div>
 
-        {selectedOrg && !selectedOrg.cloudflareZoneId ? (
-          <Card className="bg-slate-50 border-slate-200 border-dashed">
+        {selectedOrg && !zoneId ? (
+          <Card className="bg-white border-slate-200 shadow-sm border-dashed">
             <CardContent className="p-20 flex flex-col items-center text-center gap-6">
-              <div className="w-20 h-20 rounded-full bg-white border border-slate-100 flex items-center justify-center shadow-sm">
-                <Globe className="w-10 h-10 text-slate-300" />
+              <div className="w-20 h-20 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shadow-sm">
+                <Globe className="w-10 h-10 text-slate-200" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-2xl font-headline font-bold text-slate-900">Start managing your DNS</h3>
-                <p className="text-slate-500 max-w-lg mx-auto leading-relaxed">
-                  Your domain <span className="font-bold text-slate-900">{selectedOrg.domain}</span> is ready to be set up. Connect your domain to enable all platform services.
+                <h3 className="text-2xl font-headline font-bold text-slate-900">Initialize Domain Setup</h3>
+                <p className="text-slate-500 max-w-lg mx-auto leading-relaxed text-sm">
+                  The domain <span className="font-bold text-slate-900">{selectedOrg.domain}</span> is ready for deployment. Connect it to our global edge network to enable web and mail services.
                 </p>
               </div>
               <Button onClick={handleSetupDNS} size="lg" className="font-bold px-10 h-12 shadow-xl shadow-primary/10">
-                Setup DNS Now
+                Setup Domain Now
               </Button>
             </CardContent>
           </Card>
-        ) : selectedOrg?.cloudflareZoneId && (
+        ) : selectedOrg && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
-              {/* Nameserver Status Card */}
+              {/* Server Nodes Status */}
               <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-                <CardHeader className="bg-slate-50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
+                <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                   <div className="flex items-center gap-2">
                     <Server className="w-4 h-4 text-slate-400" />
                     <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Server Nodes</CardTitle>
@@ -292,35 +310,35 @@ export default function DNSManagementPage() {
                     "text-[9px] font-bold px-2 py-0.5 border shadow-none",
                     zoneDetails?.status === 'active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
                   )}>
-                    {zoneDetails?.status === 'active' ? "CONNECTED" : "PENDING SETUP"}
+                    {zoneDetails?.status === 'active' ? "ACTIVE & ROUTED" : "SETUP IN PROGRESS"}
                   </Badge>
                 </CardHeader>
                 <CardContent className="p-8">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      <div className="space-y-4">
-                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Server Nodes</p>
+                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Nodes</p>
                        <div className="space-y-2">
                          {zoneDetails?.nameServers?.map((ns: string) => (
                            <div key={ns} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group hover:border-primary/20 transition-all">
                              <code className="text-xs font-mono font-bold text-slate-700">{ns}</code>
                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                            </div>
-                         )) || <p className="text-xs text-slate-400 italic">Assigning servers...</p>}
+                         )) || <p className="text-xs text-slate-400 italic">Nodes are being assigned...</p>}
                        </div>
                      </div>
                      <div className="space-y-6 flex flex-col justify-center border-l border-slate-100 pl-8">
                         <div className="space-y-2">
-                          <h4 className="text-sm font-bold text-slate-900">Connection Status</h4>
-                          <p className="text-xs text-slate-500 leading-relaxed">
+                          <h4 className="text-sm font-bold text-slate-900">Connection Policy</h4>
+                          <p className="text-xs text-slate-500 leading-relaxed font-medium">
                             {zoneDetails?.status === 'active' 
-                              ? "Your domain is successfully connected to our global network."
-                              : "To activate your domain, please update your nameservers at your domain registrar to the nodes listed on the left."}
+                              ? "Your domain is successfully connected to our edge network. All settings are live."
+                              : "To activate your domain, please update the nameservers at your domain registrar to match the nodes listed here."}
                           </p>
                         </div>
                         <Button 
                           onClick={handleRefreshActivation} 
                           disabled={isRefreshing}
-                          className="w-full bg-slate-900 text-white font-bold gap-2 h-11"
+                          className="w-full bg-slate-900 text-white font-bold gap-2 h-11 shadow-lg shadow-slate-200"
                         >
                           {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                           Check Connection
@@ -330,12 +348,12 @@ export default function DNSManagementPage() {
                 </CardContent>
               </Card>
 
-              {/* DNS Records Table */}
+              {/* Settings Table */}
               <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-                <CardHeader className="bg-slate-50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
+                <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                   <div className="flex items-center gap-2">
                     <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Domain Settings</CardTitle>
-                    <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white">{records.length}</Badge>
+                    <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white border-slate-200">{records.length}</Badge>
                   </div>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -343,7 +361,7 @@ export default function DNSManagementPage() {
                       placeholder="Search settings..." 
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-8 pl-8 text-xs w-48 bg-white border-slate-200" 
+                      className="h-8 pl-8 text-xs w-48 bg-white border-slate-200 font-medium" 
                     />
                   </div>
                 </CardHeader>
@@ -351,12 +369,14 @@ export default function DNSManagementPage() {
                   {isLoadingRecords ? (
                     <div className="flex flex-col items-center justify-center py-32 gap-3">
                       <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing...</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Settings...</p>
                     </div>
                   ) : filteredRecords.length === 0 ? (
-                    <div className="p-20 text-center space-y-2">
-                      <Info className="w-8 h-8 text-slate-100 mx-auto" />
-                      <p className="text-sm font-bold text-slate-400">No settings found.</p>
+                    <div className="p-24 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mx-auto">
+                        <Info className="w-6 h-6 text-slate-200" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-400">No settings found matching your search.</p>
                     </div>
                   ) : (
                     <Table>
@@ -372,7 +392,7 @@ export default function DNSManagementPage() {
                       <TableBody>
                         {filteredRecords.map((rec) => (
                           <TableRow key={rec.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                            <TableCell className="pl-6">
+                            <TableCell className="pl-6 py-4">
                               <Badge className={cn(
                                 "font-mono text-[9px] font-bold px-2 py-0 h-5 border shadow-none",
                                 rec.type === "A" ? "bg-blue-50 text-blue-600 border-blue-100" :
@@ -388,20 +408,20 @@ export default function DNSManagementPage() {
                             </TableCell>
                             <TableCell className="max-w-md">
                               <div className="flex flex-col gap-0.5">
-                                <span className="font-mono text-[11px] text-slate-500 truncate">{rec.content}</span>
+                                <span className="font-mono text-[11px] text-slate-500 truncate max-w-[250px]">{rec.content}</span>
                                 {rec.priority !== undefined && <span className="text-[9px] font-bold text-slate-400 uppercase">Priority: {rec.priority}</span>}
                               </div>
                             </TableCell>
                             <TableCell>
                                {rec.proxied ? (
-                                 <div className="flex items-center gap-1.5 text-amber-500" title="Protected">
+                                 <div className="flex items-center gap-1.5 text-amber-500" title="Infrastructure Shield Active">
                                    <ShieldCheck className="w-3.5 h-3.5" />
-                                   <span className="text-[9px] font-bold uppercase">On</span>
+                                   <span className="text-[9px] font-bold uppercase tracking-tighter">On</span>
                                  </div>
                                ) : (
-                                 <div className="flex items-center gap-1.5 text-slate-300" title="Off">
+                                 <div className="flex items-center gap-1.5 text-slate-300" title="Shield Disabled">
                                    <Globe className="w-3.5 h-3.5" />
-                                   <span className="text-[9px] font-bold uppercase">Off</span>
+                                   <span className="text-[9px] font-bold uppercase tracking-tighter">Off</span>
                                  </div>
                                )}
                             </TableCell>
@@ -435,35 +455,35 @@ export default function DNSManagementPage() {
             </div>
 
             <div className="space-y-8">
-               <Card className="bg-slate-900 text-white shadow-xl shadow-slate-200 overflow-hidden relative">
+               <Card className="bg-slate-900 text-white shadow-xl shadow-slate-200 overflow-hidden relative border-none">
                   <div className="absolute top-0 right-0 p-8 opacity-10">
                     <Globe className="w-24 h-24" />
                   </div>
                   <CardContent className="p-8 space-y-6 relative z-10">
                     <div className="space-y-2">
-                      <h4 className="font-headline font-bold text-xl">Global Performance</h4>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        Your domain is connected to a global network for 100% uptime and faster load times across Nepal.
+                      <h4 className="font-headline font-bold text-xl">Edge Performance</h4>
+                      <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                        Your institution's domain is routed through our global edge network, ensuring 100% uptime and protection against network threats.
                       </p>
                     </div>
                     <div className="flex flex-col gap-3">
                        <Button variant="outline" className="w-full border-slate-700 hover:bg-slate-800 text-xs font-bold gap-2 text-white h-10">
                          <Info className="w-3.5 h-3.5" />
-                         User Guide
+                         Download User Guide
                        </Button>
                     </div>
                   </CardContent>
                </Card>
 
                <Card className="bg-white border-slate-200 shadow-sm">
-                 <CardHeader>
-                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Safety Check</CardTitle>
+                 <CardHeader className="pb-2">
+                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Network Safety</CardTitle>
                  </CardHeader>
                  <CardContent className="space-y-4">
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 flex gap-3">
-                       <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
-                       <p className="text-[10px] text-slate-500 leading-relaxed">
-                         Changes you make here go live almost instantly. Please double-check your settings before saving to avoid downtime.
+                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 flex gap-3">
+                       <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                       <p className="text-[10px] text-amber-700 leading-relaxed font-bold uppercase tracking-tight">
+                         Warning: Changes to domain settings propagate instantly. Incorrect values may cause institutional services to go offline.
                        </p>
                     </div>
                  </CardContent>
@@ -476,24 +496,24 @@ export default function DNSManagementPage() {
           <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
             <DialogHeader className="bg-slate-900 text-white p-6">
               <DialogTitle className="font-headline font-bold text-xl">
-                {editingRecord ? "Edit Setting" : "Add New Setting"}
+                {editingRecord ? "Edit Domain Setting" : "Add New Setting"}
               </DialogTitle>
-              <p className="text-slate-400 text-xs mt-1">Update settings for {selectedOrg?.domain}.</p>
+              <p className="text-slate-400 text-xs mt-1">Configure parameters for {selectedOrg?.domain}.</p>
             </DialogHeader>
             <div className="p-8 space-y-6">
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-5">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Type</Label>
+                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Record Type</Label>
                   <Select 
                     value={formData.type} 
                     onValueChange={(v) => setFormData({...formData, type: v})}
                   >
-                    <SelectTrigger className="col-span-3 h-10 font-bold">
+                    <SelectTrigger className="col-span-3 h-10 font-bold border-slate-200">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV"].map(t => (
-                        <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                        <SelectItem key={t} value={t} className="text-xs font-bold">{t}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -502,14 +522,14 @@ export default function DNSManagementPage() {
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Name</Label>
                   <div className="col-span-3 relative">
-                    <input 
+                    <Input 
                       placeholder="e.g. www or @" 
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-bold pr-12" 
+                      className="h-10 font-bold text-xs border-slate-200 pr-12" 
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
                     />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-300">
-                      .{selectedOrg?.domain}
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-300 pointer-events-none uppercase">
+                      {selectedOrg?.domain}
                     </div>
                   </div>
                 </div>
@@ -517,8 +537,8 @@ export default function DNSManagementPage() {
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Value</Label>
                   <Input 
-                    placeholder="e.g. 1.2.3.4" 
-                    className="col-span-3 h-10 font-bold text-xs" 
+                    placeholder="e.g. IP Address or Hostname" 
+                    className="col-span-3 h-10 font-bold text-xs border-slate-200" 
                     value={formData.content}
                     onChange={(e) => setFormData({...formData, content: e.target.value})}
                   />
@@ -529,24 +549,24 @@ export default function DNSManagementPage() {
                     <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Priority</Label>
                     <Input 
                       type="number" 
-                      className="col-span-3 h-10 font-bold text-xs" 
+                      className="col-span-3 h-10 font-bold text-xs border-slate-200" 
                       value={formData.priority}
-                      onChange={(e) => setFormData({...formData, priority: parseInt(e.target.value)})}
+                      onChange={(e) => setFormData({...formData, priority: parseInt(e.target.value) || 0})}
                     />
                   </div>
                 )}
 
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500">Speed</Label>
+                  <Label className="text-right text-[10px] font-bold uppercase text-slate-500">TTL</Label>
                   <Select value={formData.ttl} onValueChange={(v) => setFormData({...formData, ttl: v})}>
-                    <SelectTrigger className="col-span-3 h-10 text-xs font-bold">
+                    <SelectTrigger className="col-span-3 h-10 text-xs font-bold border-slate-200">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Auto">Auto</SelectItem>
-                      <SelectItem value="60">60 seconds</SelectItem>
-                      <SelectItem value="300">5 minutes</SelectItem>
-                      <SelectItem value="3600">1 hour</SelectItem>
+                      <SelectItem value="Auto" className="text-xs font-bold">Auto</SelectItem>
+                      <SelectItem value="60" className="text-xs font-bold">1 minute</SelectItem>
+                      <SelectItem value="300" className="text-xs font-bold">5 minutes</SelectItem>
+                      <SelectItem value="3600" className="text-xs font-bold">1 hour</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -554,7 +574,7 @@ export default function DNSManagementPage() {
                 <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg mt-2">
                    <div className="space-y-0.5">
                      <Label className="text-xs font-bold text-slate-900">Security Shield</Label>
-                     <p className="text-[10px] text-slate-400">Protects your server from cyber attacks.</p>
+                     <p className="text-[10px] text-slate-400 font-medium">Protects your origin server from direct threats.</p>
                    </div>
                    <Switch 
                     checked={formData.proxied} 
@@ -565,8 +585,8 @@ export default function DNSManagementPage() {
             </div>
             <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
               <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
-              <Button onClick={handleSaveRecord} disabled={isSubmitting} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11">
-                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Add Setting"}
+              <Button onClick={handleSaveRecord} disabled={isSubmitting} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11 shadow-lg shadow-slate-200">
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Apply Setting"}
               </Button>
             </DialogFooter>
           </DialogContent>

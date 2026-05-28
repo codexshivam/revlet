@@ -1,4 +1,3 @@
-
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -16,8 +15,7 @@ import {
   CirclePlus,
   Loader2,
   Globe,
-  Ban,
-  MessageSquare
+  Ban
 } from "lucide-react"
 import {
   Dialog,
@@ -38,7 +36,7 @@ import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/f
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
 
-type WebsiteStatus = "not_found" | "external" | "waiting_for_changes" | "ready_and_published"
+type WebsiteStatus = "not_found" | "external" | "ready_and_published"
 
 interface Organization {
   id: string
@@ -55,22 +53,16 @@ export default function WebsiteManagementPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string>("")
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
-  
-  // Local status override for demo/testing purposes
-  const [testStatus, setTestStatus] = useState<WebsiteStatus | null>(null)
 
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
-  // Determine active status based on Firestore data or test override
-  const status = useMemo(() => {
-    if (testStatus) return testStatus
+  // Real-world status logic based on Firestore data
+  const status = useMemo((): WebsiteStatus => {
     if (!selectedOrg) return "not_found"
-    
     if (selectedOrg.hasWebsite === undefined) return "not_found"
     if (selectedOrg.hasWebsite === true) return "external"
-    // If hasWebsite is explicitly false, it means they want it managed/built by us
-    return "ready_and_published" // In a real app, this would check another field like 'isPublished'
-  }, [selectedOrg, testStatus])
+    return "ready_and_published"
+  }, [selectedOrg])
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -93,7 +85,7 @@ export default function WebsiteManagementPage() {
     return unsub
   }, [user, authLoading, db, selectedOrgId])
 
-  const handleDeclareWebsite = async (hasWebsite: boolean) => {
+  const handleDeclareWebsite = (hasWebsite: boolean) => {
     if (!selectedOrgId) return
     setIsUpdating(true)
     
@@ -105,7 +97,6 @@ export default function WebsiteManagementPage() {
         title: "Infrastructure Context Updated",
         description: `Website preference for ${selectedOrg?.name} has been registered.`,
       })
-      setTestStatus(null) // Reset test status to show live data
     }).catch(async (error) => {
       const permissionError = new FirestorePermissionError({
         path: orgRef.path,
@@ -143,13 +134,6 @@ export default function WebsiteManagementPage() {
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Network</span>
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Website Management</h1>
-            <div className="flex gap-2 bg-white p-1 border border-slate-200 rounded-lg shadow-sm">
-               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setTestStatus("not_found")}>Test: Not Found</Button>
-               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setTestStatus("external")}>Test: External</Button>
-               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setTestStatus("waiting_for_changes")}>Test: Waiting</Button>
-               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setTestStatus("ready_and_published")}>Test: Ready</Button>
-               <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold text-primary" onClick={() => setTestStatus(null)}>Reset to Live</Button>
-            </div>
           </div>
         </div>
         
@@ -158,7 +142,7 @@ export default function WebsiteManagementPage() {
         {status === "not_found" && (
           <Card className="bg-slate-50 border-slate-200 border-dashed">
             <CardContent className="p-16 flex flex-col items-center text-center gap-6">
-              <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 shadow-sm">
+              <div className="w-16 h-16 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center">
                 <CircleAlert className="w-8 h-8 text-slate-400" />
               </div>
               <div className="space-y-2">
@@ -203,52 +187,40 @@ export default function WebsiteManagementPage() {
                     <p className="text-slate-500 text-sm mt-1 max-w-md">The website for <span className="font-bold">{selectedOrg?.domain}</span> is hosted on external infrastructure. Advanced edge controls are restricted.</p>
                   </div>
                 </div>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button size="lg" className="font-bold px-8 shadow-lg shadow-primary/20">
-                      Request Managed Migration
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-xl">
-                    <DialogHeader>
-                      <DialogTitle className="font-headline font-bold">Managed Hosting Migration</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <p className="text-sm text-slate-500">Transition to our high-performance enterprise infrastructure. Our technical team handles the entire migration process.</p>
-                      <div className="grid gap-2">
-                        <Label htmlFor="current-url" className="text-xs font-bold uppercase text-slate-500">Target URL</Label>
-                        <Input id="current-url" defaultValue={`https://${selectedOrg?.domain}`} className="font-bold" />
+                <div className="flex gap-3">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button size="lg" className="font-bold px-8 shadow-lg shadow-primary/20">
+                        Request Managed Migration
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-xl">
+                      <DialogHeader>
+                        <DialogTitle className="font-headline font-bold">Managed Hosting Migration</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <p className="text-sm text-slate-500">Transition to our high-performance enterprise infrastructure. Our technical team handles the entire migration process.</p>
+                        <div className="grid gap-2">
+                          <Label htmlFor="current-url" className="text-xs font-bold uppercase text-slate-500">Target URL</Label>
+                          <Input id="current-url" defaultValue={`https://${selectedOrg?.domain}`} className="font-bold" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="upgrade-note" className="text-xs font-bold uppercase text-slate-500">Special Requirements</Label>
+                          <Textarea id="upgrade-note" placeholder="List any specific CMS or database requirements..." className="min-h-[100px]" />
+                        </div>
                       </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="upgrade-note" className="text-xs font-bold uppercase text-slate-500">Special Requirements</Label>
-                        <Textarea id="upgrade-note" placeholder="List any specific CMS or database requirements..." className="min-h-[100px]" />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button onClick={() => toast({ title: "Migration request logged", description: "A technical lead will contact you within 24 hours." })} className="font-bold px-8">Confirm Migration Request</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                      <DialogFooter>
+                        <Button onClick={() => toast({ title: "Migration request logged", description: "A technical lead will contact you within 24 hours." })} className="font-bold px-8">Confirm Migration Request</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                  <Button variant="outline" onClick={() => handleDeclareWebsite(false)} className="border-slate-200 h-11 px-6 font-bold text-slate-500 hover:text-destructive">
+                    Remove Declaration
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
-        )}
-
-        {status === "waiting_for_changes" && (
-          <Card className="bg-amber-50 border-amber-200 overflow-hidden shadow-sm">
-            <div className="h-1.5 w-full bg-amber-100 relative">
-              <div className="absolute top-0 left-0 h-full bg-amber-400 animate-pulse w-2/3" />
-            </div>
-            <CardContent className="p-12 flex items-start gap-4">
-              <div className="p-3 bg-amber-100 rounded-lg shrink-0">
-                <Clock className="w-6 h-6 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-headline font-bold text-amber-900">Infrastructure Provisioning</h3>
-                <p className="text-amber-700/80 text-sm mt-1 max-w-lg">Our engineering team is currently deploying the edge environment for {selectedOrg?.domain}. Access controls will unlock once propagation is verified.</p>
-              </div>
-            </CardContent>
-          </Card>
         )}
 
         {status === "ready_and_published" && (
@@ -295,20 +267,14 @@ export default function WebsiteManagementPage() {
                     </TableHeader>
                     <TableBody>
                       {[
-                        { detail: "Update primary contact records", date: "Jan 12, 2026", status: "Completed" },
-                        { detail: "Redesign service landing pages", date: "Feb 04, 2026", status: "Pending" },
-                        { detail: "Apply security patch 12.0.4", date: "Feb 15, 2026", status: "Not Started" },
+                        { detail: "Initial architecture deployment", date: "Feb 10, 2026", status: "Completed" },
+                        { detail: "Edge security rules configuration", date: "Feb 12, 2026", status: "Completed" },
                       ].map((req, i) => (
                         <TableRow key={i} className="hover:bg-slate-50/30 border-b border-slate-50 last:border-0">
                           <TableCell className="font-bold text-slate-800 text-sm pl-6">{req.detail}</TableCell>
                           <TableCell className="text-slate-400 text-xs font-medium">{req.date}</TableCell>
                           <TableCell className="text-right pr-6">
-                            <Badge className={cn(
-                              "text-[9px] font-bold px-2 py-0.5 border shadow-none",
-                              req.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
-                              req.status === "Pending" ? "bg-amber-50 text-amber-600 border-amber-100" :
-                              "bg-slate-100 text-slate-500 border-slate-200"
-                            )}>
+                            <Badge className="text-[9px] font-bold px-2 py-0.5 border shadow-none bg-emerald-50 text-emerald-600 border-emerald-100">
                               {req.status}
                             </Badge>
                           </TableCell>
@@ -329,17 +295,20 @@ export default function WebsiteManagementPage() {
                   <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Monthly Modifications</p>
                     <div className="flex items-end justify-between mt-2">
-                      <span className="text-3xl font-headline font-bold text-primary">2 / 5</span>
+                      <span className="text-3xl font-headline font-bold text-primary">0 / 5</span>
                       <span className="text-[10px] font-bold text-slate-400 pb-1">Units Consumed</span>
                     </div>
                     <div className="h-1.5 w-full bg-slate-200 rounded-full mt-3 overflow-hidden">
-                      <div className="h-full bg-primary w-[40%] transition-all" />
+                      <div className="h-full bg-primary w-[0%] transition-all" />
                     </div>
                   </div>
                   <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-lg border border-emerald-100 shadow-sm">
                     <CircleCheck className="w-4 h-4 text-emerald-600" />
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Live & Synchronized</span>
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Live & Published</span>
                   </div>
+                  <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="w-full text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-destructive">
+                    Switch to External
+                  </Button>
                 </CardContent>
               </Card>
 

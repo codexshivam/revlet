@@ -39,7 +39,7 @@ import { useState, useEffect, useMemo } from "react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore"
+import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
 import Link from "next/link"
@@ -52,6 +52,16 @@ interface Organization {
   siteActiveOn?: boolean
 }
 
+interface SiteModification {
+  id: string
+  title: string
+  description: string
+  status: "Pending" | "Completed" | "Rejected"
+  requestedAt: Timestamp
+  organizationId: string
+  ownerId: string
+}
+
 export default function WebsiteManagementPage() {
   const { toast } = useToast()
   const { user, loading: authLoading } = useUser()
@@ -59,11 +69,18 @@ export default function WebsiteManagementPage() {
   
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string>("")
+  const [modifications, setModifications] = useState<SiteModification[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
+  
+  // Modification Form State
+  const [modTitle, setModTitle] = useState("")
+  const [modDesc, setModDesc] = useState("")
+  const [isModDialogOpen, setIsModDialogOpen] = useState(false)
 
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
+  // Fetch Organizations
   useEffect(() => {
     if (authLoading || !user) return
 
@@ -84,6 +101,25 @@ export default function WebsiteManagementPage() {
     })
     return unsub
   }, [user, authLoading, db, selectedOrgId])
+
+  // Fetch Modifications for selected org
+  useEffect(() => {
+    if (!selectedOrgId || !user) return
+
+    const q = query(
+      collection(db, "siteModifications"), 
+      where("organizationId", "==", selectedOrgId),
+      where("ownerId", "==", user.uid)
+    )
+
+    const unsub = onSnapshot(q, (snap) => {
+      const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SiteModification[]
+      // Sort by requestedAt descending
+      setModifications(fetched.sort((a, b) => b.requestedAt?.toMillis() - a.requestedAt?.toMillis()))
+    })
+
+    return unsub
+  }, [selectedOrgId, user, db])
 
   const handleDeclareWebsite = (hasWebsite: boolean) => {
     if (!selectedOrgId) return
@@ -115,7 +151,7 @@ export default function WebsiteManagementPage() {
     
     const orgRef = doc(db, "organizations", selectedOrgId)
     updateDoc(orgRef, {
-      siteActiveOn: false
+      siteActiveOn: false // Setting to false triggers "Pending" state
     }).then(() => {
       toast({
         title: "Upgrade Requested",
@@ -132,6 +168,54 @@ export default function WebsiteManagementPage() {
       setIsUpdating(false)
     })
   }
+
+  const handleRequestModification = async () => {
+    if (!selectedOrgId || !user || !modTitle || !modDesc) return
+    setIsUpdating(true)
+
+    const payload = {
+      organizationId: selectedOrgId,
+      ownerId: user.uid,
+      title: modTitle,
+      description: modDesc,
+      status: "Pending",
+      requestedAt: serverTimestamp()
+    }
+
+    addDoc(collection(db, "siteModifications"), payload)
+      .then(() => {
+        toast({
+          title: "Modification Request Logged",
+          description: "Our engineering queue will implement your changes within 24 hours.",
+        })
+        setIsModDialogOpen(false)
+        setModTitle("")
+        setModDesc("")
+      })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: 'siteModifications',
+          operation: 'create',
+          requestResourceData: payload
+        })
+        errorEmitter.emit('permission-error', permissionError)
+      })
+      .finally(() => {
+        setIsUpdating(false)
+      })
+  }
+
+  // Quota Calculation (Simplified: Count modifications in current month)
+  const currentMonthMods = useMemo(() => {
+    const now = new Date()
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+    return modifications.filter(m => {
+      const date = m.requestedAt?.toDate()
+      return date && date >= firstDay
+    }).length
+  }, [modifications])
+
+  const quotaTotal = 5
 
   if (isLoading || authLoading) {
     return (
@@ -167,7 +251,7 @@ export default function WebsiteManagementPage() {
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {/* 1. ACTIVE CONTROL PANEL: If siteActiveOn is true */}
+        {/* 1. ACTIVE CONTROL PANEL: siteActiveOn === true */}
         {selectedOrg?.siteActiveOn === true && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
@@ -177,7 +261,7 @@ export default function WebsiteManagementPage() {
                     <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Change Ledger</CardTitle>
                     <p className="text-[10px] text-slate-500 font-medium">Tracking all technical and content modifications.</p>
                   </div>
-                  <Dialog>
+                  <Dialog open={isModDialogOpen} onOpenChange={setIsModDialogOpen}>
                     <DialogTrigger asChild>
                       <Button size="sm" className="font-bold h-8 bg-slate-900 hover:bg-black text-white">
                         <CirclePlus className="w-3.5 h-3.5 mr-1.5" />
@@ -195,18 +279,31 @@ export default function WebsiteManagementPage() {
                       <div className="space-y-4 py-4">
                         <div className="grid gap-2">
                           <Label htmlFor="req-title" className="text-xs font-bold uppercase text-slate-500">Subject / Area of Change</Label>
-                          <Input id="req-title" placeholder="e.g. Update staff directory or MX record change" />
+                          <Input 
+                            id="req-title" 
+                            placeholder="e.g. Update staff directory or MX record change" 
+                            value={modTitle}
+                            onChange={(e) => setModTitle(e.target.value)}
+                          />
                         </div>
                         <div className="grid gap-2">
                           <Label htmlFor="req-desc" className="text-xs font-bold uppercase text-slate-500">Modification Details</Label>
-                          <Textarea id="req-desc" placeholder="Describe the specific modifications required. Our developers and AI agents will implement these changes..." className="min-h-[120px]" />
+                          <Textarea 
+                            id="req-desc" 
+                            placeholder="Describe the specific modifications required..." 
+                            className="min-h-[120px]" 
+                            value={modDesc}
+                            onChange={(e) => setModDesc(e.target.value)}
+                          />
                         </div>
                         <p className="text-[10px] text-slate-400 font-medium leading-relaxed italic">
                           Requests are implemented manually by our engineering team to ensure zero-downtime and security compliance.
                         </p>
                       </div>
                       <DialogFooter>
-                        <Button onClick={() => toast({ title: "Request Logged", description: "Our engineering queue will implement your changes within 24 hours." })} className="font-bold px-8 w-full sm:w-auto">Submit Modification Request</Button>
+                        <Button onClick={handleRequestModification} disabled={isUpdating} className="font-bold px-8 w-full sm:w-auto">
+                          {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Submit Modification Request"}
+                        </Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
@@ -221,20 +318,32 @@ export default function WebsiteManagementPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {[
-                        { detail: "Infrastructure activation", date: "Initial Deployment", status: "Completed" },
-                        { detail: "Global SSL configuration", date: "System Event", status: "Completed" },
-                      ].map((req, i) => (
-                        <TableRow key={i} className="hover:bg-slate-50/30 border-b border-b-slate-50 last:border-0">
-                          <TableCell className="font-bold text-slate-800 text-sm pl-6">{req.detail}</TableCell>
-                          <TableCell className="text-slate-400 text-xs font-medium">{req.date}</TableCell>
-                          <TableCell className="text-right pr-6">
-                            <Badge className="text-[9px] font-bold px-2 py-0.5 border shadow-none bg-emerald-50 text-emerald-600 border-emerald-100">
-                              {req.status}
-                            </Badge>
+                      {modifications.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="py-12 text-center text-slate-400 text-xs italic font-medium">
+                            No modifications logged in the global ledger.
                           </TableCell>
                         </TableRow>
-                      ))}
+                      ) : (
+                        modifications.map((mod) => (
+                          <TableRow key={mod.id} className="hover:bg-slate-50/30 border-b border-b-slate-50 last:border-0">
+                            <TableCell className="font-bold text-slate-800 text-sm pl-6">{mod.title}</TableCell>
+                            <TableCell className="text-slate-400 text-xs font-medium">
+                              {mod.requestedAt?.toDate?.().toLocaleString() || 'Pending Sync...'}
+                            </TableCell>
+                            <TableCell className="text-right pr-6">
+                              <Badge className={cn(
+                                "text-[9px] font-bold px-2 py-0.5 border shadow-none",
+                                mod.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                                mod.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" :
+                                "bg-amber-50 text-amber-600 border-amber-100"
+                              )}>
+                                {mod.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -250,11 +359,14 @@ export default function WebsiteManagementPage() {
                   <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Monthly Modifications</p>
                     <div className="flex items-end justify-between mt-2">
-                      <span className="text-3xl font-headline font-bold text-primary">0 / 5</span>
+                      <span className="text-3xl font-headline font-bold text-primary">{currentMonthMods} / {quotaTotal}</span>
                       <span className="text-[10px] font-bold text-slate-400 pb-1">Units Consumed</span>
                     </div>
                     <div className="h-1.5 w-full bg-slate-200 rounded-full mt-3 overflow-hidden">
-                      <div className="h-full bg-primary w-[0%] transition-all" />
+                      <div 
+                        className="h-full bg-primary transition-all duration-700" 
+                        style={{ width: `${(currentMonthMods / quotaTotal) * 100}%` }} 
+                      />
                     </div>
                   </div>
                   <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-lg border border-emerald-100 shadow-sm">
@@ -269,7 +381,7 @@ export default function WebsiteManagementPage() {
                   <ShieldCheck className="w-8 h-8 text-primary" />
                   <h4 className="font-headline font-bold text-lg leading-tight">Infrastructure Active</h4>
                   <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                    Your site is optimized for global edge delivery. All requests and modifications are implemented with precision by our team.
+                    Your site is optimized for global edge delivery. All modifications are implementation-guaranteed within 24 hours.
                   </p>
                   <Link href="/support" className="block w-full">
                     <Button variant="outline" className="w-full border-slate-700 text-white hover:bg-slate-800 text-xs font-bold h-10">
@@ -282,7 +394,7 @@ export default function WebsiteManagementPage() {
           </div>
         )}
 
-        {/* 2. PENDING STATUS: If siteActiveOn is false */}
+        {/* 2. PENDING STATUS: siteActiveOn === false */}
         {selectedOrg?.siteActiveOn === false && (
           <div className="max-w-4xl mx-auto py-20">
             <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
@@ -314,7 +426,7 @@ export default function WebsiteManagementPage() {
           </div>
         )}
 
-        {/* 3. DECLARATION: If status is unknown */}
+        {/* 3. INITIAL DECLARATION: No status or declaration found */}
         {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === undefined && (
           <Card className="bg-slate-50 border-slate-200 border-dashed">
             <CardContent className="p-16 flex flex-col items-center text-center gap-6">
@@ -350,7 +462,7 @@ export default function WebsiteManagementPage() {
           </Card>
         )}
 
-        {/* 4. UPGRADE VIEW: If hasWebsite is true (External) or false (No site) AND siteActiveOn is undefined */}
+        {/* 4. UPGRADE PATH: hasWebsite declared but not on managed infra yet */}
         {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite !== undefined && (
           <div className="space-y-12">
             <div className="max-w-5xl mx-auto space-y-12 text-center animate-in slide-in-from-bottom-4 duration-500">
@@ -363,7 +475,7 @@ export default function WebsiteManagementPage() {
                     Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure. This is not an AI-built website or a generic template. Our engineering team provides consistent, long-term support so you never feel lost.
                   </p>
                   <p className="text-slate-400 text-[10px] leading-relaxed font-medium italic">
-                    We train AI using your website data after building it once, so that modifications get easier for us to do, ensuring rapid turnaround for your requests.
+                    We train AI using your website data after building it once, so that modification get easier for us to do, ensuring rapid turnaround for your requests.
                   </p>
                 </div>
               </div>

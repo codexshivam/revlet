@@ -26,7 +26,8 @@ import {
   Shield,
   ChevronDown,
   ChevronUp,
-  CalendarDays
+  CalendarDays,
+  X
 } from "lucide-react"
 import {
   Dialog,
@@ -35,6 +36,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -94,10 +96,7 @@ export default function WebsiteManagementPage() {
     if (!selectedOrg || !db) return;
 
     const now = new Date();
-    // Use lastWebQuota if exists, otherwise fall back to createdAt or current time
     const lastResetDate = selectedOrg.lastWebQuota?.toDate() || selectedOrg.createdAt?.toDate() || new Date();
-    
-    // Calculate difference in days
     const diffTime = Math.abs(now.getTime() - lastResetDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -212,6 +211,16 @@ export default function WebsiteManagementPage() {
 
   const handleRequestModification = async () => {
     if (!selectedOrgId || !user || !modTitle || !modDesc) return
+    
+    if (usedEdits >= maxEdits) {
+      toast({
+        variant: "destructive",
+        title: "Quota Exceeded",
+        description: "You have reached your monthly modification limit. Please wait for the cycle reset."
+      });
+      return;
+    }
+
     setIsUpdating(true)
 
     const payload = {
@@ -225,7 +234,6 @@ export default function WebsiteManagementPage() {
 
     addDoc(collection(db, "siteModifications"), payload)
       .then(() => {
-        // Increment used edits
         const orgRef = doc(db, "organizations", selectedOrgId)
         updateDoc(orgRef, {
           usedWebEdits: (selectedOrg?.usedWebEdits || 0) + 1
@@ -258,8 +266,8 @@ export default function WebsiteManagementPage() {
 
   const maxEdits = selectedOrg?.maxWebEdits || 5
   const usedEdits = selectedOrg?.usedWebEdits || 0
+  const isQuotaExceeded = usedEdits >= maxEdits
   
-  // Calculate display reset date: 30 days from lastWebQuota
   const resetAnchor = selectedOrg?.lastWebQuota?.toDate() || selectedOrg?.createdAt?.toDate() || new Date();
   const resetDateDisplay = new Date(resetAnchor.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -311,12 +319,14 @@ export default function WebsiteManagementPage() {
                   <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
                     <div className="flex-1 w-full space-y-2">
                       <div className="flex justify-between items-end">
-                        <span className="text-2xl font-headline font-bold text-primary">{usedEdits} / {maxEdits}</span>
+                        <span className={cn("text-2xl font-headline font-bold", isQuotaExceeded ? "text-red-600" : "text-primary")}>
+                          {usedEdits} / {maxEdits}
+                        </span>
                         <span className="text-[9px] font-bold text-slate-400 uppercase">Monthly Modification Units</span>
                       </div>
                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-50">
                         <div 
-                          className="h-full bg-primary transition-all duration-700" 
+                          className={cn("h-full transition-all duration-700", isQuotaExceeded ? "bg-red-500" : "bg-primary")}
                           style={{ width: `${Math.min((usedEdits / maxEdits) * 100, 100)}%` }} 
                         />
                       </div>
@@ -351,46 +361,54 @@ export default function WebsiteManagementPage() {
                 </div>
                 <Dialog open={isModDialogOpen} onOpenChange={setIsModDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button size="sm" className="font-bold h-9 bg-slate-900 hover:bg-black text-white px-6 shadow-md shadow-slate-200">
+                    <Button 
+                      size="sm" 
+                      className="font-bold h-9 bg-slate-900 hover:bg-black text-white px-6 shadow-md shadow-slate-200 disabled:opacity-50"
+                      disabled={isQuotaExceeded}
+                    >
                       <CirclePlus className="w-3.5 h-3.5 mr-2" />
                       New Modification
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-md border-none shadow-2xl bg-white p-0 overflow-hidden">
-                    <DialogHeader className="bg-slate-900 text-white p-6">
+                  <DialogContent className="max-w-md border-none shadow-2xl bg-white p-0 overflow-hidden [&>button]:text-white [&>button]:opacity-100">
+                    <DialogHeader className="bg-slate-900 text-white p-6 relative">
                       <DialogTitle className="font-headline font-bold text-xl">Request Infrastructure Change</DialogTitle>
                       <div className="flex items-center gap-1.5 mt-1 text-[10px] text-primary font-bold uppercase tracking-widest">
                         <MessageSquare className="w-3 h-3" />
                         Processed within 24 business hours
                       </div>
                     </DialogHeader>
-                    <div className="p-6 space-y-4">
-                      <div className="grid gap-1.5">
+                    <div className="p-6 space-y-6">
+                      <div className="grid gap-2">
                         <Label htmlFor="req-title" className="text-[10px] font-bold uppercase text-slate-500">Subject / Area of Change</Label>
                         <Input 
                           id="req-title" 
-                          placeholder="e.g. MX record change or faculty page update" 
+                          placeholder="e.g. MX record update or page content change" 
                           value={modTitle}
                           className="h-10 text-xs font-bold border-slate-200"
                           onChange={(e) => setModTitle(e.target.value)}
                         />
                       </div>
-                      <div className="grid gap-1.5">
+                      <div className="grid gap-2">
                         <Label htmlFor="req-desc" className="text-[10px] font-bold uppercase text-slate-500">Modification Details</Label>
                         <Textarea 
                           id="req-desc" 
-                          placeholder="Describe the specific modifications required in detail..." 
-                          className="min-h-[140px] text-xs font-medium border-slate-200 leading-relaxed" 
+                          placeholder="Describe specific changes..." 
+                          className="min-h-[120px] text-xs font-medium border-slate-200 leading-relaxed" 
                           value={modDesc}
                           onChange={(e) => setModDesc(e.target.value)}
                         />
                       </div>
-                      <p className="text-[9px] text-slate-400 font-bold leading-relaxed italic uppercase tracking-tighter">
-                        * Modifications are hand-implemented by our engineering team for security compliance.
+                      <p className="text-[9px] text-slate-400 font-bold leading-relaxed uppercase tracking-tighter">
+                        * All changes are hand-implemented for security and performance compliance.
                       </p>
                     </div>
                     <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
-                      <Button onClick={handleRequestModification} disabled={isUpdating} className="font-bold px-8 w-full bg-slate-900 hover:bg-black text-white h-11 shadow-lg">
+                      <Button 
+                        onClick={handleRequestModification} 
+                        disabled={isUpdating || !modTitle || !modDesc} 
+                        className="font-bold px-8 w-full bg-slate-900 hover:bg-black text-white h-11"
+                      >
                         {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Commit Modification Request"}
                       </Button>
                     </DialogFooter>

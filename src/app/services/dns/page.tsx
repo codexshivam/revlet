@@ -17,7 +17,11 @@ import {
   AlertCircle,
   Clock,
   MessageSquare,
-  Info
+  Info,
+  Zap,
+  Shield,
+  LayoutGrid,
+  CheckCircle2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -223,7 +227,7 @@ export default function DNSManagementPage() {
       
       toast({
         title: "Activation Requested",
-        description: "Your domain management request has been sent to the infrastructure team.",
+        description: "Your network management request has been sent to the infrastructure team.",
       })
     } catch (error: any) {
       toast({ 
@@ -275,7 +279,7 @@ export default function DNSManagementPage() {
                    ))}
                  </SelectContent>
                </Select>
-               {zoneId && zoneDetails?.status === 'active' && (
+               {zoneId && (
                  <Button onClick={() => {
                    setEditingRecord(null)
                    setFormData({ type: "A", name: "", content: "", ttl: "Auto", proxied: true, priority: 10 })
@@ -290,30 +294,89 @@ export default function DNSManagementPage() {
         </div>
 
         {selectedOrg && !selectedOrg.dnsRequested && !zoneId ? (
-          <Card className="bg-white border-slate-200 shadow-sm border-dashed">
-            <CardContent className="p-20 flex flex-col items-center text-center gap-6">
-              <div className="w-20 h-20 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shadow-sm">
-                <Globe className="w-10 h-10 text-slate-200" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-headline font-bold text-slate-900">Activate Domain Management</h3>
-                <p className="text-slate-500 max-w-lg mx-auto leading-relaxed text-sm">
-                  Enable DNS management for <span className="font-bold text-slate-900">{selectedOrg.domain}</span> to manage web and mail services through our global edge nodes.
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <Badge variant="secondary" className="bg-primary/10 text-primary font-bold px-3 py-1">
+                  Premium Infrastructure
+                </Badge>
+                <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
+                  High-Performance Domain Management
+                </h2>
+                <p className="text-slate-500 text-lg leading-relaxed">
+                  Connect your institution's domain to our professional global network. Unlock advanced security, performance, and simplified management.
                 </p>
               </div>
-              <Button 
-                onClick={handleRequestDNS} 
-                size="lg" 
-                disabled={isRequesting}
-                className="font-bold px-10 h-12 shadow-xl shadow-primary/10"
-              >
-                {isRequesting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Request Activation
-              </Button>
-            </CardContent>
-          </Card>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
+                    <Shield className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <h4 className="font-bold text-slate-900">Advanced Security</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">Built-in DDoS protection and security filtering for all your web traffic.</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100">
+                    <Zap className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <h4 className="font-bold text-slate-900">Ultra-Fast DNS</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">Lightning-fast record propagation across our global edge infrastructure.</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-100">
+                    <LayoutGrid className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <h4 className="font-bold text-slate-900">Easy Management</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">Simple interface for A, CNAME, MX, and TXT records with one-click proxying.</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center border border-purple-100">
+                    <CheckCircle2 className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <h4 className="font-bold text-slate-900">99.9% Uptime</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">Enterprise-grade reliability for your institution's critical web presence.</p>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <Button 
+                  onClick={handleRequestDNS} 
+                  size="lg" 
+                  disabled={isRequesting}
+                  className="font-bold px-10 h-12 shadow-xl shadow-primary/20 text-lg group"
+                >
+                  {isRequesting ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Globe className="w-5 h-5 mr-3 group-hover:rotate-12 transition-transform" />}
+                  Activate Global Network
+                </Button>
+                <p className="text-[10px] text-slate-400 mt-4 font-medium uppercase tracking-widest">
+                  Estimated Setup Time: 2-4 Hours • Included with your membership
+                </p>
+              </div>
+            </div>
+
+            <Card className="bg-white border-slate-200 overflow-hidden shadow-2xl relative group">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
+              <img 
+                src="https://picsum.photos/seed/infra/1200/900" 
+                alt="Infrastructure Preview" 
+                className="w-full h-full object-cover grayscale opacity-30 group-hover:scale-105 transition-transform duration-1000" 
+              />
+              <div className="absolute inset-0 flex items-center justify-center p-12">
+                <div className="bg-white/90 backdrop-blur-md p-8 rounded-2xl border border-white shadow-2xl text-center max-w-sm space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto border-4 border-white shadow-lg">
+                    <Server className="w-8 h-8 text-primary" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-headline font-bold text-xl text-slate-900">Ready to Connect</h3>
+                    <p className="text-xs text-slate-500 leading-relaxed font-medium">Click activate to begin provisioning your secure edge environment for <span className="text-primary font-bold">{selectedOrg.domain}</span>.</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
         ) : selectedOrg && selectedOrg.dnsRequested && !zoneId ? (
-          <Card className="bg-amber-50 border-amber-200 shadow-sm">
+          <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
             <CardContent className="p-20 flex flex-col items-center text-center gap-6">
               <div className="relative">
                 <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
@@ -324,26 +387,28 @@ export default function DNSManagementPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <h3 className="text-2xl font-headline font-bold text-amber-900">Setup in Progress</h3>
-                <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed">
-                  Our infrastructure team is currently provisioning your secure edge environment for <span className="font-bold">{selectedOrg.domain}</span>. This usually takes 2-4 business hours.
+                <h3 className="text-2xl font-headline font-bold text-amber-900">Infrastructure Provisioning</h3>
+                <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
+                  We are currently configuring your secure edge environment for <span className="font-bold">{selectedOrg.domain}</span>. Once complete, your assigned network nodes will appear here.
                 </p>
               </div>
-              <Link href="/support">
-                <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  Contact Infrastructure Support
-                </Button>
-              </Link>
+              <div className="flex gap-3">
+                <Link href="/support">
+                  <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-6">
+                    <MessageSquare className="w-4 h-4" />
+                    Contact Network Desk
+                  </Button>
+                </Link>
+              </div>
             </CardContent>
           </Card>
         ) : selectedOrg && zoneId && (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-in fade-in duration-700">
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-slate-400" />
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Server Nodes</CardTitle>
+                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Network Nodes</CardTitle>
                 </div>
                 <Badge className={cn(
                   "text-[9px] font-bold px-2 py-0.5 border shadow-none",
@@ -355,19 +420,16 @@ export default function DNSManagementPage() {
               <CardContent className="p-6">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                    <div className="space-y-3">
-                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Nodes</p>
+                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Name Servers</p>
                      <div className="space-y-2">
                        {(zoneDetails?.nameServers || []).map((ns: string) => (
-                         <div key={ns} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group">
+                         <div 
+                           key={ns} 
+                           className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group hover:border-primary/20 cursor-pointer transition-all"
+                           onClick={() => handleCopyText(ns)}
+                         >
                            <code className="text-xs font-mono font-bold text-slate-700">{ns}</code>
-                           <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-7 w-7 text-slate-400 hover:text-primary transition-colors"
-                              onClick={() => handleCopyText(ns)}
-                            >
-                              <Globe className="w-4 h-4" />
-                            </Button>
+                           <Globe className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
                          </div>
                        ))}
                        {!zoneDetails?.nameServers?.length && <p className="text-xs text-slate-400 italic">Nodes will appear once initialized.</p>}
@@ -376,8 +438,15 @@ export default function DNSManagementPage() {
                    <div className="space-y-4 flex flex-col justify-center border-l border-slate-100 pl-8">
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-slate-900">Infrastructure Connection</h4>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Point your domain at your registrar to these nodes. Propagation can take up to 24 hours. The portal will automatically update once the connection is verified globally.
+                        <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                          Update your domain's name servers at your registrar to point to the nodes listed above. 
+                          Propagation typically occurs within 1-2 hours.
+                        </p>
+                      </div>
+                      <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex gap-3">
+                        <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                        <p className="text-[10px] text-primary font-bold leading-relaxed">
+                          Your records will only take effect after your registrar is pointed to these nodes.
                         </p>
                       </div>
                    </div>
@@ -408,20 +477,10 @@ export default function DNSManagementPage() {
                       <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Records...</p>
                     </div>
-                  ) : zoneDetails?.status !== 'active' ? (
-                    <div className="p-24 text-center space-y-4">
-                      <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <Clock className="w-6 h-6 text-amber-500" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900">Activation Required</h4>
-                        <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1">Record management will be available once the global nodes are successfully connected.</p>
-                      </div>
-                    </div>
                   ) : filteredRecords.length === 0 ? (
                     <div className="p-24 text-center space-y-3">
                       <AlertCircle className="w-8 h-8 text-slate-100 mx-auto" />
-                      <p className="text-sm font-bold text-slate-400">No DNS records found.</p>
+                      <p className="text-sm font-bold text-slate-400">No active DNS records found.</p>
                     </div>
                   ) : (
                     <Table>
@@ -439,7 +498,7 @@ export default function DNSManagementPage() {
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-xs p-3">
                                   <p className="text-xs font-medium leading-relaxed">
-                                    Cloudflare responds to DNS queries. HTTP/S traffic is sent to the Cloudflare network and handled by security, caching, performance, and the developer platform.
+                                    Global Network responds to DNS queries. HTTP/S traffic is sent to our edge network and handled by security, caching, and performance layers.
                                   </p>
                                 </TooltipContent>
                               </Tooltip>
@@ -608,8 +667,11 @@ export default function DNSManagementPage() {
 
                 <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg mt-2">
                    <div className="space-y-0.5">
-                     <Label className="text-xs font-bold text-slate-900">Proxied</Label>
-                     <p className="text-[10px] text-slate-400 font-medium">Hides your server's IP and protects it from direct threats.</p>
+                     <div className="flex items-center gap-2">
+                        <Label className="text-xs font-bold text-slate-900">Proxied</Label>
+                        <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+                     </div>
+                     <p className="text-[10px] text-slate-400 font-medium">Hides your server's IP and protects it from direct threats via our security layer.</p>
                    </div>
                    <Switch 
                     checked={formData.proxied} 

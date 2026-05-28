@@ -56,6 +56,8 @@ interface Organization {
   siteActiveOn?: boolean
   maxWebEdits?: number
   usedWebEdits?: number
+  lastWebQuota?: Timestamp
+  createdAt?: Timestamp
 }
 
 interface SiteModification {
@@ -80,7 +82,6 @@ export default function WebsiteManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [expandedModId, setExpandedModId] = useState<string | null>(null)
-  const [resetDate, setResetDate] = useState<string>("")
   
   // Modification Form State
   const [modTitle, setModTitle] = useState("")
@@ -89,12 +90,33 @@ export default function WebsiteManagementPage() {
 
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
+  // Quota Reset Logic (Client Side)
   useEffect(() => {
-    // Calculate reset date 30 days from now for display
-    const date = new Date()
-    date.setDate(date.getDate() + 30)
-    setResetDate(date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))
-  }, [])
+    if (!selectedOrg || !db) return;
+
+    const now = new Date();
+    // Use lastWebQuota if exists, otherwise fall back to createdAt or current time
+    const lastResetDate = selectedOrg.lastWebQuota?.toDate() || selectedOrg.createdAt?.toDate() || new Date();
+    
+    // Calculate difference in days
+    const diffTime = Math.abs(now.getTime() - lastResetDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays >= 30) {
+      const orgRef = doc(db, "organizations", selectedOrg.id);
+      updateDoc(orgRef, {
+        usedWebEdits: 0,
+        lastWebQuota: serverTimestamp()
+      }).catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: orgRef.path,
+          operation: 'update',
+          requestResourceData: { usedWebEdits: 0, lastWebQuota: "serverTimestamp()" }
+        })
+        errorEmitter.emit('permission-error', permissionError)
+      });
+    }
+  }, [selectedOrg, db]);
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -146,7 +168,8 @@ export default function WebsiteManagementPage() {
     updateDoc(orgRef, {
       hasWebsite: hasWebsite,
       usedWebEdits: 0,
-      maxWebEdits: 5
+      maxWebEdits: 5,
+      lastWebQuota: serverTimestamp()
     }).then(() => {
       toast({
         title: "Status Updated",
@@ -156,7 +179,7 @@ export default function WebsiteManagementPage() {
       const permissionError = new FirestorePermissionError({
         path: orgRef.path,
         operation: 'update',
-        requestResourceData: { hasWebsite }
+        requestResourceData: { hasWebsite, lastWebQuota: "serverTimestamp()" }
       })
       errorEmitter.emit('permission-error', permissionError)
     }).finally(() => {
@@ -203,6 +226,12 @@ export default function WebsiteManagementPage() {
 
     addDoc(collection(db, "siteModifications"), payload)
       .then(() => {
+        // Increment used edits
+        const orgRef = doc(db, "organizations", selectedOrgId)
+        updateDoc(orgRef, {
+          usedWebEdits: (selectedOrg?.usedWebEdits || 0) + 1
+        })
+
         toast({
           title: "Modification Request Logged",
           description: "Our engineering queue will implement your changes within 24 hours.",
@@ -230,6 +259,10 @@ export default function WebsiteManagementPage() {
 
   const maxEdits = selectedOrg?.maxWebEdits || 5
   const usedEdits = selectedOrg?.usedWebEdits || 0
+  
+  // Calculate display reset date: 30 days from lastWebQuota
+  const resetAnchor = selectedOrg?.lastWebQuota?.toDate() || selectedOrg?.createdAt?.toDate() || new Date();
+  const resetDateDisplay = new Date(resetAnchor.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
   if (isLoading || authLoading) {
     return (
@@ -254,11 +287,6 @@ export default function WebsiteManagementPage() {
                 <Cloud className="w-3 h-3" />
                 Powered by Cloudflare
               </div>
-              <div className="w-px h-3 bg-slate-200" />
-              <div className="flex items-center gap-1.5 text-primary">
-                <Sparkles className="w-3 h-3" />
-                Manage website content from our dashboard
-              </div>
             </div>
           </div>
         </div>
@@ -267,7 +295,6 @@ export default function WebsiteManagementPage() {
 
         {selectedOrg?.siteActiveOn === true ? (
           <div className="space-y-8">
-            {/* Top Stats Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="bg-white border-slate-200 shadow-sm md:col-span-2">
                 <CardHeader className="pb-2">
@@ -299,7 +326,7 @@ export default function WebsiteManagementPage() {
                       <CalendarDays className="w-5 h-5 text-slate-400" />
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Cycle Reset Date</p>
-                        <p className="text-xs font-bold text-slate-700">{resetDate}</p>
+                        <p className="text-xs font-bold text-slate-700">{resetDateDisplay}</p>
                       </div>
                     </div>
                   </div>
@@ -317,12 +344,11 @@ export default function WebsiteManagementPage() {
               </Card>
             </div>
 
-            {/* Full Width Ledger */}
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between px-6 py-4">
                 <div className="space-y-1">
                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Change Ledger</CardTitle>
-                  <p className="text-[10px] text-slate-500 font-medium italic">Comprehensive log of all infrastructure and content modifications.</p>
+                  <p className="text-[10px] text-slate-500 font-medium">Comprehensive log of all infrastructure and content modifications.</p>
                 </div>
                 <Dialog open={isModDialogOpen} onOpenChange={setIsModDialogOpen}>
                   <DialogTrigger asChild>
@@ -376,7 +402,7 @@ export default function WebsiteManagementPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/30 border-b border-slate-100">
-                      <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-widest">Modification Subject</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-widest">Request Title</TableHead>
                       <TableHead className="text-[10px] font-bold uppercase py-4 tracking-widest">Request Date</TableHead>
                       <TableHead className="text-[10px] font-bold uppercase py-4 tracking-widest">Updated On</TableHead>
                       <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-widest">Status</TableHead>
@@ -404,9 +430,7 @@ export default function WebsiteManagementPage() {
                           >
                             <TableCell className="font-bold text-slate-800 text-sm pl-8">
                               <div className="flex items-center gap-3">
-                                <div className="p-1.5 rounded-md bg-slate-100 group-hover:bg-white transition-colors">
-                                  {expandedModId === mod.id ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
-                                </div>
+                                {expandedModId === mod.id ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
                                 {mod.title}
                               </div>
                             </TableCell>
@@ -434,7 +458,7 @@ export default function WebsiteManagementPage() {
                                 <div className="space-y-3 max-w-4xl">
                                   <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                     <Sparkles className="w-3 h-3" />
-                                    Detailed Modification Instructions
+                                    Modification Instructions
                                   </h5>
                                   <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
                                     <p className="text-xs text-slate-600 font-medium leading-relaxed whitespace-pre-wrap">
@@ -490,7 +514,7 @@ export default function WebsiteManagementPage() {
               </div>
               <div className="space-y-2">
                 <h3 className="text-2xl font-headline font-bold text-slate-900">Infrastructure Declaration Required</h3>
-                <p className="text-slate-500 max-w-sm mx-auto text-sm leading-relaxed font-medium">
+                <p className="text-slate-500 max-sm mx-auto text-sm leading-relaxed font-medium">
                   Please declare the current website status for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span> to initialize service contexts.
                 </p>
               </div>

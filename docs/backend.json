@@ -37,6 +37,7 @@
         "outstandingAmount": { "type": "number", "description": "The current unpaid balance for this institution." },
         "maxWebEdits": { "type": "number", "description": "Maximum allowed website modifications per month." },
         "usedWebEdits": { "type": "number", "description": "Consumed website modifications in the current cycle." },
+        "lastWebQuota": { "type": "string", "format": "date-time", "description": "The timestamp of the last quota reset event." },
         "createdAt": { "type": "string", "format": "date-time" }
       }
     },

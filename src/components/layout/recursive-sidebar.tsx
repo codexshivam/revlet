@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -61,7 +62,7 @@ export function RecursiveSidebar() {
             REVLET
           </span>
           <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1.5 leading-tight">
-            Enterprise Tech Infrastructure Management
+            Enterprise Infrastructure Management
           </span>
         </Link>
       </div>

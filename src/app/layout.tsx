@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
   title: 'Revlet IT Manager',
-  description: 'Enterprise IT & Infrastructure Management Platform',
+  description: 'Enterprise Infrastructure Management Platform',
 };
 
 export default function RootLayout({

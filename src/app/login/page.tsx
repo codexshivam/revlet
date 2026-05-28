@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link"
@@ -106,7 +107,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[420px] space-y-8">
         <div className="flex flex-col items-center text-center space-y-2">
           <h1 className="text-4xl font-body font-black tracking-[0.2em] text-slate-900 mb-1 ml-[0.2em]">REVLET</h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest max-w-[280px]">Enterprise Tech Infrastructure Management</p>
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest max-w-[280px]">Enterprise Infrastructure Management</p>
         </div>
 
         <Card className="border-slate-200 shadow-2xl shadow-slate-200/50 bg-white">
@@ -181,7 +182,7 @@ export default function LoginPage() {
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <>
-                    Secure Login
+                    Access Dashboard
                     <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-0.5 transition-transform" />
                   </>
                 )}
@@ -198,7 +199,7 @@ export default function LoginPage() {
               </div>
             </div>
             <p className="text-sm text-slate-500 text-center font-medium">
-              New organization? <Link href="/signup" className="text-primary font-bold hover:underline transition-colors">Register here</Link>
+              new to us? <Link href="/signup" className="text-primary font-bold hover:underline transition-colors">Signup here</Link>
             </p>
           </CardFooter>
         </Card>
@@ -211,3 +212,4 @@ export default function LoginPage() {
       </div>
     </div>
   )
+}

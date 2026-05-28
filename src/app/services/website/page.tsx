@@ -26,7 +26,8 @@ import {
   Cloud,
   Shield,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  CalendarDays
 } from "lucide-react"
 import {
   Dialog,
@@ -79,6 +80,7 @@ export default function WebsiteManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [expandedModId, setExpandedModId] = useState<string | null>(null)
+  const [resetDate, setResetDate] = useState<string>("")
   
   // Modification Form State
   const [modTitle, setModTitle] = useState("")
@@ -86,6 +88,13 @@ export default function WebsiteManagementPage() {
   const [isModDialogOpen, setIsModDialogOpen] = useState(false)
 
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
+
+  useEffect(() => {
+    // Calculate reset date 30 days from now for display
+    const date = new Date()
+    date.setDate(date.getDate() + 30)
+    setResetDate(date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))
+  }, [])
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -257,160 +266,192 @@ export default function WebsiteManagementPage() {
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
         {selectedOrg?.siteActiveOn === true ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-                <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between px-6 py-4">
-                  <div className="space-y-1">
-                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Change Ledger</CardTitle>
-                    <p className="text-[10px] text-slate-500 font-medium">Click a row to view modification details.</p>
+          <div className="space-y-8">
+            {/* Top Stats Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="bg-white border-slate-200 shadow-sm md:col-span-2">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resource Quota</CardTitle>
+                    <div className="flex items-center gap-2">
+                       <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 font-bold text-[9px] shadow-none uppercase">
+                         <CircleCheck className="w-3 h-3 mr-1" />
+                         Live & Published
+                       </Badge>
+                    </div>
                   </div>
-                  <Dialog open={isModDialogOpen} onOpenChange={setIsModDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="sm" className="font-bold h-8 bg-slate-900 hover:bg-black text-white">
-                        <CirclePlus className="w-3.5 h-3.5 mr-1.5" />
-                        Request Modification
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-md">
-                      <DialogHeader>
-                        <DialogTitle className="font-headline font-bold">Infrastructure Modification Request</DialogTitle>
-                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-primary font-bold uppercase">
-                          <MessageSquare className="w-3 h-3" />
-                          Processed by Engineering within 24 hours
-                        </div>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="req-title" className="text-xs font-bold uppercase text-slate-500">Subject / Area of Change</Label>
-                          <Input 
-                            id="req-title" 
-                            placeholder="e.g. Update staff directory or MX record change" 
-                            value={modTitle}
-                            onChange={(e) => setModTitle(e.target.value)}
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="req-desc" className="text-xs font-bold uppercase text-slate-500">Modification Details</Label>
-                          <Textarea 
-                            id="req-desc" 
-                            placeholder="Describe the specific modifications required..." 
-                            className="min-h-[120px]" 
-                            value={modDesc}
-                            onChange={(e) => setModDesc(e.target.value)}
-                          />
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-medium leading-relaxed italic">
-                          Requests are implemented manually by our engineering team to ensure zero-downtime and security compliance.
-                        </p>
-                      </div>
-                      <DialogFooter>
-                        <Button onClick={handleRequestModification} disabled={isUpdating} className="font-bold px-8 w-full sm:w-auto">
-                          {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Submit Modification Request"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
                 </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-slate-50/30 border-b border-slate-100">
-                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-6">Request Title</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4">Request Date</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4">Updated On</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {modifications.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={4} className="py-12 text-center text-slate-400 text-xs italic font-medium">
-                            No modifications logged in the global ledger.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        modifications.map((mod) => (
-                          <React.Fragment key={mod.id}>
-                            <TableRow 
-                              className="hover:bg-slate-50/50 border-b border-b-slate-50 cursor-pointer transition-colors"
-                              onClick={() => toggleRow(mod.id)}
-                            >
-                              <TableCell className="font-bold text-slate-800 text-sm pl-6">
-                                <div className="flex items-center gap-2">
-                                  {expandedModId === mod.id ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
-                                  {mod.title}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-slate-500 text-[11px] font-medium">
-                                {mod.requestedAt?.toDate?.().toLocaleDateString() || 'Pending...'}
-                              </TableCell>
-                              <TableCell className="text-slate-400 text-[11px] font-medium">
-                                {mod.updatedAt?.toDate?.().toLocaleDateString() || '--'}
-                              </TableCell>
-                              <TableCell className="text-right pr-6">
-                                <Badge className={cn(
-                                  "text-[9px] font-bold px-2 py-0.5 border shadow-none",
-                                  mod.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
-                                  mod.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" :
-                                  mod.status === "Pending" ? "bg-amber-50 text-amber-600 border-amber-100" :
-                                  "bg-slate-50 text-slate-500 border-slate-200"
-                                )}>
-                                  {mod.status}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                            {expandedModId === mod.id && (
-                              <TableRow className="bg-slate-50/50 border-b border-slate-100">
-                                <TableCell colSpan={4} className="p-6">
-                                  <div className="space-y-2">
-                                    <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Modification Details</h5>
-                                    <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
-                                      {mod.description}
-                                    </p>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </React.Fragment>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
+                <CardContent className="pt-2">
+                  <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+                    <div className="flex-1 w-full space-y-2">
+                      <div className="flex justify-between items-end">
+                        <span className="text-2xl font-headline font-bold text-primary">{usedEdits} / {maxEdits}</span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Monthly Modification Units</span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-50">
+                        <div 
+                          className="h-full bg-primary transition-all duration-700" 
+                          style={{ width: `${Math.min((usedEdits / maxEdits) * 100, 100)}%` }} 
+                        />
+                      </div>
+                    </div>
+                    <div className="shrink-0 p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-3 w-full md:w-auto">
+                      <CalendarDays className="w-5 h-5 text-slate-400" />
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Cycle Reset Date</p>
+                        <p className="text-xs font-bold text-slate-700">{resetDate}</p>
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
+              </Card>
+
+              <Card className="bg-primary/5 border-primary/10 shadow-sm flex flex-col justify-center p-6 space-y-2">
+                <div className="flex items-center gap-2 text-primary">
+                  <Sparkles className="w-4 h-4" />
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest">Platform Support</h4>
+                </div>
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  Modification requests are manually verified by engineering to ensure zero-downtime deployments.
+                </p>
               </Card>
             </div>
 
-            <div className="space-y-6">
-              <Card className="bg-white border-slate-200 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resource Quota</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Monthly Modifications</p>
-                    <div className="flex items-end justify-between mt-2">
-                      <span className="text-3xl font-headline font-bold text-primary">{usedEdits} / {maxEdits}</span>
-                      <span className="text-[10px] font-bold text-slate-400 pb-1">Units Consumed</span>
+            {/* Full Width Ledger */}
+            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
+              <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between px-6 py-4">
+                <div className="space-y-1">
+                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Change Ledger</CardTitle>
+                  <p className="text-[10px] text-slate-500 font-medium italic">Comprehensive log of all infrastructure and content modifications.</p>
+                </div>
+                <Dialog open={isModDialogOpen} onOpenChange={setIsModDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" className="font-bold h-9 bg-slate-900 hover:bg-black text-white px-6 shadow-md shadow-slate-200">
+                      <CirclePlus className="w-3.5 h-3.5 mr-2" />
+                      New Modification
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md border-none shadow-2xl bg-white p-0 overflow-hidden">
+                    <DialogHeader className="bg-slate-900 text-white p-6">
+                      <DialogTitle className="font-headline font-bold text-xl">Request Infrastructure Change</DialogTitle>
+                      <div className="flex items-center gap-1.5 mt-1 text-[10px] text-primary font-bold uppercase tracking-widest">
+                        <MessageSquare className="w-3 h-3" />
+                        Processed within 24 business hours
+                      </div>
+                    </DialogHeader>
+                    <div className="p-6 space-y-4">
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="req-title" className="text-[10px] font-bold uppercase text-slate-500">Subject / Area of Change</Label>
+                        <Input 
+                          id="req-title" 
+                          placeholder="e.g. MX record change or faculty page update" 
+                          value={modTitle}
+                          className="h-10 text-xs font-bold border-slate-200"
+                          onChange={(e) => setModTitle(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="req-desc" className="text-[10px] font-bold uppercase text-slate-500">Modification Details</Label>
+                        <Textarea 
+                          id="req-desc" 
+                          placeholder="Describe the specific modifications required in detail..." 
+                          className="min-h-[140px] text-xs font-medium border-slate-200 leading-relaxed" 
+                          value={modDesc}
+                          onChange={(e) => setModDesc(e.target.value)}
+                        />
+                      </div>
+                      <p className="text-[9px] text-slate-400 font-bold leading-relaxed italic uppercase tracking-tighter">
+                        * Modifications are hand-implemented by our engineering team for security compliance.
+                      </p>
                     </div>
-                    <div className="h-1.5 w-full bg-slate-200 rounded-full mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-primary transition-all duration-700" 
-                        style={{ width: `${(usedEdits / maxEdits) * 100}%` }} 
-                      />
-                    </div>
-                    <p className="text-[9px] text-slate-400 mt-3 font-medium flex items-center gap-1.5">
-                      <Clock className="w-3 h-3" />
-                      Quota resets every 30 days.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-lg border border-emerald-100 shadow-sm">
-                    <CircleCheck className="w-4 h-4 text-emerald-600" />
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Live & Published</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                    <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
+                      <Button onClick={handleRequestModification} disabled={isUpdating} className="font-bold px-8 w-full bg-slate-900 hover:bg-black text-white h-11 shadow-lg">
+                        {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Commit Modification Request"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/30 border-b border-slate-100">
+                      <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-widest">Modification Subject</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-widest">Request Date</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-widest">Updated On</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-widest">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {modifications.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="py-24 text-center text-slate-400 text-xs italic font-medium">
+                          <div className="flex flex-col items-center gap-2">
+                             <Server className="w-8 h-8 text-slate-100" />
+                             No active modification records in the global ledger.
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      modifications.map((mod) => (
+                        <React.Fragment key={mod.id}>
+                          <TableRow 
+                            className={cn(
+                              "hover:bg-slate-50/50 border-b border-b-slate-50 cursor-pointer transition-colors group",
+                              expandedModId === mod.id && "bg-slate-50/30"
+                            )}
+                            onClick={() => toggleRow(mod.id)}
+                          >
+                            <TableCell className="font-bold text-slate-800 text-sm pl-8">
+                              <div className="flex items-center gap-3">
+                                <div className="p-1.5 rounded-md bg-slate-100 group-hover:bg-white transition-colors">
+                                  {expandedModId === mod.id ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                                </div>
+                                {mod.title}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-slate-500 text-[11px] font-bold font-mono">
+                              {mod.requestedAt?.toDate?.().toLocaleDateString('en-GB') || 'Syncing...'}
+                            </TableCell>
+                            <TableCell className="text-slate-400 text-[11px] font-bold font-mono">
+                              {mod.updatedAt?.toDate?.().toLocaleDateString('en-GB') || '--'}
+                            </TableCell>
+                            <TableCell className="text-right pr-8">
+                              <Badge className={cn(
+                                "text-[9px] font-bold px-2.5 py-0.5 border shadow-none rounded-sm uppercase tracking-tighter",
+                                mod.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                                mod.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" :
+                                mod.status === "Pending" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                                "bg-slate-50 text-slate-500 border-slate-200"
+                              )}>
+                                {mod.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                          {expandedModId === mod.id && (
+                            <TableRow className="bg-slate-50/20 border-b border-slate-100">
+                              <TableCell colSpan={4} className="p-8">
+                                <div className="space-y-3 max-w-4xl">
+                                  <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Sparkles className="w-3 h-3" />
+                                    Detailed Modification Instructions
+                                  </h5>
+                                  <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+                                    <p className="text-xs text-slate-600 font-medium leading-relaxed whitespace-pre-wrap">
+                                      {mod.description}
+                                    </p>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </div>
         ) : selectedOrg?.siteActiveOn === false ? (
           <div className="max-w-4xl mx-auto py-20">

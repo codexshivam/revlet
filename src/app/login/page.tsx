@@ -1,4 +1,3 @@
-
 "use client"
 
 import Link from "next/link"
@@ -199,7 +198,7 @@ export default function LoginPage() {
               </div>
             </div>
             <p className="text-sm text-slate-500 text-center font-medium">
-              new to us? <Link href="/signup" className="text-primary font-bold hover:underline transition-colors">Signup here</Link>
+              New to us? <Link href="/signup" className="text-primary font-bold hover:underline transition-colors">Signup here</Link>
             </p>
           </CardFooter>
         </Card>

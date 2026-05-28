@@ -1,4 +1,3 @@
-
 "use client"
 
 import Link from "next/link"
@@ -80,15 +79,17 @@ export default function SignupPage() {
         </div>
 
         <Card className="border-slate-200 shadow-2xl shadow-slate-200/50 bg-white">
-          <CardHeader className="space-y-1 pb-4">
-            <div className="flex items-center gap-1 text-[11px] font-bold text-primary uppercase tracking-wider mb-1">
+          <CardHeader className="space-y-4 pb-4">
+            <div className="flex items-center gap-1 text-[11px] font-bold text-primary uppercase tracking-wider mb-2">
               <Link href="/login" className="flex items-center hover:underline">
                 <ChevronLeft className="w-3 h-3 mr-0.5" />
                 Back to Login
               </Link>
             </div>
-            <CardTitle className="text-xl font-headline font-bold">Create Account</CardTitle>
-            <CardDescription className="text-xs">Join our network of managed organizations</CardDescription>
+            <div className="space-y-1">
+              <CardTitle className="text-xl font-headline font-bold">Create Account</CardTitle>
+              <CardDescription className="text-xs">Join our network of managed organizations</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSignup} className="space-y-5">

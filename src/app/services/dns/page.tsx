@@ -19,7 +19,8 @@ import {
   AlertCircle,
   Activity,
   Copy,
-  Check
+  Check,
+  Clock
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -105,7 +106,6 @@ export default function DNSManagementPage() {
       const zone = await getZoneDetails(zoneId)
       setZoneDetails(zone)
       
-      // Only fetch records if the zone is active or we want to allow pending management
       const dns = await listDNSRecords(zoneId)
       setRecords(dns)
     } catch (error: any) {
@@ -120,7 +120,6 @@ export default function DNSManagementPage() {
     }
   }, [zoneId, toast])
 
-  // Fetch Orgs
   useEffect(() => {
     if (!user) return
     const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
@@ -135,7 +134,6 @@ export default function DNSManagementPage() {
     return unsub
   }, [user, db, selectedOrgId])
 
-  // Initial fetch on org change
   useEffect(() => {
     if (zoneId) {
       fetchDNSData()

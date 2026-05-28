@@ -115,7 +115,7 @@ export default function AccountHomePage() {
         ...doc.data()
       })) as Organization[]
 
-      // Sort client-side to ensure it works even without composite indexes initially
+      // Client-side sort by createdAt or fallback to ID
       const sortedOrgs = fetchedOrgs.sort((a, b) => {
         const timeA = a.createdAt?.toMillis?.() || 0
         const timeB = b.createdAt?.toMillis?.() || 0
@@ -124,13 +124,19 @@ export default function AccountHomePage() {
 
       setOrgs(sortedOrgs)
       setIsLoadingOrgs(false)
-    }, (error) => {
+    }, (error: any) => {
       console.error("Firestore sync error:", error)
       setIsLoadingOrgs(false)
+      
+      let message = "Failed to connect to the database."
+      if (error.code === 'permission-denied') {
+        message = "Permission denied. Please ensure you are logged in and authorized."
+      }
+
       toast({
         variant: "destructive",
         title: "Sync Failure",
-        description: "Failed to connect to the institutional database. Please check your connectivity."
+        description: message
       })
     })
 
@@ -184,7 +190,7 @@ export default function AccountHomePage() {
       toast({
         variant: "destructive",
         title: "Registration Error",
-        description: "Failed to save organization. Please verify your permissions."
+        description: "Failed to save organization. Please verify your internet connection and permissions."
       })
     } finally {
       setIsAddingOrg(false)

@@ -5,11 +5,18 @@ Enterprise IT Management for Educational Institutions.
 
 ## Firebase Configuration
 
-### Database ID
+### 1. Authorized Domains (CRITICAL)
+Since you are using a development domain (Cloud Workstations), you **MUST** add your current URL to the authorized domains in Firebase Console. 
+
+*   Go to **Authentication** > **Settings** > **Authorized domains**.
+*   Click **Add domain**.
+*   Paste your workstation domain: `9000-firebase-studio-1779875082553.cluster-edb2jv34dnhjisxuq5m7l37ccy.cloudworkstations.dev` (without https://).
+
+### 2. Database ID
 The Firestore database ID for this project is: **`(default)`**
 
-### Firestore Security Rules
-To ensure users can only access their own institutional data, apply the following security rules in the Firebase Console (Firestore > Rules):
+### 3. Firestore Security Rules
+Apply these rules in **Firestore > Rules** to ensure data isolation. These rules allow users to only see and modify their own data.
 
 ```javascript
 rules_version = '2';
@@ -26,8 +33,8 @@ service cloud.firestore {
 }
 ```
 
-### Firestore Indexes
-The Account Home dashboard uses a query filtered by `ownerId`. For optimal performance and to enable sorting, create the following index in the Firestore Console (Firestore > Indexes):
+### 4. Firestore Indexes
+Create this index in **Firestore > Indexes** for the dashboard queries:
 
 *   **Collection ID**: `organizations`
 *   **Fields**:

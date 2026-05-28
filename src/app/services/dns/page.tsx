@@ -291,34 +291,31 @@ export default function DNSManagementPage() {
         </div>
 
         {selectedOrg && !selectedOrg.dnsRequested && !zoneId ? (
-          <div className="max-w-4xl mx-auto py-12 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="max-w-5xl mx-auto py-12 animate-in slide-in-from-bottom-4 duration-500">
             <div className="space-y-12 text-center">
               <div className="space-y-4">
-                <Badge variant="secondary" className="bg-primary/10 text-primary font-bold px-3 py-1">
-                  Premium Infrastructure
-                </Badge>
                 <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
-                  Professional Domain Infrastructure
+                  Premium Domain Infrastructure
                 </h2>
                 <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto">
-                  Connect your institution's domain to our professional global network. Unlock advanced security, performance, and simplified management.
+                  Unlock advanced security, ultra-fast propagation, and centralized management by activating your institution's global network context.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto text-left">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
                 {[
-                  { title: "Advanced Security", desc: "Enterprise DDoS Protection & WAF", icon: ShieldCheck },
-                  { title: "Ultra-Fast DNS", desc: "Global Propagation in seconds", icon: Globe },
-                  { title: "Record Management", desc: "MX, CNAME & TXT edge control", icon: Server },
-                  { title: "99.9% Uptime", desc: "Redundant node infrastructure", icon: CheckCircle2 }
+                  { title: "Advanced Security", desc: "Enterprise-grade DDoS protection and managed edge firewall rules.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
+                  { title: "Ultra-Fast DNS", desc: "Global Anycast network ensures sub-second propagation and resolution.", icon: Globe, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
+                  { title: "Edge Control", desc: "Manage MX, CNAME, and TXT records directly from your administrative dashboard.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" },
+                  { title: "High Availability", desc: "Redundant global nodes with a 99.9% uptime guarantee for all services.", icon: CheckCircle2, color: "bg-amber-50 text-amber-600 border-amber-100" }
                 ].map((feature) => (
-                  <div key={feature.title} className="p-4 bg-white border border-slate-200 rounded-xl flex items-center gap-4 hover:border-primary/20 transition-all shadow-sm">
-                    <div className="p-2.5 bg-primary/5 rounded-lg">
-                      <feature.icon className="w-5 h-5 text-primary" />
+                  <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
+                    <div className="p-3 bg-white rounded-xl shadow-sm shrink-0">
+                      <feature.icon className="w-6 h-6" />
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900">{feature.title}</h4>
-                      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-tight">{feature.desc}</p>
+                    <div className="space-y-1">
+                      <h4 className="text-base font-bold">{feature.title}</h4>
+                      <p className="text-xs opacity-80 leading-relaxed font-medium">{feature.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -332,7 +329,7 @@ export default function DNSManagementPage() {
                   className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
                 >
                   {isRequesting ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Globe className="w-5 h-5 mr-3 group-hover:rotate-12 transition-transform" />}
-                  Activate Global Network
+                  Activate DNS Management
                 </Button>
               </div>
             </div>

@@ -1,7 +1,7 @@
 
-# EduSphere IT Portal
+# Revlet IT Manager
 
-Enterprise IT Management for Educational Institutions.
+Enterprise IT & Infrastructure Management Platform by Revlet Platform Private Limited.
 
 ## Getting Started
 
@@ -28,15 +28,14 @@ CLOUDFLARE_INFRA_TOKEN=your_infrastructure_read_token_here
 2.  **Apply Rules**: Copy the contents of `firestore.rules` from this project and paste them into the **Rules** tab of your Firestore console.
 3.  **Indexing**: Firestore will automatically prompt you to create indexes if you perform complex queries. Follow the links provided in the console logs if needed.
 
-### 4. Activating Institutional DNS
+### 4. Activating DNS Management
 To prevent unauthorized access, users cannot add domains to Cloudflare themselves. The workflow is:
-1.  **User Request**: The user clicks "Activate DNS Management" in the portal.
-2.  **Admin Assignment**: You (as the platform owner) must manually add the domain to your Cloudflare account.
-3.  **Assign Zone ID**: Find the `cloudflareZoneId` in your Cloudflare dashboard and paste it into the specific document in the `organizations` collection in Firestore.
-4.  **Unlock**: Once the `cloudflareZoneId` is present, the user's DNS management dashboard will automatically unlock. The assigned global nodes will be displayed, and record management will become available once propagation is complete.
+1.  **User Request**: The user clicks "Activate Global Network" in the portal.
+2.  **Admin Assignment**: The platform admin manually adds the domain to the Cloudflare account.
+3.  **Assign Zone ID**: Find the `cloudflareZoneId` in the Cloudflare dashboard and paste it into the specific organization document in Firestore.
+4.  **Unlock**: Once the `cloudflareZoneId` is present, the user's DNS management dashboard unlocks automatically.
 
-## Features
-- **Account Home**: Manage multiple educational institutions from a single dashboard.
-- **DNS Records**: Professional management of A, CNAME, MX, and TXT records with proxy toggles.
-- **Financial Portal**: Track institutional balances and submit payment proof.
-- **Team Access**: Invite staff to help manage specific organizations.
+## Support
+For technical issues, contact us at hello@revlet.me.
+
+© 2024 Revlet Platform Private Limited.

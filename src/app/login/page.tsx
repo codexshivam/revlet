@@ -3,7 +3,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Globe, Lock, Mail, ChevronRight, Loader2 } from "lucide-react"
+import { Lock, Mail, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -106,11 +106,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
       <div className="w-full max-w-[420px] space-y-8">
         <div className="flex flex-col items-center text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-xl shadow-primary/20 mb-2">
-            <Globe className="text-white w-8 h-8" />
-          </div>
-          <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">EduSphere Portal</h1>
-          <p className="text-slate-500 text-sm font-medium">Enterprise Infrastructure Management</p>
+          <h1 className="text-4xl font-body font-black tracking-tighter text-slate-900 mb-2">REVLET</h1>
+          <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">IT Manager</p>
         </div>
 
         <Card className="border-slate-200 shadow-2xl shadow-slate-200/50 bg-white">
@@ -127,7 +124,7 @@ export default function LoginPage() {
                   <Input 
                     id="email" 
                     type="email" 
-                    placeholder="admin@institution.edu.np" 
+                    placeholder="admin@yourcompany.com" 
                     className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -155,7 +152,7 @@ export default function LoginPage() {
                           <Input 
                             id="reset-email" 
                             type="email" 
-                            placeholder="admin@institution.edu.np" 
+                            placeholder="admin@yourcompany.com" 
                             required 
                             value={resetEmail}
                             onChange={(e) => setResetEmail(e.target.value)}
@@ -202,14 +199,14 @@ export default function LoginPage() {
               </div>
             </div>
             <p className="text-sm text-slate-500 text-center font-medium">
-              New institution? <Link href="/signup" className="text-primary font-bold hover:underline transition-colors">Register here</Link>
+              New organization? <Link href="/signup" className="text-primary font-bold hover:underline transition-colors">Register here</Link>
             </p>
           </CardFooter>
         </Card>
         
         <div className="text-center">
           <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
-            © 2024 EduSphere IT Solutions • Support Desk: 1660-01-45678
+            © 2024 Revlet Platform Private Limited • Support: hello@revlet.me
           </p>
         </div>
       </div>

@@ -45,7 +45,7 @@ const navItems: NavItem[] = [
     title: "MANAGEMENT",
     icon: ShieldCheck,
     children: [
-      { title: "Team Managmenet", icon: Users, href: "/management/team" },
+      { title: "Team Management", icon: Users, href: "/management/team" },
       { title: "Settings", icon: Settings, href: "/management/settings" },
     ]
   }
@@ -57,12 +57,12 @@ export function RecursiveSidebar() {
   return (
     <aside className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col pt-12 shrink-0">
       <div className="px-6 mb-8">
-        <Link href="/account/home" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20 transition-transform group-hover:scale-105">
-            <Globe className="text-white w-5 h-5" />
-          </div>
-          <span className="font-headline font-bold text-xl tracking-tight text-slate-900 uppercase">
-            EduSphere
+        <Link href="/account/home" className="flex flex-col gap-0 group">
+          <span className="font-body font-black text-2xl tracking-tighter text-slate-900 leading-none">
+            REVLET
+          </span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+            IT Manager
           </span>
         </Link>
       </div>

@@ -5,8 +5,8 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
-  title: 'EduSphere IT Portal',
-  description: 'Enterprise IT Management for Educational Institutions',
+  title: 'Revlet IT Manager',
+  description: 'Enterprise IT & Infrastructure Management Platform',
 };
 
 export default function RootLayout({

@@ -185,14 +185,13 @@ export default function AccountHomePage() {
       toast({
         variant: "destructive",
         title: "Missing Fields",
-        description: "Legal name, domain, and administrative email are mandatory."
+        description: "Organization name, domain, and contact email are mandatory."
       })
       return
     }
 
     setIsSubmitting(true)
     try {
-      // Check for domain uniqueness if it's a new registration
       if (!editingOrg) {
         const orgsRef = collection(db, "organizations")
         const q = query(orgsRef, where("domain", "==", formData.domain.toLowerCase()))
@@ -202,7 +201,7 @@ export default function AccountHomePage() {
           toast({
             variant: "destructive",
             title: "Domain Already Registered",
-            description: "This domain is already associated with an institution in our network."
+            description: "This domain is already associated with an organization in our network."
           })
           setIsSubmitting(false)
           return
@@ -362,14 +361,14 @@ export default function AccountHomePage() {
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 text-primary">
                           <Building2 className="w-4 h-4" />
-                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Institution Core Details</h3>
+                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Organization Core Details</h3>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <Label htmlFor="org-name" className="text-[10px] font-bold text-slate-500 uppercase">Legal Institution Name</Label>
+                            <Label htmlFor="org-name" className="text-[10px] font-bold text-slate-500 uppercase">Organization Legal Name</Label>
                             <Input 
                               id="org-name" 
-                              placeholder="e.g. Kathmandu University" 
+                              placeholder="e.g. Revlet Tech Solutions" 
                               value={formData.name}
                               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             />
@@ -378,7 +377,7 @@ export default function AccountHomePage() {
                             <Label htmlFor="org-domain" className="text-[10px] font-bold text-slate-500 uppercase">Primary Domain</Label>
                             <Input 
                               id="org-domain" 
-                              placeholder="e.g. ku.edu.np" 
+                              placeholder="e.g. revlet.me" 
                               value={formData.domain}
                               onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
                             />
@@ -390,13 +389,13 @@ export default function AccountHomePage() {
                             <Input 
                               id="org-email" 
                               type="email"
-                              placeholder="info@institution.edu.np" 
+                              placeholder="info@yourcompany.com" 
                               value={formData.currentEmail}
                               onChange={(e) => setFormData({ ...formData, currentEmail: e.target.value })}
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="org-balance" className="text-[10px] font-bold text-slate-500 uppercase">Outstanding Balance (रू)</Label>
+                            <Label htmlFor="org-balance" className="text-[10px] font-bold text-slate-500 uppercase">Outstanding Balance (NPR)</Label>
                             <Input 
                               id="org-balance" 
                               type="number"
@@ -410,7 +409,7 @@ export default function AccountHomePage() {
                           <Label htmlFor="org-address" className="text-[10px] font-bold text-slate-500 uppercase">Physical Office Address</Label>
                           <Input 
                             id="org-address" 
-                            placeholder="Street, City, Province, Nepal" 
+                            placeholder="Street, City, Country" 
                             value={formData.address}
                             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                           />
@@ -434,10 +433,10 @@ export default function AccountHomePage() {
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="org-desc" className="text-[10px] font-bold text-slate-500 uppercase">Institutional Level / Description</Label>
+                          <Label htmlFor="org-desc" className="text-[10px] font-bold text-slate-500 uppercase">Brief Description</Label>
                           <Textarea 
                             id="org-desc" 
-                            placeholder="e.g. Higher Secondary, Bachelor Programs..." 
+                            placeholder="Briefly describe the business operations..." 
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                             className="min-h-[100px]"
@@ -464,7 +463,7 @@ export default function AccountHomePage() {
                             <Label htmlFor="contact-phone" className="text-[10px] font-bold text-slate-500 uppercase">Contact Mobile</Label>
                             <Input 
                               id="contact-phone" 
-                              placeholder="+977-98XXXXXXXX" 
+                              placeholder="+X XXXXXXXXXX" 
                               value={formData.contactPhone}
                               onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
                             />
@@ -474,7 +473,7 @@ export default function AccountHomePage() {
                             <Input 
                               id="contact-email" 
                               type="email"
-                              placeholder="admin.contact@domain.edu.np" 
+                              placeholder="contact@yourcompany.com" 
                               value={formData.contactEmail}
                               onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
                             />
@@ -523,7 +522,7 @@ export default function AccountHomePage() {
                   <TableRow className="bg-slate-50 hover:bg-slate-50 border-b border-slate-200">
                     <TableHead className="text-[10px] font-bold uppercase py-5 pl-8 text-slate-400 tracking-widest">Organization Name</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Managed Domain</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Outstanding (रू)</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Outstanding (NPR)</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
                   </TableRow>
                 </TableHeader>

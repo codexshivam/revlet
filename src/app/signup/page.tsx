@@ -3,7 +3,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Globe, User, Mail, Lock, ChevronLeft, Loader2 } from "lucide-react"
+import { User, Mail, Lock, ChevronLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -57,7 +57,7 @@ export default function SignupPage() {
       })
       toast({
         title: "Account created",
-        description: "Welcome to EduSphere! Your profile is ready.",
+        description: "Welcome to Revlet! Your profile is ready.",
       })
       router.push("/account/home")
     } catch (error: any) {
@@ -75,11 +75,8 @@ export default function SignupPage() {
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
       <div className="w-full max-w-[420px] space-y-8">
         <div className="flex flex-col items-center text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-xl shadow-primary/20 mb-2">
-            <Globe className="text-white w-8 h-8" />
-          </div>
-          <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">EduSphere Portal</h1>
-          <p className="text-slate-500 text-sm font-medium">Enterprise Infrastructure Management</p>
+          <h1 className="text-4xl font-body font-black tracking-tighter text-slate-900 mb-2">REVLET</h1>
+          <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">IT Manager</p>
         </div>
 
         <Card className="border-slate-200 shadow-2xl shadow-slate-200/50 bg-white">
@@ -91,7 +88,7 @@ export default function SignupPage() {
               </Link>
             </div>
             <CardTitle className="text-xl font-headline font-bold">Create Account</CardTitle>
-            <CardDescription className="text-xs">Join our network of managed educational institutions</CardDescription>
+            <CardDescription className="text-xs">Join our network of managed organizations</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSignup} className="space-y-5">
@@ -116,7 +113,7 @@ export default function SignupPage() {
                   <Input 
                     id="email" 
                     type="email" 
-                    placeholder="admin@institution.edu.np" 
+                    placeholder="admin@yourcompany.com" 
                     required 
                     className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
                     value={formData.email}

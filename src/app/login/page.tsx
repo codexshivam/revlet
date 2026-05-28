@@ -106,8 +106,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
       <div className="w-full max-w-[420px] space-y-8">
         <div className="flex flex-col items-center text-center space-y-2">
-          <h1 className="text-4xl font-body font-black tracking-tighter text-slate-900 mb-2">REVLET</h1>
-          <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">IT Manager</p>
+          <h1 className="text-4xl font-body font-black tracking-[0.2em] text-slate-900 mb-1 ml-[0.2em]">REVLET</h1>
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest max-w-[280px]">Enterprise Tech Infrastructure Management</p>
         </div>
 
         <Card className="border-slate-200 shadow-2xl shadow-slate-200/50 bg-white">
@@ -206,7 +206,7 @@ export default function LoginPage() {
         
         <div className="text-center">
           <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
-            © 2024 Revlet Platform Private Limited • Support: hello@revlet.me
+            © 2026 Revlet Platform • hello@revlet.me
           </p>
         </div>
       </div>

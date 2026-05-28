@@ -27,7 +27,8 @@ import {
   ChevronDown,
   ChevronUp,
   CalendarDays,
-  X
+  X,
+  CreditCard
 } from "lucide-react"
 import {
   Dialog,
@@ -383,7 +384,7 @@ export default function WebsiteManagementPage() {
                         <Label htmlFor="req-title" className="text-[10px] font-bold uppercase text-slate-500">Subject / Area of Change</Label>
                         <Input 
                           id="req-title" 
-                          placeholder="e.g. MX record update or page content change" 
+                          placeholder="e.g. Navigation update or page content change" 
                           value={modTitle}
                           className="h-10 text-xs font-bold border-slate-200"
                           onChange={(e) => setModTitle(e.target.value)}
@@ -506,11 +507,18 @@ export default function WebsiteManagementPage() {
                     </Badge>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-headline font-bold text-amber-900">Provisioning Managed Infrastructure</h3>
-                  <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
-                    Our engineering team is building your secure institution portal for <span className="font-bold">{selectedOrg.domain}</span>. This process typically initializes within 24 hours.
-                  </p>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="text-2xl font-headline font-bold text-amber-900">Provisioning Managed Infrastructure</h3>
+                    <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
+                      Our engineering team is building your secure institution portal for <span className="font-bold">{selectedOrg.domain}</span>. This process typically initializes within 24 hours.
+                    </p>
+                  </div>
+                  <div className="bg-amber-100/50 p-4 rounded-lg border border-amber-200/50 max-w-lg mx-auto">
+                    <p className="text-xs text-amber-800 font-bold leading-relaxed">
+                      Our team will reach out to you to clarify your doubts and get a proper concept of your website before we finalise the deployment.
+                    </p>
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <Link href="/support">
@@ -559,16 +567,24 @@ export default function WebsiteManagementPage() {
         ) : (
           <div className="space-y-12">
             <div className="max-w-5xl mx-auto space-y-12 text-center animate-in slide-in-from-bottom-4 duration-500">
-              <div className="space-y-4">
-                <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
-                  {selectedOrg.hasWebsite ? "Upgrade Your Institutional Presence" : "Get Your Professional Website"}
-                </h2>
-                <div className="max-w-3xl mx-auto space-y-4">
-                  <p className="text-slate-500 text-xs leading-relaxed font-medium">
-                    Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure. This is not an AI-built website or a generic template. Our engineering team provides consistent, long-term support so you never feel lost.
-                  </p>
-                  <p className="text-slate-400 text-[10px] leading-relaxed font-medium italic">
-                    We train AI using your website data after building it once, so that modification get easier for us to do, ensuring rapid turnaround for your requests.
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
+                    {selectedOrg.hasWebsite ? "Upgrade Your Institutional Presence" : "Get Your Professional Website"}
+                  </h2>
+                  <div className="max-w-3xl mx-auto space-y-4">
+                    <p className="text-slate-500 text-[11px] leading-relaxed font-medium">
+                      Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure. This is not an AI-built website or a generic template. Our engineering team provides consistent, long-term support so you never feel lost.
+                    </p>
+                    <p className="text-slate-400 text-[10px] leading-relaxed font-medium italic">
+                      We train AI using your website data after building it once, so that modifications get easier for us to do, ensuring rapid turnaround for your requests.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 max-w-2xl mx-auto">
+                  <p className="text-xs text-primary font-bold leading-relaxed">
+                    Our team will reach out to you to clarify your doubts and get a proper concept of your website after you request the upgrade.
                   </p>
                 </div>
               </div>
@@ -577,7 +593,7 @@ export default function WebsiteManagementPage() {
                 {[
                   { title: "Custom Development", desc: "No templates or AI generation. We build professional, hand-coded portals tailored for institutions.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
                   { title: "Peace of Mind", desc: "Always have full control. Modify your content or request technical changes anytime via our central dashboard.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
-                  { title: "24/7 Updates", desc: "Our platform ensures your digital presence is never stagnant. Request modifications and see them live within hours.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
+                  { title: "No Hidden Costs", desc: "Stay away from unwanted charges just to make small changes. Our monthly quota includes everything you need for regular maintenance.", icon: CreditCard, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
                   { title: "Enterprise Speed", desc: "Ultra-fast global performance with Cloudflare edge caching for superior student and faculty access.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
                 ].map((feature) => (
                   <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>

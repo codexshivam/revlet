@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -25,16 +26,7 @@ async function cfFetch(path: string, options: RequestInit = {}) {
       cache: 'no-store',
     });
 
-    const text = await response.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      if (!response.ok) {
-        throw new Error(`API error (${response.status}): ${text.substring(0, 100)}`);
-      }
-      return text;
-    }
+    const data = await response.json();
 
     if (!response.ok) {
       const message = data.errors?.[0]?.message || data.message || `API error (${response.status})`;

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
@@ -19,7 +20,9 @@ import {
   Activity,
   Copy,
   Check,
-  Clock
+  Clock,
+  MessageSquare,
+  ShieldAlert
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -44,9 +47,9 @@ import {
   createDNSRecord, 
   updateDNSRecord, 
   deleteDNSRecord,
-  checkZoneActivation,
-  createZone
+  checkZoneActivation
 } from "@/app/actions/cloudflare-dns"
+import Link from "next/link"
 
 type DNSRecord = {
   id: string
@@ -63,6 +66,7 @@ interface Organization {
   name: string
   domain: string
   cloudflareZoneId?: string
+  dnsRequested?: boolean
 }
 
 export default function DNSManagementPage() {
@@ -78,7 +82,7 @@ export default function DNSManagementPage() {
   const [zoneDetails, setZoneDetails] = useState<any>(null)
   const [isLoadingRecords, setIsLoadingRecords] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [isSettingUp, setIsSettingUp] = useState(false)
+  const [isRequesting, setIsRequesting] = useState(false)
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -105,8 +109,6 @@ export default function DNSManagementPage() {
       const zoneRes = await getZoneDetails(zoneId)
       if (zoneRes.success) {
         setZoneDetails(zoneRes.data)
-      } else {
-        throw new Error(zoneRes.error)
       }
       
       const dnsRes = await listDNSRecords(zoneId)
@@ -233,38 +235,28 @@ export default function DNSManagementPage() {
     }
   }
 
-  const handleSetupDNS = async () => {
+  const handleRequestDNS = async () => {
     if (!selectedOrg) return
-    setIsSettingUp(true)
+    setIsRequesting(true)
     
     try {
-      const res = await createZone(selectedOrg.domain)
-      if (res.success) {
-        const newZone = res.data;
-        if (!newZone?.id) {
-          throw new Error("Initialization succeeded but no infrastructure ID was returned.");
-        }
-        
-        const orgRef = doc(db, "organizations", selectedOrg.id)
-        await updateDoc(orgRef, {
-          cloudflareZoneId: newZone.id
-        })
-        
-        toast({
-          title: "Infrastructure Initialized",
-          description: "Domain added to the global network. Please update your nodes as shown.",
-        })
-      } else {
-        throw new Error(res.error)
-      }
+      const orgRef = doc(db, "organizations", selectedOrg.id)
+      await updateDoc(orgRef, {
+        dnsRequested: true
+      })
+      
+      toast({
+        title: "Activation Requested",
+        description: "Your domain management request has been sent to the infrastructure team.",
+      })
     } catch (error: any) {
       toast({ 
         variant: "destructive", 
-        title: "Setup Failed",
-        description: error.message || "Ensure the domain is valid and not already managed."
+        title: "Request Failed",
+        description: "Could not submit activation request at this time."
       })
     } finally {
-      setIsSettingUp(false)
+      setIsRequesting(false)
     }
   }
 
@@ -323,30 +315,53 @@ export default function DNSManagementPage() {
           </div>
         </div>
 
-        {selectedOrg && !zoneId ? (
+        {selectedOrg && !selectedOrg.dnsRequested && !zoneId ? (
           <Card className="bg-white border-slate-200 shadow-sm border-dashed">
             <CardContent className="p-20 flex flex-col items-center text-center gap-6">
               <div className="w-20 h-20 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shadow-sm">
                 <Globe className="w-10 h-10 text-slate-200" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-2xl font-headline font-bold text-slate-900">Initialize Domain Setup</h3>
+                <h3 className="text-2xl font-headline font-bold text-slate-900">Activate Domain Management</h3>
                 <p className="text-slate-500 max-w-lg mx-auto leading-relaxed text-sm">
-                  Connect <span className="font-bold text-slate-900">{selectedOrg.domain}</span> to our global edge network to enable web and mail services.
+                  Enable DNS management for <span className="font-bold text-slate-900">{selectedOrg.domain}</span> to manage web and mail services through our global edge nodes.
                 </p>
               </div>
               <Button 
-                onClick={handleSetupDNS} 
+                onClick={handleRequestDNS} 
                 size="lg" 
-                disabled={isSettingUp}
+                disabled={isRequesting}
                 className="font-bold px-10 h-12 shadow-xl shadow-primary/10"
               >
-                {isSettingUp ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Setup Domain Now
+                {isRequesting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Request Activation
               </Button>
             </CardContent>
           </Card>
-        ) : selectedOrg && (
+        ) : selectedOrg && selectedOrg.dnsRequested && !zoneId ? (
+          <Card className="bg-amber-50 border-amber-200 shadow-sm">
+            <CardContent className="p-20 flex flex-col items-center text-center gap-6">
+              <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
+                <Clock className="w-10 h-10 text-amber-500" />
+                <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white">
+                  PENDING
+                </Badge>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-headline font-bold text-amber-900">Setup in Progress</h3>
+                <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed">
+                  Our infrastructure team is currently provisioning your secure edge environment for <span className="font-bold">{selectedOrg.domain}</span>. This usually takes 2-4 business hours.
+                </p>
+              </div>
+              <Link href="/support">
+                <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  Contact Infrastructure Support
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ) : selectedOrg && zoneId && (
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <Card className="md:col-span-2 bg-white border-slate-200 shadow-sm overflow-hidden">
@@ -396,7 +411,7 @@ export default function DNSManagementPage() {
                           className="w-full bg-slate-900 text-white font-bold gap-2 h-10 shadow-lg"
                         >
                           {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                          Check Node Connection
+                          Check Connection Status
                         </Button>
                      </div>
                    </div>

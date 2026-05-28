@@ -96,35 +96,18 @@ export default function AccountHomePage() {
     }
   }, [user])
 
-  const userId = user?.uid
   useEffect(() => {
-    // If auth is still loading, wait
     if (authLoading) return
 
-    // If no user, redirect to login
-    if (!userId) {
+    if (!user) {
       setIsLoadingOrgs(false)
       router.push("/login")
       return
     }
 
-    // Safety timeout to prevent infinite spinner
-    const timer = setTimeout(() => {
-      setIsLoadingOrgs(current => {
-        if (current) {
-          console.warn("Sync timeout reached")
-          return false
-        }
-        return false
-      })
-    }, 8000)
-
+    // Real-time synchronization with Firestore
     const orgsRef = collection(db, "organizations")
-    // Simplified query to avoid index requirement during initial setup
-    const q = query(
-      orgsRef, 
-      where("ownerId", "==", userId)
-    )
+    const q = query(orgsRef, where("ownerId", "==", user.uid))
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedOrgs = snapshot.docs.map(doc => ({
@@ -132,42 +115,36 @@ export default function AccountHomePage() {
         ...doc.data()
       })) as Organization[]
 
-      // Sort client-side to avoid index requirement
+      // Sort client-side to ensure it works even without composite indexes initially
       const sortedOrgs = fetchedOrgs.sort((a, b) => {
-        const dateA = a.createdAt?.seconds || 0
-        const dateB = b.createdAt?.seconds || 0
-        return dateB - dateA
+        const timeA = a.createdAt?.toMillis?.() || 0
+        const timeB = b.createdAt?.toMillis?.() || 0
+        return timeB - timeA
       })
 
       setOrgs(sortedOrgs)
       setIsLoadingOrgs(false)
-      clearTimeout(timer)
     }, (error) => {
-      console.error("Error fetching organizations:", error)
+      console.error("Firestore sync error:", error)
       setIsLoadingOrgs(false)
-      clearTimeout(timer)
       toast({
         variant: "destructive",
-        title: "Synchronization Error",
-        description: "Could not sync your institutions. Please check your connection."
+        title: "Sync Failure",
+        description: "Failed to connect to the institutional database. Please check your connectivity."
       })
     })
 
-    return () => {
-      unsubscribe()
-      clearTimeout(timer)
-    }
-  }, [userId, authLoading, db, router])
+    return () => unsubscribe()
+  }, [user, authLoading, db, router])
 
   const handleAddOrg = async () => {
     if (!user) return
     
-    // Basic validation
     if (!formData.name || !formData.domain || !formData.contactEmail) {
       toast({
         variant: "destructive",
         title: "Missing Fields",
-        description: "Institution name, domain, and contact email are required."
+        description: "Legal name, domain, and administrative email are mandatory."
       })
       return
     }
@@ -185,8 +162,8 @@ export default function AccountHomePage() {
       })
 
       toast({
-        title: "Organization Registered",
-        description: `${formData.name} has been successfully added to your directory.`
+        title: "Success",
+        description: `${formData.name} registered successfully.`
       })
       
       setFormData({
@@ -203,10 +180,11 @@ export default function AccountHomePage() {
       })
       setIsDialogOpen(false)
     } catch (error: any) {
+      console.error("Add org error:", error)
       toast({
         variant: "destructive",
-        title: "Registration Failed",
-        description: "We couldn't register the institution. Please check your connection."
+        title: "Registration Error",
+        description: "Failed to save organization. Please verify your permissions."
       })
     } finally {
       setIsAddingOrg(false)
@@ -221,16 +199,9 @@ export default function AccountHomePage() {
       await updateProfile(user, { displayName: accountName })
       setLocalDisplayName(accountName)
       setIsEditNameOpen(false)
-      toast({
-        title: "Profile Updated",
-        description: "Your administrative name has been updated successfully."
-      })
+      toast({ title: "Name Updated" })
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Update Failed",
-        description: "Failed to update profile name."
-      })
+      toast({ variant: "destructive", title: "Update Failed" })
     } finally {
       setIsUpdatingAccount(false)
     }
@@ -239,10 +210,9 @@ export default function AccountHomePage() {
   const handleLogout = async () => {
     try {
       await signOut(auth)
-      toast({ title: "Logged out", description: "You have been securely signed out." })
       router.push("/login")
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Logout Failed", description: "Error during sign out." })
+    } catch (error) {
+      toast({ variant: "destructive", title: "Sign out failed" })
     }
   }
 
@@ -250,8 +220,8 @@ export default function AccountHomePage() {
     return (
       <DashboardShell>
         <div className="flex flex-col items-center justify-center h-96 gap-4">
-          <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Synchronizing Session...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Initialising Secure Session...</p>
         </div>
       </DashboardShell>
     )
@@ -261,7 +231,7 @@ export default function AccountHomePage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Portal Overview</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Institutional Portal</span>
           <div className="flex items-center justify-between">
             <h1 className="text-4xl font-headline font-bold text-slate-900 tracking-tight">
               {localDisplayName}
@@ -269,34 +239,31 @@ export default function AccountHomePage() {
             <div className="flex items-center gap-3">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200 hover:bg-slate-50 shadow-sm transition-all active:scale-95">
+                  <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200">
                     <MoreVertical className="w-4 h-4 text-slate-600" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem 
-                    onSelect={() => setIsEditNameOpen(true)}
-                    className="cursor-pointer gap-2 py-2.5"
-                  >
+                  <DropdownMenuItem onSelect={() => setIsEditNameOpen(true)} className="gap-2 py-2.5">
                     <Edit2 className="w-4 h-4 text-slate-400" />
-                    <span className="font-medium text-sm">Update display name</span>
+                    <span>Update display name</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer gap-2 py-2.5 text-destructive focus:text-destructive">
+                  <DropdownMenuItem onClick={handleLogout} className="gap-2 py-2.5 text-destructive">
                     <LogOut className="w-4 h-4" />
-                    <span className="font-medium text-sm">Logout session</span>
+                    <span>Logout session</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
               <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
-                <DialogContent className="max-w-md">
+                <DialogContent>
                   <DialogHeader>
-                    <DialogTitle className="font-headline font-bold">Administrative Display Name</DialogTitle>
+                    <DialogTitle>Admin Display Name</DialogTitle>
                   </DialogHeader>
                   <div className="py-4 space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="acc-name" className="text-xs font-bold text-slate-500 uppercase">New Display Name</Label>
+                      <Label htmlFor="acc-name">New Display Name</Label>
                       <Input 
                         id="acc-name" 
                         value={accountName} 
@@ -306,9 +273,9 @@ export default function AccountHomePage() {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="ghost" onClick={() => setIsEditNameOpen(false)} className="text-xs font-bold uppercase tracking-tight">Cancel</Button>
-                    <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount} className="font-bold">
-                      {isUpdatingAccount ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Commit Changes"}
+                    <Button variant="ghost" onClick={() => setIsEditNameOpen(false)}>Cancel</Button>
+                    <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount}>
+                      {isUpdatingAccount ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Save Changes"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -316,20 +283,19 @@ export default function AccountHomePage() {
               
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="bg-primary hover:bg-primary/90 text-white font-bold h-10 px-6 shadow-md shadow-primary/10 transition-all hover:-translate-y-0.5 active:translate-y-0">
+                  <Button className="bg-primary hover:bg-primary/90 text-white font-bold h-10 px-6 shadow-md shadow-primary/10">
                     <Plus className="w-4 h-4 mr-2" />
                     Register Institution
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden border-none shadow-2xl">
+                <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden">
                   <DialogHeader className="bg-slate-900 text-white p-6">
-                    <DialogTitle className="font-headline font-bold text-xl">Institution Onboarding</DialogTitle>
-                    <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-bold">Comprehensive Registration Protocol</p>
+                    <DialogTitle className="font-headline font-bold text-xl">Onboard New Institution</DialogTitle>
+                    <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-bold">Secure Registration Protocol</p>
                   </DialogHeader>
                   
                   <ScrollArea className="max-h-[70vh]">
                     <div className="p-8 space-y-8">
-                      {/* Section 1: Core Details */}
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 text-primary">
                           <Building2 className="w-4 h-4" />
@@ -387,7 +353,6 @@ export default function AccountHomePage() {
                         </div>
                       </div>
 
-                      {/* Section 2: Technical Status */}
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 text-primary">
                           <Globe className="w-4 h-4" />
@@ -396,7 +361,7 @@ export default function AccountHomePage() {
                         <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg">
                           <div className="space-y-0.5">
                             <Label htmlFor="has-website" className="text-sm font-bold text-slate-900">Active Website?</Label>
-                            <p className="text-[10px] text-slate-400">Is there an existing live platform for this domain?</p>
+                            <p className="text-[10px] text-slate-400">Does this domain have an existing platform?</p>
                           </div>
                           <Switch 
                             id="has-website"
@@ -405,10 +370,10 @@ export default function AccountHomePage() {
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="org-desc" className="text-[10px] font-bold text-slate-500 uppercase">Institutional Brief / Level</Label>
+                          <Label htmlFor="org-desc" className="text-[10px] font-bold text-slate-500 uppercase">Institutional Level / Description</Label>
                           <Textarea 
                             id="org-desc" 
-                            placeholder="e.g. Higher Secondary, Bachelor/Masters Programs, Technical Vocational..." 
+                            placeholder="e.g. Higher Secondary, Bachelor Programs..." 
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                             className="min-h-[100px]"
@@ -416,24 +381,23 @@ export default function AccountHomePage() {
                         </div>
                       </div>
 
-                      {/* Section 3: Point of Contact */}
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 text-primary">
                           <Info className="w-4 h-4" />
-                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Primary Administrative Contact</h3>
+                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Point of Contact</h3>
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="contact-name" className="text-[10px] font-bold text-slate-500 uppercase">Contact Person Full Name</Label>
+                          <Label htmlFor="contact-name" className="text-[10px] font-bold text-slate-500 uppercase">Representative Name</Label>
                           <Input 
                             id="contact-name" 
-                            placeholder="Authorized Representative Name" 
+                            placeholder="Authorized Contact Name" 
                             value={formData.contactName}
                             onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
                           />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <Label htmlFor="contact-phone" className="text-[10px] font-bold text-slate-500 uppercase">Contact Mobile/Direct</Label>
+                            <Label htmlFor="contact-phone" className="text-[10px] font-bold text-slate-500 uppercase">Contact Mobile</Label>
                             <Input 
                               id="contact-phone" 
                               placeholder="+977-98XXXXXXXX" 
@@ -442,7 +406,7 @@ export default function AccountHomePage() {
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="contact-email" className="text-[10px] font-bold text-slate-500 uppercase">Direct Administrative Email</Label>
+                            <Label htmlFor="contact-email" className="text-[10px] font-bold text-slate-500 uppercase">Direct Email</Label>
                             <Input 
                               id="contact-email" 
                               type="email"
@@ -459,7 +423,7 @@ export default function AccountHomePage() {
                   <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
                     <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-xs font-bold uppercase tracking-widest text-slate-400">Abort</Button>
                     <Button onClick={handleAddOrg} disabled={isAddingOrg} className="px-8 font-bold h-11 bg-slate-900 hover:bg-black text-white shadow-xl">
-                      {isAddingOrg ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Complete Registration"}
+                      {isAddingOrg ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Confirm Registration"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -468,13 +432,13 @@ export default function AccountHomePage() {
           </div>
         </div>
 
-        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl border-t-0">
-          <div className="h-1.5 w-full bg-primary/10" />
+        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+          <div className="h-1 w-full bg-primary/20" />
           <CardContent className="p-0 min-h-[400px]">
             {isLoadingOrgs ? (
               <div className="flex flex-col items-center justify-center py-32 gap-3">
                 <Loader2 className="w-10 h-10 animate-spin text-slate-200" />
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Synchronizing Directory...</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synchronizing Directory...</p>
               </div>
             ) : orgs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32 text-center gap-4">
@@ -482,11 +446,11 @@ export default function AccountHomePage() {
                   <Building2 className="w-8 h-8 text-slate-200" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-lg font-headline font-bold text-slate-900">No Organizations Registered</h3>
-                  <p className="text-sm text-slate-500 max-w-xs">Start by adding your first educational institution to the management dashboard.</p>
+                  <h3 className="text-lg font-headline font-bold text-slate-900">No Institutions Registered</h3>
+                  <p className="text-sm text-slate-500 max-w-xs">Start by registering your first educational institution.</p>
                 </div>
-                <Button variant="outline" onClick={() => setIsDialogOpen(true)} className="mt-2 font-bold h-9">
-                  Register First Institution
+                <Button variant="outline" onClick={() => setIsDialogOpen(true)} className="mt-2 font-bold">
+                  Add First Organization
                 </Button>
               </div>
             ) : (
@@ -504,7 +468,7 @@ export default function AccountHomePage() {
                     <TableRow key={org.id} className="group hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
                       <TableCell className="pl-8 py-5">
                         <div className="flex items-center gap-4">
-                          <div className="p-2.5 bg-slate-100 rounded-lg border border-slate-200 group-hover:bg-primary/5 group-hover:border-primary/20 transition-all">
+                          <div className="p-2.5 bg-slate-100 rounded-lg border border-slate-200 group-hover:bg-primary/5 transition-all">
                             <Building2 className="w-4 h-4 text-slate-400 group-hover:text-primary" />
                           </div>
                           <div className="flex flex-col gap-0.5">
@@ -524,7 +488,7 @@ export default function AccountHomePage() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1.5">
                           {org.services?.map((s) => (
-                            <Badge key={s} variant="secondary" className="bg-slate-100 text-[9px] font-bold text-slate-500 border-slate-200 py-0.5 h-5 px-2 tracking-tight group-hover:border-slate-300 transition-colors uppercase">
+                            <Badge key={s} variant="secondary" className="bg-slate-100 text-[9px] font-bold text-slate-500 border-slate-200 py-0.5 h-5 px-2 tracking-tight uppercase">
                               {s}
                             </Badge>
                           ))}
@@ -549,7 +513,7 @@ export default function AccountHomePage() {
             {!isLoadingOrgs && orgs.length > 0 && (
               <div className="py-4 px-8 border-t border-slate-50 bg-slate-50/30">
                 <p className="text-[10px] text-slate-400 font-medium">
-                  Total Managed Organizations: {orgs.length} • Real-time database synchronization active
+                  Synchronization active • {orgs.length} records retrieved
                 </p>
               </div>
             )}

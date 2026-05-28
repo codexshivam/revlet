@@ -1,3 +1,4 @@
+
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -15,7 +16,8 @@ import {
   Loader2, 
   Info,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Clock
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -45,7 +47,6 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useState, useEffect } from "react"
@@ -61,7 +62,6 @@ import {
   addDoc, 
   updateDoc,
   doc,
-  deleteDoc,
   serverTimestamp,
   getDocs
 } from "firebase/firestore"
@@ -76,13 +76,13 @@ interface Organization {
   currentEmail: string
   domain: string
   cloudflareZoneId: string
-  hasWebsite: boolean
   contactName: string
   contactPhone: string
   contactEmail: string
   description: string
   code: string
   ownerId: string
+  status?: string
   createdAt: any
 }
 
@@ -108,7 +108,6 @@ export default function AccountHomePage() {
     phone: "",
     currentEmail: "",
     domain: "",
-    hasWebsite: false,
     contactName: "",
     contactPhone: "",
     contactEmail: "",
@@ -172,7 +171,6 @@ export default function AccountHomePage() {
       phone: org.phone,
       currentEmail: org.currentEmail,
       domain: org.domain,
-      hasWebsite: org.hasWebsite,
       contactName: org.contactName,
       contactPhone: org.contactPhone,
       contactEmail: org.contactEmail,
@@ -189,7 +187,6 @@ export default function AccountHomePage() {
       phone: "",
       currentEmail: "",
       domain: "",
-      hasWebsite: false,
       contactName: "",
       contactPhone: "",
       contactEmail: "",
@@ -277,16 +274,20 @@ export default function AccountHomePage() {
     setIsSubmitting(true)
     
     const orgRef = doc(db, "organizations", editingOrg.id)
-    deleteDoc(orgRef)
+    updateDoc(orgRef, { 
+      status: "Pending Deletion",
+      updatedAt: serverTimestamp()
+    })
       .then(() => {
-        toast({ title: "Organization Removed", description: "The organization and all its data have been deleted." })
+        toast({ title: "Request Submitted", description: "The organization has been marked for permanent deletion." })
         setIsDeleteDialogOpen(false)
         setIsDialogOpen(false)
       })
       .catch(async (error) => {
         const permissionError = new FirestorePermissionError({
           path: orgRef.path,
-          operation: 'delete'
+          operation: 'update',
+          requestResourceData: { status: "Pending Deletion" }
         });
         errorEmitter.emit('permission-error', permissionError);
       })
@@ -450,19 +451,8 @@ export default function AccountHomePage() {
 
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 text-primary">
-                          <Globe className="w-4 h-4" />
-                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Infrastructure & Status</h3>
-                        </div>
-                        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg">
-                          <div className="space-y-0.5">
-                            <Label htmlFor="has-website" className="text-sm font-bold text-slate-900">Active Website?</Label>
-                            <p className="text-[10px] text-slate-400">Does this domain have an existing platform?</p>
-                          </div>
-                          <Switch 
-                            id="has-website"
-                            checked={formData.hasWebsite}
-                            onCheckedChange={(checked) => setFormData({ ...formData, hasWebsite: checked })}
-                          />
+                          <Info className="w-4 h-4" />
+                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Infrastructure & Contact</h3>
                         </div>
                         <div className="space-y-1.5">
                           <Label htmlFor="org-desc" className="text-[10px] font-bold text-slate-500 uppercase">Brief Description</Label>
@@ -473,13 +463,6 @@ export default function AccountHomePage() {
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                             className="min-h-[100px]"
                           />
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-primary">
-                          <Info className="w-4 h-4" />
-                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Point of Contact</h3>
                         </div>
                         <div className="space-y-1.5">
                           <Label htmlFor="contact-name" className="text-[10px] font-bold text-slate-500 uppercase">Representative Name</Label>
@@ -513,7 +496,7 @@ export default function AccountHomePage() {
                         </div>
                       </div>
 
-                      {editingOrg && (
+                      {editingOrg && editingOrg.status !== "Pending Deletion" && (
                         <div className="space-y-4 pt-4">
                           <Separator />
                           <div className="flex items-center gap-2 text-destructive">
@@ -629,7 +612,15 @@ export default function AccountHomePage() {
                             <Building2 className="w-4 h-4 text-slate-400 group-hover:text-primary" />
                           </div>
                           <div className="flex flex-col gap-0.5">
-                            <span className="font-bold text-slate-800 text-sm">{org.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-800 text-sm">{org.name}</span>
+                              {org.status === "Pending Deletion" && (
+                                <Badge variant="destructive" className="text-[8px] h-4 font-bold px-1.5 uppercase tracking-tighter">
+                                  <Clock className="w-2 h-2 mr-1" />
+                                  Pending Deletion
+                                </Badge>
+                              )}
+                            </div>
                             <span className="font-mono text-[10px] text-slate-400 uppercase tracking-tighter">{org.code}</span>
                           </div>
                         </div>

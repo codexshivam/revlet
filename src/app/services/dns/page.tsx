@@ -18,7 +18,8 @@ import {
   Clock,
   MessageSquare,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Shield
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -305,17 +306,21 @@ export default function DNSManagementPage() {
                 </p>
               </div>
 
-              <div className="flex flex-col items-center justify-center space-y-4 text-left max-w-md mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto text-left">
                 {[
-                  "Advanced Security & DDoS Protection",
-                  "Ultra-Fast Global DNS Propagation",
-                  "Simplified MX, CNAME & TXT Management",
-                  "Enterprise-Grade 99.9% Uptime SLA",
-                  "One-Click Proxy & Security Shields"
+                  { title: "Advanced Security", desc: "Enterprise DDoS Protection & WAF", icon: ShieldCheck },
+                  { title: "Ultra-Fast DNS", desc: "Global Propagation in seconds", icon: Globe },
+                  { title: "Record Management", desc: "MX, CNAME & TXT edge control", icon: Server },
+                  { title: "99.9% Uptime", desc: "Redundant node infrastructure", icon: CheckCircle2 }
                 ].map((feature) => (
-                  <div key={feature} className="flex items-center gap-3 w-full p-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                    <span className="text-sm font-bold text-slate-700">{feature}</span>
+                  <div key={feature.title} className="p-4 bg-white border border-slate-200 rounded-xl flex items-center gap-4 hover:border-primary/20 transition-all shadow-sm">
+                    <div className="p-2.5 bg-primary/5 rounded-lg">
+                      <feature.icon className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{feature.title}</h4>
+                      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-tight">{feature.desc}</p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -331,7 +336,7 @@ export default function DNSManagementPage() {
                   Activate Global Network
                 </Button>
                 <p className="text-[10px] text-slate-400 mt-6 font-medium uppercase tracking-widest">
-                  Estimated Setup Time: 2-4 Hours • Included with your membership
+                  Estimated Setup Time: 2-4 Hours • Managed Activation
                 </p>
               </div>
             </div>

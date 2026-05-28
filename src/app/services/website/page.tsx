@@ -325,7 +325,7 @@ export default function WebsiteManagementPage() {
                     <div className="shrink-0 p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-3 w-full md:w-auto">
                       <CalendarDays className="w-5 h-5 text-slate-400" />
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Cycle Reset Date</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Quota Resets On</p>
                         <p className="text-xs font-bold text-slate-700">{resetDateDisplay}</p>
                       </div>
                     </div>
@@ -348,7 +348,7 @@ export default function WebsiteManagementPage() {
               <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between px-6 py-4">
                 <div className="space-y-1">
                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Change Ledger</CardTitle>
-                  <p className="text-[10px] text-slate-500 font-medium">Comprehensive log of all infrastructure and content modifications.</p>
+                  <p className="text-[10px] text-slate-500 font-medium">Comprehensive log of modifications requested for the organization's website</p>
                 </div>
                 <Dialog open={isModDialogOpen} onOpenChange={setIsModDialogOpen}>
                   <DialogTrigger asChild>

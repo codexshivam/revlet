@@ -55,7 +55,7 @@ export function OrgSelector({
   return (
     <div className="flex items-center gap-4 py-4 px-6 bg-white border border-slate-200 rounded-lg shadow-sm">
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Active Infrastructure Context:</span>
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Select Organization</span>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button

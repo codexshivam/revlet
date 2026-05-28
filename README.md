@@ -33,7 +33,7 @@ To prevent unauthorized access, users cannot add domains to Cloudflare themselve
 1.  **User Request**: The user clicks "Activate DNS Management" in the portal.
 2.  **Admin Assignment**: You (as the platform owner) must manually add the domain to your Cloudflare account.
 3.  **Assign Zone ID**: Find the `cloudflareZoneId` in your Cloudflare dashboard and paste it into the specific document in the `organizations` collection in Firestore.
-4.  **Unlock**: Once the `cloudflareZoneId` is present, the user's DNS management dashboard will automatically unlock.
+4.  **Unlock**: Once the `cloudflareZoneId` is present, the user's DNS management dashboard will automatically unlock. The assigned global nodes will be displayed, and record management will become available once propagation is complete.
 
 ## Features
 - **Account Home**: Manage multiple educational institutions from a single dashboard.

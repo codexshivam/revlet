@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
@@ -12,7 +11,6 @@ import {
   Trash2, 
   Search, 
   ShieldCheck, 
-  RefreshCw, 
   Loader2, 
   Server,
   Globe,
@@ -44,8 +42,7 @@ import {
   listDNSRecords, 
   createDNSRecord, 
   updateDNSRecord, 
-  deleteDNSRecord,
-  checkZoneActivation
+  deleteDNSRecord
 } from "@/app/actions/cloudflare-dns"
 import Link from "next/link"
 import {
@@ -85,7 +82,6 @@ export default function DNSManagementPage() {
   const [records, setRecords] = useState<DNSRecord[]>([])
   const [zoneDetails, setZoneDetails] = useState<any>(null)
   const [isLoadingRecords, setIsLoadingRecords] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRequesting, setIsRequesting] = useState(false)
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -154,29 +150,6 @@ export default function DNSManagementPage() {
       setZoneDetails(null)
     }
   }, [zoneId, fetchDNSData])
-
-  const handleRefreshActivation = useCallback(async () => {
-    if (!zoneId) return
-    setIsRefreshing(true)
-    try {
-      const res = await checkZoneActivation(zoneId)
-      if (!res.success) throw new Error(res.error)
-      
-      await fetchDNSData()
-      toast({
-        title: "Connection Checked",
-        description: "Node status check initiated. This may take a few minutes to update globally."
-      })
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Check Failed",
-        description: error.message || "Could not verify node status."
-      })
-    } finally {
-      setIsRefreshing(false)
-    }
-  }, [zoneId, fetchDNSData, toast])
 
   const handleSaveRecord = async () => {
     if (!zoneId) return
@@ -404,17 +377,9 @@ export default function DNSManagementPage() {
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-slate-900">Infrastructure Connection</h4>
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          Point your domain at your registrar to these nodes. Propagation can take up to 24 hours.
+                          Point your domain at your registrar to these nodes. Propagation can take up to 24 hours. The portal will automatically update once the connection is verified globally.
                         </p>
                       </div>
-                      <Button 
-                        onClick={handleRefreshActivation} 
-                        disabled={isRefreshing}
-                        className="w-full bg-slate-900 text-white font-bold gap-2 h-10 shadow-lg"
-                      >
-                        {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                        Check Connection Status
-                      </Button>
                    </div>
                  </div>
               </CardContent>
@@ -474,7 +439,7 @@ export default function DNSManagementPage() {
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-xs p-3">
                                   <p className="text-xs font-medium leading-relaxed">
-                                    The network responds to DNS queries. HTTP/S traffic is sent to the network and handled by security, caching, performance, and the developer platform.
+                                    Cloudflare responds to DNS queries. HTTP/S traffic is sent to the Cloudflare network and handled by security, caching, performance, and the developer platform.
                                   </p>
                                 </TooltipContent>
                               </Tooltip>

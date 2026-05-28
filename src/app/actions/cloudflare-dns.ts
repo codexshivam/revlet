@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -69,16 +68,6 @@ export async function getZoneDetails(zoneId: string) {
     };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to fetch domain details' };
-  }
-}
-
-export async function checkZoneActivation(zoneId: string) {
-  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
-  try {
-    const data = await cfFetch(`/zones/${zoneId}/activation_check`, 'INFRA', { method: 'PUT' });
-    return { success: true, data: data.success || data.result?.id ? true : false };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to initiate connection check' };
   }
 }
 

@@ -21,7 +21,8 @@ import {
   Server,
   MessageSquare,
   Sparkles,
-  Cloud
+  Cloud,
+  Shield
 } from "lucide-react"
 import {
   Dialog,
@@ -94,7 +95,7 @@ export default function WebsiteManagementPage() {
     }).then(() => {
       toast({
         title: "Status Updated",
-        description: `Website declaration for ${selectedOrg?.name} has been saved.`,
+        description: `Website status for ${selectedOrg?.name} has been recorded.`,
       })
     }).catch(async (error) => {
       const permissionError = new FirestorePermissionError({
@@ -118,7 +119,7 @@ export default function WebsiteManagementPage() {
     }).then(() => {
       toast({
         title: "Upgrade Requested",
-        description: "Your request for managed hosting is being processed by the infrastructure team.",
+        description: "Your infrastructure upgrade request has been logged successfully.",
       })
     }).catch(async (error) => {
       const permissionError = new FirestorePermissionError({
@@ -158,7 +159,7 @@ export default function WebsiteManagementPage() {
               <div className="w-px h-3 bg-slate-200" />
               <div className="flex items-center gap-1.5 text-primary">
                 <Sparkles className="w-3 h-3" />
-                AI Infrastructure
+                Engineering Support
               </div>
             </div>
           </div>
@@ -184,8 +185,8 @@ export default function WebsiteManagementPage() {
                       <DialogHeader>
                         <DialogTitle className="font-headline font-bold">Content Modification Request</DialogTitle>
                         <p className="text-[10px] text-primary font-bold uppercase flex items-center gap-1.5 mt-1">
-                          <Sparkles className="w-3 h-3" />
-                          Processed by AI within 24 hours
+                          <MessageSquare className="w-3 h-3" />
+                          Processed by Engineering within 24 hours
                         </p>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
@@ -195,11 +196,11 @@ export default function WebsiteManagementPage() {
                         </div>
                         <div className="grid gap-2">
                           <Label htmlFor="req-desc" className="text-xs font-bold uppercase text-slate-500">Modification Details</Label>
-                          <Textarea id="req-desc" placeholder="Describe specific changes for the engineering team..." className="min-h-[120px]" />
+                          <Textarea id="req-desc" placeholder="Describe the specific text or media changes required..." className="min-h-[120px]" />
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button onClick={() => toast({ title: "Request Logged", description: "The AI-driven queue will process your request within 24 hours." })} className="font-bold px-8">Submit for AI Processing</Button>
+                        <Button onClick={() => toast({ title: "Request Logged", description: "Our engineering queue will process your request within 24 hours." })} className="font-bold px-8">Submit Request</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
@@ -259,10 +260,10 @@ export default function WebsiteManagementPage() {
 
               <Card className="bg-slate-900 text-white shadow-xl shadow-slate-200">
                 <CardContent className="p-6 space-y-4">
-                  <Rocket className="w-8 h-8 text-primary" />
-                  <h4 className="font-headline font-bold text-lg leading-tight">Engineering Support</h4>
+                  <ShieldCheck className="w-8 h-8 text-primary" />
+                  <h4 className="font-headline font-bold text-lg leading-tight">Peace of Mind</h4>
                   <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                    Our AI infrastructure ensures all updates are verified and deployed within 24 hours. Need complex architecture?
+                    This is a custom-engineered website. Our team provides dedicated support so you always have full control 24/7.
                   </p>
                   <Button variant="outline" className="w-full border-slate-700 text-white hover:bg-slate-800 text-xs font-bold h-10">
                     Consult Engineering Lead
@@ -289,7 +290,7 @@ export default function WebsiteManagementPage() {
                 <div className="space-y-2">
                   <h3 className="text-2xl font-headline font-bold text-amber-900">Provisioning Website Infrastructure</h3>
                   <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
-                    We are building your enterprise site context for <span className="font-bold">{selectedOrg.domain}</span>. This typically takes 24 hours to initialize.
+                    Our developers are building your secure institution portal for <span className="font-bold">{selectedOrg.domain}</span>. This process typically initializes within 24 hours.
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -341,16 +342,16 @@ export default function WebsiteManagementPage() {
           </Card>
         )}
 
-        {/* 4. EXTERNAL/UPGRADE VIEW: If hasWebsite is true (and not active/pending) */}
-        {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === true && (
+        {/* 4. UPGRADE VIEW: If hasWebsite is true (External) or false (No site) */}
+        {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite !== undefined && (
           <div className="space-y-12">
             <div className="max-w-5xl mx-auto space-y-12 text-center animate-in slide-in-from-bottom-4 duration-500">
               <div className="space-y-4">
                 <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
-                  Request an Upgrade
+                  {selectedOrg.hasWebsite ? "Upgrade Your Institutional Presence" : "Get Your Professional Website"}
                 </h2>
-                <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto font-medium">
-                  Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure.
+                <p className="text-slate-500 text-lg leading-relaxed max-w-3xl mx-auto font-medium">
+                  Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure. This is <span className="text-slate-900 font-bold">not</span> an AI-built website or a generic template. Our engineering team provides consistent, long-term support so you never feel lost.
                 </p>
                 <div className="flex items-center justify-center gap-6 mt-6">
                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -359,17 +360,17 @@ export default function WebsiteManagementPage() {
                    </div>
                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">
                      <Sparkles className="w-4 h-4" />
-                     AI Deployed in 24h
+                     Manage website content from our dashboard
                    </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
                 {[
-                  { title: "Ultra-Fast Performance", desc: "Optimized server-side rendering and global CDN for lightning-quick loading.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
-                  { title: "Automated Security", desc: "Built-in DDoS protection, automatic SSL, and weekly infrastructure patches.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
-                  { title: "Managed Updates", desc: "Our AI-driven queue handles all content changes and technical updates within 24h.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
-                  { title: "Enterprise Reliability", desc: "Redundant cloud infrastructure with 99.9% uptime for your organization.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
+                  { title: "Custom Development", desc: "No templates or AI generation. We build professional, hand-coded portals tailored for institutions.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
+                  { title: "24/7 Peace of Mind", desc: "Always have full control. Modify your content or request technical changes anytime, day or night.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
+                  { title: "Dedicated Engineers", desc: "Our developers don't disappear. We provide ongoing, reliable support so your infrastructure is always up-to-date.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
+                  { title: "Enterprise Speed", desc: "Ultra-fast global performance with Cloudflare edge caching for superior student and faculty access.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
                 ].map((feature) => (
                   <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
                     <div className="p-3 bg-white rounded-xl shadow-sm shrink-0">
@@ -393,69 +394,10 @@ export default function WebsiteManagementPage() {
                   {isUpdating ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Rocket className="w-5 h-5 mr-3 group-hover:translate-y-[-2px] transition-transform" />}
                   Request Managed Upgrade
                 </Button>
-                <Button variant="ghost" onClick={() => handleDeclareWebsite(false)} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                  Switch to No Website Mode
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 5. NO WEBSITE VIEW: If hasWebsite is false (and not active/pending) */}
-        {selectedOrg?.siteActiveOn === undefined && selectedOrg?.hasWebsite === false && (
-          <div className="max-w-5xl mx-auto py-8 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="space-y-12 text-center">
-              <div className="space-y-4">
-                <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
-                  Get your website with us
-                </h2>
-                <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto font-medium">
-                  Launch a high-performance, secure presence for your institution on our optimized enterprise infrastructure.
-                </p>
-                <div className="flex items-center justify-center gap-6 mt-6">
-                   <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                     <Cloud className="w-4 h-4" />
-                     Cloudflare Secured
-                   </div>
-                   <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">
-                     <Sparkles className="w-4 h-4" />
-                     AI Deployed in 24h
-                   </div>
+                <div className="flex items-center gap-2 mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <Shield className="w-3 h-3" />
+                  Full Administrative Control Guaranteed
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
-                {[
-                  { title: "Ultra-Fast Performance", desc: "Optimized server-side rendering and global CDN for lightning-quick loading.", icon: Zap, color: "bg-amber-50 text-amber-600 border-amber-100" },
-                  { title: "Automated Security", desc: "Built-in DDoS protection, automatic SSL, and weekly infrastructure patches.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
-                  { title: "Managed Updates", desc: "Our AI-driven queue handles all content changes and technical updates within 24h.", icon: MessageSquare, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
-                  { title: "Enterprise Reliability", desc: "Redundant cloud infrastructure with 99.9% uptime for your organization.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" }
-                ].map((feature) => (
-                  <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
-                    <div className="p-3 bg-white rounded-xl shadow-sm shrink-0">
-                      <feature.icon className="w-6 h-6" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-base font-bold">{feature.title}</h4>
-                      <p className="text-xs opacity-80 leading-relaxed font-medium">{feature.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-8 flex flex-col items-center gap-4">
-                <Button 
-                  onClick={handleRequestUpgrade} 
-                  size="lg" 
-                  disabled={isUpdating}
-                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
-                >
-                  {isUpdating ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Rocket className="w-5 h-5 mr-3 group-hover:translate-y-[-2px] transition-transform" />}
-                  Request Managed Website
-                </Button>
-                <Button variant="ghost" onClick={() => handleDeclareWebsite(true)} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                  Switch to External Hosting
-                </Button>
               </div>
             </div>
           </div>

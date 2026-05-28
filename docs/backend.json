@@ -49,6 +49,21 @@
         "ownerId": { "type": "string" },
         "status": { "type": "string", "enum": ["Not verified", "Verified", "Rejected"] }
       }
+    },
+    "TeamMember": {
+      "title": "Team Member",
+      "description": "A member invited to manage specific organizations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "organizationId": { "type": "string" },
+        "organizationName": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "invitedAt": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "auth": {
@@ -62,6 +77,10 @@
     "/paymentVouchers/{voucherId}": {
       "schema": "#/backend/entities/PaymentVoucher",
       "description": "Submitted proof of payments for verification."
+    },
+    "/teamMembers/{memberId}": {
+      "schema": "#/backend/entities/TeamMember",
+      "description": "Invitations and team associations."
     }
   }
 }

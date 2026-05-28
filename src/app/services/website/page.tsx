@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -279,7 +278,7 @@ export default function WebsiteManagementPage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Network</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Website Management</h1>
             <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -336,7 +335,7 @@ export default function WebsiteManagementPage() {
               <Card className="bg-primary/5 border-primary/10 shadow-sm flex flex-col justify-center p-6 space-y-2">
                 <div className="flex items-center gap-2 text-primary">
                   <Sparkles className="w-4 h-4" />
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest">Platform Support</h4>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest">Manage website content</h4>
                 </div>
                 <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
                   Modification requests are manually verified by engineering to ensure zero-downtime deployments.

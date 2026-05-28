@@ -1,4 +1,3 @@
-
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -18,7 +17,10 @@ export default function WorkspaceManagementPage() {
     <DashboardShell>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-headline font-bold text-slate-900">Google Workspace for Ed.</h1>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
+            <h1 className="text-3xl font-headline font-bold text-slate-900">Google Workspace for Ed.</h1>
+          </div>
           <div className="flex gap-2">
              <Button variant="ghost" size="sm" onClick={() => setStatus(null)}>Test: Unregistered</Button>
              <Button variant="ghost" size="sm" onClick={() => setStatus("applied")}>Test: Pending</Button>
@@ -37,9 +39,9 @@ export default function WorkspaceManagementPage() {
               <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
                 Unlock Enterprise-Grade Productivity
               </h2>
-              <p className="text-slate-500 leading-relaxed">
+              <h3 className="text-slate-500 leading-relaxed">
                 Empower your students and faculty with professional collaboration tools. Google Workspace for Education Fundamentals is available at no cost for qualifying institutions.
-              </p>
+              </h3>
               <ul className="space-y-3">
                 {[
                   "Custom @institution.edu.np email addresses",

@@ -18,7 +18,8 @@ import {
   Copy, 
   Check, 
   User as UserIcon,
-  CreditCard
+  CreditCard,
+  X
 } from "lucide-react"
 import {
   Dialog,
@@ -26,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -222,10 +224,11 @@ export default function BillingPage() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl bg-white p-0 overflow-hidden border-none shadow-2xl">
-                  <DialogHeader className="p-6 bg-slate-900 text-white">
+                  <DialogHeader className="p-6 bg-slate-900 text-white relative">
                     <DialogTitle className="text-xl font-headline font-bold">Payment Submission Portal</DialogTitle>
                     <p className="text-slate-400 text-xs">Verify your bank transfer and upload proof.</p>
                   </DialogHeader>
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
                     <div className="p-8 bg-slate-50 border-r border-slate-100 space-y-8">
                       <div className="space-y-6">
@@ -235,44 +238,35 @@ export default function BillingPage() {
                         </div>
                         
                         <div className="space-y-4">
-                          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center">
-                                <UserIcon className="w-4 h-4 text-primary" />
+                          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5">
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center shrink-0">
+                                <CreditCard className="w-5 h-5 text-primary" />
                               </div>
-                              <div className="flex-1">
-                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-tighter leading-none mb-1">Account Name</p>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight leading-none mb-1.5">Account Number</p>
+                                <p className="text-lg font-mono font-bold text-slate-900 tracking-tight">16007010030603</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center shrink-0">
+                                <Landmark className="w-5 h-5 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight leading-none mb-1.5">Bank & Branch</p>
+                                <p className="text-sm font-bold text-slate-900">Global IME Bank Limited</p>
+                                <p className="text-xs font-bold text-slate-500 uppercase mt-0.5">Bhaisepati Branch</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center shrink-0">
+                                <UserIcon className="w-5 h-5 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight leading-none mb-1.5">Account Name</p>
                                 <p className="text-sm font-bold text-slate-900 uppercase">Shivam Yadav</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center">
-                                <CreditCard className="w-4 h-4 text-primary" />
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-tighter leading-none mb-1">Account Number</p>
-                                <p className="text-base font-mono font-bold text-primary tracking-tight">16007010030603</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center">
-                                <Landmark className="w-4 h-4 text-primary" />
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-tighter leading-none mb-1">Bank</p>
-                                <p className="text-xs font-bold text-slate-700">Global IME Bank Limited</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center">
-                                <MapPin className="w-4 h-4 text-primary" />
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-tighter leading-none mb-1">Branch</p>
-                                <p className="text-xs font-bold text-slate-700 uppercase">Bhaisepati Branch</p>
                               </div>
                             </div>
                           </div>
@@ -282,7 +276,7 @@ export default function BillingPage() {
                       <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 flex gap-3">
                         <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
                         <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
-                          Verification is manually processed by our accounts team. Please ensure the reference note includes your Institution Code.
+                          Verification is manually processed by our accounts team. Please ensure the reference note includes your Institution Code for faster processing.
                         </p>
                       </div>
                     </div>

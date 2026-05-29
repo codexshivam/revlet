@@ -212,9 +212,9 @@ export default function WorkspaceManagementPage() {
             <CardContent className="p-16 flex flex-col items-center text-center gap-10">
               <div className="space-y-8 w-full">
                 <div className="space-y-3">
-                  <h3 className="text-3xl font-headline font-bold text-slate-900 uppercase tracking-tight">Workspace Infrastructure Configuration</h3>
+                  <h3 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Managed Workspace for You</h3>
                   <div className="space-y-1">
-                    <p className="text-primary font-bold text-sm uppercase tracking-widest">What we can improve for your institution:</p>
+                    <p className="text-primary font-bold text-sm tracking-widest">Simplest and most effective way to manage infrastructure globally</p>
                     <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed font-medium">
                       Select your current status below to activate the managed administrative interface and see how we optimize your workspace environment for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span>.
                     </p>
@@ -362,7 +362,7 @@ export default function WorkspaceManagementPage() {
                          <div className="space-y-1">
                             <h4 className="text-sm font-bold text-slate-900">Step 3 & 4: Finalize in Google Admin</h4>
                             <p className="text-xs text-slate-500 leading-relaxed">
-                              Navigate to <span className="font-bold text-slate-900">Security {'&gt;'} API Controls {'&gt;'} Manage Domain Wide Delegation</span> in your Google Admin console. 
+                              Navigate to <span className="font-bold text-slate-900">Security {'>'} API Controls {'>'} Manage Domain Wide Delegation</span> in your Google Admin console. 
                               Add a new API Client, paste the values copied above, and click <span className="font-bold text-slate-900">Authorize</span>.
                             </p>
                          </div>
@@ -462,7 +462,7 @@ export default function WorkspaceManagementPage() {
                             <Badge className={cn(
                               "text-[9px] font-bold h-5 px-1.5 border shadow-none",
                               log.type === "CRITICAL" ? "bg-red-50 text-red-600 border-red-100" :
-                              log.type === "WARNING" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                              log.type === "WARNING" ? "bg-amber-50 text-amber-700 border-amber-100" :
                               "bg-slate-50 text-slate-500 border-slate-100"
                             )}>
                               {log.type}

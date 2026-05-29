@@ -175,6 +175,43 @@ export default function WorkspaceManagementPage() {
   
   const allOUs = [...defaultOUs, ...(selectedOrg?.customUserTypes || [])]
 
+  // Dynamic Features for Declaration Panel
+  const declarationFeatures = selectedOrg?.gEducation 
+    ? [
+        { 
+          title: "Academic Directory", 
+          desc: "High-density management for students, teachers, and faculty with rapid organizational unit (OU) assignment.", 
+          icon: GraduationCap 
+        },
+        { 
+          title: "Collective Storage", 
+          desc: "Visualize and control your 100TB institutional pool. Set hard quotas for different academic levels effortlessly.", 
+          icon: HardDrive 
+        },
+        { 
+          title: "Institutional Safety", 
+          desc: "Automated policy enforcement and security defaults tailored for educational environments and student data protection.", 
+          icon: ShieldCheck 
+        }
+      ]
+    : [
+        { 
+          title: "Simple Management", 
+          desc: "We remove Google's administrative complexity. Manage thousands of users and group storage from a single crisp dashboard.", 
+          icon: Zap 
+        },
+        { 
+          title: "Matter-Only Focus", 
+          desc: "A streamlined surface designed for rapid institutional oversight, cutting down manual administrative task time by 70%.", 
+          icon: Users 
+        },
+        { 
+          title: "Zero Configuration", 
+          desc: "Automated policy enforcement and standard institutional security defaults deployed directly to your domain.", 
+          icon: Lock 
+        }
+      ]
+
   if (isLoading || authLoading) {
     return (
       <DashboardShell>
@@ -222,23 +259,7 @@ export default function WorkspaceManagementPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left">
-                  {[
-                    { 
-                      title: "Simple Management", 
-                      desc: "We remove Google's administrative complexity. Manage users and storage from a single crisp dashboard.", 
-                      icon: Zap 
-                    },
-                    { 
-                      title: "Matter-Only Focus", 
-                      desc: "A streamlined surface designed for rapid institutional oversight, cutting down manual task time by 70%.", 
-                      icon: ShieldCheck 
-                    },
-                    { 
-                      title: "Zero Configuration", 
-                      desc: "Automated policy enforcement and institutional security defaults deployed directly to your domain.", 
-                      icon: Lock 
-                    }
-                  ].map((feat) => (
+                  {declarationFeatures.map((feat) => (
                     <div key={feat.title} className="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-4 group hover:border-primary/20 transition-all">
                       <div className="p-3 bg-slate-50 rounded-xl w-fit group-hover:bg-primary/5 transition-colors">
                         <feat.icon className="w-5 h-5 text-primary" />
@@ -278,15 +299,19 @@ export default function WorkspaceManagementPage() {
         {selectedOrg && selectedOrg.workspaceActive === false && !selectedOrg.managedWorkspace && (
           <div className="max-w-5xl mx-auto py-8 space-y-12 animate-in slide-in-from-bottom-4">
             <div className="text-center space-y-4">
-              <h2 className="text-4xl font-headline font-bold text-slate-900">Enterprise Cloud Deployment</h2>
-              <p className="text-slate-500 text-lg max-w-2xl mx-auto">Access professional collaboration tools for your entire organization at zero license cost for eligible institutions.</p>
+              <h2 className="text-4xl font-headline font-bold text-slate-900">
+                {selectedOrg.gEducation ? "Academic Cloud Deployment" : "Enterprise Cloud Deployment"}
+              </h2>
+              <p className="text-slate-500 text-lg max-w-2xl mx-auto">
+                Access professional collaboration tools for your entire organization. Eligible {selectedOrg.gEducation ? "educational institutions" : "organizations"} can scale their infrastructure with zero license overhead.
+              </p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
-                { title: "Managed Onboarding", desc: "Our team handles the verification and DNS setup for your new domain.", icon: Zap, color: "text-blue-500 bg-blue-50" },
-                { title: "EDU Exclusive", desc: "Unlock 100TB of collective storage and advanced teaching tools.", icon: GraduationCap, color: "text-emerald-500 bg-emerald-50" },
-                { title: "Security First", desc: "DLP rules and advanced threat protection enabled by default.", icon: Lock, color: "text-purple-500 bg-purple-50" },
+                { title: "Managed Onboarding", desc: "Our team handles the verification and DNS setup for your institutional domain.", icon: Zap, color: "text-blue-500 bg-blue-50" },
+                { title: selectedOrg.gEducation ? "EDU Exclusive" : "Enterprise Ready", desc: selectedOrg.gEducation ? "Unlock 100TB of collective storage and advanced teaching tools." : "Unlock advanced administrative tools and high-capacity secure storage.", icon: GraduationCap, color: "text-emerald-500 bg-emerald-50" },
+                { title: "Security First", desc: "DLP rules and advanced threat protection enabled by default for your protection.", icon: Lock, color: "text-purple-500 bg-purple-50" },
               ].map((feat) => (
                 <Card key={feat.title} className="bg-white border-slate-200 shadow-sm p-8 space-y-4">
                   <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", feat.color)}>
@@ -362,7 +387,7 @@ export default function WorkspaceManagementPage() {
                          <div className="space-y-1">
                             <h4 className="text-sm font-bold text-slate-900">Step 3 & 4: Finalize in Google Admin</h4>
                             <p className="text-xs text-slate-500 leading-relaxed">
-                              Navigate to <span className="font-bold text-slate-900">Security {'>'} API Controls {'>'} Manage Domain Wide Delegation</span> in your Google Admin console. 
+                              Navigate to <span className="font-bold">Security {'>'} API Controls {'>'} Manage Domain Wide Delegation</span> in your Google Admin console. 
                               Add a new API Client, paste the values copied above, and click <span className="font-bold text-slate-900">Authorize</span>.
                             </p>
                          </div>

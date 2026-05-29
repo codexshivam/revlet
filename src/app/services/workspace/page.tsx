@@ -41,7 +41,8 @@ import {
   Calendar,
   X,
   Lock,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Mail
 } from "lucide-react"
 import {
   Table,
@@ -207,38 +208,59 @@ export default function WorkspaceManagementPage() {
 
         {/* 1. Declaration View */}
         {selectedOrg && selectedOrg.workspaceActive === undefined && (
-          <div className="max-w-4xl mx-auto py-12">
-            <Card className="bg-white border-slate-200 shadow-xl overflow-hidden rounded-2xl">
-              <div className="h-1.5 w-full bg-primary" />
-              <CardContent className="p-12 text-center space-y-8">
+          <Card className="bg-slate-50 border-slate-200 border-dashed animate-in slide-in-from-bottom-2 duration-500">
+            <CardContent className="p-16 flex flex-col items-center text-center gap-10">
+              <div className="w-16 h-16 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center">
+                <Mail className="w-8 h-8 text-slate-400" />
+              </div>
+              
+              <div className="space-y-8">
                 <div className="space-y-3">
-                  <h3 className="text-3xl font-headline font-bold text-slate-900">Infrastructure Inventory</h3>
-                  <p className="text-slate-500 text-sm max-w-lg mx-auto">Does your institution already operate an existing Google Workspace instance on <span className="font-bold text-slate-900">{selectedOrg.domain}</span>?</p>
+                  <h3 className="text-3xl font-headline font-bold text-slate-900">Workspace Context Declaration</h3>
+                  <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed font-medium">
+                    Please declare the current Google Workspace status for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span> to initialize management contexts.
+                  </p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                  <Button 
-                    onClick={() => handleDeclare(true)} 
-                    disabled={isUpdating}
-                    variant="outline" 
-                    className="h-24 flex flex-col gap-1 border-2 hover:border-primary hover:bg-primary/5 transition-all"
-                  >
-                    <ArrowRightLeft className="w-6 h-6 text-primary mb-1" />
-                    <span className="font-bold">Yes, Migrate Management</span>
-                    <span className="text-[10px] opacity-60">Connect existing domain to our portal</span>
-                  </Button>
-                  <Button 
-                    onClick={() => handleDeclare(false)}
-                    disabled={isUpdating}
-                    className="h-24 flex flex-col gap-1 bg-slate-900 hover:bg-black text-white"
-                  >
-                    <Plus className="w-6 h-6 mb-1" />
-                    <span className="font-bold">No, Deploy New Workspace</span>
-                    <span className="text-[10px] opacity-80">Launch institutional cloud from scratch</span>
-                  </Button>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto text-left">
+                  {[
+                    { title: "Simple Management", desc: "Take care of only what matters. We remove Google's administrative complexity.", icon: Zap },
+                    { title: "Matter-Only Focus", desc: "A streamlined surface designed for rapid institutional oversight.", icon: ShieldCheck },
+                    { title: "Zero Configuration", desc: "Automated policy enforcement and institutional security defaults.", icon: Lock }
+                  ].map((feat) => (
+                    <div key={feat.title} className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3 group hover:border-primary/20 transition-all">
+                      <div className="p-2 bg-slate-50 rounded-lg w-fit group-hover:bg-primary/5 transition-colors">
+                        <feat.icon className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold text-slate-900">{feat.title}</h4>
+                        <p className="text-[10px] text-slate-500 leading-relaxed font-medium">{feat.desc}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+                <Button 
+                  onClick={() => handleDeclare(true)}
+                  disabled={isUpdating}
+                  className="flex-1 h-14 bg-white hover:bg-slate-50 text-slate-900 border-slate-200 border shadow-sm font-bold gap-3"
+                >
+                  <ArrowRightLeft className="w-5 h-5 text-primary" />
+                  We have Workspace
+                </Button>
+                <Button 
+                  onClick={() => handleDeclare(false)}
+                  disabled={isUpdating}
+                  className="flex-1 h-14 bg-slate-900 hover:bg-black text-white shadow-xl shadow-slate-200 font-bold gap-3"
+                >
+                  <Plus className="w-5 h-5 text-slate-400" />
+                  No Workspace yet
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* 2. Apply View (Declaration: False) */}

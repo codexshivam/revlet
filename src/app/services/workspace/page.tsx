@@ -210,34 +210,42 @@ export default function WorkspaceManagementPage() {
         {selectedOrg && selectedOrg.workspaceActive === undefined && (
           <Card className="bg-slate-50 border-slate-200 border-dashed animate-in slide-in-from-bottom-2 duration-500">
             <CardContent className="p-16 flex flex-col items-center text-center gap-10">
-              <div className="w-16 h-16 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center">
-                <Mail className="w-8 h-8 text-slate-400" />
-              </div>
-              
-              <div className="space-y-8">
+              <div className="space-y-8 w-full">
                 <div className="space-y-3">
                   <h3 className="text-3xl font-headline font-bold text-slate-900 uppercase tracking-tight">Workspace Infrastructure Configuration</h3>
                   <div className="space-y-1">
-                    <p className="text-primary font-bold text-sm uppercase tracking-widest">Simplified Administration for Modern Institutions</p>
+                    <p className="text-primary font-bold text-sm uppercase tracking-widest">What we can improve for your institution:</p>
                     <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed font-medium">
-                      Select your institution's current workspace status for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span> to activate the managed administrative interface and automated security protocols.
+                      Select your current status below to activate the managed administrative interface and see how we optimize your workspace environment for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span>.
                     </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto text-left">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left">
                   {[
-                    { title: "Simple Management", desc: "Take care of only what matters. We remove Google's administrative complexity.", icon: Zap },
-                    { title: "Matter-Only Focus", desc: "A streamlined surface designed for rapid institutional oversight.", icon: ShieldCheck },
-                    { title: "Zero Configuration", desc: "Automated policy enforcement and institutional security defaults.", icon: Lock }
+                    { 
+                      title: "Simple Management", 
+                      desc: "We remove Google's administrative complexity. Manage users and storage from a single crisp dashboard.", 
+                      icon: Zap 
+                    },
+                    { 
+                      title: "Matter-Only Focus", 
+                      desc: "A streamlined surface designed for rapid institutional oversight, cutting down manual task time by 70%.", 
+                      icon: ShieldCheck 
+                    },
+                    { 
+                      title: "Zero Configuration", 
+                      desc: "Automated policy enforcement and institutional security defaults deployed directly to your domain.", 
+                      icon: Lock 
+                    }
                   ].map((feat) => (
-                    <div key={feat.title} className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3 group hover:border-primary/20 transition-all">
-                      <div className="p-2 bg-slate-50 rounded-lg w-fit group-hover:bg-primary/5 transition-colors">
-                        <feat.icon className="w-4 h-4 text-primary" />
+                    <div key={feat.title} className="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-4 group hover:border-primary/20 transition-all">
+                      <div className="p-3 bg-slate-50 rounded-xl w-fit group-hover:bg-primary/5 transition-colors">
+                        <feat.icon className="w-5 h-5 text-primary" />
                       </div>
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-bold text-slate-900">{feat.title}</h4>
-                        <p className="text-[10px] text-slate-500 leading-relaxed font-medium">{feat.desc}</p>
+                      <div className="space-y-1.5">
+                        <h4 className="text-sm font-bold text-slate-900">{feat.title}</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed font-medium">{feat.desc}</p>
                       </div>
                     </div>
                   ))}

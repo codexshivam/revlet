@@ -55,7 +55,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
   return (
     <aside className={cn(
       "bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 transition-all",
-      mobile ? "w-full pt-4 border-r-0 h-full" : "w-64 pt-12 hidden lg:flex"
+      mobile ? "w-full pt-4 border-r-0 h-full" : "w-64 pt-6 hidden lg:flex"
     )}>
       <div className="px-6 mb-8">
         <Link href="/account/home" className="flex flex-col gap-0 group">

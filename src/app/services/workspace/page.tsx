@@ -42,7 +42,9 @@ import {
   X,
   Lock,
   ArrowRightLeft,
-  Mail
+  Mail,
+  MessageSquare,
+  Clock
 } from "lucide-react"
 import {
   Table,
@@ -59,10 +61,21 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useUser, useFirestore } from "@/firebase"
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, arrayUnion } from "firebase/firestore"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 interface Organization {
   id: string
@@ -102,6 +115,7 @@ export default function WorkspaceManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [isOUDialogOpen, setIsOUDialogOpen] = useState(false)
+  const [isApplyConfirmOpen, setIsApplyConfirmOpen] = useState(false)
   const [newOUType, setNewOUType] = useState("")
   
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
@@ -129,6 +143,23 @@ export default function WorkspaceManagementPage() {
       updatedAt: serverTimestamp()
     }).then(() => {
       toast({ title: "Declaration Saved", description: active ? "Migration guidelines unlocked." : "Application features unlocked." })
+    }).finally(() => setIsUpdating(false))
+  }
+
+  const handleApply = async () => {
+    if (!selectedOrg) return
+    setIsUpdating(true)
+    const orgRef = doc(db, "organizations", selectedOrg.id)
+    updateDoc(orgRef, {
+      workspaceStatus: "pending",
+      workspaceAppliedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }).then(() => {
+      toast({ 
+        title: "Application Submitted", 
+        description: "Your workspace application is now under institutional review." 
+      })
+      setIsApplyConfirmOpen(false)
     }).finally(() => setIsUpdating(false))
   }
 
@@ -296,13 +327,13 @@ export default function WorkspaceManagementPage() {
         )}
 
         {/* 2. Apply View (Declaration: False) */}
-        {selectedOrg && selectedOrg.workspaceActive === false && !selectedOrg.managedWorkspace && (
+        {selectedOrg && selectedOrg.workspaceActive === false && selectedOrg.workspaceStatus !== "pending" && !selectedOrg.managedWorkspace && (
           <div className="max-w-5xl mx-auto py-8 space-y-12 animate-in slide-in-from-bottom-4">
             <div className="text-center space-y-4">
               <h2 className="text-4xl font-headline font-bold text-slate-900">
                 {selectedOrg.gEducation ? "Academic Cloud Deployment" : "Enterprise Cloud Deployment"}
               </h2>
-              <p className="text-slate-500 text-lg max-w-2xl mx-auto">
+              <p className="text-slate-500 text-lg max-w-2xl mx-auto font-medium">
                 Access professional collaboration tools for your entire organization. Eligible {selectedOrg.gEducation ? "educational institutions" : "organizations"} can scale their infrastructure with zero license overhead.
               </p>
             </div>
@@ -318,17 +349,80 @@ export default function WorkspaceManagementPage() {
                     <feat.icon className="w-6 h-6" />
                   </div>
                   <h4 className="font-bold text-slate-900">{feat.title}</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">{feat.desc}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed font-medium">{feat.desc}</p>
                 </Card>
               ))}
             </div>
 
             <div className="flex justify-center">
-              <Button size="lg" className="h-14 px-12 text-lg font-bold shadow-xl shadow-primary/20 gap-3">
+              <Button 
+                onClick={() => setIsApplyConfirmOpen(true)}
+                size="lg" 
+                className="h-14 px-12 text-lg font-bold shadow-xl shadow-primary/20 gap-3"
+              >
                 <Globe className="w-5 h-5" />
                 Apply for Institutional Workspace
               </Button>
             </div>
+
+            <AlertDialog open={isApplyConfirmOpen} onOpenChange={setIsApplyConfirmOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="font-headline font-bold">Confirm Application Request?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-sm leading-relaxed">
+                    This will initiate the Google Workspace deployment request for <span className="font-bold">{selectedOrg.domain}</span>. Our engineering team will verify your institutional eligibility and contact you for DNS requirements.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handleApply}
+                    className="bg-slate-900 text-white font-bold"
+                  >
+                    Confirm & Apply
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
+
+        {/* Pending View */}
+        {selectedOrg && selectedOrg.workspaceStatus === "pending" && !selectedOrg.managedWorkspace && (
+          <div className="max-w-5xl mx-auto py-20 animate-in fade-in duration-700">
+            <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
+              <CardContent className="p-20 flex flex-col items-center text-center gap-8">
+                <div className="relative">
+                  <div className="w-24 h-24 rounded-full bg-white border-primary/20 flex items-center justify-center shadow-sm relative">
+                    <Clock className="w-12 h-12 text-amber-500" />
+                    <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white uppercase text-[9px] px-2 h-5">
+                      PROCESSING
+                    </Badge>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="text-3xl font-headline font-bold text-amber-900">Workspace Verification in Progress</h3>
+                    <p className="text-amber-700/80 max-w-xl mx-auto text-sm leading-relaxed font-medium">
+                      We are currently verifying the institutional credentials and DNS health for <span className="font-bold">{selectedOrg.domain}</span>. A network engineer will reach out to finalize your workspace deployment.
+                    </p>
+                  </div>
+                  <div className="bg-amber-100/50 p-4 rounded-lg border border-amber-200/50 max-w-lg mx-auto">
+                    <p className="text-xs text-amber-800 font-bold leading-relaxed">
+                      Verification normally completes within 24 business hours. You will receive an email confirmation once the administrative panel is unlocked.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <Link href="/support">
+                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-12 px-10">
+                      <MessageSquare className="w-4 h-4" />
+                      Contact Support
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -339,7 +433,7 @@ export default function WorkspaceManagementPage() {
               <div className="text-center space-y-2">
                 <Badge className="bg-blue-50 text-blue-600 border-blue-100 mb-2">MIGRATION PROTOCOL</Badge>
                 <h2 className="text-2xl font-headline font-bold text-slate-900">Authorize Domain-Wide Delegation</h2>
-                <p className="text-slate-500 text-sm">Follow Approach A to securely link your Google Admin environment to our platform.</p>
+                <p className="text-slate-500 text-sm font-medium">Follow Approach A to securely link your Google Admin environment to our platform.</p>
               </div>
 
               <div className="grid gap-6">
@@ -386,8 +480,8 @@ export default function WorkspaceManagementPage() {
                       <div className="space-y-4">
                          <div className="space-y-1">
                             <h4 className="text-sm font-bold text-slate-900">Step 3 & 4: Finalize in Google Admin</h4>
-                            <p className="text-xs text-slate-500 leading-relaxed">
-                              Navigate to <span className="font-bold">Security {'>'} API Controls {'>'} Manage Domain Wide Delegation</span> in your Google Admin console. 
+                            <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                              Navigate to <span className="font-bold">Security {'>'} API Controls {'>'} Manage Domain Wide Delegation</span>. 
                               Add a new API Client, paste the values copied above, and click <span className="font-bold text-slate-900">Authorize</span>.
                             </p>
                          </div>

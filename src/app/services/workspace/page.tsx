@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -215,7 +214,7 @@ export default function WorkspaceManagementPage() {
                          <div className="space-y-1">
                             <h4 className="text-sm font-bold text-slate-900">Step 3 & 4: Finalize in Google Admin</h4>
                             <p className="text-xs text-slate-500 leading-relaxed">
-                              Navigate to <span className="font-bold">Security > API Controls > Manage Domain Wide Delegation</span>. 
+                              Navigate to <span className="font-bold">Security &gt; API Controls &gt; Manage Domain Wide Delegation</span>. 
                               Add a new API Client, paste the values copied above, and click <span className="font-bold">Authorize</span>.
                             </p>
                          </div>

@@ -38,6 +38,8 @@
         "maxWebEdits": { "type": "number" },
         "usedWebEdits": { "type": "number" },
         "lastWebQuota": { "type": "string", "format": "date-time" },
+        "gEducation": { "type": "boolean", "description": "Whether the institution uses Google Workspace for Education." },
+        "managedWorkspace": { "type": "boolean", "description": "Whether the workspace is connected and managed by the platform." },
         "workspaceStatus": { "type": "string", "enum": ["unregistered", "applied", "pending", "active"] },
         "workspaceDomain": { "type": "string" },
         "workspaceCustomerId": { "type": "string" },

@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -40,7 +41,10 @@ import {
   Bell,
   HardDrive,
   UserCog,
-  FileText
+  FileText,
+  Zap,
+  Globe,
+  Ban
 } from "lucide-react"
 import {
   Table,
@@ -67,6 +71,8 @@ interface Organization {
   id: string
   name: string
   domain: string
+  gEducation?: boolean
+  managedWorkspace?: boolean
   workspaceStatus?: "unregistered" | "applied" | "pending" | "active"
   workspaceDomain?: string
   workspaceCustomerId?: string
@@ -97,7 +103,7 @@ export default function WorkspaceManagementPage() {
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string>("")
   const [isLoading, setIsLoading] = useState(true)
-  const [isActivating, setIsActivating] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
   
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
@@ -115,16 +121,35 @@ export default function WorkspaceManagementPage() {
     return unsub
   }, [user, authLoading, db, selectedOrgId])
 
-  const handleActivate = async () => {
+  const handleDeclareEligibility = async (eligible: boolean) => {
     if (!selectedOrg) return
-    setIsActivating(true)
+    setIsUpdating(true)
     const orgRef = doc(db, "organizations", selectedOrg.id)
     updateDoc(orgRef, {
+      gEducation: eligible,
+      updatedAt: serverTimestamp()
+    }).then(() => {
+      toast({ 
+        title: eligible ? "Status Declared" : "Not Eligible", 
+        description: eligible 
+          ? "Educational status verified. Proceeding to setup." 
+          : "Standard Workspace options will be provided soon." 
+      })
+    }).finally(() => setIsUpdating(false))
+  }
+
+  const handleActivate = async () => {
+    if (!selectedOrg) return
+    setIsUpdating(true)
+    const orgRef = doc(db, "organizations", selectedOrg.id)
+    updateDoc(orgRef, {
+      managedWorkspace: true,
       workspaceStatus: "active",
-      workspaceDomain: selectedOrg.domain
+      workspaceDomain: selectedOrg.domain,
+      updatedAt: serverTimestamp()
     }).then(() => {
       toast({ title: "Connection Verified", description: "Google Workspace for Education is now active." })
-    }).finally(() => setIsActivating(false))
+    }).finally(() => setIsUpdating(false))
   }
 
   const copyToClipboard = (text: string, label: string) => {
@@ -161,7 +186,72 @@ export default function WorkspaceManagementPage() {
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {selectedOrg?.workspaceStatus !== "active" ? (
+        {/* Declaration Widget: Only if gEducation is not defined */}
+        {selectedOrg && selectedOrg.gEducation === undefined && (
+          <div className="max-w-4xl mx-auto py-12 animate-in slide-in-from-bottom-4 duration-500">
+            <Card className="bg-white border-slate-200 shadow-xl overflow-hidden rounded-2xl">
+              <div className="h-2 w-full bg-gradient-to-r from-blue-500 to-emerald-500" />
+              <CardContent className="p-12 flex flex-col items-center text-center gap-8">
+                <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center">
+                  <GraduationCap className="w-10 h-10 text-blue-600" />
+                </div>
+                <div className="space-y-4">
+                  <h2 className="text-3xl font-headline font-bold text-slate-900">Institutional Eligibility Declaration</h2>
+                  <p className="text-slate-500 text-lg leading-relaxed max-w-2xl font-medium">
+                    Google Workspace for Education provides powerful communication and collaboration tools at <span className="text-emerald-600 font-bold">zero cost</span> for qualifying educational institutions.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl text-left">
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-4">
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Zap className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-900">Free Premium Features</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed font-medium">Includes Gmail, Drive, Docs, and advanced admin security controls.</p>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-4">
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Globe className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-900">Education Exclusive</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed font-medium">Reserved for K-12, Higher Ed, or education-focused nonprofits.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 w-full max-w-md pt-4">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Does your institution use Workspace for Ed?</p>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <Button 
+                      onClick={() => handleDeclareEligibility(true)}
+                      disabled={isUpdating}
+                      className="flex-1 h-14 bg-slate-900 text-white hover:bg-black font-bold shadow-xl gap-2"
+                    >
+                      <CheckCircle className="w-5 h-5" />
+                      Yes, proceed to setup
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => handleDeclareEligibility(false)}
+                      disabled={isUpdating}
+                      className="flex-1 h-14 font-bold gap-2"
+                    >
+                      <Ban className="w-5 h-5 text-slate-400" />
+                      No, not eligible
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Setup Wizard: If gEducation is true but not yet managed */}
+        {selectedOrg && selectedOrg.gEducation === true && !selectedOrg.managedWorkspace && (
           <div className="max-w-4xl mx-auto py-8">
             <div className="space-y-8">
               <div className="text-center space-y-2">
@@ -218,8 +308,8 @@ export default function WorkspaceManagementPage() {
                               Add a new API Client, paste the values copied above, and click <span className="font-bold">Authorize</span>.
                             </p>
                          </div>
-                         <Button onClick={handleActivate} disabled={isActivating} className="bg-slate-900 text-white font-bold h-11 px-8 shadow-xl">
-                           {isActivating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Verify and Activate Connection"}
+                         <Button onClick={handleActivate} disabled={isUpdating} className="bg-slate-900 text-white font-bold h-11 px-8 shadow-xl">
+                           {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Verify and Activate Connection"}
                          </Button>
                       </div>
                    </div>
@@ -227,7 +317,28 @@ export default function WorkspaceManagementPage() {
               </div>
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* Not Eligible Message */}
+        {selectedOrg && selectedOrg.gEducation === false && (
+          <div className="max-w-4xl mx-auto py-20 text-center space-y-6">
+            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto">
+              <Ban className="w-8 h-8 text-slate-400" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-headline font-bold text-slate-900">Standard Workspace Management</h3>
+              <p className="text-slate-500 max-w-sm mx-auto text-sm leading-relaxed font-medium">
+                Your institution has been marked as ineligible for the Education offering. Our team will contact you for standard Workspace integration options.
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => handleDeclareEligibility(true)} className="font-bold">
+              Incorrect? Redecalre Status
+            </Button>
+          </div>
+        )}
+
+        {/* Active Dashboard Suite */}
+        {selectedOrg && selectedOrg.gEducation === true && selectedOrg.managedWorkspace === true && (
           <Tabs value={currentTab} onValueChange={(v) => router.push(`/services/workspace?tab=${v}`)} className="space-y-8">
             <div className="flex items-center justify-between border-b border-slate-200 pb-1">
               <TabsList className="bg-transparent h-auto p-0 gap-8">

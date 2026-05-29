@@ -39,8 +39,11 @@ export function RecursiveSidebar() {
     if (!user) return
     const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
     const unsub = onSnapshot(q, (snap) => {
-      // Check if any organization has an active workspace
-      const active = snap.docs.some(doc => doc.data().workspaceStatus === "active")
+      // Check if any organization has an active and managed workspace
+      const active = snap.docs.some(doc => {
+        const data = doc.data()
+        return data.gEducation === true && data.managedWorkspace === true
+      })
       setWorkspaceActive(active)
     })
     return unsub
@@ -55,16 +58,6 @@ export function RecursiveSidebar() {
         { title: "Manage Payments", href: "/account/billing" },
       ]
     },
-    ...(workspaceActive ? [{
-      title: "GOOGLE WORKSPACE",
-      icon: Mail,
-      children: [
-        { title: "Workspace Hub", icon: Home, href: "/services/workspace" },
-        { title: "Users", icon: Users, href: "/services/workspace?tab=users" },
-        { title: "Storage", icon: HardDrive, href: "/services/workspace?tab=storage" },
-        { title: "Archived", icon: Archive, href: "/services/workspace?tab=archived" },
-      ]
-    }] : []),
     {
       title: "SERVICES",
       icon: LayoutDashboard,
@@ -74,6 +67,15 @@ export function RecursiveSidebar() {
         { title: "Google Workspace", icon: Mail, href: "/services/workspace" },
       ]
     },
+    ...(workspaceActive ? [{
+      title: "GOOGLE WORKSPACE",
+      icon: Mail,
+      children: [
+        { title: "Users", icon: Users, href: "/services/workspace?tab=users" },
+        { title: "Storage", icon: HardDrive, href: "/services/workspace?tab=storage" },
+        { title: "Archived", icon: Archive, href: "/services/workspace?tab=archived" },
+      ]
+    }] : []),
     {
       title: "MANAGEMENT",
       icon: ShieldCheck,

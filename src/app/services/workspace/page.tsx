@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -291,7 +290,6 @@ export default function WorkspaceManagementPage() {
   }
 
   const handleCopyIndividualScope = (url: string) => {
-    navigator.clipboard.text = url;
     navigator.clipboard.writeText(url)
     setCopiedScope(url)
     toast({ title: "Scope Copied", description: "API Scope URL ready for pasting." })

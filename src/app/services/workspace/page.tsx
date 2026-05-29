@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -43,7 +42,8 @@ import {
   ChevronRight,
   CheckCircle2,
   X,
-  RefreshCw
+  RefreshCw,
+  Check
 } from "lucide-react"
 import {
   Table,
@@ -133,6 +133,7 @@ export default function WorkspaceManagementPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string>("")
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [copiedScope, setCopiedScope] = useState<string | null>(null)
   
   // Connection state
   const [selectedScopes, setSelectedScopes] = useState<string[]>(SCOPES.map(s => s.url))
@@ -287,6 +288,13 @@ export default function WorkspaceManagementPage() {
     toast({ title: "Copied", description: `${label} copied to clipboard.` })
   }
 
+  const handleCopyIndividualScope = (url: string) => {
+    navigator.clipboard.writeText(url)
+    setCopiedScope(url)
+    toast({ title: "Scope Copied", description: "API Scope URL ready for pasting." })
+    setTimeout(() => setCopiedScope(null), 2000)
+  }
+
   const defaultOUs = selectedOrg?.gEducation 
     ? ["Students", "Teachers", "Main People", "Staffs"] 
     : ["Users", "Main People"]
@@ -336,6 +344,31 @@ export default function WorkspaceManagementPage() {
                     Select your institution's current workspace status to activate the managed administrative interface and automated security protocols.
                   </p>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl text-left">
+                {(selectedOrg.gEducation 
+                  ? [
+                    { title: "Academic Scale", desc: "Manage thousands of Student & Faculty accounts with nested organizational hierarchies.", icon: Users, color: "text-blue-600 bg-blue-50" },
+                    { title: "Institutional Safety", desc: "Enforce domain-wide security policies and Data Loss Prevention (DLP) across all academic units.", icon: ShieldCheck, color: "text-emerald-600 bg-emerald-50" },
+                    { title: "Storage Oversight", desc: "Control the 100TB collective institutional storage pool with group-level hard quotas.", icon: HardDrive, color: "text-purple-600 bg-purple-50" },
+                  ]
+                  : [
+                    { title: "Unified Directory", desc: "Centralized management for users, groups, and cross-departmental access.", icon: Network, color: "text-blue-600 bg-blue-50" },
+                    { title: "Admin Agility", desc: "Simplified administrative layer for rapid onboarding, password resets, and audits.", icon: Zap, color: "text-amber-600 bg-amber-50" },
+                    { title: "Policy Enforcement", desc: "Deploy enterprise security standards globally with a single click.", icon: Lock, color: "text-slate-600 bg-slate-100" },
+                  ]
+                ).map((feat) => (
+                  <div key={feat.title} className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", feat.color)}>
+                      <feat.icon className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-slate-900 text-sm">{feat.title}</h4>
+                      <p className="text-[11px] text-slate-500 leading-relaxed font-medium">{feat.desc}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
               
               <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
@@ -444,79 +477,132 @@ export default function WorkspaceManagementPage() {
               <p className="text-slate-500 text-sm font-medium">Follow these steps to securely link your Google Admin environment to our management platform.</p>
             </div>
 
-            <div className="space-y-6">
-              <Card className="bg-slate-900 text-white p-8">
-                 <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                       <Settings className="w-5 h-5 text-primary" />
+            <div className="space-y-8">
+              {/* Instructions First */}
+              <Card className="bg-slate-900 text-white p-8 shadow-2xl border-none">
+                 <div className="flex items-start gap-5">
+                    <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0">
+                       <Settings className="w-6 h-6 text-primary" />
                     </div>
-                    <div className="space-y-2">
-                       <h4 className="text-lg font-bold">Step-by-Step Instructions</h4>
-                       <ol className="text-xs text-slate-400 space-y-2 list-decimal pl-4 leading-relaxed font-medium">
-                          <li>Log in to your <strong>Google Admin Console</strong> with super-admin credentials.</li>
-                          <li>Navigate to <strong>Security &gt; API Controls &gt; Manage Domain Wide Delegation</strong>.</li>
-                          <li>Click <strong>Add new</strong> to register a new API client.</li>
-                          <li>Copy the <strong>System Client ID</strong> below and paste it into the "Client ID" field.</li>
-                          <li>Select the required <strong>API Scopes</strong> from the checklist and copy the comma-separated list into the "OAuth Scopes" field.</li>
-                          <li>Click <strong>Authorize</strong> to finalize the connection.</li>
-                       </ol>
+                    <div className="space-y-4 flex-1">
+                       <h4 className="text-xl font-bold">Step-by-Step Instructions</h4>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-3">
+                             <div className="flex items-center gap-2">
+                                <Badge className="bg-white/20 text-white h-5 w-5 p-0 flex items-center justify-center font-bold">1</Badge>
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Initialize Console</span>
+                             </div>
+                             <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                                Log in to your <span className="text-white font-bold">Google Admin Console</span> with super-admin credentials.
+                             </p>
+                          </div>
+                          <div className="space-y-3">
+                             <div className="flex items-center gap-2">
+                                <Badge className="bg-white/20 text-white h-5 w-5 p-0 flex items-center justify-center font-bold">2</Badge>
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Locate Security Controls</span>
+                             </div>
+                             <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                                Navigate to <span className="text-white font-bold">Security &gt; API Controls &gt; Manage Domain Wide Delegation</span>.
+                             </p>
+                          </div>
+                          <div className="space-y-3">
+                             <div className="flex items-center gap-2">
+                                <Badge className="bg-white/20 text-white h-5 w-5 p-0 flex items-center justify-center font-bold">3</Badge>
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Register API Client</span>
+                             </div>
+                             <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                                Click <span className="text-white font-bold">Add new</span> and paste the <span className="text-primary font-bold">System Client ID</span> provided below.
+                             </p>
+                          </div>
+                          <div className="space-y-3">
+                             <div className="flex items-center gap-2">
+                                <Badge className="bg-white/20 text-white h-5 w-5 p-0 flex items-center justify-center font-bold">4</Badge>
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Delegate Permissions</span>
+                             </div>
+                             <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                                Copy the <span className="text-primary font-bold">API Scopes</span> from the checklist and click <span className="text-white font-bold">Authorize</span>.
+                             </p>
+                          </div>
+                       </div>
                     </div>
                  </div>
               </Card>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <Card className="bg-white border-slate-200 shadow-sm flex flex-col">
-                  <CardHeader className="py-4 px-6 border-b border-slate-100">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <Card className="lg:col-span-1 bg-white border-slate-200 shadow-sm flex flex-col">
+                  <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50">
                     <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System Client ID</CardTitle>
                   </CardHeader>
-                  <CardContent className="p-6 flex-1 flex flex-col justify-between gap-4">
-                    <code className="text-lg font-mono font-bold text-primary block text-center py-4 bg-slate-50 rounded-lg border border-slate-100">
-                      {SYSTEM_CLIENT_ID}
-                    </code>
-                    <Button onClick={() => copyToClipboard(SYSTEM_CLIENT_ID, "Client ID")} className="w-full bg-slate-900 text-white font-bold h-11">
+                  <CardContent className="p-6 flex-1 flex flex-col justify-center gap-4">
+                    <div className="relative group">
+                       <code className="text-sm font-mono font-bold text-primary block text-center py-6 bg-slate-50 rounded-xl border border-slate-200 group-hover:border-primary/30 transition-colors">
+                        {SYSTEM_CLIENT_ID}
+                      </code>
+                    </div>
+                    <Button onClick={() => copyToClipboard(SYSTEM_CLIENT_ID, "Client ID")} className="w-full bg-slate-900 text-white font-bold h-12 shadow-lg">
                       <Copy className="w-4 h-4 mr-2" />
                       Copy Client ID
                     </Button>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-white border-slate-200 shadow-sm flex flex-col">
-                  <CardHeader className="py-4 px-6 border-b border-slate-100">
+                <Card className="lg:col-span-2 bg-white border-slate-200 shadow-sm flex flex-col">
+                  <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
                     <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Required API Scopes</CardTitle>
+                    <Badge variant="outline" className="text-[9px] font-bold h-5 bg-white">{selectedScopes.length} Scopes Selected</Badge>
                   </CardHeader>
-                  <CardContent className="p-6 space-y-4">
-                    <div className="space-y-2 max-h-[160px] overflow-y-auto no-scrollbar">
+                  <CardContent className="p-0 flex-1 flex flex-col">
+                    <div className="flex-1 max-h-[300px] overflow-y-auto no-scrollbar divide-y divide-slate-100">
                       {SCOPES.map((scope) => (
-                        <div key={scope.url} className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                          <Checkbox 
-                            id={scope.url} 
-                            checked={selectedScopes.includes(scope.url)} 
-                            onCheckedChange={(checked) => {
-                              setSelectedScopes(prev => checked ? [...prev, scope.url] : prev.filter(s => s !== scope.url))
-                            }}
-                          />
-                          <label htmlFor={scope.url} className="text-[9px] font-mono font-bold text-slate-500 cursor-pointer flex-1 break-all">
-                            {scope.url}
-                          </label>
+                        <div key={scope.url} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-all group">
+                          <div className="flex items-center space-x-4 flex-1 min-w-0">
+                            <Checkbox 
+                              id={scope.url} 
+                              checked={selectedScopes.includes(scope.url)} 
+                              onCheckedChange={(checked) => {
+                                setSelectedScopes(prev => checked ? [...prev, scope.url] : prev.filter(s => s !== scope.url))
+                              }}
+                            />
+                            <label htmlFor={scope.url} className="text-[10px] font-mono font-bold text-slate-500 cursor-pointer flex-1 truncate pr-4">
+                              {scope.url}
+                            </label>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleCopyIndividualScope(scope.url)}
+                            className="h-8 w-8 text-slate-300 hover:text-primary shrink-0"
+                          >
+                            {copiedScope === scope.url ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          </Button>
                         </div>
                       ))}
                     </div>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => copyToClipboard(selectedScopes.join(', '), "Scopes")} 
-                      className="w-full border-slate-200 font-bold h-11"
-                    >
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy Selected Scopes
-                    </Button>
+                    <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+                       <Button 
+                        variant="outline" 
+                        onClick={() => copyToClipboard(selectedScopes.join(', '), "All Scopes")} 
+                        disabled={selectedScopes.length === 0}
+                        className="w-full border-slate-200 font-bold h-11 bg-white"
+                      >
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy Selected Comma-Separated List
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
 
-              <div className="flex justify-center pt-8 border-t border-slate-100">
-                 <Button onClick={handleVerify} disabled={isUpdating} className="h-14 px-12 text-lg font-bold shadow-xl shadow-primary/20 gap-3">
-                   {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-6 h-6" />}
-                   Verify and Activate Connection
+              <div className="flex flex-col items-center gap-6 pt-8 border-t border-slate-100">
+                 <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-100 max-w-lg text-center">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <p className="text-[10px] text-amber-700 font-bold leading-relaxed">
+                       Propagation of delegation settings typically takes 2-5 minutes in Google's systems.
+                    </p>
+                 </div>
+                 <Button onClick={handleVerify} disabled={isUpdating} className="h-14 px-16 text-lg font-bold shadow-xl shadow-primary/20 gap-3 group">
+                   {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-6 h-6 group-hover:scale-110 transition-transform" />}
+                   Verify & Activate Connection
                  </Button>
               </div>
             </div>

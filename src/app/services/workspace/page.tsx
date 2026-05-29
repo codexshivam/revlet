@@ -402,14 +402,14 @@ export default function WorkspaceManagementPage() {
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <h3 className="text-3xl font-headline font-bold text-amber-900">Workspace Verification in Progress</h3>
+                    <h3 className="text-3xl font-headline font-bold text-amber-900">Deployment Consultation in Progress</h3>
                     <p className="text-amber-700/80 max-w-xl mx-auto text-sm leading-relaxed font-medium">
-                      We are currently verifying the institutional credentials and DNS health for <span className="font-bold">{selectedOrg.domain}</span>. A network engineer will reach out to finalize your workspace deployment.
+                      Our engineering team is reviewing your deployment request for <span className="font-bold">{selectedOrg.domain}</span>. A specialist will call you shortly to discuss your organizational needs and finalize the Google Workspace setup.
                     </p>
                   </div>
                   <div className="bg-amber-100/50 p-4 rounded-lg border border-amber-200/50 max-w-lg mx-auto">
                     <p className="text-xs text-amber-800 font-bold leading-relaxed">
-                      Verification normally completes within 24 business hours. You will receive an email confirmation once the administrative panel is unlocked.
+                      Our team will reach out to you to clarify your doubts and get a proper concept of your workspace before we finalize the deployment.
                     </p>
                   </div>
                 </div>
@@ -481,7 +481,7 @@ export default function WorkspaceManagementPage() {
                          <div className="space-y-1">
                             <h4 className="text-sm font-bold text-slate-900">Step 3 & 4: Finalize in Google Admin</h4>
                             <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                              Navigate to <span className="font-bold">Security {'>'} API Controls {'>'} Manage Domain Wide Delegation</span>. 
+                              Navigate to <span className="font-bold">Security {'{'}'>'{'}' API Controls {'{'}'>'{'}' Manage Domain Wide Delegation</span>. 
                               Add a new API Client, paste the values copied above, and click <span className="font-bold text-slate-900">Authorize</span>.
                             </p>
                          </div>

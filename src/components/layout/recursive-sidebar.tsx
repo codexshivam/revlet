@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -67,8 +66,7 @@ export function RecursiveSidebar() {
       title: "GOOGLE WORKSPACE",
       icon: Shield,
       children: [
-        { title: "Workspace Hub", icon: LayoutGrid, href: "/services/workspace" },
-        { title: "Directory", icon: Users, href: "/services/workspace/users" },
+        { title: "Identity Directory", icon: Users, href: "/services/workspace/users" },
         { title: "Retention Archive", icon: Archive, href: "/services/workspace/archived" },
         { title: "Storage Policies", icon: HardDrive, href: "/services/workspace/storage" },
       ]

@@ -26,7 +26,9 @@ import {
   RefreshCw,
   ExternalLink,
   ChevronRight,
-  GraduationCap
+  GraduationCap,
+  Copy,
+  Check
 } from "lucide-react"
 import {
   AlertDialog,
@@ -89,6 +91,7 @@ export default function WorkspaceManagementPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string>("")
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [copiedScope, setCopiedScope] = useState<string | null>(null)
   
   // Dashboard state
   const [users, setUsers] = useState<WorkspaceUser[]>([])
@@ -179,7 +182,9 @@ export default function WorkspaceManagementPage() {
 
   const handleCopyScope = (url: string) => {
     navigator.clipboard.writeText(url)
+    setCopiedScope(url)
     toast({ title: "Scope Copied" })
+    setTimeout(() => setCopiedScope(null), 2000)
   }
 
   const directoryBreakdown = useMemo(() => {
@@ -321,7 +326,7 @@ export default function WorkspaceManagementPage() {
               <CardContent className="p-20 flex flex-col items-center text-center gap-6">
                 <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
                   <Clock className="w-10 h-10 text-amber-500" />
-                  <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white uppercase text-[8px]">PENDING</Badge>
+                  <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white uppercase text-[9px]">PENDING</Badge>
                 </div>
                 <div className="space-y-2">
                   <h3 className="text-2xl font-headline font-bold text-amber-900">Infrastructure Setup in Progress</h3>
@@ -337,48 +342,79 @@ export default function WorkspaceManagementPage() {
 
         {selectedOrg && selectedOrg.workspaceActive === true && !selectedOrg.managedWorkspace && (
           <div className="max-w-5xl mx-auto py-8 space-y-12">
-            <div className="space-y-6">
-              <h2 className="text-3xl font-headline font-bold text-slate-900">Connection Protocol</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  {[
-                    { s: "1", t: "Log In", d: "Access admin.google.com with your institutional account." },
-                    { s: "2", t: "Navigation", d: "Navigate to Security > API Controls > Manage Domain Wide Delegation." },
-                    { s: "3", t: "Registration", d: "Add a new client and paste the Client ID provided." },
-                    { s: "4", t: "Authorization", d: "Copy and paste each required scope and authorize." },
-                  ].map(step => (
-                    <div key={step.s} className="flex gap-4 p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 font-bold text-primary">{step.s}</div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm">{step.t}</h4>
-                        <p className="text-xs text-slate-500 font-medium leading-relaxed">{step.d}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <Card className="bg-slate-900 text-white p-8 space-y-8 h-fit">
-                   <div className="space-y-2">
-                     <Label className="text-[10px] font-bold uppercase text-slate-400">System Client ID</Label>
-                     <div className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-lg">
-                       <code className="text-xs font-mono font-bold text-primary">{SYSTEM_CLIENT_ID}</code>
-                       <Button variant="ghost" size="icon" onClick={() => {navigator.clipboard.writeText(SYSTEM_CLIENT_ID); toast({title: "Copied ID"})}} className="h-8 w-8 text-slate-400 hover:text-white"><Plus className="w-4 h-4" /></Button>
+            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
+               <CardHeader className="bg-slate-900 text-white p-6">
+                 <CardTitle className="text-xl font-headline font-bold">Connection Protocol</CardTitle>
+                 <p className="text-slate-400 text-xs mt-1">Authorized steps to delegate Domain-Wide access to the management platform.</p>
+               </CardHeader>
+               <CardContent className="p-8 space-y-10">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                     <div className="space-y-6">
+                        <div className="space-y-2">
+                           <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">Step 1 & 2: Console Navigation</h4>
+                           <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                             Login to <span className="font-bold text-slate-900 underline">admin.google.com</span> and navigate to 
+                             <span className="bg-slate-100 px-1.5 py-0.5 rounded mx-1">Security &gt; API Controls &gt; Manage Domain Wide Delegation</span>.
+                           </p>
+                        </div>
+                        <div className="space-y-2">
+                           <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">Step 3 & 4: API Client Authorization</h4>
+                           <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                             Click <span className="font-bold text-slate-900">Add new</span> and paste the Client ID provided. Then, copy and paste each of the required scopes below into the "OAuth scopes" field.
+                           </p>
+                        </div>
+                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex gap-3">
+                           <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
+                           <p className="text-[10px] text-primary font-bold leading-relaxed uppercase">
+                             Access is strictly limited to directory management and reports auditing as defined by these scopes.
+                           </p>
+                        </div>
                      </div>
-                   </div>
-                   <div className="space-y-4">
-                     <Label className="text-[10px] font-bold uppercase text-slate-400">Required Scopes</Label>
-                     <div className="space-y-2">
-                        {SCOPES.map(s => (
-                          <div key={s.url} className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-lg group">
-                            <code className="text-[9px] font-mono text-slate-400 truncate pr-4">{s.url}</code>
-                            <Button variant="ghost" size="icon" onClick={() => handleCopyScope(s.url)} className="h-6 w-6 text-slate-600 hover:text-white"><ArrowUpRight className="w-3 h-3" /></Button>
+
+                     <div className="space-y-8">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-bold uppercase text-slate-400">System Client ID</Label>
+                          <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg group">
+                            <code className="text-xs font-mono font-bold text-slate-700">{SYSTEM_CLIENT_ID}</code>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => {navigator.clipboard.writeText(SYSTEM_CLIENT_ID); toast({title: "Client ID Copied"})}} 
+                              className="h-8 w-8 text-slate-300 hover:text-primary transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
                           </div>
-                        ))}
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label className="text-[10px] font-bold uppercase text-slate-400">Required API Scopes</Label>
+                          <div className="space-y-2">
+                             {SCOPES.map(s => (
+                               <div key={s.url} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-lg group transition-all hover:border-primary/20">
+                                 <code className="text-[9px] font-mono text-slate-500 truncate pr-4">{s.url}</code>
+                                 <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => handleCopyScope(s.url)} 
+                                  className="h-6 w-6 text-slate-300 hover:text-primary transition-colors"
+                                 >
+                                   {copiedScope === s.url ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                 </Button>
+                               </div>
+                             ))}
+                          </div>
+                        </div>
                      </div>
-                   </div>
-                </Card>
-              </div>
+                  </div>
+               </CardContent>
+            </Card>
+            <div className="flex flex-col items-center pt-8 border-t">
+              <Button onClick={handleVerify} disabled={isUpdating} className="h-14 px-16 text-lg font-bold shadow-xl gap-3">
+                {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-6 h-6" />}
+                Verify & Activate Dashboard
+              </Button>
             </div>
-            <div className="flex flex-col items-center pt-8 border-t"><Button onClick={handleVerify} disabled={isUpdating} className="h-14 px-16 text-lg font-bold shadow-xl gap-3">{isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-6 h-6" />}Verify & Activate Dashboard</Button></div>
           </div>
         )}
 
@@ -387,7 +423,7 @@ export default function WorkspaceManagementPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="bg-white border-slate-200 shadow-sm flex flex-col justify-between h-56">
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cloud Roster</CardTitle>
+                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Directory Snapshot</CardTitle>
                   <Network className="w-4 h-4 text-slate-300" />
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col justify-center space-y-1">
@@ -398,7 +434,7 @@ export default function WorkspaceManagementPage() {
                     </div>
                   ))}
                   <Button variant="ghost" asChild className="w-full h-8 mt-4 text-[10px] font-bold text-primary hover:bg-primary/5">
-                    <Link href="/services/workspace/users">Manage Identities <ChevronRight className="w-3 h-3 ml-1" /></Link>
+                    <Link href="/services/workspace/users">Identity Management <ChevronRight className="w-3 h-3 ml-1" /></Link>
                   </Button>
                 </CardContent>
                 <div className="h-1 w-full bg-primary/20" />
@@ -413,12 +449,12 @@ export default function WorkspaceManagementPage() {
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-end">
                       <span className="text-2xl font-headline font-bold text-slate-900">{storageStats.used} TB</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">/ {storageStats.total} TB Capacity</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">/ {storageStats.total} TB Pool</span>
                     </div>
                     <Progress value={(parseFloat(storageStats.used.toString()) / storageStats.total) * 100} className="h-2.5 bg-slate-50" />
                   </div>
                   <Button variant="ghost" asChild className="w-full h-8 text-[10px] font-bold text-slate-400 hover:bg-slate-50">
-                    <Link href="/services/workspace/storage">Policy Controls <ChevronRight className="w-3 h-3 ml-1" /></Link>
+                    <Link href="/services/workspace/storage">Quota Policies <ChevronRight className="w-3 h-3 ml-1" /></Link>
                   </Button>
                 </CardContent>
                 <div className="h-1 w-full bg-emerald-500/20" />
@@ -427,14 +463,14 @@ export default function WorkspaceManagementPage() {
               <Card className="bg-primary text-primary-foreground border-none shadow-xl flex flex-col justify-between h-56 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-10"><Cloud className="w-32 h-32" /></div>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-[10px] font-bold uppercase tracking-widest opacity-80">Google Admin Center</CardTitle>
+                  <CardTitle className="text-[10px] font-bold uppercase tracking-widest opacity-80">System Gateway</CardTitle>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col justify-center space-y-4 px-6 z-10">
                   <div className="space-y-1">
-                    <h4 className="text-xl font-headline font-bold">Administrative Gateway</h4>
-                    <p className="text-[10px] opacity-80 leading-relaxed font-medium">Global policies and domain billing controls.</p>
+                    <h4 className="text-xl font-headline font-bold text-white">Google Admin Console</h4>
+                    <p className="text-[10px] opacity-80 leading-relaxed font-medium">Manage global security policies and billing direct.</p>
                   </div>
-                  <Button asChild className="w-full bg-white text-primary hover:bg-slate-50 font-bold h-11">
+                  <Button asChild className="w-full bg-white text-primary hover:bg-slate-50 font-bold h-11 border-none">
                     <a href="https://admin.google.com" target="_blank" rel="noopener noreferrer" className="gap-2">Open Console <ExternalLink className="w-4 h-4" /></a>
                   </Button>
                 </CardContent>
@@ -445,23 +481,24 @@ export default function WorkspaceManagementPage() {
               <CardHeader className="bg-slate-50/50 border-b border-slate-200 py-4 px-8 flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Bell className="w-4 h-4 text-slate-400" />
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Audit Activity Feed</CardTitle>
+                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Audit Activity Ledger</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 {activities.length === 0 ? (
-                  <div className="py-20 text-center text-slate-400 text-xs italic">Scanning system logs...</div>
+                  <div className="py-20 text-center text-slate-400 text-xs italic">Synchronizing real-time system logs...</div>
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {activities.map((log) => (
                       <div key={log.id} className="p-6 flex items-start justify-between hover:bg-slate-50 transition-colors">
                         <div className="flex gap-5">
-                          <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100"><Clock className="w-4 h-4 text-slate-400" /></div>
+                          <div className="p-2.5 bg-white rounded-xl border border-slate-100 shadow-sm shrink-0"><Clock className="w-4 h-4 text-slate-400" /></div>
                           <div className="space-y-1">
                             <span className="text-[10px] font-bold text-slate-300 uppercase tracking-tight">{log.time}</span>
-                            <p className="text-sm font-medium text-slate-700">{log.msg}</p>
+                            <p className="text-sm font-bold text-slate-700">{log.msg}</p>
                           </div>
                         </div>
+                        <Badge variant="outline" className="text-[9px] font-bold text-slate-400 uppercase tracking-widest h-6 border-slate-200">{log.type || 'SYSTEM'}</Badge>
                       </div>
                     ))}
                   </div>

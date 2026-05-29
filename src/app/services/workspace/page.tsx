@@ -98,6 +98,7 @@ interface Organization {
   workspaceStatus?: "unregistered" | "applied" | "pending" | "active"
   workspaceDomain?: string
   customUserTypes?: string[]
+  contactEmail?: string
 }
 
 interface WorkspaceUser {
@@ -111,10 +112,10 @@ interface WorkspaceUser {
 }
 
 const SCOPES = [
-  { label: "User Directory Management", url: "https://www.googleapis.com/auth/admin.directory.user" },
-  { label: "Organizational Unit Access", url: "https://www.googleapis.com/auth/admin.directory.orgunit" },
-  { label: "Customer Usage Reports", url: "https://www.googleapis.com/auth/admin.reports.usage.readonly" },
-  { label: "Directory Reports Read-Only", url: "https://www.googleapis.com/auth/admin.directory.customer.readonly" }
+  { url: "https://www.googleapis.com/auth/admin.directory.user" },
+  { url: "https://www.googleapis.com/auth/admin.directory.orgunit" },
+  { url: "https://www.googleapis.com/auth/admin.reports.usage.readonly" },
+  { url: "https://www.googleapis.com/auth/admin.directory.customer.readonly" }
 ]
 
 const SYSTEM_CLIENT_ID = "105450959878009279492"
@@ -157,8 +158,8 @@ export default function WorkspaceManagementPage() {
     
     setIsUsersLoading(true)
     const [usersRes, storageRes] = await Promise.all([
-      listWorkspaceUsers(),
-      getCustomerStorageUsage()
+      listWorkspaceUsers('/', selectedOrg.contactEmail),
+      getCustomerStorageUsage(selectedOrg.contactEmail)
     ])
 
     if (usersRes.success) setUsers(usersRes.data)
@@ -234,7 +235,7 @@ export default function WorkspaceManagementPage() {
       email: `${newUser.emailPrefix}@${selectedOrg.domain}`,
       password: newUser.password,
       orgUnitPath: `/${newUser.orgUnit}`
-    })
+    }, selectedOrg.contactEmail)
 
     if (res.success) {
       toast({ title: "User Created", description: `${newUser.firstName} has been added to the directory.` })
@@ -249,7 +250,7 @@ export default function WorkspaceManagementPage() {
   const handleArchiveUser = async (userId: string, currentStatus: string) => {
     const suspend = currentStatus === 'Active'
     setIsUpdating(true)
-    const res = await archiveUser(userId, suspend)
+    const res = await archiveUser(userId, suspend, selectedOrg?.contactEmail)
     if (res.success) {
       toast({ title: suspend ? "Account Suspended" : "Account Reactivated" })
       fetchWorkspaceData()
@@ -260,7 +261,7 @@ export default function WorkspaceManagementPage() {
   const handleDeleteUser = async (userId: string) => {
     if (!confirm("Are you sure? This action is permanent and wipes all data associated with the user account.")) return
     setIsUpdating(true)
-    const res = await deleteWorkspaceUser(userId)
+    const res = await deleteWorkspaceUser(userId, selectedOrg?.contactEmail)
     if (res.success) {
       toast({ title: "User Wiped", description: "The account and its data have been purged." })
       fetchWorkspaceData()
@@ -494,8 +495,8 @@ export default function WorkspaceManagementPage() {
                               setSelectedScopes(prev => checked ? [...prev, scope.url] : prev.filter(s => s !== scope.url))
                             }}
                           />
-                          <label htmlFor={scope.url} className="text-[10px] font-bold text-slate-600 uppercase cursor-pointer flex-1">
-                            {scope.label}
+                          <label htmlFor={scope.url} className="text-[9px] font-mono font-bold text-slate-500 cursor-pointer flex-1 break-all">
+                            {scope.url}
                           </label>
                         </div>
                       ))}
@@ -967,7 +968,7 @@ export default function WorkspaceManagementPage() {
                <Button 
                  onClick={async () => {
                    setIsUpdating(true)
-                   const res = await resetUserPassword(resetData.userId, resetData.newPassword, resetData.forceChange)
+                   const res = await resetUserPassword(resetData.userId, resetData.newPassword, resetData.forceChange, selectedOrg?.contactEmail)
                    if (res.success) {
                      toast({ title: "Password Updated", description: `Credentials for ${resetData.userName} have been reset.` })
                      setIsResetDialogOpen(false)

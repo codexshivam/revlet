@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { OrgSelector } from "@/components/org/org-selector"
@@ -39,7 +39,11 @@ import {
   Lock,
   ArrowRightLeft,
   MessageSquare,
-  Clock
+  Clock,
+  ChevronRight,
+  CheckCircle2,
+  X,
+  RefreshCw
 } from "lucide-react"
 import {
   Table,
@@ -66,11 +70,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { useUser, useFirestore } from "@/firebase"
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, arrayUnion } from "firebase/firestore"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { 
+  listWorkspaceUsers, 
+  createWorkspaceUser, 
+  updateWorkspaceUser, 
+  resetUserPassword, 
+  archiveUser, 
+  deleteWorkspaceUser,
+  listOrgUnits,
+  createOrgUnit,
+  getCustomerStorageUsage
+} from "@/app/actions/google-workspace"
 
 interface Organization {
   id: string
@@ -84,17 +100,24 @@ interface Organization {
   customUserTypes?: string[]
 }
 
-const SCOPES = [
-  "https://www.googleapis.com/auth/admin.directory.user",
-  "https://www.googleapis.com/auth/admin.directory.orgunit",
-  "https://www.googleapis.com/auth/admin.reports.usage.readonly"
-].join(", ")
+interface WorkspaceUser {
+  id: string
+  name: string
+  email: string
+  status: string
+  storage: string
+  archived: boolean
+  orgUnitPath: string
+}
 
-const ALERT_LOGS = [
-  { id: 1, type: "CRITICAL", msg: "Multiple failed login attempts detected on administrative account", time: "2m ago" },
-  { id: 2, type: "WARNING", msg: "Students OU collective storage has reached 88% capacity", time: "1h ago" },
-  { id: 3, type: "INFO", msg: "Directory sync executed successfully", time: "4h ago" },
+const SCOPES = [
+  { label: "User Directory Management", url: "https://www.googleapis.com/auth/admin.directory.user" },
+  { label: "Organizational Unit Access", url: "https://www.googleapis.com/auth/admin.directory.orgunit" },
+  { label: "Customer Usage Reports", url: "https://www.googleapis.com/auth/admin.reports.usage.readonly" },
+  { label: "Directory Reports Read-Only", url: "https://www.googleapis.com/auth/admin.directory.customer.readonly" }
 ]
+
+const SYSTEM_CLIENT_ID = "105450959878009279492"
 
 export default function WorkspaceManagementPage() {
   const { toast } = useToast()
@@ -109,11 +132,39 @@ export default function WorkspaceManagementPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string>("")
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
+  
+  // Connection state
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(SCOPES.map(s => s.url))
+  
+  // Dashboard state
+  const [users, setUsers] = useState<WorkspaceUser[]>([])
+  const [isUsersLoading, setIsUsersLoading] = useState(false)
+  const [storageStats, setStorageStats] = useState({ used: 0, total: 10 })
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
   const [isOUDialogOpen, setIsOUDialogOpen] = useState(false)
   const [isApplyConfirmOpen, setIsApplyConfirmOpen] = useState(false)
+  
+  // Form states
+  const [newUser, setNewUser] = useState({ firstName: "", lastName: "", emailPrefix: "", password: "", orgUnit: "" })
+  const [resetData, setResetData] = useState({ userId: "", userName: "", newPassword: "", forceChange: true })
   const [newOUType, setNewOUType] = useState("")
   
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
+
+  const fetchWorkspaceData = useCallback(async () => {
+    if (!selectedOrg?.managedWorkspace) return
+    
+    setIsUsersLoading(true)
+    const [usersRes, storageRes] = await Promise.all([
+      listWorkspaceUsers(),
+      getCustomerStorageUsage()
+    ])
+
+    if (usersRes.success) setUsers(usersRes.data)
+    if (storageRes.success) setStorageStats(storageRes.data)
+    setIsUsersLoading(false)
+  }, [selectedOrg])
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -128,6 +179,12 @@ export default function WorkspaceManagementPage() {
     })
     return unsub
   }, [user, authLoading, db, selectedOrgId])
+
+  useEffect(() => {
+    if (selectedOrg?.managedWorkspace) {
+      fetchWorkspaceData()
+    }
+  }, [selectedOrg, fetchWorkspaceData])
 
   const handleDeclare = async (active: boolean) => {
     if (!selectedOrg) return
@@ -147,13 +204,9 @@ export default function WorkspaceManagementPage() {
     const orgRef = doc(db, "organizations", selectedOrg.id)
     updateDoc(orgRef, {
       workspaceStatus: "pending",
-      workspaceAppliedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     }).then(() => {
-      toast({ 
-        title: "Application Submitted", 
-        description: "Your workspace application is now under institutional review." 
-      })
+      toast({ title: "Request Logged", description: "Our engineering team will contact you shortly." })
       setIsApplyConfirmOpen(false)
     }).finally(() => setIsUpdating(false))
   }
@@ -172,19 +225,57 @@ export default function WorkspaceManagementPage() {
     }).finally(() => setIsUpdating(false))
   }
 
+  const handleCreateUser = async () => {
+    if (!selectedOrg) return
+    setIsUpdating(true)
+    const res = await createWorkspaceUser({
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
+      email: `${newUser.emailPrefix}@${selectedOrg.domain}`,
+      password: newUser.password,
+      orgUnitPath: `/${newUser.orgUnit}`
+    })
+
+    if (res.success) {
+      toast({ title: "User Created", description: `${newUser.firstName} has been added to the directory.` })
+      setIsCreateDialogOpen(false)
+      fetchWorkspaceData()
+    } else {
+      toast({ variant: "destructive", title: "Creation Failed", description: res.error })
+    }
+    setIsUpdating(false)
+  }
+
+  const handleArchiveUser = async (userId: string, currentStatus: string) => {
+    const suspend = currentStatus === 'Active'
+    setIsUpdating(true)
+    const res = await archiveUser(userId, suspend)
+    if (res.success) {
+      toast({ title: suspend ? "Account Suspended" : "Account Reactivated" })
+      fetchWorkspaceData()
+    }
+    setIsUpdating(false)
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("Are you sure? This action is permanent and wipes all data associated with the user account.")) return
+    setIsUpdating(true)
+    const res = await deleteWorkspaceUser(userId)
+    if (res.success) {
+      toast({ title: "User Wiped", description: "The account and its data have been purged." })
+      fetchWorkspaceData()
+    }
+    setIsUpdating(false)
+  }
+
   const handleAddUserType = async () => {
     if (!selectedOrg || !newOUType) return
-    if ((selectedOrg.customUserTypes?.length || 0) >= 5) {
-      toast({ variant: "destructive", title: "Limit Reached", description: "You can define a maximum of 5 custom user types." })
-      return
-    }
-    
     setIsUpdating(true)
     const orgRef = doc(db, "organizations", selectedOrg.id)
     updateDoc(orgRef, {
       customUserTypes: arrayUnion(newOUType)
     }).then(() => {
-      toast({ title: "User Type Added", description: `"${newOUType}" has been registered as a new OU.` })
+      toast({ title: "User Type Registered", description: `"${newOUType}" OU created.` })
       setNewOUType("")
       setIsOUDialogOpen(false)
     }).finally(() => setIsUpdating(false))
@@ -200,43 +291,6 @@ export default function WorkspaceManagementPage() {
     : ["Users", "Main People"]
   
   const allOUs = [...defaultOUs, ...(selectedOrg?.customUserTypes || [])]
-
-  // Dynamic Features for Declaration Panel
-  const declarationFeatures = selectedOrg?.gEducation 
-    ? [
-        { 
-          title: "Academic Directory", 
-          desc: "High-density management for students, teachers, and faculty with rapid organizational unit (OU) assignment.", 
-          icon: GraduationCap 
-        },
-        { 
-          title: "Collective Storage", 
-          desc: "Visualize and control your 100TB institutional pool. Set hard quotas for different academic levels effortlessly.", 
-          icon: HardDrive 
-        },
-        { 
-          title: "Institutional Safety", 
-          desc: "Automated policy enforcement and security defaults tailored for educational environments and student data protection.", 
-          icon: ShieldCheck 
-        }
-      ]
-    : [
-        { 
-          title: "Simple Management", 
-          desc: "We remove Google's administrative complexity. Manage thousands of users and group storage from a single crisp dashboard.", 
-          icon: Zap 
-        },
-        { 
-          title: "Matter-Only Focus", 
-          desc: "A streamlined surface designed for rapid institutional oversight, cutting down manual administrative task time by 70%.", 
-          icon: Users 
-        },
-        { 
-          title: "Zero Configuration", 
-          desc: "Automated policy enforcement and standard institutional security defaults deployed directly to your domain.", 
-          icon: Lock 
-        }
-      ]
 
   if (isLoading || authLoading) {
     return (
@@ -269,33 +323,17 @@ export default function WorkspaceManagementPage() {
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {/* 1. Declaration View */}
+        {/* State 1: Declaration */}
         {selectedOrg && selectedOrg.workspaceActive === undefined && (
-          <Card className="bg-slate-50 border-slate-200 border-dashed animate-in slide-in-from-bottom-2 duration-500">
+          <Card className="bg-slate-50 border-slate-200 border-dashed">
             <CardContent className="p-16 flex flex-col items-center text-center gap-10">
-              <div className="space-y-8 w-full">
-                <div className="space-y-3">
-                  <h3 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Managed Workspace for You</h3>
-                  <div className="space-y-1">
-                    <p className="text-primary font-bold text-sm tracking-widest uppercase">Most Simplest and Effective Way to Manage Infrastructure Globally</p>
-                    <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed font-medium">
-                      Select your institution's current workspace status to activate the managed administrative interface and automated security protocols for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span>.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left">
-                  {declarationFeatures.map((feat) => (
-                    <div key={feat.title} className="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-4 group hover:border-primary/20 transition-all">
-                      <div className="p-3 bg-slate-50 rounded-xl w-fit group-hover:bg-primary/5 transition-colors">
-                        <feat.icon className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <h4 className="text-sm font-bold text-slate-900">{feat.title}</h4>
-                        <p className="text-xs text-slate-500 leading-relaxed font-medium">{feat.desc}</p>
-                      </div>
-                    </div>
-                  ))}
+              <div className="space-y-3">
+                <h3 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Managed Workspace for You</h3>
+                <div className="space-y-1">
+                  <p className="text-primary font-bold text-sm tracking-widest uppercase">Most Simplest and Effective Way to Manage Infrastructure Globally</p>
+                  <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed font-medium">
+                    Select your institution's current workspace status to activate the managed administrative interface and automated security protocols.
+                  </p>
                 </div>
               </div>
               
@@ -321,23 +359,21 @@ export default function WorkspaceManagementPage() {
           </Card>
         )}
 
-        {/* 2. Apply View (Declaration: False) */}
-        {selectedOrg && selectedOrg.workspaceActive === false && selectedOrg.workspaceStatus !== "pending" && !selectedOrg.managedWorkspace && (
-          <div className="max-w-5xl mx-auto py-8 space-y-12 animate-in slide-in-from-bottom-4">
+        {/* State 2: Apply (Pending deployment call) */}
+        {selectedOrg && selectedOrg.workspaceActive === false && selectedOrg.workspaceStatus !== 'pending' && (
+          <div className="max-w-5xl mx-auto py-8 space-y-12">
             <div className="text-center space-y-4">
-              <h2 className="text-4xl font-headline font-bold text-slate-900">
-                {selectedOrg.gEducation ? "Academic Cloud Deployment" : "Enterprise Cloud Deployment"}
-              </h2>
+              <h2 className="text-4xl font-headline font-bold text-slate-900">Institutional Cloud Deployment</h2>
               <p className="text-slate-500 text-lg max-w-2xl mx-auto font-medium">
-                Access professional collaboration tools for your entire organization. Eligible {selectedOrg.gEducation ? "educational institutions" : "organizations"} can scale their infrastructure with zero license overhead.
+                Access professional collaboration tools for your entire organization with zero license overhead for eligible institutions.
               </p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
                 { title: "Managed Onboarding", desc: "Our team handles the verification and DNS setup for your institutional domain.", icon: Zap, color: "text-blue-500 bg-blue-50" },
-                { title: selectedOrg.gEducation ? "EDU Exclusive" : "Enterprise Ready", desc: selectedOrg.gEducation ? "Unlock 100TB of collective storage and advanced teaching tools." : "Unlock advanced administrative tools and high-capacity secure storage.", icon: GraduationCap, color: "text-emerald-500 bg-emerald-50" },
-                { title: "Security First", desc: "DLP rules and advanced threat protection enabled by default for your protection.", icon: Lock, color: "text-purple-500 bg-purple-50" },
+                { title: "EDU Exclusive", desc: "Unlock 100TB of collective storage and advanced teaching tools.", icon: GraduationCap, color: "text-emerald-500 bg-emerald-50" },
+                { title: "Security First", desc: "DLP rules and advanced threat protection enabled by default.", icon: Lock, color: "text-purple-500 bg-purple-50" },
               ].map((feat) => (
                 <Card key={feat.title} className="bg-white border-slate-200 shadow-sm p-8 space-y-4">
                   <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", feat.color)}>
@@ -350,12 +386,7 @@ export default function WorkspaceManagementPage() {
             </div>
 
             <div className="flex justify-center">
-              <Button 
-                onClick={() => setIsApplyConfirmOpen(true)}
-                size="lg" 
-                className="h-14 px-12 text-lg font-bold shadow-xl shadow-primary/20 gap-3"
-              >
-                <Globe className="w-5 h-5" />
+              <Button onClick={() => setIsApplyConfirmOpen(true)} size="lg" className="h-14 px-12 text-lg font-bold shadow-xl">
                 Apply for Institutional Workspace
               </Button>
             </div>
@@ -365,128 +396,133 @@ export default function WorkspaceManagementPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle className="font-headline font-bold">Confirm Application Request?</AlertDialogTitle>
                   <AlertDialogDescription className="text-sm leading-relaxed">
-                    This will initiate the Google Workspace deployment request for <span className="font-bold">{selectedOrg.domain}</span>. Our engineering team will contact you to discuss your specific infrastructure plan before finalized setup.
+                    This will initiate a Google Workspace deployment request for <span className="font-bold">{selectedOrg.domain}</span>. Our engineering team will contact you to discuss the plan and finalize deployment.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction 
-                    onClick={handleApply}
-                    className="bg-slate-900 text-white font-bold"
-                  >
-                    Confirm & Apply
-                  </AlertDialogAction>
+                  <AlertDialogAction onClick={handleApply} className="bg-slate-900 text-white font-bold">Confirm & Apply</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           </div>
         )}
 
-        {/* Pending View */}
-        {selectedOrg && selectedOrg.workspaceStatus === "pending" && !selectedOrg.managedWorkspace && (
-          <div className="max-w-5xl mx-auto py-20 animate-in fade-in duration-700">
+        {/* State 3: Pending Engineering Call */}
+        {selectedOrg && selectedOrg.workspaceStatus === 'pending' && !selectedOrg.managedWorkspace && (
+          <div className="max-w-4xl mx-auto py-20">
             <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
-              <CardContent className="p-20 flex flex-col items-center text-center gap-8">
-                <div className="relative">
-                  <div className="w-24 h-24 rounded-full bg-white border-primary/20 flex items-center justify-center shadow-sm relative">
-                    <Clock className="w-12 h-12 text-amber-500" />
-                    <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white uppercase text-[9px] px-2 h-5">
-                      PENDING
-                    </Badge>
-                  </div>
+              <CardContent className="p-20 flex flex-col items-center text-center gap-6">
+                <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
+                  <Clock className="w-10 h-10 text-amber-500" />
+                  <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white">PENDING</Badge>
                 </div>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <h3 className="text-3xl font-headline font-bold text-amber-900">Infrastructure Setup in Progress</h3>
-                    <p className="text-amber-700/80 max-w-xl mx-auto text-sm leading-relaxed font-medium">
-                      Our engineering team is reviewing your request for <span className="font-bold">{selectedOrg.domain}</span>. A specialist from our team will contact you shortly to discuss your specific plan and finalized the Google Workspace deployment.
-                    </p>
-                  </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-headline font-bold text-amber-900">Infrastructure Setup in Progress</h3>
+                  <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
+                    Our engineering team will call you shortly to discuss your institutional plan and finalize the Google Workspace deployment for <span className="font-bold">{selectedOrg.domain}</span>.
+                  </p>
                 </div>
-                <div className="flex gap-4">
-                  <Link href="/support">
-                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-12 px-10">
-                      <MessageSquare className="w-4 h-4" />
-                      Contact Support
-                    </Button>
-                  </Link>
-                </div>
+                <Link href="/support">
+                  <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    Contact Support
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* 3. Connection Guidelines (Declaration: True, Managed: False) */}
+        {/* State 4: Migration Guideline (DWD Authorization) */}
         {selectedOrg && selectedOrg.workspaceActive === true && !selectedOrg.managedWorkspace && (
-          <div className="max-w-4xl mx-auto py-8">
-            <div className="space-y-8">
-              <div className="text-center space-y-2">
-                <Badge className="bg-blue-50 text-blue-600 border-blue-100 mb-2">MIGRATION PROTOCOL</Badge>
-                <h2 className="text-2xl font-headline font-bold text-slate-900">Authorize Domain-Wide Delegation</h2>
-                <p className="text-slate-500 text-sm font-medium">Follow these steps to securely link your Google Admin environment to our platform.</p>
+          <div className="max-w-5xl mx-auto py-8 space-y-12">
+            <div className="text-center space-y-2">
+              <Badge className="bg-blue-50 text-blue-600 border-blue-100 mb-2">MIGRATION PROTOCOL</Badge>
+              <h2 className="text-3xl font-headline font-bold text-slate-900">Authorize Domain-Wide Delegation</h2>
+              <p className="text-slate-500 text-sm font-medium">Follow these steps to securely link your Google Admin environment to our management platform.</p>
+            </div>
+
+            <div className="space-y-6">
+              <Card className="bg-slate-900 text-white p-8">
+                 <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                       <Settings className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="space-y-2">
+                       <h4 className="text-lg font-bold">Step-by-Step Instructions</h4>
+                       <ol className="text-xs text-slate-400 space-y-2 list-decimal pl-4 leading-relaxed font-medium">
+                          <li>Log in to your <strong>Google Admin Console</strong> with super-admin credentials.</li>
+                          <li>Navigate to <strong>Security &gt; API Controls &gt; Manage Domain Wide Delegation</strong>.</li>
+                          <li>Click <strong>Add new</strong> to register a new API client.</li>
+                          <li>Copy the <strong>System Client ID</strong> below and paste it into the "Client ID" field.</li>
+                          <li>Select the required <strong>API Scopes</strong> from the checklist and copy the comma-separated list into the "OAuth Scopes" field.</li>
+                          <li>Click <strong>Authorize</strong> to finalize the connection.</li>
+                       </ol>
+                    </div>
+                 </div>
+              </Card>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <Card className="bg-white border-slate-200 shadow-sm flex flex-col">
+                  <CardHeader className="py-4 px-6 border-b border-slate-100">
+                    <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System Client ID</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 flex-1 flex flex-col justify-between gap-4">
+                    <code className="text-lg font-mono font-bold text-primary block text-center py-4 bg-slate-50 rounded-lg border border-slate-100">
+                      {SYSTEM_CLIENT_ID}
+                    </code>
+                    <Button onClick={() => copyToClipboard(SYSTEM_CLIENT_ID, "Client ID")} className="w-full bg-slate-900 text-white font-bold h-11">
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy Client ID
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white border-slate-200 shadow-sm flex flex-col">
+                  <CardHeader className="py-4 px-6 border-b border-slate-100">
+                    <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Required API Scopes</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 space-y-4">
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto no-scrollbar">
+                      {SCOPES.map((scope) => (
+                        <div key={scope.url} className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                          <Checkbox 
+                            id={scope.url} 
+                            checked={selectedScopes.includes(scope.url)} 
+                            onCheckedChange={(checked) => {
+                              setSelectedScopes(prev => checked ? [...prev, scope.url] : prev.filter(s => s !== scope.url))
+                            }}
+                          />
+                          <label htmlFor={scope.url} className="text-[10px] font-bold text-slate-600 uppercase cursor-pointer flex-1">
+                            {scope.label}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => copyToClipboard(selectedScopes.join(', '), "Scopes")} 
+                      className="w-full border-slate-200 font-bold h-11"
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy Selected Scopes
+                    </Button>
+                  </CardContent>
+                </Card>
               </div>
 
-              <div className="grid gap-6">
-                {[
-                  {
-                    step: 1,
-                    title: "System Client ID",
-                    content: "982734982734-edu-revlet.apps.googleusercontent.com",
-                    action: () => copyToClipboard("982734982734-edu-revlet.apps.googleusercontent.com", "Client ID")
-                  },
-                  {
-                    step: 2,
-                    title: "Authorized API Scopes",
-                    content: SCOPES,
-                    action: () => copyToClipboard(SCOPES, "API Scopes")
-                  }
-                ].map((item) => (
-                  <Card key={item.step} className="bg-white border-slate-200 shadow-sm">
-                    <CardHeader className="py-4 px-6 border-b border-slate-100 flex flex-row items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center">
-                          {item.step}
-                        </div>
-                        <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-600">{item.title}</CardTitle>
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={item.action} className="h-8 text-primary font-bold text-[10px] uppercase gap-1.5">
-                        <Copy className="w-3 h-3" />
-                        Copy String
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="p-6 bg-slate-50/50">
-                      <code className="text-xs font-mono text-slate-500 break-all leading-relaxed">
-                        {item.content}
-                      </code>
-                    </CardContent>
-                  </Card>
-                ))}
-
-                <Card className="bg-white border-slate-200 shadow-sm p-6">
-                   <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-                         <Settings className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div className="space-y-4">
-                         <div className="space-y-1">
-                            <h4 className="text-sm font-bold text-slate-900">Step 3 & 4: Finalize in Google Admin</h4>
-                            <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                              Navigate to <span className="font-bold">Security &gt; API Controls &gt; Manage Domain Wide Delegation</span>. 
-                              Add a new API Client, paste the values copied above, and click <span className="font-bold text-slate-900">Authorize</span>.
-                            </p>
-                         </div>
-                         <Button onClick={handleVerify} disabled={isUpdating} className="bg-slate-900 text-white font-bold h-11 px-8 shadow-xl">
-                           {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Verify and Activate Connection"}
-                         </Button>
-                      </div>
-                   </div>
-                </Card>
+              <div className="flex justify-center pt-8 border-t border-slate-100">
+                 <Button onClick={handleVerify} disabled={isUpdating} className="h-14 px-12 text-lg font-bold shadow-xl shadow-primary/20 gap-3">
+                   {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-6 h-6" />}
+                   Verify and Activate Connection
+                 </Button>
               </div>
             </div>
           </div>
         )}
 
-        {/* 4. Active Management Dashboard */}
+        {/* State 5: Active Management Dashboard */}
         {selectedOrg && selectedOrg.managedWorkspace === true && (
           <Tabs value={currentTab} onValueChange={(v) => router.push(`/services/workspace?tab=${v}`)} className="space-y-8">
             <div className="flex items-center justify-between border-b border-slate-200 pb-1">
@@ -501,6 +537,10 @@ export default function WorkspaceManagementPage() {
                   </TabsTrigger>
                 ))}
               </TabsList>
+              <Button variant="ghost" size="sm" onClick={fetchWorkspaceData} disabled={isUsersLoading} className="h-8 text-xs font-bold gap-2">
+                <RefreshCw className={cn("w-3 h-3", isUsersLoading && "animate-spin")} />
+                Sync Data
+              </Button>
             </div>
 
             <TabsContent value="hub" className="m-0 space-y-8">
@@ -535,21 +575,19 @@ export default function WorkspaceManagementPage() {
               </div>
 
               <Card className="bg-white border-slate-200 shadow-sm">
-                <CardHeader className="py-4 px-6 border-b border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                       <HardDrive className="w-4 h-4 text-slate-400" />
-                       <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Storage Pool</CardTitle>
-                    </div>
-                    <span className="text-[11px] font-bold text-slate-900">4.8 TB / 10.0 TB</span>
+                <CardHeader className="py-4 px-6 border-b border-slate-100 flex flex-row items-center justify-between">
+                  <div className="flex items-center gap-2">
+                     <HardDrive className="w-4 h-4 text-slate-400" />
+                     <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Storage Pool</CardTitle>
                   </div>
+                  <span className="text-[11px] font-bold text-slate-900">{storageStats.used} TB / {storageStats.total} TB</span>
                 </CardHeader>
                 <CardContent className="p-8">
                   <div className="space-y-4">
-                    <Progress value={48} className="h-2.5 bg-slate-100" />
+                    <Progress value={(storageStats.used / storageStats.total) * 100} className="h-2.5 bg-slate-100" />
                     <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                       <span>48% Utilised</span>
-                       <span>5.2 TB Available</span>
+                       <span>{Math.round((storageStats.used / storageStats.total) * 100)}% Utilised</span>
+                       <span>{(storageStats.total - storageStats.used).toFixed(1)} TB Available</span>
                     </div>
                   </div>
                 </CardContent>
@@ -565,7 +603,11 @@ export default function WorkspaceManagementPage() {
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y divide-slate-100">
-                      {ALERT_LOGS.map((log) => (
+                      {[
+                        { id: 1, type: "CRITICAL", msg: "Multiple failed login attempts detected on administrative account", time: "2m ago" },
+                        { id: 2, type: "WARNING", msg: "Students OU collective storage has reached 88% capacity", time: "1h ago" },
+                        { id: 3, type: "INFO", msg: "Directory sync executed successfully", time: "4h ago" },
+                      ].map((log) => (
                         <div key={log.id} className="p-5 flex items-start justify-between hover:bg-slate-50/50 transition-colors">
                           <div className="flex gap-4">
                             <Badge className={cn(
@@ -599,9 +641,11 @@ export default function WorkspaceManagementPage() {
                         Secure gateway to Google's master control panel for advanced policy enforcement.
                       </p>
                     </div>
-                    <Button className="w-full bg-white text-slate-900 hover:bg-slate-100 font-bold h-12 group">
-                      Launch Console
-                      <ArrowUpRight className="w-4 h-4 ml-2 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    <Button asChild className="w-full bg-white text-slate-900 hover:bg-slate-100 font-bold h-12 group">
+                      <a href="https://admin.google.com" target="_blank" rel="noopener noreferrer">
+                        Launch Console
+                        <ArrowUpRight className="w-4 h-4 ml-2 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </a>
                     </Button>
                   </div>
                 </Card>
@@ -633,58 +677,101 @@ export default function WorkspaceManagementPage() {
                           </Button>
                         </div>
                         <div className="flex items-center gap-3 w-full md:w-auto">
-                          <div className="relative flex-1 md:w-64">
-                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                             <Input placeholder="Search directory..." className="h-9 pl-8 text-xs font-medium bg-white border-slate-200" />
-                          </div>
-                          <Button size="sm" className="h-9 font-bold px-4 gap-2 bg-slate-900 text-white">
+                          <Button onClick={() => setIsCreateDialogOpen(true)} size="sm" className="h-9 font-bold px-4 gap-2 bg-slate-900 text-white">
                              <UserPlus className="w-3.5 h-3.5" />
                              Create User
                           </Button>
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="p-0">
-                      {allOUs.map((ou) => (
-                        <TabsContent key={ou} value={ou.toLowerCase()} className="m-0">
-                           <Table>
-                             <TableHeader className="bg-slate-50/30">
-                               <TableRow className="border-b border-slate-100">
-                                 <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 w-1/3">User Identity</TableHead>
-                                 <TableHead className="text-[10px] font-bold uppercase py-4">Workspace Email</TableHead>
-                                 <TableHead className="text-[10px] font-bold uppercase py-4">Storage Usage</TableHead>
-                                 <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Actions</TableHead>
-                               </TableRow>
-                             </TableHeader>
-                             <TableBody>
-                               {[1, 2, 3].map((i) => (
-                                 <TableRow key={i} className="hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0">
-                                   <TableCell className="pl-8 py-5">
-                                      <div className="flex items-center gap-3">
-                                         <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-400">
-                                            {ou.substring(0, 1)}
-                                         </div>
-                                         <div className="flex flex-col">
-                                            <span className="text-sm font-bold text-slate-800">Sample User {i}</span>
-                                            <Badge variant="outline" className="text-[8px] font-bold h-4 w-fit px-1 bg-emerald-50 text-emerald-600 border-emerald-100">ACTIVE</Badge>
-                                         </div>
-                                      </div>
-                                   </TableCell>
-                                   <TableCell className="font-mono text-xs text-slate-500 font-medium">user.{i}@{selectedOrg?.domain}</TableCell>
-                                   <TableCell className="text-xs font-bold text-slate-600">0.5 GB</TableCell>
-                                   <TableCell className="text-right pr-8">
-                                      <div className="flex items-center justify-end gap-1">
-                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary"><Settings className="w-3.5 h-3.5" /></Button>
-                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary"><Key className="w-3.5 h-3.5" /></Button>
-                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500"><Archive className="w-3.5 h-3.5" /></Button>
-                                      </div>
-                                   </TableCell>
+                    <CardContent className="p-0 min-h-[400px]">
+                      {isUsersLoading ? (
+                        <div className="py-40 flex flex-col items-center justify-center gap-3">
+                           <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
+                           <p className="text-[10px] font-bold text-slate-400 uppercase">Indexing Directory...</p>
+                        </div>
+                      ) : (
+                        allOUs.map((ou) => (
+                          <TabsContent key={ou} value={ou.toLowerCase()} className="m-0">
+                             <Table>
+                               <TableHeader className="bg-slate-50/30">
+                                 <TableRow className="border-b border-slate-100">
+                                   <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 w-1/3">User Identity</TableHead>
+                                   <TableHead className="text-[10px] font-bold uppercase py-4">Workspace Email</TableHead>
+                                   <TableHead className="text-[10px] font-bold uppercase py-4">Storage Usage</TableHead>
+                                   <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Actions</TableHead>
                                  </TableRow>
-                               ))}
-                             </TableBody>
-                           </Table>
-                        </TabsContent>
-                      ))}
+                               </TableHeader>
+                               <TableBody>
+                                 {users.filter(u => u.orgUnitPath === `/${ou}`).length === 0 ? (
+                                   <TableRow>
+                                      <TableCell colSpan={4} className="py-24 text-center text-slate-400 text-xs italic">
+                                         No users found in the {ou} organizational unit.
+                                      </TableCell>
+                                   </TableRow>
+                                 ) : (
+                                   users.filter(u => u.orgUnitPath === `/${ou}`).map((u) => (
+                                     <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0">
+                                       <TableCell className="pl-8 py-5">
+                                          <div className="flex items-center gap-3">
+                                             <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase">
+                                                {u.name.substring(0, 1)}
+                                             </div>
+                                             <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-slate-800">{u.name}</span>
+                                                <Badge variant="outline" className={cn(
+                                                  "text-[8px] font-bold h-4 w-fit px-1 shadow-none border",
+                                                  u.status === 'Active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-red-50 text-red-600 border-red-100"
+                                                )}>
+                                                  {u.status.toUpperCase()}
+                                                </Badge>
+                                             </div>
+                                          </div>
+                                       </TableCell>
+                                       <TableCell className="font-mono text-xs text-slate-500 font-medium">{u.email}</TableCell>
+                                       <TableCell className="text-xs font-bold text-slate-600">{u.storage}</TableCell>
+                                       <TableCell className="text-right pr-8">
+                                          <div className="flex items-center justify-end gap-1">
+                                             <Button 
+                                               variant="ghost" 
+                                               size="icon" 
+                                               title="Reset Password"
+                                               onClick={() => {
+                                                 setResetData({ userId: u.id, userName: u.name, newPassword: "", forceChange: true })
+                                                 setIsResetDialogOpen(true)
+                                               }}
+                                               className="h-8 w-8 text-slate-400 hover:text-primary"
+                                             >
+                                               <Key className="w-3.5 h-3.5" />
+                                             </Button>
+                                             <Button 
+                                               variant="ghost" 
+                                               size="icon" 
+                                               title={u.status === 'Active' ? "Archive Account" : "Activate Account"}
+                                               onClick={() => handleArchiveUser(u.id, u.status)}
+                                               className="h-8 w-8 text-slate-400 hover:text-amber-500"
+                                             >
+                                               <Archive className="w-3.5 h-3.5" />
+                                             </Button>
+                                             <Button 
+                                               variant="ghost" 
+                                               size="icon" 
+                                               title="Delete Permanently"
+                                               onClick={() => handleDeleteUser(u.id)}
+                                               className="h-8 w-8 text-slate-400 hover:text-red-500"
+                                             >
+                                               <Trash2 className="w-3.5 h-3.5" />
+                                             </Button>
+                                          </div>
+                                       </TableCell>
+                                     </TableRow>
+                                   ))
+                                 )}
+                               </TableBody>
+                             </Table>
+                          </TabsContent>
+                        ))
+                      )}
                     </CardContent>
                  </Tabs>
                </Card>
@@ -731,12 +818,12 @@ export default function WorkspaceManagementPage() {
                        <div className="flex items-center gap-3">
                           <div className="relative flex-1">
                              <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                             <Input type="date" className="pl-10 h-10 border-slate-200 text-xs" />
+                             <Input type="date" className="pl-10 h-10 border-slate-200 text-xs font-bold" />
                           </div>
                           <span className="text-slate-300 text-xs font-bold">to</span>
                           <div className="relative flex-1">
                              <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                             <Input type="date" className="pl-10 h-10 border-slate-200 text-xs" />
+                             <Input type="date" className="pl-10 h-10 border-slate-200 text-xs font-bold" />
                           </div>
                        </div>
                     </div>
@@ -746,37 +833,47 @@ export default function WorkspaceManagementPage() {
                <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                  <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6 flex flex-row items-center justify-between">
                     <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Archived Retention Ledger</CardTitle>
-                    <Badge variant="outline" className="text-[10px] font-bold text-slate-400">Archived Records</Badge>
+                    <Badge variant="outline" className="text-[10px] font-bold text-slate-400 px-2 h-5 bg-white border-slate-200">
+                      {users.filter(u => u.archived).length} Archived Records
+                    </Badge>
                  </CardHeader>
-                 <CardContent className="p-0">
+                 <CardContent className="p-0 min-h-[300px]">
                     <Table>
                       <TableHeader className="bg-slate-50/30">
                          <TableRow className="border-b border-slate-100">
                            <TableHead className="text-[10px] font-bold uppercase py-4 pl-8">Former Identity</TableHead>
                            <TableHead className="text-[10px] font-bold uppercase py-4">Original Type</TableHead>
-                           <TableHead className="text-[10px] font-bold uppercase py-4">Deactivation Date</TableHead>
-                           <TableHead className="text-[10px] font-bold uppercase py-4">Storage Saved</TableHead>
+                           <TableHead className="text-[10px] font-bold uppercase py-4">Status</TableHead>
                            <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Actions</TableHead>
                          </TableRow>
                       </TableHeader>
                       <TableBody>
-                        <TableRow className="hover:bg-slate-50/50 transition-colors border-b border-slate-50">
-                          <TableCell className="pl-8 py-5">
-                             <div className="flex flex-col">
-                                <span className="text-sm font-bold text-slate-400 line-through">Alice Johnson</span>
-                                <span className="text-[10px] font-mono text-slate-400">a.johnson@{selectedOrg?.domain}</span>
-                             </div>
-                          </TableCell>
-                          <TableCell className="text-xs font-bold text-slate-600">{allOUs[0]}</TableCell>
-                          <TableCell className="text-[10px] font-bold text-slate-400 uppercase">Suspended Dec 2025</TableCell>
-                          <TableCell className="text-xs font-bold text-emerald-600">4.2 GB</TableCell>
-                          <TableCell className="text-right pr-8">
-                             <div className="flex items-center justify-end gap-2">
-                                <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold uppercase tracking-widest border-slate-200">Restore</Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></Button>
-                             </div>
-                          </TableCell>
-                        </TableRow>
+                        {users.filter(u => u.archived).length === 0 ? (
+                          <TableRow>
+                             <TableCell colSpan={4} className="py-24 text-center text-slate-400 text-xs italic">
+                               No archived accounts found in the directory.
+                             </TableCell>
+                          </TableRow>
+                        ) : (
+                          users.filter(u => u.archived).map(u => (
+                            <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-50">
+                              <TableCell className="pl-8 py-5">
+                                 <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-slate-400 line-through">{u.name}</span>
+                                    <span className="text-[10px] font-mono text-slate-400">{u.email}</span>
+                                 </div>
+                              </TableCell>
+                              <TableCell className="text-xs font-bold text-slate-600">{u.orgUnitPath.substring(1)}</TableCell>
+                              <TableCell className="text-[10px] font-bold text-red-500 uppercase tracking-tighter">SUSPENDED</TableCell>
+                              <TableCell className="text-right pr-8">
+                                 <div className="flex items-center justify-end gap-2">
+                                    <Button variant="outline" size="sm" onClick={() => handleArchiveUser(u.id, u.status)} className="h-8 text-[10px] font-bold uppercase tracking-widest border-slate-200">Restore</Button>
+                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(u.id)} className="h-8 w-8 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></Button>
+                                 </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
                       </TableBody>
                     </Table>
                  </CardContent>
@@ -785,6 +882,108 @@ export default function WorkspaceManagementPage() {
           </Tabs>
         )}
 
+        {/* Create User Dialog */}
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
+            <DialogHeader className="bg-slate-900 text-white p-6">
+               <DialogTitle className="font-headline font-bold text-xl">Create Workspace Identity</DialogTitle>
+               <p className="text-slate-400 text-xs mt-1">Authorize new account access for {selectedOrg?.domain}.</p>
+            </DialogHeader>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                   <Label className="text-[10px] font-bold uppercase text-slate-500">First Name</Label>
+                   <Input value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} placeholder="e.g. Sagar" className="h-10 text-xs font-bold" />
+                </div>
+                <div className="space-y-1.5">
+                   <Label className="text-[10px] font-bold uppercase text-slate-500">Last Name</Label>
+                   <Input value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} placeholder="e.g. Poudel" className="h-10 text-xs font-bold" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                 <Label className="text-[10px] font-bold uppercase text-slate-500">Email Identifier</Label>
+                 <div className="flex items-center gap-2">
+                    <Input value={newUser.emailPrefix} onChange={e => setNewUser({...newUser, emailPrefix: e.target.value})} placeholder="username" className="h-10 text-xs font-bold flex-1" />
+                    <span className="text-xs font-bold text-slate-400">@{selectedOrg?.domain}</span>
+                 </div>
+              </div>
+              <div className="space-y-1.5">
+                 <Label className="text-[10px] font-bold uppercase text-slate-500">Security Password</Label>
+                 <Input type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} placeholder="••••••••" className="h-10 text-xs font-bold" />
+              </div>
+              <div className="space-y-1.5">
+                 <Label className="text-[10px] font-bold uppercase text-slate-500">Assign to OU</Label>
+                 <select 
+                   className="w-full h-10 px-3 text-xs font-bold border border-slate-200 rounded-md outline-none focus:ring-1 focus:ring-primary"
+                   value={newUser.orgUnit}
+                   onChange={e => setNewUser({...newUser, orgUnit: e.target.value})}
+                 >
+                   <option value="">Select Unit</option>
+                   {allOUs.map(ou => <option key={ou} value={ou}>{ou}</option>)}
+                 </select>
+              </div>
+            </div>
+            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
+               <Button variant="ghost" onClick={() => setIsCreateDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
+               <Button onClick={handleCreateUser} disabled={isUpdating} className="px-8 bg-slate-900 text-white font-bold h-11">
+                 {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Deploy Identity"}
+               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Password Dialog */}
+        <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
+            <DialogHeader className="bg-slate-900 text-white p-6">
+               <DialogTitle className="font-headline font-bold text-xl">Reset Security Access</DialogTitle>
+               <p className="text-slate-400 text-xs mt-1">Issue new credentials for {resetData.userName}.</p>
+            </DialogHeader>
+            <div className="p-6 space-y-4">
+               <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">New Secure Password</Label>
+                  <Input 
+                    type="password" 
+                    value={resetData.newPassword} 
+                    onChange={e => setResetData({...resetData, newPassword: e.target.value})} 
+                    placeholder="Min. 8 characters" 
+                    className="h-11 text-xs font-bold" 
+                  />
+               </div>
+               <div className="flex items-center space-x-3 p-4 bg-slate-50 border border-slate-100 rounded-lg">
+                  <Checkbox 
+                    id="force-reset" 
+                    checked={resetData.forceChange} 
+                    onCheckedChange={checked => setResetData({...resetData, forceChange: !!checked})} 
+                  />
+                  <div className="space-y-0.5">
+                    <label htmlFor="force-reset" className="text-xs font-bold text-slate-900 block cursor-pointer">Force change on next login</label>
+                    <p className="text-[10px] text-slate-400 font-medium">Ensures only the user knows the actual password.</p>
+                  </div>
+               </div>
+            </div>
+            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
+               <Button variant="ghost" onClick={() => setIsResetDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
+               <Button 
+                 onClick={async () => {
+                   setIsUpdating(true)
+                   const res = await resetUserPassword(resetData.userId, resetData.newPassword, resetData.forceChange)
+                   if (res.success) {
+                     toast({ title: "Password Updated", description: `Credentials for ${resetData.userName} have been reset.` })
+                     setIsResetDialogOpen(false)
+                   }
+                   setIsUpdating(false)
+                 }} 
+                 disabled={isUpdating || !resetData.newPassword} 
+                 className="px-8 bg-slate-900 text-white font-bold h-11"
+               >
+                 {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit New Password"}
+               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Custom OU Dialog */}
         <Dialog open={isOUDialogOpen} onOpenChange={setIsOUDialogOpen}>
           <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl">
             <DialogHeader className="bg-slate-900 text-white p-6">
@@ -802,7 +1001,7 @@ export default function WorkspaceManagementPage() {
                   onChange={(e) => setNewOUType(e.target.value)}
                 />
               </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed">
+              <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
                 Custom types allow for granular storage allocation and specific security policies within the Google Workspace environment.
               </p>
             </div>

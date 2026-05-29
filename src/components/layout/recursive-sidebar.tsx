@@ -13,10 +13,8 @@ import {
   ShieldCheck,
   Briefcase,
   LayoutDashboard,
-  Home,
   HardDrive,
-  Archive,
-  Layout
+  Archive
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser, useFirestore } from "@/firebase"
@@ -42,7 +40,7 @@ export function RecursiveSidebar() {
       // Check if any organization has an active and managed workspace
       const active = snap.docs.some(doc => {
         const data = doc.data()
-        return data.gEducation === true && data.managedWorkspace === true
+        return data.managedWorkspace === true
       })
       setWorkspaceActive(active)
     })

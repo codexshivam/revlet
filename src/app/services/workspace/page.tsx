@@ -15,21 +15,12 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   ShieldCheck, 
-  Mail, 
-  Info, 
-  CheckCircle, 
-  Clock, 
-  GraduationCap, 
-  Users, 
-  Database, 
   Settings, 
-  Plus, 
   MoreVertical,
   Key,
   Archive,
   Trash2,
   Loader2,
-  Server,
   Network,
   Cloud,
   ChevronRight,
@@ -41,10 +32,11 @@ import {
   Bell,
   HardDrive,
   UserCog,
-  FileText,
   Zap,
   Globe,
-  Ban
+  GraduationCap,
+  Users,
+  CheckCircle
 } from "lucide-react"
 import {
   Table,
@@ -54,14 +46,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useUser, useFirestore } from "@/firebase"
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore"
@@ -121,23 +105,6 @@ export default function WorkspaceManagementPage() {
     return unsub
   }, [user, authLoading, db, selectedOrgId])
 
-  const handleDeclareEligibility = async (eligible: boolean) => {
-    if (!selectedOrg) return
-    setIsUpdating(true)
-    const orgRef = doc(db, "organizations", selectedOrg.id)
-    updateDoc(orgRef, {
-      gEducation: eligible,
-      updatedAt: serverTimestamp()
-    }).then(() => {
-      toast({ 
-        title: eligible ? "Status Declared" : "Not Eligible", 
-        description: eligible 
-          ? "Educational status verified. Proceeding to setup." 
-          : "Standard Workspace options will be provided soon." 
-      })
-    }).finally(() => setIsUpdating(false))
-  }
-
   const handleActivate = async () => {
     if (!selectedOrg) return
     setIsUpdating(true)
@@ -148,7 +115,7 @@ export default function WorkspaceManagementPage() {
       workspaceDomain: selectedOrg.domain,
       updatedAt: serverTimestamp()
     }).then(() => {
-      toast({ title: "Connection Verified", description: "Google Workspace for Education is now active." })
+      toast({ title: "Connection Verified", description: `${selectedOrg.gEducation ? 'Google Workspace for Education' : 'Google Workspace'} is now active.` })
     }).finally(() => setIsUpdating(false))
   }
 
@@ -156,6 +123,8 @@ export default function WorkspaceManagementPage() {
     navigator.clipboard.writeText(text)
     toast({ title: "Copied", description: `${label} copied to clipboard.` })
   }
+
+  const workspaceTypeLabel = selectedOrg?.gEducation ? "Google Workspace for Ed." : "Google Workspace"
 
   if (isLoading || authLoading) {
     return (
@@ -174,7 +143,7 @@ export default function WorkspaceManagementPage() {
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-headline font-bold text-slate-900">Google Workspace for Ed.</h1>
+            <h1 className="text-3xl font-headline font-bold text-slate-900">{workspaceTypeLabel}</h1>
             <div className="flex items-center gap-3">
                <Button variant="ghost" size="sm" className="h-9 gap-2 text-slate-500 font-bold text-xs">
                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
@@ -186,76 +155,12 @@ export default function WorkspaceManagementPage() {
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {/* Declaration Widget: Only if gEducation is not defined */}
-        {selectedOrg && selectedOrg.gEducation === undefined && (
-          <div className="max-w-4xl mx-auto py-12 animate-in slide-in-from-bottom-4 duration-500">
-            <Card className="bg-white border-slate-200 shadow-xl overflow-hidden rounded-2xl">
-              <div className="h-2 w-full bg-gradient-to-r from-blue-500 to-emerald-500" />
-              <CardContent className="p-12 flex flex-col items-center text-center gap-8">
-                <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center">
-                  <GraduationCap className="w-10 h-10 text-blue-600" />
-                </div>
-                <div className="space-y-4">
-                  <h2 className="text-3xl font-headline font-bold text-slate-900">Institutional Eligibility Declaration</h2>
-                  <p className="text-slate-500 text-lg leading-relaxed max-w-2xl font-medium">
-                    Google Workspace for Education provides powerful communication and collaboration tools at <span className="text-emerald-600 font-bold">zero cost</span> for qualifying educational institutions.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl text-left">
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-4">
-                    <div className="p-2 bg-white rounded-lg shadow-sm">
-                      <Zap className="w-4 h-4 text-amber-500" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-slate-900">Free Premium Features</h4>
-                      <p className="text-xs text-slate-500 leading-relaxed font-medium">Includes Gmail, Drive, Docs, and advanced admin security controls.</p>
-                    </div>
-                  </div>
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-4">
-                    <div className="p-2 bg-white rounded-lg shadow-sm">
-                      <Globe className="w-4 h-4 text-emerald-500" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-slate-900">Education Exclusive</h4>
-                      <p className="text-xs text-slate-500 leading-relaxed font-medium">Reserved for K-12, Higher Ed, or education-focused nonprofits.</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4 w-full max-w-md pt-4">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Does your institution use Workspace for Ed?</p>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Button 
-                      onClick={() => handleDeclareEligibility(true)}
-                      disabled={isUpdating}
-                      className="flex-1 h-14 bg-slate-900 text-white hover:bg-black font-bold shadow-xl gap-2"
-                    >
-                      <CheckCircle className="w-5 h-5" />
-                      Yes, proceed to setup
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      onClick={() => handleDeclareEligibility(false)}
-                      disabled={isUpdating}
-                      className="flex-1 h-14 font-bold gap-2"
-                    >
-                      <Ban className="w-5 h-5 text-slate-400" />
-                      No, not eligible
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Setup Wizard: If gEducation is true but not yet managed */}
-        {selectedOrg && selectedOrg.gEducation === true && !selectedOrg.managedWorkspace && (
+        {/* Setup Wizard: If not yet managed */}
+        {selectedOrg && !selectedOrg.managedWorkspace && (
           <div className="max-w-4xl mx-auto py-8">
             <div className="space-y-8">
               <div className="text-center space-y-2">
-                <h2 className="text-2xl font-headline font-bold text-slate-900">Manual Connection Setup</h2>
+                <h2 className="text-2xl font-headline font-bold text-slate-900">Approach A: Manual Connection Setup</h2>
                 <p className="text-slate-500 text-sm">Follow these steps to authorize domain-wide delegation for your institution.</p>
               </div>
 
@@ -319,26 +224,8 @@ export default function WorkspaceManagementPage() {
           </div>
         )}
 
-        {/* Not Eligible Message */}
-        {selectedOrg && selectedOrg.gEducation === false && (
-          <div className="max-w-4xl mx-auto py-20 text-center space-y-6">
-            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto">
-              <Ban className="w-8 h-8 text-slate-400" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-headline font-bold text-slate-900">Standard Workspace Management</h3>
-              <p className="text-slate-500 max-w-sm mx-auto text-sm leading-relaxed font-medium">
-                Your institution has been marked as ineligible for the Education offering. Our team will contact you for standard Workspace integration options.
-              </p>
-            </div>
-            <Button variant="outline" onClick={() => handleDeclareEligibility(true)} className="font-bold">
-              Incorrect? Redecalre Status
-            </Button>
-          </div>
-        )}
-
         {/* Active Dashboard Suite */}
-        {selectedOrg && selectedOrg.gEducation === true && selectedOrg.managedWorkspace === true && (
+        {selectedOrg && selectedOrg.managedWorkspace === true && (
           <Tabs value={currentTab} onValueChange={(v) => router.push(`/services/workspace?tab=${v}`)} className="space-y-8">
             <div className="flex items-center justify-between border-b border-slate-200 pb-1">
               <TabsList className="bg-transparent h-auto p-0 gap-8">
@@ -348,14 +235,13 @@ export default function WorkspaceManagementPage() {
                     value={t} 
                     className="bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-slate-900 rounded-none h-10 px-0 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 transition-all"
                   >
-                    {t}
+                    {t === 'hub' ? 'Workspace Hub' : t}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </div>
 
             <TabsContent value="hub" className="m-0 space-y-8">
-              {/* Metric Overview Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
                   { label: "Students Count", val: "1,420", status: "Active", icon: GraduationCap },
@@ -378,7 +264,6 @@ export default function WorkspaceManagementPage() {
                 ))}
               </div>
 
-              {/* Storage Gauge */}
               <Card className="bg-white border-slate-200 shadow-sm">
                 <CardHeader className="py-4 px-6 border-b border-slate-100">
                   <div className="flex items-center justify-between">
@@ -401,7 +286,6 @@ export default function WorkspaceManagementPage() {
               </Card>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Alert Center */}
                 <Card className="lg:col-span-2 bg-white border-slate-200 shadow-sm overflow-hidden">
                   <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6">
                     <div className="flex items-center gap-2">
@@ -431,7 +315,6 @@ export default function WorkspaceManagementPage() {
                   </CardContent>
                 </Card>
 
-                {/* Gateway */}
                 <Card className="bg-slate-900 text-white shadow-2xl relative overflow-hidden flex flex-col justify-center p-8">
                   <div className="absolute top-0 right-0 p-4 opacity-5">
                     <Network className="w-32 h-32 rotate-12" />
@@ -447,7 +330,7 @@ export default function WorkspaceManagementPage() {
                       </p>
                     </div>
                     <Button className="w-full bg-white text-slate-900 hover:bg-slate-100 font-bold h-12 group">
-                      Launch Console
+                      Launch Admin Console
                       <ArrowUpRight className="w-4 h-4 ml-2 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                     </Button>
                   </div>
@@ -500,13 +383,13 @@ export default function WorkspaceManagementPage() {
                                             JS
                                          </div>
                                          <div className="flex flex-col">
-                                            <span className="text-sm font-bold text-slate-800">John Smith</span>
+                                            <span className="text-sm font-bold text-slate-800">Sample User {i}</span>
                                             <Badge variant="outline" className="text-[8px] font-bold h-4 w-fit px-1 bg-emerald-50 text-emerald-600 border-emerald-100">ACTIVE</Badge>
                                          </div>
                                       </div>
                                    </TableCell>
-                                   <TableCell className="font-mono text-xs text-slate-500 font-medium">j.smith@{selectedOrg?.domain}</TableCell>
-                                   <TableCell className="text-xs font-bold text-slate-600">2.1 GB</TableCell>
+                                   <TableCell className="font-mono text-xs text-slate-500 font-medium">user.{i}@{selectedOrg?.domain}</TableCell>
+                                   <TableCell className="text-xs font-bold text-slate-600">0.5 GB</TableCell>
                                    <TableCell className="text-right pr-8">
                                       <div className="flex items-center justify-end gap-1">
                                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary"><Settings className="w-3.5 h-3.5" /></Button>
@@ -546,7 +429,7 @@ export default function WorkspaceManagementPage() {
                            </div>
                         </div>
                         <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 flex gap-3">
-                           <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                           <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                            <p className="text-[10px] text-blue-700 leading-relaxed font-medium">
                              This policy controls the hard quota tier directly for all accounts under this specific Google Workspace Organizational Unit (OU).
                            </p>
@@ -562,7 +445,7 @@ export default function WorkspaceManagementPage() {
                <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                  <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                     <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Suspended Account Directory</CardTitle>
-                    <Badge variant="outline" className="text-[10px] font-bold text-slate-400">14 Records</Badge>
+                    <Badge variant="outline" className="text-[10px] font-bold text-slate-400">Sample Records</Badge>
                  </CardHeader>
                  <CardContent className="p-0">
                     <Table>

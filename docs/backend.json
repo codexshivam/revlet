@@ -15,7 +15,7 @@
     },
     "Organization": {
       "title": "Organization",
-      "description": "Educational institution managed by the portal.",
+      "description": "Educational institution or business managed by the portal.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -38,7 +38,7 @@
         "maxWebEdits": { "type": "number" },
         "usedWebEdits": { "type": "number" },
         "lastWebQuota": { "type": "string", "format": "date-time" },
-        "gEducation": { "type": "boolean", "description": "Whether the institution uses Google Workspace for Education." },
+        "gEducation": { "type": "boolean", "description": "Whether the institution is an Educational organization." },
         "managedWorkspace": { "type": "boolean", "description": "Whether the workspace is connected and managed by the platform." },
         "workspaceStatus": { "type": "string", "enum": ["unregistered", "applied", "pending", "active"] },
         "workspaceDomain": { "type": "string" },

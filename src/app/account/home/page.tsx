@@ -17,7 +17,8 @@ import {
   Info,
   Trash2,
   AlertTriangle,
-  Clock
+  Clock,
+  GraduationCap
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -49,6 +50,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
 import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore } from "@/firebase"
@@ -67,6 +69,7 @@ import {
 } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
+import { cn } from "@/lib/utils"
 
 interface Organization {
   id: string
@@ -83,6 +86,7 @@ interface Organization {
   code: string
   ownerId: string
   status?: string
+  gEducation?: boolean
   createdAt: any
 }
 
@@ -111,7 +115,8 @@ export default function AccountHomePage() {
     contactName: "",
     contactPhone: "",
     contactEmail: "",
-    description: ""
+    description: "",
+    gEducation: false
   })
   
   const [accountName, setAccountName] = useState("")
@@ -174,7 +179,8 @@ export default function AccountHomePage() {
       contactName: org.contactName,
       contactPhone: org.contactPhone,
       contactEmail: org.contactEmail,
-      description: org.description
+      description: org.description,
+      gEducation: org.gEducation || false
     })
     setIsDialogOpen(true)
   }
@@ -190,7 +196,8 @@ export default function AccountHomePage() {
       contactName: "",
       contactPhone: "",
       contactEmail: "",
-      description: ""
+      description: "",
+      gEducation: false
     })
     setIsDialogOpen(true)
   }
@@ -426,6 +433,25 @@ export default function AccountHomePage() {
                             />
                           </div>
                         </div>
+
+                        {/* Classification Field */}
+                        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-white rounded-lg shadow-sm">
+                              <GraduationCap className={cn("w-4 h-4", formData.gEducation ? "text-primary" : "text-slate-400")} />
+                            </div>
+                            <div className="space-y-0.5">
+                              <Label htmlFor="is-edu" className="text-xs font-bold text-slate-900">Educational Institution</Label>
+                              <p className="text-[10px] text-slate-400 font-medium leading-tight">Enable Education exclusive Workspace features and pricing.</p>
+                            </div>
+                          </div>
+                          <Switch 
+                            id="is-edu"
+                            checked={formData.gEducation} 
+                            onCheckedChange={(v) => setFormData({ ...formData, gEducation: v })} 
+                          />
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
                             <Label htmlFor="org-email" className="text-[10px] font-bold text-slate-500 uppercase">General Contact Email</Label>
@@ -618,6 +644,12 @@ export default function AccountHomePage() {
                                 <Badge variant="destructive" className="text-[8px] h-4 font-bold px-1.5 uppercase tracking-tighter">
                                   <Clock className="w-2 h-2 mr-1" />
                                   Pending Deletion
+                                </Badge>
+                              )}
+                              {org.gEducation && (
+                                <Badge variant="outline" className="text-[8px] h-4 font-bold px-1.5 uppercase tracking-tighter bg-blue-50 text-blue-600 border-blue-100">
+                                  <GraduationCap className="w-2 h-2 mr-1" />
+                                  Education
                                 </Badge>
                               )}
                             </div>

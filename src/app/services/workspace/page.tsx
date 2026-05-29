@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { OrgSelector } from "@/components/org/org-selector"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -36,7 +36,12 @@ import {
   Globe,
   GraduationCap,
   Users,
-  CheckCircle
+  CheckCircle,
+  Plus,
+  Calendar,
+  X,
+  Lock,
+  ArrowRightLeft
 } from "lucide-react"
 import {
   Table,
@@ -46,9 +51,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, arrayUnion } from "firebase/firestore"
 import { cn } from "@/lib/utils"
 
 interface Organization {
@@ -56,11 +68,11 @@ interface Organization {
   name: string
   domain: string
   gEducation?: boolean
+  workspaceActive?: boolean
   managedWorkspace?: boolean
   workspaceStatus?: "unregistered" | "applied" | "pending" | "active"
   workspaceDomain?: string
-  workspaceCustomerId?: string
-  workspaceAppliedAt?: any
+  customUserTypes?: string[]
 }
 
 const SCOPES = [
@@ -72,7 +84,7 @@ const SCOPES = [
 const ALERT_LOGS = [
   { id: 1, type: "CRITICAL", msg: "Multiple failed login attempts detected on administrative account", time: "2m ago" },
   { id: 2, type: "WARNING", msg: "Students OU collective storage has reached 88% capacity", time: "1h ago" },
-  { id: 3, type: "INFO", msg: "Directory sync with local Appwrite server executed successfully", time: "4h ago" },
+  { id: 3, type: "INFO", msg: "Directory sync with local infrastructure executed successfully", time: "4h ago" },
 ]
 
 export default function WorkspaceManagementPage() {
@@ -88,6 +100,8 @@ export default function WorkspaceManagementPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string>("")
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [isOUDialogOpen, setIsOUDialogOpen] = useState(false)
+  const [newOUType, setNewOUType] = useState("")
   
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
@@ -105,7 +119,19 @@ export default function WorkspaceManagementPage() {
     return unsub
   }, [user, authLoading, db, selectedOrgId])
 
-  const handleActivate = async () => {
+  const handleDeclare = async (active: boolean) => {
+    if (!selectedOrg) return
+    setIsUpdating(true)
+    const orgRef = doc(db, "organizations", selectedOrg.id)
+    updateDoc(orgRef, {
+      workspaceActive: active,
+      updatedAt: serverTimestamp()
+    }).then(() => {
+      toast({ title: "Declaration Saved", description: active ? "Migration guidelines unlocked." : "Application features unlocked." })
+    }).finally(() => setIsUpdating(false))
+  }
+
+  const handleVerify = async () => {
     if (!selectedOrg) return
     setIsUpdating(true)
     const orgRef = doc(db, "organizations", selectedOrg.id)
@@ -115,7 +141,25 @@ export default function WorkspaceManagementPage() {
       workspaceDomain: selectedOrg.domain,
       updatedAt: serverTimestamp()
     }).then(() => {
-      toast({ title: "Connection Verified", description: `${selectedOrg.gEducation ? 'Google Workspace for Education' : 'Google Workspace'} is now active.` })
+      toast({ title: "Connection Verified", description: "Your workspace management panel is now live." })
+    }).finally(() => setIsUpdating(false))
+  }
+
+  const handleAddUserType = async () => {
+    if (!selectedOrg || !newOUType) return
+    if ((selectedOrg.customUserTypes?.length || 0) >= 5) {
+      toast({ variant: "destructive", title: "Limit Reached", description: "You can define a maximum of 5 custom user types." })
+      return
+    }
+    
+    setIsUpdating(true)
+    const orgRef = doc(db, "organizations", selectedOrg.id)
+    updateDoc(orgRef, {
+      customUserTypes: arrayUnion(newOUType)
+    }).then(() => {
+      toast({ title: "User Type Added", description: `"${newOUType}" has been registered as a new OU.` })
+      setNewOUType("")
+      setIsOUDialogOpen(false)
     }).finally(() => setIsUpdating(false))
   }
 
@@ -124,14 +168,18 @@ export default function WorkspaceManagementPage() {
     toast({ title: "Copied", description: `${label} copied to clipboard.` })
   }
 
-  const workspaceTypeLabel = selectedOrg?.gEducation ? "Google Workspace for Ed." : "Google Workspace"
+  const defaultOUs = selectedOrg?.gEducation 
+    ? ["Students", "Teachers", "Main People", "Staffs"] 
+    : ["Users", "Main People"]
+  
+  const allOUs = [...defaultOUs, ...(selectedOrg?.customUserTypes || [])]
 
   if (isLoading || authLoading) {
     return (
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Initialising Admin SDK...</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Initialising Admin Context...</p>
         </div>
       </DashboardShell>
     )
@@ -143,25 +191,97 @@ export default function WorkspaceManagementPage() {
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-headline font-bold text-slate-900">{workspaceTypeLabel}</h1>
-            <div className="flex items-center gap-3">
-               <Button variant="ghost" size="sm" className="h-9 gap-2 text-slate-500 font-bold text-xs">
-                 <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                 Enterprise Verified
-               </Button>
-            </div>
+            <h1 className="text-3xl font-headline font-bold text-slate-900">
+              {selectedOrg?.gEducation ? "Google Workspace for Education" : "Google Workspace"}
+            </h1>
+            {selectedOrg?.managedWorkspace && (
+              <Badge variant="ghost" className="h-9 gap-2 text-slate-500 font-bold text-xs bg-slate-50 border border-slate-200 px-4">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                Enterprise Managed
+              </Badge>
+            )}
           </div>
         </div>
         
         <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
 
-        {/* Setup Wizard: If not yet managed */}
-        {selectedOrg && !selectedOrg.managedWorkspace && (
+        {/* 1. Declaration View */}
+        {selectedOrg && selectedOrg.workspaceActive === undefined && (
+          <div className="max-w-4xl mx-auto py-12">
+            <Card className="bg-white border-slate-200 shadow-xl overflow-hidden rounded-2xl">
+              <div className="h-1.5 w-full bg-primary" />
+              <CardContent className="p-12 text-center space-y-8">
+                <div className="space-y-3">
+                  <h3 className="text-3xl font-headline font-bold text-slate-900">Infrastructure Inventory</h3>
+                  <p className="text-slate-500 text-sm max-w-lg mx-auto">Does your institution already operate an existing Google Workspace instance on <span className="font-bold text-slate-900">{selectedOrg.domain}</span>?</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                  <Button 
+                    onClick={() => handleDeclare(true)} 
+                    disabled={isUpdating}
+                    variant="outline" 
+                    className="h-24 flex flex-col gap-1 border-2 hover:border-primary hover:bg-primary/5 transition-all"
+                  >
+                    <ArrowRightLeft className="w-6 h-6 text-primary mb-1" />
+                    <span className="font-bold">Yes, Migrate Management</span>
+                    <span className="text-[10px] opacity-60">Connect existing domain to our portal</span>
+                  </Button>
+                  <Button 
+                    onClick={() => handleDeclare(false)}
+                    disabled={isUpdating}
+                    className="h-24 flex flex-col gap-1 bg-slate-900 hover:bg-black text-white"
+                  >
+                    <Plus className="w-6 h-6 mb-1" />
+                    <span className="font-bold">No, Deploy New Workspace</span>
+                    <span className="text-[10px] opacity-80">Launch institutional cloud from scratch</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* 2. Apply View (Declaration: False) */}
+        {selectedOrg && selectedOrg.workspaceActive === false && !selectedOrg.managedWorkspace && (
+          <div className="max-w-5xl mx-auto py-8 space-y-12 animate-in slide-in-from-bottom-4">
+            <div className="text-center space-y-4">
+              <h2 className="text-4xl font-headline font-bold text-slate-900">Enterprise Cloud Deployment</h2>
+              <p className="text-slate-500 text-lg max-w-2xl mx-auto">Access professional collaboration tools for your entire organization at zero license cost for eligible institutions.</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[
+                { title: "Managed Onboarding", desc: "Our team handles the verification and DNS setup for your new domain.", icon: Zap, color: "text-blue-500 bg-blue-50" },
+                { title: "EDU Exclusive", desc: "Unlock 100TB of collective storage and advanced teaching tools.", icon: GraduationCap, color: "text-emerald-500 bg-emerald-50" },
+                { title: "Security First", desc: "DLP rules and advanced threat protection enabled by default.", icon: Lock, color: "text-purple-500 bg-purple-50" },
+              ].map((feat) => (
+                <Card key={feat.title} className="bg-white border-slate-200 shadow-sm p-8 space-y-4">
+                  <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", feat.color)}>
+                    <feat.icon className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-bold text-slate-900">{feat.title}</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">{feat.desc}</p>
+                </Card>
+              ))}
+            </div>
+
+            <div className="flex justify-center">
+              <Button size="lg" className="h-14 px-12 text-lg font-bold shadow-xl shadow-primary/20 gap-3">
+                <Globe className="w-5 h-5" />
+                Apply for Institutional Workspace
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 3. Connection Guidelines (Declaration: True, Managed: False) */}
+        {selectedOrg && selectedOrg.workspaceActive === true && !selectedOrg.managedWorkspace && (
           <div className="max-w-4xl mx-auto py-8">
             <div className="space-y-8">
               <div className="text-center space-y-2">
-                <h2 className="text-2xl font-headline font-bold text-slate-900">Approach A: Manual Connection Setup</h2>
-                <p className="text-slate-500 text-sm">Follow these steps to authorize domain-wide delegation for your institution.</p>
+                <Badge className="bg-blue-50 text-blue-600 border-blue-100 mb-2">MIGRATION PROTOCOL</Badge>
+                <h2 className="text-2xl font-headline font-bold text-slate-900">Authorize Domain-Wide Delegation</h2>
+                <p className="text-slate-500 text-sm">Follow Approach A to securely link your Google Admin environment to our platform.</p>
               </div>
 
               <div className="grid gap-6">
@@ -209,11 +329,11 @@ export default function WorkspaceManagementPage() {
                          <div className="space-y-1">
                             <h4 className="text-sm font-bold text-slate-900">Step 3 & 4: Finalize in Google Admin</h4>
                             <p className="text-xs text-slate-500 leading-relaxed">
-                              Navigate to <span className="font-bold">Security &gt; API Controls &gt; Manage Domain Wide Delegation</span>. 
-                              Add a new API Client, paste the values copied above, and click <span className="font-bold">Authorize</span>.
+                              Navigate to <span className="font-bold text-slate-900">Security &gt; API Controls &gt; Manage Domain Wide Delegation</span> in your Google Admin console. 
+                              Add a new API Client, paste the values copied above, and click <span className="font-bold text-slate-900">Authorize</span>.
                             </p>
                          </div>
-                         <Button onClick={handleActivate} disabled={isUpdating} className="bg-slate-900 text-white font-bold h-11 px-8 shadow-xl">
+                         <Button onClick={handleVerify} disabled={isUpdating} className="bg-slate-900 text-white font-bold h-11 px-8 shadow-xl">
                            {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Verify and Activate Connection"}
                          </Button>
                       </div>
@@ -224,7 +344,7 @@ export default function WorkspaceManagementPage() {
           </div>
         )}
 
-        {/* Active Dashboard Suite */}
+        {/* 4. Active Management Dashboard */}
         {selectedOrg && selectedOrg.managedWorkspace === true && (
           <Tabs value={currentTab} onValueChange={(v) => router.push(`/services/workspace?tab=${v}`)} className="space-y-8">
             <div className="flex items-center justify-between border-b border-slate-200 pb-1">
@@ -243,19 +363,27 @@ export default function WorkspaceManagementPage() {
 
             <TabsContent value="hub" className="m-0 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[
-                  { label: "Students Count", val: "1,420", status: "Active", icon: GraduationCap },
-                  { label: "Teachers Count", val: "85", status: "Active", icon: Users },
-                  { label: "Main People", val: "12", status: "Active", icon: UserCog },
-                  { label: "Staffs Count", val: "42", status: "Active", icon: Network },
-                ].map((m) => (
+                {(selectedOrg.gEducation 
+                  ? [
+                    { label: "Students Count", val: "1,420", icon: GraduationCap },
+                    { label: "Teachers Count", val: "85", icon: Users },
+                    { label: "Main People", val: "12", icon: UserCog },
+                    { label: "Staffs Count", val: "42", icon: Network },
+                  ]
+                  : [
+                    { label: "Total Users", val: "156", icon: Users },
+                    { label: "Main People", val: "5", icon: UserCog },
+                    { label: "OUs Count", val: "3", icon: Network },
+                    { label: "Groups", val: "8", icon: Bell },
+                  ]
+                ).map((m) => (
                   <Card key={m.label} className="bg-white border-slate-200 shadow-sm overflow-hidden group">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between mb-4">
                         <div className="p-2 bg-slate-50 rounded-lg group-hover:bg-primary/5 transition-colors">
                            <m.icon className="w-4 h-4 text-slate-400 group-hover:text-primary" />
                         </div>
-                        <Badge variant="outline" className="text-[9px] font-bold h-4 bg-emerald-50 text-emerald-600 border-emerald-100">{m.status}</Badge>
+                        <Badge variant="outline" className="text-[9px] font-bold h-4 bg-emerald-50 text-emerald-600 border-emerald-100">ACTIVE</Badge>
                       </div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{m.label}</p>
                       <p className="text-3xl font-headline font-bold text-slate-900 mt-1">{m.val}</p>
@@ -324,13 +452,13 @@ export default function WorkspaceManagementPage() {
                        <Cloud className="w-6 h-6 text-primary" />
                     </div>
                     <div className="space-y-2">
-                      <h4 className="text-xl font-headline font-bold">Admin Console Gateway</h4>
+                      <h4 className="text-xl font-headline font-bold">Admin Console</h4>
                       <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                        Direct encrypted tunnel to Google's master control panel for policy enforcement.
+                        Secure gateway to Google's master control panel for advanced policy enforcement.
                       </p>
                     </div>
                     <Button className="w-full bg-white text-slate-900 hover:bg-slate-100 font-bold h-12 group">
-                      Launch Admin Console
+                      Launch Console
                       <ArrowUpRight className="w-4 h-4 ml-2 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                     </Button>
                   </div>
@@ -340,22 +468,34 @@ export default function WorkspaceManagementPage() {
 
             <TabsContent value="users" className="m-0 space-y-6">
                <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-                 <Tabs defaultValue="students" className="w-full">
+                 <Tabs defaultValue={allOUs[0].toLowerCase()} className="w-full">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-0">
                       <div className="flex flex-col md:flex-row items-center justify-between p-4 px-6 gap-4">
-                        <TabsList className="bg-slate-200/50 h-9 p-1">
-                          {["students", "teachers", "main people", "staffs"].map((ou) => (
-                            <TabsTrigger key={ou} value={ou.toLowerCase()} className="text-[9px] font-bold uppercase tracking-widest px-4 h-7 data-[state=active]:bg-white">
-                              {ou}
-                            </TabsTrigger>
-                          ))}
-                        </TabsList>
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
+                          <TabsList className="bg-slate-200/50 h-9 p-1">
+                            {allOUs.map((ou) => (
+                              <TabsTrigger key={ou} value={ou.toLowerCase()} className="text-[9px] font-bold uppercase tracking-widest px-4 h-7 data-[state=active]:bg-white">
+                                {ou}
+                              </TabsTrigger>
+                            ))}
+                          </TabsList>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setIsOUDialogOpen(true)}
+                            disabled={(selectedOrg.customUserTypes?.length || 0) >= 5}
+                            className="h-8 text-primary font-bold text-[9px] uppercase gap-1 px-3 hover:bg-primary/5"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Add Type
+                          </Button>
+                        </div>
                         <div className="flex items-center gap-3 w-full md:w-auto">
                           <div className="relative flex-1 md:w-64">
                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                              <Input placeholder="Search directory..." className="h-9 pl-8 text-xs font-medium bg-white border-slate-200" />
                           </div>
-                          <Button size="sm" className="h-9 font-bold px-4 gap-2 bg-slate-900">
+                          <Button size="sm" className="h-9 font-bold px-4 gap-2 bg-slate-900 text-white">
                              <UserPlus className="w-3.5 h-3.5" />
                              Create User
                           </Button>
@@ -363,7 +503,7 @@ export default function WorkspaceManagementPage() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-0">
-                      {["students", "teachers", "main people", "staffs"].map((ou) => (
+                      {allOUs.map((ou) => (
                         <TabsContent key={ou} value={ou.toLowerCase()} className="m-0">
                            <Table>
                              <TableHeader className="bg-slate-50/30">
@@ -380,7 +520,7 @@ export default function WorkspaceManagementPage() {
                                    <TableCell className="pl-8 py-5">
                                       <div className="flex items-center gap-3">
                                          <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-400">
-                                            JS
+                                            {ou.substring(0, 1)}
                                          </div>
                                          <div className="flex flex-col">
                                             <span className="text-sm font-bold text-slate-800">Sample User {i}</span>
@@ -410,7 +550,7 @@ export default function WorkspaceManagementPage() {
 
             <TabsContent value="storage" className="m-0 space-y-8">
                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 {["Students", "Teachers", "Main People", "Staffs"].map((ou) => (
+                 {allOUs.map((ou) => (
                    <Card key={ou} className="bg-white border-slate-200 shadow-sm overflow-hidden">
                      <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50">
                         <div className="flex items-center gap-3">
@@ -431,30 +571,50 @@ export default function WorkspaceManagementPage() {
                         <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 flex gap-3">
                            <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                            <p className="text-[10px] text-blue-700 leading-relaxed font-medium">
-                             This policy controls the hard quota tier directly for all accounts under this specific Google Workspace Organizational Unit (OU).
+                             This policy controls the hard quota tier directly for all accounts under this specific Google Workspace User Type.
                            </p>
                         </div>
-                        <Button className="w-full h-11 font-bold bg-slate-900">Update Allocation Rule</Button>
+                        <Button className="w-full h-11 font-bold bg-slate-900 text-white">Apply Storage Policy</Button>
                      </CardContent>
                    </Card>
                  ))}
                </div>
             </TabsContent>
 
-            <TabsContent value="archived" className="m-0">
+            <TabsContent value="archived" className="m-0 space-y-6">
+               <Card className="bg-white border-slate-200 shadow-sm p-6">
+                  <div className="flex items-center gap-6">
+                    <div className="flex-1 space-y-1.5">
+                       <Label className="text-[10px] font-bold uppercase text-slate-400">Filter Archive Timeline</Label>
+                       <div className="flex items-center gap-3">
+                          <div className="relative flex-1">
+                             <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                             <Input type="date" className="pl-10 h-10 border-slate-200 text-xs" />
+                          </div>
+                          <span className="text-slate-300 text-xs font-bold">to</span>
+                          <div className="relative flex-1">
+                             <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                             <Input type="date" className="pl-10 h-10 border-slate-200 text-xs" />
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+               </Card>
+
                <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
-                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Suspended Account Directory</CardTitle>
-                    <Badge variant="outline" className="text-[10px] font-bold text-slate-400">Sample Records</Badge>
+                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6 flex flex-row items-center justify-between">
+                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Archived Retention Ledger</CardTitle>
+                    <Badge variant="outline" className="text-[10px] font-bold text-slate-400">Archived Records</Badge>
                  </CardHeader>
                  <CardContent className="p-0">
                     <Table>
                       <TableHeader className="bg-slate-50/30">
                          <TableRow className="border-b border-slate-100">
                            <TableHead className="text-[10px] font-bold uppercase py-4 pl-8">Former Identity</TableHead>
-                           <TableHead className="text-[10px] font-bold uppercase py-4">Suspension Reason</TableHead>
-                           <TableHead className="text-[10px] font-bold uppercase py-4">Timeline</TableHead>
-                           <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Management</TableHead>
+                           <TableHead className="text-[10px] font-bold uppercase py-4">Original Type</TableHead>
+                           <TableHead className="text-[10px] font-bold uppercase py-4">Deactivation Date</TableHead>
+                           <TableHead className="text-[10px] font-bold uppercase py-4">Storage Saved</TableHead>
+                           <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Actions</TableHead>
                          </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -465,8 +625,9 @@ export default function WorkspaceManagementPage() {
                                 <span className="text-[10px] font-mono text-slate-400">a.johnson@{selectedOrg?.domain}</span>
                              </div>
                           </TableCell>
-                          <TableCell className="text-xs font-medium text-slate-500">Graduation / Alumni Status</TableCell>
+                          <TableCell className="text-xs font-bold text-slate-600">{allOUs[0]}</TableCell>
                           <TableCell className="text-[10px] font-bold text-slate-400 uppercase">Suspended Dec 2025</TableCell>
+                          <TableCell className="text-xs font-bold text-emerald-600">4.2 GB</TableCell>
                           <TableCell className="text-right pr-8">
                              <div className="flex items-center justify-end gap-2">
                                 <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold uppercase tracking-widest border-slate-200">Restore</Button>
@@ -481,6 +642,36 @@ export default function WorkspaceManagementPage() {
             </TabsContent>
           </Tabs>
         )}
+
+        <Dialog open={isOUDialogOpen} onOpenChange={setIsOUDialogOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl">
+            <DialogHeader className="bg-slate-900 text-white p-6">
+              <DialogTitle className="font-headline font-bold text-xl">Register Custom User Type</DialogTitle>
+              <p className="text-slate-400 text-xs mt-1">This will create a new top-level Organizational Unit (OU).</p>
+            </DialogHeader>
+            <div className="p-8 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="ou-name" className="text-[10px] font-bold uppercase text-slate-500">User Type Name</Label>
+                <Input 
+                  id="ou-name" 
+                  placeholder="e.g. Contractors, Alumni, Guest" 
+                  value={newOUType}
+                  className="h-11 font-bold border-slate-200"
+                  onChange={(e) => setNewOUType(e.target.value)}
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                Custom types allow for granular storage allocation and specific security policies within the Google Workspace environment.
+              </p>
+            </div>
+            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
+              <Button variant="ghost" onClick={() => setIsOUDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
+              <Button onClick={handleAddUserType} disabled={isUpdating || !newOUType} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11">
+                {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Register Type"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardShell>
   )

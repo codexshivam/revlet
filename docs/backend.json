@@ -39,10 +39,12 @@
         "usedWebEdits": { "type": "number" },
         "lastWebQuota": { "type": "string", "format": "date-time" },
         "gEducation": { "type": "boolean", "description": "Whether the institution is an Educational organization." },
+        "workspaceActive": { "type": "boolean", "description": "Whether the organization declares they have an existing Google Workspace." },
         "managedWorkspace": { "type": "boolean", "description": "Whether the workspace is connected and managed by the platform." },
         "workspaceStatus": { "type": "string", "enum": ["unregistered", "applied", "pending", "active"] },
         "workspaceDomain": { "type": "string" },
         "workspaceCustomerId": { "type": "string" },
+        "customUserTypes": { "type": "array", "items": { "type": "string" } },
         "workspaceAppliedAt": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       }

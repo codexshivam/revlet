@@ -14,7 +14,8 @@ import {
   Briefcase,
   LayoutDashboard,
   HardDrive,
-  Archive
+  Archive,
+  LayoutGrid
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser, useFirestore } from "@/firebase"
@@ -69,6 +70,7 @@ export function RecursiveSidebar() {
       title: "GOOGLE WORKSPACE",
       icon: Mail,
       children: [
+        { title: "Workspace Hub", icon: LayoutGrid, href: "/services/workspace?tab=hub" },
         { title: "Users", icon: Users, href: "/services/workspace?tab=users" },
         { title: "Storage", icon: HardDrive, href: "/services/workspace?tab=storage" },
         { title: "Archived", icon: Archive, href: "/services/workspace?tab=archived" },
@@ -103,7 +105,11 @@ export function RecursiveSidebar() {
             </div>
             <div className="space-y-1">
               {section.children?.map((item, childIdx) => {
-                const isActive = pathname === item.href
+                // For sub-tabs in workspace, match exact href with query params if present
+                const isActive = item.href?.includes('?') 
+                  ? pathname + (typeof window !== 'undefined' ? window.location.search : '') === item.href
+                  : pathname === item.href
+                
                 return (
                   <Link
                     key={childIdx}

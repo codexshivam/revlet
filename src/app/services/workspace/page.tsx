@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -83,8 +84,6 @@ import {
   resetUserPassword, 
   archiveUser, 
   deleteWorkspaceUser,
-  listOrgUnits,
-  createOrgUnit,
   getCustomerStorageUsage
 } from "@/app/actions/google-workspace"
 
@@ -135,9 +134,6 @@ export default function WorkspaceManagementPage() {
   const [isUpdating, setIsUpdating] = useState(false)
   const [copiedScope, setCopiedScope] = useState<string | null>(null)
   
-  // Connection state
-  const [selectedScopes, setSelectedScopes] = useState<string[]>(SCOPES.map(s => s.url))
-  
   // Dashboard state
   const [users, setUsers] = useState<WorkspaceUser[]>([])
   const [isUsersLoading, setIsUsersLoading] = useState(false)
@@ -155,18 +151,28 @@ export default function WorkspaceManagementPage() {
   const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
   const fetchWorkspaceData = useCallback(async () => {
-    if (!selectedOrg?.managedWorkspace) return
+    if (!selectedOrg?.managedWorkspace || !selectedOrg?.contactEmail) return
     
     setIsUsersLoading(true)
-    const [usersRes, storageRes] = await Promise.all([
-      listWorkspaceUsers('/', selectedOrg.contactEmail),
-      getCustomerStorageUsage(selectedOrg.contactEmail)
-    ])
+    try {
+      const [usersRes, storageRes] = await Promise.all([
+        listWorkspaceUsers('/', selectedOrg.contactEmail),
+        getCustomerStorageUsage(selectedOrg.contactEmail)
+      ])
 
-    if (usersRes.success) setUsers(usersRes.data)
-    if (storageRes.success) setStorageStats(storageRes.data)
-    setIsUsersLoading(false)
-  }, [selectedOrg])
+      if (usersRes.success) {
+        setUsers(usersRes.data)
+      } else {
+        toast({ variant: "destructive", title: "Sync Failed", description: usersRes.error })
+      }
+
+      if (storageRes.success) setStorageStats(storageRes.data)
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "API Connection Error" })
+    } finally {
+      setIsUsersLoading(false)
+    }
+  }, [selectedOrg, toast])
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -224,6 +230,7 @@ export default function WorkspaceManagementPage() {
       updatedAt: serverTimestamp()
     }).then(() => {
       toast({ title: "Connection Verified", description: "Your workspace management panel is now live." })
+      fetchWorkspaceData()
     }).finally(() => setIsUpdating(false))
   }
 
@@ -283,12 +290,8 @@ export default function WorkspaceManagementPage() {
     }).finally(() => setIsUpdating(false))
   }
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
-    toast({ title: "Copied", description: `${label} copied to clipboard.` })
-  }
-
   const handleCopyIndividualScope = (url: string) => {
+    navigator.clipboard.text = url;
     navigator.clipboard.writeText(url)
     setCopiedScope(url)
     toast({ title: "Scope Copied", description: "API Scope URL ready for pasting." })
@@ -300,6 +303,32 @@ export default function WorkspaceManagementPage() {
     : ["Users", "Main People"]
   
   const allOUs = [...defaultOUs, ...(selectedOrg?.customUserTypes || [])]
+
+  // Dynamic Metrics for Hub
+  const hubMetrics = useMemo(() => {
+    if (!selectedOrg) return []
+    const metricsMap = users.reduce((acc: any, u) => {
+      const ou = u.orgUnitPath.substring(1);
+      acc[ou] = (acc[ou] || 0) + 1;
+      return acc;
+    }, {});
+
+    const baseItems = selectedOrg.gEducation 
+      ? [
+        { label: "Students Count", val: metricsMap["Students"] || 0, icon: GraduationCap },
+        { label: "Teachers Count", val: metricsMap["Teachers"] || 0, icon: Users },
+        { label: "Main People", val: metricsMap["Main People"] || 0, icon: UserCog },
+        { label: "Staffs Count", val: metricsMap["Staffs"] || 0, icon: Network },
+      ]
+      : [
+        { label: "Total Users", val: users.length, icon: Users },
+        { label: "Main People", val: metricsMap["Main People"] || 0, icon: UserCog },
+        { label: "OUs Count", val: allOUs.length, icon: Network },
+        { label: "Groups", val: "Calculated", icon: Bell },
+      ]
+
+    return baseItems;
+  }, [users, selectedOrg, allOUs]);
 
   if (isLoading || authLoading) {
     return (
@@ -371,7 +400,7 @@ export default function WorkspaceManagementPage() {
                 ))}
               </div>
               
-              <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+              <div className="flex flex-col sm:flex-row gap-4 w-full max-md sm:max-w-md">
                 <Button 
                   onClick={() => handleDeclare(true)}
                   disabled={isUpdating}
@@ -468,38 +497,30 @@ export default function WorkspaceManagementPage() {
           </div>
         )}
 
-        {/* State 4: Migration Guideline (DWD Authorization) */}
+        {/* State 4: Connection Guideline */}
         {selectedOrg && selectedOrg.workspaceActive === true && !selectedOrg.managedWorkspace && (
           <div className="max-w-5xl mx-auto py-8 space-y-12">
-            <div className="text-center space-y-2">
-              <Badge className="bg-blue-50 text-blue-600 border-blue-100 mb-2">MIGRATION PROTOCOL</Badge>
-              <h2 className="text-3xl font-headline font-bold text-slate-900">Authorize Domain-Wide Delegation</h2>
-              <p className="text-slate-500 text-sm font-medium">Follow these steps to securely link your Google Admin environment to our management platform.</p>
-            </div>
-
-            <div className="space-y-8">
-              {/* Instructions First */}
-              <Card className="bg-slate-900 text-white p-8 shadow-2xl border-none">
+            <Card className="bg-slate-900 text-white p-8 shadow-2xl border-none">
                  <div className="flex items-start gap-5">
                     <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0">
                        <Settings className="w-6 h-6 text-primary" />
                     </div>
                     <div className="space-y-4 flex-1">
-                       <h4 className="text-xl font-bold">Step-by-Step Instructions</h4>
+                       <h4 className="text-xl font-bold">Domain-Wide Delegation Protocol</h4>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-3">
                              <div className="flex items-center gap-2">
                                 <Badge className="bg-white/20 text-white h-5 w-5 p-0 flex items-center justify-center font-bold">1</Badge>
-                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Initialize Console</span>
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Initialize</span>
                              </div>
                              <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                                Log in to your <span className="text-white font-bold">Google Admin Console</span> with super-admin credentials.
+                                Log in to your <span className="text-white font-bold">Google Admin Console</span>.
                              </p>
                           </div>
                           <div className="space-y-3">
                              <div className="flex items-center gap-2">
                                 <Badge className="bg-white/20 text-white h-5 w-5 p-0 flex items-center justify-center font-bold">2</Badge>
-                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Locate Security Controls</span>
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Locate API</span>
                              </div>
                              <p className="text-xs text-slate-300 leading-relaxed font-medium">
                                 Navigate to <span className="text-white font-bold">Security &gt; API Controls &gt; Manage Domain Wide Delegation</span>.
@@ -508,19 +529,19 @@ export default function WorkspaceManagementPage() {
                           <div className="space-y-3">
                              <div className="flex items-center gap-2">
                                 <Badge className="bg-white/20 text-white h-5 w-5 p-0 flex items-center justify-center font-bold">3</Badge>
-                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Register API Client</span>
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Register ID</span>
                              </div>
                              <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                                Click <span className="text-white font-bold">Add new</span> and paste the <span className="text-primary font-bold">System Client ID</span> provided below.
+                                Add new Client, paste <span className="text-primary font-bold">{SYSTEM_CLIENT_ID}</span>.
                              </p>
                           </div>
                           <div className="space-y-3">
                              <div className="flex items-center gap-2">
                                 <Badge className="bg-white/20 text-white h-5 w-5 p-0 flex items-center justify-center font-bold">4</Badge>
-                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Delegate Permissions</span>
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Authorize</span>
                              </div>
                              <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                                Copy the <span className="text-primary font-bold">API Scopes</span> from the checklist and click <span className="text-white font-bold">Authorize</span>.
+                                Copy required scopes from the list below and click Authorize.
                              </p>
                           </div>
                        </div>
@@ -529,87 +550,39 @@ export default function WorkspaceManagementPage() {
               </Card>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <Card className="lg:col-span-1 bg-white border-slate-200 shadow-sm flex flex-col">
-                  <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50">
-                    <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System Client ID</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 flex-1 flex flex-col justify-center gap-4">
-                    <div className="relative group">
-                       <code className="text-sm font-mono font-bold text-primary block text-center py-6 bg-slate-50 rounded-xl border border-slate-200 group-hover:border-primary/30 transition-colors">
-                        {SYSTEM_CLIENT_ID}
-                      </code>
+                 <Card className="lg:col-span-1 bg-white border-slate-200 p-6 flex flex-col justify-center gap-4">
+                    <Label className="text-[10px] font-bold uppercase text-slate-400">Client ID</Label>
+                    <code className="text-sm font-mono font-bold text-primary block text-center py-4 bg-slate-50 border rounded-xl">{SYSTEM_CLIENT_ID}</code>
+                    <Button onClick={() => {navigator.clipboard.writeText(SYSTEM_CLIENT_ID); toast({title: "Copied ID"})}} className="bg-slate-900 text-white font-bold">Copy Client ID</Button>
+                 </Card>
+                 <Card className="lg:col-span-2 bg-white border-slate-200 overflow-hidden">
+                    <CardHeader className="py-3 px-6 bg-slate-50 border-b border-slate-100 flex flex-row items-center justify-between">
+                       <span className="text-[10px] font-bold uppercase text-slate-400">Required OAuth Scopes</span>
+                       <Badge variant="outline" className="bg-white h-5">{SCOPES.length} Scopes</Badge>
+                    </CardHeader>
+                    <div className="divide-y divide-slate-100">
+                       {SCOPES.map(s => (
+                         <div key={s.url} className="p-4 flex items-center justify-between hover:bg-slate-50 group">
+                            <code className="text-[9px] font-mono text-slate-500 truncate pr-4">{s.url}</code>
+                            <Button variant="ghost" size="icon" onClick={() => handleCopyIndividualScope(s.url)} className="h-8 w-8 text-slate-300 hover:text-primary">
+                               {copiedScope === s.url ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            </Button>
+                         </div>
+                       ))}
                     </div>
-                    <Button onClick={() => copyToClipboard(SYSTEM_CLIENT_ID, "Client ID")} className="w-full bg-slate-900 text-white font-bold h-12 shadow-lg">
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy Client ID
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="lg:col-span-2 bg-white border-slate-200 shadow-sm flex flex-col">
-                  <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
-                    <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Required API Scopes</CardTitle>
-                    <Badge variant="outline" className="text-[9px] font-bold h-5 bg-white">{selectedScopes.length} Scopes Selected</Badge>
-                  </CardHeader>
-                  <CardContent className="p-0 flex-1 flex flex-col">
-                    <div className="flex-1 max-h-[300px] overflow-y-auto no-scrollbar divide-y divide-slate-100">
-                      {SCOPES.map((scope) => (
-                        <div key={scope.url} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-all group">
-                          <div className="flex items-center space-x-4 flex-1 min-w-0">
-                            <Checkbox 
-                              id={scope.url} 
-                              checked={selectedScopes.includes(scope.url)} 
-                              onCheckedChange={(checked) => {
-                                setSelectedScopes(prev => checked ? [...prev, scope.url] : prev.filter(s => s !== scope.url))
-                              }}
-                            />
-                            <label htmlFor={scope.url} className="text-[10px] font-mono font-bold text-slate-500 cursor-pointer flex-1 truncate pr-4">
-                              {scope.url}
-                            </label>
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleCopyIndividualScope(scope.url)}
-                            className="h-8 w-8 text-slate-300 hover:text-primary shrink-0"
-                          >
-                            {copiedScope === scope.url ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-                       <Button 
-                        variant="outline" 
-                        onClick={() => copyToClipboard(selectedScopes.join(', '), "All Scopes")} 
-                        disabled={selectedScopes.length === 0}
-                        className="w-full border-slate-200 font-bold h-11 bg-white"
-                      >
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy Selected Comma-Separated List
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                 </Card>
               </div>
 
-              <div className="flex flex-col items-center gap-6 pt-8 border-t border-slate-100">
-                 <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-100 max-w-lg text-center">
-                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <p className="text-[10px] text-amber-700 font-bold leading-relaxed">
-                       Propagation of delegation settings typically takes 2-5 minutes in Google's systems.
-                    </p>
-                 </div>
-                 <Button onClick={handleVerify} disabled={isUpdating} className="h-14 px-16 text-lg font-bold shadow-xl shadow-primary/20 gap-3 group">
-                   {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-6 h-6 group-hover:scale-110 transition-transform" />}
-                   Verify & Activate Connection
+              <div className="flex flex-col items-center pt-8 border-t">
+                 <Button onClick={handleVerify} disabled={isUpdating} className="h-14 px-16 text-lg font-bold shadow-xl gap-3">
+                   {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-6 h-6" />}
+                   Verify & Activate Dashboard
                  </Button>
               </div>
-            </div>
           </div>
         )}
 
-        {/* State 5: Active Management Dashboard */}
+        {/* State 5: Active Management */}
         {selectedOrg && selectedOrg.managedWorkspace === true && (
           <Tabs value={currentTab} onValueChange={(v) => router.push(`/services/workspace?tab=${v}`)} className="space-y-8">
             <div className="flex items-center justify-between border-b border-slate-200 pb-1">
@@ -626,33 +599,20 @@ export default function WorkspaceManagementPage() {
               </TabsList>
               <Button variant="ghost" size="sm" onClick={fetchWorkspaceData} disabled={isUsersLoading} className="h-8 text-xs font-bold gap-2">
                 <RefreshCw className={cn("w-3 h-3", isUsersLoading && "animate-spin")} />
-                Sync Data
+                Sync Cloud Directory
               </Button>
             </div>
 
             <TabsContent value="hub" className="m-0 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {(selectedOrg.gEducation 
-                  ? [
-                    { label: "Students Count", val: "1,420", icon: GraduationCap },
-                    { label: "Teachers Count", val: "85", icon: Users },
-                    { label: "Main People", val: "12", icon: UserCog },
-                    { label: "Staffs Count", val: "42", icon: Network },
-                  ]
-                  : [
-                    { label: "Total Users", val: "156", icon: Users },
-                    { label: "Main People", val: "5", icon: UserCog },
-                    { label: "OUs Count", val: "3", icon: Network },
-                    { label: "Groups", val: "8", icon: Bell },
-                  ]
-                ).map((m) => (
-                  <Card key={m.label} className="bg-white border-slate-200 shadow-sm overflow-hidden group">
+                {hubMetrics.map((m) => (
+                  <Card key={m.label} className="bg-white border-slate-200 shadow-sm group">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between mb-4">
                         <div className="p-2 bg-slate-50 rounded-lg group-hover:bg-primary/5 transition-colors">
                            <m.icon className="w-4 h-4 text-slate-400 group-hover:text-primary" />
                         </div>
-                        <Badge variant="outline" className="text-[9px] font-bold h-4 bg-emerald-50 text-emerald-600 border-emerald-100">ACTIVE</Badge>
+                        <Badge variant="outline" className="text-[9px] font-bold h-4 bg-emerald-50 text-emerald-600 border-emerald-100">LIVE</Badge>
                       </div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{m.label}</p>
                       <p className="text-3xl font-headline font-bold text-slate-900 mt-1">{m.val}</p>
@@ -673,7 +633,7 @@ export default function WorkspaceManagementPage() {
                   <div className="space-y-4">
                     <Progress value={(storageStats.used / storageStats.total) * 100} className="h-2.5 bg-slate-100" />
                     <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                       <span>{Math.round((storageStats.used / storageStats.total) * 100)}% Utilised</span>
+                       <span>{Math.round((storageStats.used / storageStats.total) * 100)}% Cloud Capacity Utilised</span>
                        <span>{(storageStats.total - storageStats.used).toFixed(1)} TB Available</span>
                     </div>
                   </div>
@@ -681,31 +641,23 @@ export default function WorkspaceManagementPage() {
               </Card>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <Card className="lg:col-span-2 bg-white border-slate-200 shadow-sm overflow-hidden">
+                <Card className="lg:col-span-2 bg-white border-slate-200 overflow-hidden">
                   <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6">
                     <div className="flex items-center gap-2">
                        <Bell className="w-4 h-4 text-slate-400" />
-                       <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Alert Center</CardTitle>
+                       <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Audit Activity Feed</CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y divide-slate-100">
                       {[
-                        { id: 1, type: "CRITICAL", msg: "Multiple failed login attempts detected on administrative account", time: "2m ago" },
-                        { id: 2, type: "WARNING", msg: "Students OU collective storage has reached 88% capacity", time: "1h ago" },
-                        { id: 3, type: "INFO", msg: "Directory sync executed successfully", time: "4h ago" },
+                        { id: 1, type: "INFO", msg: "Institutional directory sync executed successfully", time: "Just now" },
+                        { id: 2, type: "INFO", msg: "Domain-wide security policy verified", time: "1h ago" },
                       ].map((log) => (
-                        <div key={log.id} className="p-5 flex items-start justify-between hover:bg-slate-50/50 transition-colors">
+                        <div key={log.id} className="p-5 flex items-start justify-between hover:bg-slate-50 transition-colors">
                           <div className="flex gap-4">
-                            <Badge className={cn(
-                              "text-[9px] font-bold h-5 px-1.5 border shadow-none",
-                              log.type === "CRITICAL" ? "bg-red-50 text-red-600 border-red-100" :
-                              log.type === "WARNING" ? "bg-amber-50 text-amber-700 border-amber-100" :
-                              "bg-slate-50 text-slate-500 border-slate-100"
-                            )}>
-                              {log.type}
-                            </Badge>
-                            <p className="text-xs font-medium text-slate-700 leading-tight">{log.msg}</p>
+                            <Badge className="text-[9px] font-bold h-5 px-1.5 bg-slate-50 text-slate-500 border-slate-100">{log.type}</Badge>
+                            <p className="text-xs font-medium text-slate-700">{log.msg}</p>
                           </div>
                           <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">{log.time}</span>
                         </div>
@@ -714,57 +666,49 @@ export default function WorkspaceManagementPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="bg-slate-900 text-white shadow-2xl relative overflow-hidden flex flex-col justify-center p-8">
-                  <div className="absolute top-0 right-0 p-4 opacity-5">
-                    <Network className="w-32 h-32 rotate-12" />
-                  </div>
-                  <div className="relative space-y-6">
+                <Card className="bg-slate-900 text-white p-8 flex flex-col justify-center space-y-6">
                     <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
                        <Cloud className="w-6 h-6 text-primary" />
                     </div>
                     <div className="space-y-2">
-                      <h4 className="text-xl font-headline font-bold">Admin Console</h4>
+                      <h4 className="text-xl font-headline font-bold">Admin Panel</h4>
                       <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                        Secure gateway to Google's master control panel for advanced policy enforcement.
+                        Secure gateway to the master Google Admin environment.
                       </p>
                     </div>
-                    <Button asChild className="w-full bg-white text-slate-900 hover:bg-slate-100 font-bold h-12 group">
+                    <Button asChild className="w-full bg-white text-slate-900 hover:bg-slate-100 font-bold h-12">
                       <a href="https://admin.google.com" target="_blank" rel="noopener noreferrer">
                         Launch Console
-                        <ArrowUpRight className="w-4 h-4 ml-2 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                        <ArrowUpRight className="w-4 h-4 ml-2" />
                       </a>
                     </Button>
-                  </div>
                 </Card>
               </div>
             </TabsContent>
 
             <TabsContent value="users" className="m-0 space-y-6">
-               <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
+               <Card className="bg-white border-slate-200 overflow-hidden">
                  <Tabs defaultValue={allOUs[0].toLowerCase()} className="w-full">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-0">
                       <div className="flex flex-col md:flex-row items-center justify-between p-4 px-6 gap-4">
-                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
-                          <TabsList className="bg-slate-200/50 h-9 p-1">
-                            {allOUs.map((ou) => (
-                              <TabsTrigger key={ou} value={ou.toLowerCase()} className="text-[9px] font-bold uppercase tracking-widest px-4 h-7 data-[state=active]:bg-white">
-                                {ou}
-                              </TabsTrigger>
-                            ))}
-                          </TabsList>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => setIsOUDialogOpen(true)}
-                            disabled={(selectedOrg.customUserTypes?.length || 0) >= 5}
-                            className="h-8 text-primary font-bold text-[9px] uppercase gap-1 px-3 hover:bg-primary/5"
-                          >
-                            <Plus className="w-3 h-3" />
-                            Add Type
-                          </Button>
-                        </div>
-                        <div className="flex items-center gap-3 w-full md:w-auto">
-                          <Button onClick={() => setIsCreateDialogOpen(true)} size="sm" className="h-9 font-bold px-4 gap-2 bg-slate-900 text-white">
+                        <TabsList className="bg-slate-200/50 h-9 p-1">
+                          {allOUs.map((ou) => (
+                            <TabsTrigger key={ou} value={ou.toLowerCase()} className="text-[9px] font-bold uppercase tracking-widest px-4 h-7 data-[state=active]:bg-white">
+                              {ou}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                        <div className="flex items-center gap-3">
+                           <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setIsOUDialogOpen(true)}
+                              className="h-9 text-primary font-bold text-[9px] uppercase"
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Add OU
+                           </Button>
+                           <Button onClick={() => setIsCreateDialogOpen(true)} size="sm" className="h-9 font-bold px-4 gap-2 bg-slate-900 text-white">
                              <UserPlus className="w-3.5 h-3.5" />
                              Create User
                           </Button>
@@ -775,7 +719,7 @@ export default function WorkspaceManagementPage() {
                       {isUsersLoading ? (
                         <div className="py-40 flex flex-col items-center justify-center gap-3">
                            <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
-                           <p className="text-[10px] font-bold text-slate-400 uppercase">Indexing Directory...</p>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase">Syncing Profiles...</p>
                         </div>
                       ) : (
                         allOUs.map((ou) => (
@@ -783,9 +727,9 @@ export default function WorkspaceManagementPage() {
                              <Table>
                                <TableHeader className="bg-slate-50/30">
                                  <TableRow className="border-b border-slate-100">
-                                   <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 w-1/3">User Identity</TableHead>
-                                   <TableHead className="text-[10px] font-bold uppercase py-4">Workspace Email</TableHead>
-                                   <TableHead className="text-[10px] font-bold uppercase py-4">Storage Usage</TableHead>
+                                   <TableHead className="text-[10px] font-bold uppercase py-4 pl-8">Identity</TableHead>
+                                   <TableHead className="text-[10px] font-bold uppercase py-4">Cloud Email</TableHead>
+                                   <TableHead className="text-[10px] font-bold uppercase py-4">Status</TableHead>
                                    <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Actions</TableHead>
                                  </TableRow>
                                </TableHeader>
@@ -793,62 +737,31 @@ export default function WorkspaceManagementPage() {
                                  {users.filter(u => u.orgUnitPath === `/${ou}`).length === 0 ? (
                                    <TableRow>
                                       <TableCell colSpan={4} className="py-24 text-center text-slate-400 text-xs italic">
-                                         No users found in the {ou} organizational unit.
+                                         No active accounts in the {ou} unit.
                                       </TableCell>
                                    </TableRow>
                                  ) : (
                                    users.filter(u => u.orgUnitPath === `/${ou}`).map((u) => (
-                                     <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0">
+                                     <TableRow key={u.id} className="hover:bg-slate-50 transition-colors border-b last:border-0">
                                        <TableCell className="pl-8 py-5">
                                           <div className="flex items-center gap-3">
-                                             <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase">
+                                             <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400">
                                                 {u.name.substring(0, 1)}
                                              </div>
-                                             <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-800">{u.name}</span>
-                                                <Badge variant="outline" className={cn(
-                                                  "text-[8px] font-bold h-4 w-fit px-1 shadow-none border",
-                                                  u.status === 'Active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-red-50 text-red-600 border-red-100"
-                                                )}>
-                                                  {u.status.toUpperCase()}
-                                                </Badge>
-                                             </div>
+                                             <span className="text-sm font-bold text-slate-800">{u.name}</span>
                                           </div>
                                        </TableCell>
-                                       <TableCell className="font-mono text-xs text-slate-500 font-medium">{u.email}</TableCell>
-                                       <TableCell className="text-xs font-bold text-slate-600">{u.storage}</TableCell>
+                                       <TableCell className="font-mono text-xs text-slate-500">{u.email}</TableCell>
+                                       <TableCell>
+                                          <Badge className={cn("text-[9px] font-bold shadow-none", u.status === 'Active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-red-50 text-red-600 border-red-100")}>
+                                            {u.status.toUpperCase()}
+                                          </Badge>
+                                       </TableCell>
                                        <TableCell className="text-right pr-8">
                                           <div className="flex items-center justify-end gap-1">
-                                             <Button 
-                                               variant="ghost" 
-                                               size="icon" 
-                                               title="Reset Password"
-                                               onClick={() => {
-                                                 setResetData({ userId: u.id, userName: u.name, newPassword: "", forceChange: true })
-                                                 setIsResetDialogOpen(true)
-                                               }}
-                                               className="h-8 w-8 text-slate-400 hover:text-primary"
-                                             >
-                                               <Key className="w-3.5 h-3.5" />
-                                             </Button>
-                                             <Button 
-                                               variant="ghost" 
-                                               size="icon" 
-                                               title={u.status === 'Active' ? "Archive Account" : "Activate Account"}
-                                               onClick={() => handleArchiveUser(u.id, u.status)}
-                                               className="h-8 w-8 text-slate-400 hover:text-amber-500"
-                                             >
-                                               <Archive className="w-3.5 h-3.5" />
-                                             </Button>
-                                             <Button 
-                                               variant="ghost" 
-                                               size="icon" 
-                                               title="Delete Permanently"
-                                               onClick={() => handleDeleteUser(u.id)}
-                                               className="h-8 w-8 text-slate-400 hover:text-red-500"
-                                             >
-                                               <Trash2 className="w-3.5 h-3.5" />
-                                             </Button>
+                                             <Button variant="ghost" size="icon" onClick={() => {setResetData({userId: u.id, userName: u.name, newPassword: "", forceChange: true}); setIsResetDialogOpen(true)}} className="h-8 w-8 text-slate-400 hover:text-primary"><Key className="w-3.5 h-3.5" /></Button>
+                                             <Button variant="ghost" size="icon" onClick={() => handleArchiveUser(u.id, u.status)} className="h-8 w-8 text-slate-400 hover:text-amber-500"><Archive className="w-3.5 h-3.5" /></Button>
+                                             <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(u.id)} className="h-8 w-8 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></Button>
                                           </div>
                                        </TableCell>
                                      </TableRow>
@@ -864,33 +777,20 @@ export default function WorkspaceManagementPage() {
                </Card>
             </TabsContent>
 
-            <TabsContent value="storage" className="m-0 space-y-8">
+            <TabsContent value="storage" className="m-0">
                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  {allOUs.map((ou) => (
                    <Card key={ou} className="bg-white border-slate-200 shadow-sm overflow-hidden">
-                     <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50">
-                        <div className="flex items-center gap-3">
-                           <div className="p-2 bg-white rounded-lg shadow-sm">
-                              <HardDrive className="w-4 h-4 text-slate-400" />
-                           </div>
-                           <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-600">{ou} Allocation</CardTitle>
-                        </div>
+                     <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+                        <HardDrive className="w-4 h-4 text-slate-400" />
+                        <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-slate-600">{ou} Allocation</CardTitle>
                      </CardHeader>
-                     <CardContent className="p-6 space-y-6">
-                        <div className="space-y-2">
-                           <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Max Storage Limit (GB)</Label>
-                           <div className="relative">
-                              <Input defaultValue={ou === "Students" ? "5" : "100"} className="h-11 font-bold border-slate-200 bg-slate-50/50" />
-                              <span className="absolute right-4 top-3 text-[10px] font-bold text-slate-400 uppercase">GB</span>
-                           </div>
+                     <CardContent className="p-6 space-y-4">
+                        <div className="space-y-1.5">
+                           <Label className="text-[10px] font-bold text-slate-400 uppercase">Max Quota (GB)</Label>
+                           <Input defaultValue={ou === "Students" ? "5" : "100"} className="h-10 font-bold border-slate-200" />
                         </div>
-                        <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 flex gap-3">
-                           <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                           <p className="text-[10px] text-blue-700 leading-relaxed font-medium">
-                             This policy controls the hard quota tier directly for all accounts under this specific Google Workspace User Type.
-                           </p>
-                        </div>
-                        <Button className="w-full h-11 font-bold bg-slate-900 text-white">Apply Storage Policy</Button>
+                        <Button className="w-full bg-slate-900 text-white font-bold h-10">Apply Cloud Policy</Button>
                      </CardContent>
                    </Card>
                  ))}
@@ -898,65 +798,34 @@ export default function WorkspaceManagementPage() {
             </TabsContent>
 
             <TabsContent value="archived" className="m-0 space-y-6">
-               <Card className="bg-white border-slate-200 shadow-sm p-6">
-                  <div className="flex items-center gap-6">
-                    <div className="flex-1 space-y-1.5">
-                       <Label className="text-[10px] font-bold uppercase text-slate-400">Filter Archive Timeline</Label>
-                       <div className="flex items-center gap-3">
-                          <div className="relative flex-1">
-                             <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                             <Input type="date" className="pl-10 h-10 border-slate-200 text-xs font-bold" />
-                          </div>
-                          <span className="text-slate-300 text-xs font-bold">to</span>
-                          <div className="relative flex-1">
-                             <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                             <Input type="date" className="pl-10 h-10 border-slate-200 text-xs font-bold" />
-                          </div>
-                       </div>
-                    </div>
-                  </div>
-               </Card>
-
                <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                  <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6 flex flex-row items-center justify-between">
-                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Archived Retention Ledger</CardTitle>
-                    <Badge variant="outline" className="text-[10px] font-bold text-slate-400 px-2 h-5 bg-white border-slate-200">
-                      {users.filter(u => u.archived).length} Archived Records
-                    </Badge>
+                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Retention Registry</CardTitle>
+                    <Badge variant="outline" className="bg-white">{users.filter(u => u.archived).length} Archived</Badge>
                  </CardHeader>
-                 <CardContent className="p-0 min-h-[300px]">
+                 <CardContent className="p-0">
                     <Table>
                       <TableHeader className="bg-slate-50/30">
                          <TableRow className="border-b border-slate-100">
                            <TableHead className="text-[10px] font-bold uppercase py-4 pl-8">Former Identity</TableHead>
-                           <TableHead className="text-[10px] font-bold uppercase py-4">Original Type</TableHead>
-                           <TableHead className="text-[10px] font-bold uppercase py-4">Status</TableHead>
+                           <TableHead className="text-[10px] font-bold uppercase py-4">Cloud Email</TableHead>
                            <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Actions</TableHead>
                          </TableRow>
                       </TableHeader>
                       <TableBody>
                         {users.filter(u => u.archived).length === 0 ? (
                           <TableRow>
-                             <TableCell colSpan={4} className="py-24 text-center text-slate-400 text-xs italic">
-                               No archived accounts found in the directory.
-                             </TableCell>
+                             <TableCell colSpan={3} className="py-24 text-center text-slate-400 text-xs italic">No archived records found.</TableCell>
                           </TableRow>
                         ) : (
                           users.filter(u => u.archived).map(u => (
-                            <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-50">
+                            <TableRow key={u.id} className="hover:bg-slate-50 transition-colors border-b last:border-0">
                               <TableCell className="pl-8 py-5">
-                                 <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-slate-400 line-through">{u.name}</span>
-                                    <span className="text-[10px] font-mono text-slate-400">{u.email}</span>
-                                 </div>
+                                 <span className="text-sm font-bold text-slate-400 line-through">{u.name}</span>
                               </TableCell>
-                              <TableCell className="text-xs font-bold text-slate-600">{u.orgUnitPath.substring(1)}</TableCell>
-                              <TableCell className="text-[10px] font-bold text-red-500 uppercase tracking-tighter">SUSPENDED</TableCell>
+                              <TableCell className="font-mono text-xs text-slate-400">{u.email}</TableCell>
                               <TableCell className="text-right pr-8">
-                                 <div className="flex items-center justify-end gap-2">
-                                    <Button variant="outline" size="sm" onClick={() => handleArchiveUser(u.id, u.status)} className="h-8 text-[10px] font-bold uppercase tracking-widest border-slate-200">Restore</Button>
-                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(u.id)} className="h-8 w-8 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></Button>
-                                 </div>
+                                 <Button variant="outline" size="sm" onClick={() => handleArchiveUser(u.id, u.status)} className="h-8 text-[10px] font-bold uppercase">Restore Access</Button>
                               </TableCell>
                             </TableRow>
                           ))
@@ -973,35 +842,35 @@ export default function WorkspaceManagementPage() {
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
             <DialogHeader className="bg-slate-900 text-white p-6">
-               <DialogTitle className="font-headline font-bold text-xl">Create Workspace Identity</DialogTitle>
-               <p className="text-slate-400 text-xs mt-1">Authorize new account access for {selectedOrg?.domain}.</p>
+               <DialogTitle className="font-headline font-bold text-xl">Provision New Cloud Identity</DialogTitle>
+               <p className="text-slate-400 text-xs mt-1">Deploy new credentials to {selectedOrg?.domain}.</p>
             </DialogHeader>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                    <Label className="text-[10px] font-bold uppercase text-slate-500">First Name</Label>
-                   <Input value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} placeholder="e.g. Sagar" className="h-10 text-xs font-bold" />
+                   <Input value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} placeholder="Sagar" className="h-10 text-xs font-bold" />
                 </div>
                 <div className="space-y-1.5">
                    <Label className="text-[10px] font-bold uppercase text-slate-500">Last Name</Label>
-                   <Input value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} placeholder="e.g. Poudel" className="h-10 text-xs font-bold" />
+                   <Input value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} placeholder="Poudel" className="h-10 text-xs font-bold" />
                 </div>
               </div>
               <div className="space-y-1.5">
-                 <Label className="text-[10px] font-bold uppercase text-slate-500">Email Identifier</Label>
+                 <Label className="text-[10px] font-bold uppercase text-slate-500">User Email Prefix</Label>
                  <div className="flex items-center gap-2">
                     <Input value={newUser.emailPrefix} onChange={e => setNewUser({...newUser, emailPrefix: e.target.value})} placeholder="username" className="h-10 text-xs font-bold flex-1" />
                     <span className="text-xs font-bold text-slate-400">@{selectedOrg?.domain}</span>
                  </div>
               </div>
               <div className="space-y-1.5">
-                 <Label className="text-[10px] font-bold uppercase text-slate-500">Security Password</Label>
+                 <Label className="text-[10px] font-bold uppercase text-slate-500">Master Password</Label>
                  <Input type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} placeholder="••••••••" className="h-10 text-xs font-bold" />
               </div>
               <div className="space-y-1.5">
                  <Label className="text-[10px] font-bold uppercase text-slate-500">Assign to OU</Label>
                  <select 
-                   className="w-full h-10 px-3 text-xs font-bold border border-slate-200 rounded-md outline-none focus:ring-1 focus:ring-primary"
+                   className="w-full h-10 px-3 text-xs font-bold border border-slate-200 rounded-md outline-none"
                    value={newUser.orgUnit}
                    onChange={e => setNewUser({...newUser, orgUnit: e.target.value})}
                  >
@@ -1010,61 +879,10 @@ export default function WorkspaceManagementPage() {
                  </select>
               </div>
             </div>
-            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
+            <DialogFooter className="bg-slate-50 p-6 border-t">
                <Button variant="ghost" onClick={() => setIsCreateDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
                <Button onClick={handleCreateUser} disabled={isUpdating} className="px-8 bg-slate-900 text-white font-bold h-11">
-                 {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Deploy Identity"}
-               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Reset Password Dialog */}
-        <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
-          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
-            <DialogHeader className="bg-slate-900 text-white p-6">
-               <DialogTitle className="font-headline font-bold text-xl">Reset Security Access</DialogTitle>
-               <p className="text-slate-400 text-xs mt-1">Issue new credentials for {resetData.userName}.</p>
-            </DialogHeader>
-            <div className="p-6 space-y-4">
-               <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-slate-500">New Secure Password</Label>
-                  <Input 
-                    type="password" 
-                    value={resetData.newPassword} 
-                    onChange={e => setResetData({...resetData, newPassword: e.target.value})} 
-                    placeholder="Min. 8 characters" 
-                    className="h-11 text-xs font-bold" 
-                  />
-               </div>
-               <div className="flex items-center space-x-3 p-4 bg-slate-50 border border-slate-100 rounded-lg">
-                  <Checkbox 
-                    id="force-reset" 
-                    checked={resetData.forceChange} 
-                    onCheckedChange={checked => setResetData({...resetData, forceChange: !!checked})} 
-                  />
-                  <div className="space-y-0.5">
-                    <label htmlFor="force-reset" className="text-xs font-bold text-slate-900 block cursor-pointer">Force change on next login</label>
-                    <p className="text-[10px] text-slate-400 font-medium">Ensures only the user knows the actual password.</p>
-                  </div>
-               </div>
-            </div>
-            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
-               <Button variant="ghost" onClick={() => setIsResetDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
-               <Button 
-                 onClick={async () => {
-                   setIsUpdating(true)
-                   const res = await resetUserPassword(resetData.userId, resetData.newPassword, resetData.forceChange, selectedOrg?.contactEmail)
-                   if (res.success) {
-                     toast({ title: "Password Updated", description: `Credentials for ${resetData.userName} have been reset.` })
-                     setIsResetDialogOpen(false)
-                   }
-                   setIsUpdating(false)
-                 }} 
-                 disabled={isUpdating || !resetData.newPassword} 
-                 className="px-8 bg-slate-900 text-white font-bold h-11"
-               >
-                 {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit New Password"}
+                 {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Commit Identity"}
                </Button>
             </DialogFooter>
           </DialogContent>
@@ -1074,29 +892,71 @@ export default function WorkspaceManagementPage() {
         <Dialog open={isOUDialogOpen} onOpenChange={setIsOUDialogOpen}>
           <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl">
             <DialogHeader className="bg-slate-900 text-white p-6">
-              <DialogTitle className="font-headline font-bold text-xl">Register Custom User Type</DialogTitle>
-              <p className="text-slate-400 text-xs mt-1">This will create a new top-level Organizational Unit (OU).</p>
+              <DialogTitle className="font-headline font-bold text-xl">Register Custom OU</DialogTitle>
             </DialogHeader>
             <div className="p-8 space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="ou-name" className="text-[10px] font-bold uppercase text-slate-500">User Type Name</Label>
-                <Input 
-                  id="ou-name" 
-                  placeholder="e.g. Contractors, Alumni, Guest" 
-                  value={newOUType}
-                  className="h-11 font-bold border-slate-200"
-                  onChange={(e) => setNewOUType(e.target.value)}
-                />
-              </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
-                Custom types allow for granular storage allocation and specific security policies within the Google Workspace environment.
-              </p>
+              <Label className="text-[10px] font-bold uppercase text-slate-500">Unit Name</Label>
+              <Input 
+                placeholder="e.g. Alumni, Contractor" 
+                value={newOUType}
+                className="h-11 font-bold border-slate-200"
+                onChange={(e) => setNewOUType(e.target.value)}
+              />
+              <p className="text-[10px] text-slate-400 font-medium">Custom units allow for granular storage and security rules.</p>
             </div>
-            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
+            <DialogFooter className="bg-slate-50 p-6 border-t">
               <Button variant="ghost" onClick={() => setIsOUDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
-              <Button onClick={handleAddUserType} disabled={isUpdating || !newOUType} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11">
-                {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Register Type"}
+              <Button onClick={handleAddUserType} disabled={isUpdating || !newOUType} className="px-8 bg-slate-900 text-white font-bold h-11">
+                {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Deploy Unit"}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Password Dialog */}
+        <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
+            <DialogHeader className="bg-slate-900 text-white p-6">
+               <DialogTitle className="font-headline font-bold text-xl">Reset Access Credentials</DialogTitle>
+               <p className="text-slate-400 text-xs mt-1">Issue new secure password for {resetData.userName}.</p>
+            </DialogHeader>
+            <div className="p-6 space-y-4">
+               <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500">New Password</Label>
+                  <Input 
+                    type="password" 
+                    value={resetData.newPassword} 
+                    onChange={e => setResetData({...resetData, newPassword: e.target.value})} 
+                    placeholder="Min. 8 characters" 
+                    className="h-11 text-xs font-bold" 
+                  />
+               </div>
+               <div className="flex items-center space-x-3 p-4 bg-slate-50 border rounded-lg">
+                  <Checkbox 
+                    id="force-reset" 
+                    checked={resetData.forceChange} 
+                    onCheckedChange={checked => setResetData({...resetData, forceChange: !!checked})} 
+                  />
+                  <label htmlFor="force-reset" className="text-xs font-bold text-slate-900 cursor-pointer">Force change on next login</label>
+               </div>
+            </div>
+            <DialogFooter className="bg-slate-50 p-6 border-t">
+               <Button variant="ghost" onClick={() => setIsResetDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
+               <Button 
+                 onClick={async () => {
+                   setIsUpdating(true)
+                   const res = await resetUserPassword(resetData.userId, resetData.newPassword, resetData.forceChange, selectedOrg?.contactEmail)
+                   if (res.success) {
+                     toast({ title: "Password Updated", description: "Cloud access credentials have been reset." })
+                     setIsResetDialogOpen(false)
+                   }
+                   setIsUpdating(false)
+                 }} 
+                 disabled={isUpdating || !resetData.newPassword} 
+                 className="px-8 bg-slate-900 text-white font-bold h-11"
+               >
+                 {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit New Password"}
+               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

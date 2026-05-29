@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -11,9 +12,15 @@ import {
   Settings, 
   ShieldCheck,
   Briefcase,
-  LayoutDashboard
+  LayoutDashboard,
+  Home,
+  HardDrive,
+  Archive,
+  Layout
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useUser, useFirestore } from "@/firebase"
+import { collection, query, where, onSnapshot } from "firebase/firestore"
 
 interface NavItem {
   title: string
@@ -22,36 +29,60 @@ interface NavItem {
   children?: NavItem[]
 }
 
-const navItems: NavItem[] = [
-  {
-    title: "ACCOUNT",
-    icon: Briefcase,
-    children: [
-      { title: "Account Home", href: "/account/home" },
-      { title: "Manage Payments", href: "/account/billing" },
-    ]
-  },
-  {
-    title: "SERVICES",
-    icon: LayoutDashboard,
-    children: [
-      { title: "DNS Management", icon: Globe, href: "/services/dns" },
-      { title: "Website Management", icon: Database, href: "/services/website" },
-      { title: "Google Workspace", icon: Mail, href: "/services/workspace" },
-    ]
-  },
-  {
-    title: "MANAGEMENT",
-    icon: ShieldCheck,
-    children: [
-      { title: "Team Management", icon: Users, href: "/management/team" },
-      { title: "Settings", icon: Settings, href: "/management/settings" },
-    ]
-  }
-]
-
 export function RecursiveSidebar() {
   const pathname = usePathname()
+  const { user } = useUser()
+  const db = useFirestore()
+  const [workspaceActive, setWorkspaceActive] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!user) return
+    const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
+    const unsub = onSnapshot(q, (snap) => {
+      // Check if any organization has an active workspace
+      const active = snap.docs.some(doc => doc.data().workspaceStatus === "active")
+      setWorkspaceActive(active)
+    })
+    return unsub
+  }, [user, db])
+
+  const navItems: NavItem[] = [
+    {
+      title: "ACCOUNT",
+      icon: Briefcase,
+      children: [
+        { title: "Account Home", href: "/account/home" },
+        { title: "Manage Payments", href: "/account/billing" },
+      ]
+    },
+    ...(workspaceActive ? [{
+      title: "GOOGLE WORKSPACE",
+      icon: Mail,
+      children: [
+        { title: "Workspace Hub", icon: Home, href: "/services/workspace" },
+        { title: "Users", icon: Users, href: "/services/workspace?tab=users" },
+        { title: "Storage", icon: HardDrive, href: "/services/workspace?tab=storage" },
+        { title: "Archived", icon: Archive, href: "/services/workspace?tab=archived" },
+      ]
+    }] : []),
+    {
+      title: "SERVICES",
+      icon: LayoutDashboard,
+      children: [
+        { title: "DNS Management", icon: Globe, href: "/services/dns" },
+        { title: "Website Management", icon: Database, href: "/services/website" },
+        { title: "Google Workspace", icon: Mail, href: "/services/workspace" },
+      ]
+    },
+    {
+      title: "MANAGEMENT",
+      icon: ShieldCheck,
+      children: [
+        { title: "Team Management", icon: Users, href: "/management/team" },
+        { title: "Settings", icon: Settings, href: "/management/settings" },
+      ]
+    }
+  ]
 
   return (
     <aside className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col pt-12 shrink-0">

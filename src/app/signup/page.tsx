@@ -2,11 +2,10 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { User, Mail, Lock, ChevronLeft, Loader2 } from "lucide-react"
+import { Eye, EyeOff, ArrowRight, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/hooks/use-toast"
 import { useState } from "react"
 import { useAuth } from "@/firebase"
@@ -16,6 +15,7 @@ export default function SignupPage() {
   const router = useRouter()
   const auth = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -43,7 +43,12 @@ export default function SignupPage() {
       toast({
         variant: "destructive",
         title: "Required fields missing",
-        description: "Please fill in all the details.",
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <span>Please fill in all the details.</span>
+          </span>
+        ),
       })
       return
     }
@@ -54,16 +59,42 @@ export default function SignupPage() {
       await updateProfile(userCredential.user, {
         displayName: formData.name
       })
+
+      // Reactive Sync: Initialize /users/{userId} document and sync pending organization relationships
+      try {
+        const { getFirestore } = await import("firebase/firestore")
+        const db = getFirestore(auth.app, "itmanager")
+        const { syncUserOrganizations } = await import("@/firebase")
+        await syncUserOrganizations(
+          db, 
+          userCredential.user.uid, 
+          userCredential.user.email || "", 
+          formData.name
+        )
+      } catch (e) {
+        console.error("Error executing user sync at signup:", e)
+      }
+
       toast({
         title: "Account created",
-        description: "Welcome to Revlet! Your profile is ready.",
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>Welcome to Revlet! Your profile is ready.</span>
+          </span>
+        ),
       })
       router.push("/account/home")
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: getFriendlyErrorMessage(error.code),
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <span>{getFriendlyErrorMessage(error.code)}</span>
+          </span>
+        ),
       })
     } finally {
       setIsLoading(false)
@@ -71,99 +102,149 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
-      <div className="w-full max-w-[420px] space-y-8">
-        <div className="flex flex-col items-center text-center space-y-2">
-          <h1 className="text-4xl font-body font-black tracking-[0.2em] text-slate-900 mb-1 ml-[0.2em]">REVLET</h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest max-w-[280px]">Enterprise Infrastructure Management</p>
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500">
+      <div className="w-full max-w-[540px] space-y-6 sm:space-y-8">
+        
+        {/* LOGO */}
+        <div className="text-center select-none">
+          <h1 className="text-[20px] sm:text-[22px] font-headline font-bold tracking-[0.1em] text-[#191c1e] ml-[0.1em]">
+            REVLET
+          </h1>
         </div>
 
-        <Card className="border-slate-200 shadow-2xl shadow-slate-200/50 bg-white">
-          <CardHeader className="space-y-4 pb-4">
-            <div className="flex items-center gap-1 text-[11px] font-bold text-primary uppercase tracking-wider mb-2">
-              <Link href="/login" className="flex items-center hover:underline">
-                <ChevronLeft className="w-3 h-3 mr-0.5" />
-                Back to Login
-              </Link>
-            </div>
-            <div className="space-y-1">
-              <CardTitle className="text-xl font-headline font-bold">Create Account</CardTitle>
-              <CardDescription className="text-xs">Join our network of managed organizations</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSignup} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Full Profile Name</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <Input 
-                    id="name" 
-                    placeholder="Sagar Poudel" 
-                    required 
-                    className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Work Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="admin@yourcompany.com" 
-                    required 
-                    className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">New Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <Input 
-                    id="password" 
-                    type="password" 
-                    placeholder="••••••••" 
-                    required 
-                    className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  />
-                </div>
-              </div>
-              <Button type="submit" className="w-full font-bold h-12 shadow-lg shadow-primary/20 text-sm mt-4" disabled={isLoading}>
-                {isLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Create Platform Account"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-6 pt-2 pb-8">
-            <p className="text-[10px] text-slate-400 text-center font-medium leading-relaxed px-4">
-              By clicking "Create Platform Account", you agree to our <button className="underline font-bold hover:text-slate-600">Terms of Service</button> and <button className="underline font-bold hover:text-slate-600">Privacy Policy</button>.
+        {/* CARD CONTAINER */}
+        <div className="bg-white border border-[#eceef0] shadow-[0px_4px_12px_rgba(15,23,42,0.03)] rounded-lg p-6 sm:p-10 space-y-5 sm:space-y-6">
+          
+          <div className="text-center space-y-2">
+            <h2 className="text-[22px] sm:text-[24px] font-headline font-semibold text-[#191c1e] tracking-tight">
+              Create Account
+            </h2>
+            <p className="text-xs text-[#45464d] font-normal leading-normal max-w-[320px] mx-auto px-2">
+              Join our network of managed institutions.
             </p>
-            <div className="relative w-full">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-slate-100" />
+          </div>
+
+          <form onSubmit={handleSignup} className="space-y-4 sm:space-y-5">
+            {/* FULL PROFILE NAME */}
+            <div className="space-y-2">
+              <Label 
+                htmlFor="name" 
+                className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+              >
+                Full Profile Name
+              </Label>
+              <Input 
+                id="name" 
+                placeholder="Sagar Poudel" 
+                required
+                className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3 placeholder-slate-400"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+
+            {/* WORK EMAIL */}
+            <div className="space-y-2">
+              <Label 
+                htmlFor="email" 
+                className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+              >
+                Work Email
+              </Label>
+              <Input 
+                id="email" 
+                type="email" 
+                placeholder="hello@world.com" 
+                required
+                className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3 placeholder-slate-400"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
+
+            {/* NEW SECURE PASSWORD */}
+            <div className="space-y-2">
+              <Label 
+                htmlFor="password" 
+                className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+              >
+                New Secure Password
+              </Label>
+              
+              <div className="relative">
+                <Input 
+                  id="password" 
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="••••••••••" 
+                  required
+                  className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal pl-3 pr-10 placeholder-slate-300"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
-            <p className="text-sm text-slate-500 text-center font-medium">
-              Already have an account? <Link href="/login" className="text-primary font-bold hover:underline transition-colors">Sign in</Link>
-            </p>
-          </CardFooter>
-        </Card>
-        <div className="text-center">
-          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
-            © 2026 Revlet Platform • hello@revlet.me
+
+            {/* SUBMIT BUTTON */}
+            <Button 
+              type="submit" 
+              className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.15)] flex items-center justify-center"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <>
+                  Create Account
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                </>
+              )}
+            </Button>
+          </form>
+
+          {/* LEGAL TERMS INFO */}
+          <p className="text-[10px] text-[#45464d] text-center font-normal leading-normal px-2 tracking-wide pt-1">
+            By clicking "Create Account", you agree to our{" "}
+            <button className="underline font-semibold hover:text-[#191c1e] transition-colors">
+              Terms of Service
+            </button>{" "}
+            and{" "}
+            <button className="underline font-semibold hover:text-[#191c1e] transition-colors">
+              Privacy Policy
+            </button>
+            .
           </p>
+
+          {/* DIVIDER */}
+          <div className="border-t border-[#eceef0] my-5 sm:my-6"></div>
+
+          {/* LINK TO LOGIN */}
+          <div className="text-center">
+            <p className="text-xs text-[#45464d] font-normal">
+              Already have an account?{" "}
+              <Link 
+                href="/login" 
+                className="text-[#191c1e] font-semibold hover:underline transition-colors"
+              >
+                Sign in
+              </Link>
+            </p>
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="text-center text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em] select-none px-4 leading-normal">
+          © 2026 REVLET PLATFORM • HELLO@REVLET.ME
         </div>
       </div>
     </div>

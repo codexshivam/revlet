@@ -10,6 +10,7 @@ import {
   MoreVertical, 
   Plus, 
   Building2, 
+  GraduationCap,
   Edit2, 
   LogOut, 
   Globe, 
@@ -17,8 +18,6 @@ import {
   Info,
   Trash2,
   AlertTriangle,
-  Clock,
-  GraduationCap
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -37,7 +36,6 @@ import {
 } from "@/components/ui/dialog"
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -53,14 +51,13 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
 import { toast } from "@/hooks/use-toast"
-import { useAuth, useUser, useFirestore } from "@/firebase"
+import { useAuth, useUser, useFirestore, syncUserOrganizations } from "@/firebase"
 import { signOut, updateProfile } from "firebase/auth"
 import { useRouter } from "next/navigation"
 import { 
   collection, 
   query, 
   where, 
-  onSnapshot, 
   addDoc, 
   updateDoc,
   doc,
@@ -78,7 +75,6 @@ interface Organization {
   phone: string
   currentEmail: string
   domain: string
-  cloudflareZoneId: string
   contactName: string
   contactPhone: string
   contactEmail: string
@@ -86,8 +82,28 @@ interface Organization {
   code: string
   ownerId: string
   status?: string
-  gEducation?: boolean
+  isEducation?: boolean
   createdAt: any
+}
+
+function TableSkeleton() {
+  return (
+    <div className="w-full divide-y divide-slate-150 animate-pulse">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center justify-between py-5 pl-8 pr-8">
+          <div className="flex items-center gap-4">
+            <div className="w-9 h-9 bg-slate-100 rounded border border-slate-200" />
+            <div className="flex flex-col gap-1.5">
+              <div className="h-4 w-32 bg-slate-200 rounded" />
+              <div className="h-3 w-16 bg-slate-100 rounded" />
+            </div>
+          </div>
+          <div className="h-4 w-28 bg-slate-100 rounded hidden md:block" />
+          <div className="h-8 w-20 bg-slate-100 rounded" />
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function AccountHomePage() {
@@ -104,8 +120,9 @@ export default function AccountHomePage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
   const [deleteConfirmName, setDeleteConfirmName] = useState("")
+  const [errors, setErrors] = useState<Record<string, string>>({})
   
-  // Form State
+  // Form State — matches Organization data model exactly
   const [formData, setFormData] = useState({
     name: "",
     address: "",
@@ -116,12 +133,65 @@ export default function AccountHomePage() {
     contactPhone: "",
     contactEmail: "",
     description: "",
-    gEducation: false
+    isEducation: false,
   })
   
   const [accountName, setAccountName] = useState("")
   const [localDisplayName, setLocalDisplayName] = useState("")
   const [isUpdatingAccount, setIsUpdatingAccount] = useState(false)
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+    if (errors[field]) {
+      setErrors(prev => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    }
+  }
+
+  const validateForm = () => {
+    const tempErrors: Record<string, string> = {}
+    
+    if (!formData.name.trim()) {
+      tempErrors.name = "Organization legal name is required"
+    } else if (formData.name.trim().length < 3) {
+      tempErrors.name = "Name must be at least 3 characters"
+    }
+
+    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/
+    if (!formData.domain.trim()) {
+      tempErrors.domain = "Managed domain is required"
+    } else if (!domainRegex.test(formData.domain.trim())) {
+      tempErrors.domain = "Enter a valid domain (e.g. company.com)"
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!formData.contactEmail.trim()) {
+      tempErrors.contactEmail = "Representative email is required"
+    } else if (!emailRegex.test(formData.contactEmail.trim())) {
+      tempErrors.contactEmail = "Enter a valid email address"
+    }
+
+    if (formData.currentEmail.trim() && !emailRegex.test(formData.currentEmail.trim())) {
+      tempErrors.currentEmail = "Enter a valid email address"
+    }
+
+    if (!formData.contactName.trim()) {
+      tempErrors.contactName = "Authorized contact name is required"
+    }
+
+    if (formData.contactPhone.trim()) {
+      const phoneRegex = /^\+?[0-9\s\-()]{7,20}$/
+      if (!phoneRegex.test(formData.contactPhone.trim())) {
+        tempErrors.contactPhone = "Enter a valid phone number (7–20 digits)"
+      }
+    }
+
+    setErrors(tempErrors)
+    return Object.keys(tempErrors).length === 0
+  }
 
   useEffect(() => {
     if (user) {
@@ -142,51 +212,59 @@ export default function AccountHomePage() {
     const orgsRef = collection(db, "organizations")
     const q = query(orgsRef, where("ownerId", "==", user.uid))
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedOrgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Organization[]
+    const fetchOrgs = async () => {
+      try {
+        const snapshot = await getDocs(q)
+        const fetchedOrgs = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Organization[]
 
-      const sortedOrgs = fetchedOrgs.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis?.() || 0
-        const timeB = b.createdAt?.toMillis?.() || 0
-        return timeB - timeA
-      })
+        const sortedOrgs = fetchedOrgs.sort((a, b) => {
+          const timeA = a.createdAt?.toMillis?.() || 0
+          const timeB = b.createdAt?.toMillis?.() || 0
+          return timeB - timeA
+        })
 
-      setOrgs(sortedOrgs)
-      setIsLoadingOrgs(false)
-    }, async (error: any) => {
-      const permissionError = new FirestorePermissionError({
-        path: 'organizations',
-        operation: 'list',
-      });
-      errorEmitter.emit('permission-error', permissionError);
-      setIsLoadingOrgs(false)
-    })
+        setOrgs(sortedOrgs)
+        setIsLoadingOrgs(false)
+        if (user && user.email) {
+          syncUserOrganizations(db, user.uid, user.email, user.displayName || "")
+        }
+      } catch (error) {
+        const permissionError = new FirestorePermissionError({
+          path: 'organizations',
+          operation: 'list',
+        })
+        errorEmitter.emit('permission-error', permissionError)
+        setIsLoadingOrgs(false)
+      }
+    }
 
-    return () => unsubscribe()
+    fetchOrgs()
   }, [user, authLoading, db, router])
 
   const handleOpenEdit = (org: Organization) => {
     setEditingOrg(org)
+    setErrors({})
     setFormData({
-      name: org.name,
-      address: org.address,
-      phone: org.phone,
-      currentEmail: org.currentEmail,
-      domain: org.domain,
-      contactName: org.contactName,
-      contactPhone: org.contactPhone,
-      contactEmail: org.contactEmail,
-      description: org.description,
-      gEducation: org.gEducation || false
+      name: org.name || "",
+      address: org.address || "",
+      phone: org.phone || "",
+      currentEmail: org.currentEmail || "",
+      domain: org.domain || "",
+      contactName: org.contactName || "",
+      contactPhone: org.contactPhone || "",
+      contactEmail: org.contactEmail || "",
+      description: org.description || "",
+      isEducation: !!org.isEducation,
     })
     setIsDialogOpen(true)
   }
 
   const handleOpenCreate = () => {
     setEditingOrg(null)
+    setErrors({})
     setFormData({
       name: "",
       address: "",
@@ -197,7 +275,7 @@ export default function AccountHomePage() {
       contactPhone: "",
       contactEmail: "",
       description: "",
-      gEducation: false
+      isEducation: false,
     })
     setIsDialogOpen(true)
   }
@@ -205,11 +283,11 @@ export default function AccountHomePage() {
   const handleSaveOrg = async () => {
     if (!user) return
     
-    if (!formData.name || !formData.domain || !formData.contactEmail) {
+    if (!validateForm()) {
       toast({
         variant: "destructive",
-        title: "Missing Fields",
-        description: "Organization name, domain, and contact email are mandatory."
+        title: "Validation Failed",
+        description: "Please correct the highlighted fields before submitting."
       })
       return
     }
@@ -217,6 +295,7 @@ export default function AccountHomePage() {
     setIsSubmitting(true)
     try {
       if (!editingOrg) {
+        // Check domain uniqueness before creating
         const orgsRef = collection(db, "organizations")
         const q = query(orgsRef, where("domain", "==", formData.domain.toLowerCase()))
         const querySnapshot = await getDocs(q)
@@ -235,42 +314,58 @@ export default function AccountHomePage() {
       if (editingOrg) {
         const orgRef = doc(db, "organizations", editingOrg.id)
         updateDoc(orgRef, {
-          ...formData,
-          domain: formData.domain.toLowerCase(),
+          name: formData.name.trim(),
+          address: formData.address.trim(),
+          phone: formData.phone.trim(),
+          currentEmail: formData.currentEmail.trim(),
+          contactName: formData.contactName.trim(),
+          contactPhone: formData.contactPhone.trim(),
+          contactEmail: formData.contactEmail.trim(),
+          description: formData.description.trim(),
+          isEducation: !!formData.isEducation,
           updatedAt: serverTimestamp()
-        }).catch(async (error) => {
+        }).catch(async () => {
           const permissionError = new FirestorePermissionError({
             path: orgRef.path,
             operation: 'update',
             requestResourceData: formData,
-          });
-          errorEmitter.emit('permission-error', permissionError);
+          })
+          errorEmitter.emit('permission-error', permissionError)
         })
-        toast({ title: "Updated", description: "Organization details saved." })
+        toast({ title: "Organization Updated", description: "Details have been saved successfully." })
       } else {
-        const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+        const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase()
         const orgCode = `${formData.name.substring(0, 3).toUpperCase()}-${uniqueSuffix}`
         
         const orgsRef = collection(db, "organizations")
         addDoc(orgsRef, {
-          ...formData,
-          domain: formData.domain.toLowerCase(),
+          name: formData.name.trim(),
+          address: formData.address.trim(),
+          phone: formData.phone.trim(),
+          currentEmail: formData.currentEmail.trim(),
+          domain: formData.domain.toLowerCase().trim(),
+          contactName: formData.contactName.trim(),
+          contactPhone: formData.contactPhone.trim(),
+          contactEmail: formData.contactEmail.trim(),
+          description: formData.description.trim(),
+          isEducation: !!formData.isEducation,
           code: orgCode,
           ownerId: user.uid,
+          status: "Active",
           createdAt: serverTimestamp()
-        }).catch(async (error) => {
+        }).catch(async () => {
           const permissionError = new FirestorePermissionError({
             path: 'organizations',
             operation: 'create',
             requestResourceData: formData,
-          });
-          errorEmitter.emit('permission-error', permissionError);
+          })
+          errorEmitter.emit('permission-error', permissionError)
         })
-        toast({ title: "Success", description: "Organization registered." })
+        toast({ title: "Organization Registered", description: `${formData.name} has been added to your account.` })
       }
       setIsDialogOpen(false)
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Operation Failed", description: error.message })
+      toast({ variant: "destructive", title: "Operation Failed", description: error.message || "An unexpected error occurred." })
     } finally {
       setIsSubmitting(false)
     }
@@ -286,17 +381,18 @@ export default function AccountHomePage() {
       updatedAt: serverTimestamp()
     })
       .then(() => {
-        toast({ title: "Request Submitted", description: "The organization has been marked for permanent deletion." })
+        toast({ title: "Deletion Requested", description: "The organization has been queued for permanent removal." })
         setIsDeleteDialogOpen(false)
         setIsDialogOpen(false)
+        setDeleteConfirmName("")
       })
-      .catch(async (error) => {
+      .catch(async () => {
         const permissionError = new FirestorePermissionError({
           path: orgRef.path,
           operation: 'update',
           requestResourceData: { status: "Pending Deletion" }
-        });
-        errorEmitter.emit('permission-error', permissionError);
+        })
+        errorEmitter.emit('permission-error', permissionError)
       })
       .finally(() => {
         setIsSubmitting(false)
@@ -304,15 +400,15 @@ export default function AccountHomePage() {
   }
 
   const handleUpdateAccountName = async () => {
-    if (!user || !accountName) return
+    if (!user || !accountName.trim()) return
     setIsUpdatingAccount(true)
     try {
-      await updateProfile(user, { displayName: accountName })
-      setLocalDisplayName(accountName)
+      await updateProfile(user, { displayName: accountName.trim() })
+      setLocalDisplayName(accountName.trim())
       setIsEditNameOpen(false)
-      toast({ title: "Account Name Updated" })
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Update Failed" })
+      toast({ title: "Account Name Updated", description: "Your display name has been changed." })
+    } catch {
+      toast({ variant: "destructive", title: "Update Failed", description: "Could not update display name. Please try again." })
     } finally {
       setIsUpdatingAccount(false)
     }
@@ -322,8 +418,8 @@ export default function AccountHomePage() {
     try {
       await signOut(auth)
       router.push("/login")
-    } catch (error) {
-      toast({ variant: "destructive", title: "Sign out failed" })
+    } catch {
+      toast({ variant: "destructive", title: "Sign Out Failed", description: "Please try again." })
     }
   }
 
@@ -350,8 +446,8 @@ export default function AccountHomePage() {
             <div className="flex items-center gap-3">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200">
-                    <MoreVertical className="w-4 h-4 text-slate-600" />
+                  <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200 hover:bg-blue-600 hover:border-blue-600 transition-colors group">
+                    <MoreVertical className="w-4 h-4 text-slate-600 group-hover:text-white transition-colors" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -367,161 +463,206 @@ export default function AccountHomePage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* Edit Account Name Dialog */}
               <Dialog open={isEditNameOpen} onOpenChange={setIsEditNameOpen}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Account Name</DialogTitle>
+                <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-lg border border-slate-200">
+                  <DialogHeader className="border-b border-slate-100 bg-white p-6">
+                    <DialogTitle className="font-headline font-semibold text-lg text-slate-900">Update Account Name</DialogTitle>
                   </DialogHeader>
-                  <div className="py-4 space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="acc-name">New Account Name</Label>
+                  <div className="p-6 space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="acc-name" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Display Name</Label>
                       <Input 
                         id="acc-name" 
                         value={accountName} 
                         onChange={(e) => setAccountName(e.target.value)}
                         placeholder="e.g. Sagar Poudel"
+                        className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
                       />
                     </div>
                   </div>
-                  <DialogFooter>
-                    <Button variant="ghost" onClick={() => setIsEditNameOpen(false)}>Cancel</Button>
-                    <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount}>
-                      {isUpdatingAccount ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Save Changes"}
+                  <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+                    <Button variant="ghost" onClick={() => setIsEditNameOpen(false)} className="rounded text-xs font-bold h-9">Cancel</Button>
+                    <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount} className="bg-primary hover:bg-primary/95 text-white font-bold h-9 px-4 rounded text-xs">
+                      {isUpdatingAccount ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
               
+              {/* Register / Edit Organization Dialog */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 text-white font-bold h-10 px-6 shadow-md shadow-primary/10">
+                  <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 text-white font-bold h-10 px-6 shadow-md shadow-primary/10 rounded-lg">
                     <Plus className="w-4 h-4 mr-2" />
                     Register Organization
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden">
-                  <DialogHeader className="bg-slate-900 text-white p-6">
-                    <DialogTitle className="font-headline font-bold text-xl">
+                <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden rounded-lg border border-slate-200">
+                  <DialogHeader className="border-b border-slate-100 bg-white p-6">
+                    <DialogTitle className="font-headline font-semibold text-lg text-slate-900">
                       {editingOrg ? "Edit Organization Details" : "Register Organization"}
                     </DialogTitle>
                   </DialogHeader>
                   
                   <ScrollArea className="max-h-[70vh]">
                     <div className="p-8 space-y-8">
+                      {/* Core Details */}
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 text-primary">
                           <Building2 className="w-4 h-4" />
-                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Organization Core Details</h3>
+                          <h3 className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Organization Core Details</h3>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <Label htmlFor="org-name" className="text-[10px] font-bold text-slate-500 uppercase">Organization Legal Name</Label>
+                            <Label 
+                              htmlFor="org-name" 
+                              className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.name ? "text-red-500" : "text-slate-500")}
+                            >
+                              Organization Legal Name *
+                            </Label>
                             <Input 
                               id="org-name" 
                               placeholder="e.g. Revlet Tech Solutions" 
                               value={formData.name}
-                              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                              onChange={(e) => handleInputChange("name", e.target.value)}
+                              className={cn("h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3", errors.name && "border-red-400 focus-visible:ring-red-400/20")}
                             />
+                            {errors.name && <span className="text-[10px] text-red-500 font-semibold block pt-0.5">{errors.name}</span>}
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="org-domain" className="text-[10px] font-bold text-slate-500 uppercase">Domain</Label>
+                            <Label 
+                              htmlFor="org-domain" 
+                              className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.domain ? "text-red-500" : "text-slate-500")}
+                            >
+                              Managed Domain * {editingOrg && <span className="normal-case text-slate-400">(immutable)</span>}
+                            </Label>
                             <Input 
                               id="org-domain" 
                               placeholder="e.g. revlet.me" 
                               value={formData.domain}
-                              onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
+                              onChange={(e) => handleInputChange("domain", e.target.value)}
+                              disabled={!!editingOrg}
+                              className={cn("h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3", errors.domain && "border-red-400 focus-visible:ring-red-400/20", !!editingOrg && "bg-slate-50 text-slate-400 cursor-not-allowed")}
                             />
+                            {errors.domain && <span className="text-[10px] text-red-500 font-semibold block pt-0.5">{errors.domain}</span>}
                           </div>
-                        </div>
-
-                        {/* Classification Field */}
-                        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-white rounded-lg shadow-sm">
-                              <GraduationCap className={cn("w-4 h-4", formData.gEducation ? "text-primary" : "text-slate-400")} />
-                            </div>
-                            <div className="space-y-0.5">
-                              <Label htmlFor="is-edu" className="text-xs font-bold text-slate-900">Educational Institution</Label>
-                              <p className="text-[10px] text-slate-400 font-medium leading-tight">Enable Education exclusive Workspace features and pricing.</p>
-                            </div>
-                          </div>
-                          <Switch 
-                            id="is-edu"
-                            checked={formData.gEducation} 
-                            onCheckedChange={(v) => setFormData({ ...formData, gEducation: v })} 
-                          />
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <Label htmlFor="org-email" className="text-[10px] font-bold text-slate-500 uppercase">General Contact Email</Label>
+                            <Label 
+                              htmlFor="org-email" 
+                              className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.currentEmail ? "text-red-500" : "text-slate-500")}
+                            >
+                              General Contact Email
+                            </Label>
                             <Input 
                               id="org-email" 
                               type="email"
                               placeholder="info@yourcompany.com" 
                               value={formData.currentEmail}
-                              onChange={(e) => setFormData({ ...formData, currentEmail: e.target.value })}
+                              onChange={(e) => handleInputChange("currentEmail", e.target.value)}
+                              className={cn("h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3", errors.currentEmail && "border-red-400 focus-visible:ring-red-400/20")}
                             />
+                            {errors.currentEmail && <span className="text-[10px] text-red-500 font-semibold block pt-0.5">{errors.currentEmail}</span>}
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="org-address" className="text-[10px] font-bold text-slate-500 uppercase">Physical Office Address</Label>
+                            <Label htmlFor="org-address" className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block">Physical Address</Label>
                             <Input 
                               id="org-address" 
                               placeholder="Street, City, Country" 
                               value={formData.address}
-                              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                              onChange={(e) => handleInputChange("address", e.target.value)}
+                              className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
                             />
                           </div>
                         </div>
-                      </div>
 
+                        {/* Educational Institution Checkbox */}
+                        <div className="flex items-center justify-between p-4 border border-slate-200/80 rounded-lg bg-slate-50/40 shadow-sm transition-all hover:bg-slate-50">
+                          <div className="space-y-0.5 pr-4">
+                            <Label htmlFor="org-is-edu" className="text-xs font-bold text-slate-800 cursor-pointer">Educational Institution</Label>
+                            <span className="text-[10px] text-slate-400 block leading-normal">Toggle on if this organization represents a school, college, university, or academic body.</span>
+                          </div>
+                          <Switch
+                            id="org-is-edu"
+                            checked={formData.isEducation}
+                            onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isEducation: checked }))}
+                          />
+                        </div>
+                      </div>
+ 
+                      {/* Contact Details */}
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 text-primary">
                           <Info className="w-4 h-4" />
-                          <h3 className="text-[10px] font-bold uppercase tracking-wider">Infrastructure & Contact</h3>
+                          <h3 className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Authorized Representative</h3>
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="org-desc" className="text-[10px] font-bold text-slate-500 uppercase">Brief Description</Label>
+                          <Label htmlFor="org-desc" className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block">Brief Description</Label>
                           <Textarea 
                             id="org-desc" 
-                            placeholder="Briefly describe the business operations..." 
+                            placeholder="Briefly describe the organization's business operations..." 
                             value={formData.description}
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            className="min-h-[100px]"
+                            onChange={(e) => handleInputChange("description", e.target.value)}
+                            className="min-h-[80px] border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="contact-name" className="text-[10px] font-bold text-slate-500 uppercase">Representative Name</Label>
+                          <Label 
+                            htmlFor="contact-name" 
+                            className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.contactName ? "text-red-500" : "text-slate-500")}
+                          >
+                            Representative Full Name *
+                          </Label>
                           <Input 
                             id="contact-name" 
                             placeholder="Authorized Contact Name" 
                             value={formData.contactName}
-                            onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
+                            onChange={(e) => handleInputChange("contactName", e.target.value)}
+                            className={cn("h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3", errors.contactName && "border-red-400 focus-visible:ring-red-400/20")}
                           />
+                          {errors.contactName && <span className="text-[10px] text-red-500 font-semibold block pt-0.5">{errors.contactName}</span>}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <Label htmlFor="contact-phone" className="text-[10px] font-bold text-slate-500 uppercase">Contact Mobile</Label>
+                            <Label 
+                              htmlFor="contact-phone" 
+                              className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.contactPhone ? "text-red-500" : "text-slate-500")}
+                            >
+                              Contact Mobile
+                            </Label>
                             <Input 
                               id="contact-phone" 
                               placeholder="+X XXXXXXXXXX" 
                               value={formData.contactPhone}
-                              onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                              onChange={(e) => handleInputChange("contactPhone", e.target.value)}
+                              className={cn("h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3", errors.contactPhone && "border-red-400 focus-visible:ring-red-400/20")}
                             />
+                            {errors.contactPhone && <span className="text-[10px] text-red-500 font-semibold block pt-0.5">{errors.contactPhone}</span>}
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="contact-email" className="text-[10px] font-bold text-slate-500 uppercase">Direct Email</Label>
+                            <Label 
+                              htmlFor="contact-email" 
+                              className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.contactEmail ? "text-red-500" : "text-slate-500")}
+                            >
+                              Direct Email *
+                            </Label>
                             <Input 
                               id="contact-email" 
                               type="email"
                               placeholder="contact@yourcompany.com" 
                               value={formData.contactEmail}
-                              onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                              onChange={(e) => handleInputChange("contactEmail", e.target.value)}
+                              className={cn("h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3", errors.contactEmail && "border-red-400 focus-visible:ring-red-400/20")}
                             />
+                            {errors.contactEmail && <span className="text-[10px] text-red-500 font-semibold block pt-0.5">{errors.contactEmail}</span>}
                           </div>
                         </div>
                       </div>
-
+ 
+                      {/* Danger Zone — Edit mode only */}
                       {editingOrg && editingOrg.status !== "Pending Deletion" && (
                         <div className="space-y-4 pt-4">
                           <Separator />
@@ -533,7 +674,7 @@ export default function AccountHomePage() {
                             <div className="space-y-1">
                               <p className="text-sm font-bold text-red-900">Request Organization Deletion</p>
                               <p className="text-xs text-red-700/80 leading-relaxed">
-                                This action is permanent and cannot be reversed. All associated DNS configurations, website data, and workspace settings will be wiped from our infrastructure.
+                                This action is permanent and cannot be reversed. All associated DNS configurations, website data, and service settings will be permanently decommissioned.
                               </p>
                             </div>
                             <Button 
@@ -543,38 +684,38 @@ export default function AccountHomePage() {
                               onClick={() => setIsDeleteDialogOpen(true)}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              Remove Organization
+                              Request Deletion
                             </Button>
                           </div>
                         </div>
                       )}
                     </div>
                   </ScrollArea>
-
+ 
                   <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
-                    <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-xs font-bold uppercase tracking-widest text-slate-400">Abort</Button>
-                    <Button onClick={handleSaveOrg} disabled={isSubmitting} className="px-8 font-bold h-11 bg-slate-900 hover:bg-black text-white shadow-xl">
-                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingOrg ? "Update Details" : "Confirm Registration"}
+                    <Button onClick={handleSaveOrg} disabled={isSubmitting} className="px-8 font-bold h-11 bg-primary hover:bg-primary/95 text-white shadow-sm rounded">
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingOrg ? "Save Changes" : "Confirm Registration"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
 
+              {/* Deletion Confirmation Dialog */}
               <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                 <AlertDialogContent className="max-w-md">
                   <AlertDialogHeader>
-                    <AlertDialogTitle className="text-red-600">Irreversible Action</AlertDialogTitle>
+                    <AlertDialogTitle className="text-red-600">Confirm Organization Deletion</AlertDialogTitle>
                     <AlertDialogDescription className="space-y-4">
                       <p className="font-bold text-slate-900">
                         Are you absolutely sure? This will permanently remove "{editingOrg?.name}".
                       </p>
                       <p className="text-xs text-slate-500">
-                        By confirming, you acknowledge that all DNS, Website, and workspace services for this organization will be decommissioned immediately.
+                        All DNS records, website configurations, and team member access for this organization will be permanently decommissioned. This action cannot be undone.
                       </p>
                       <div className="space-y-2 pt-2">
-                        <Label className="text-[10px] font-bold uppercase">To confirm, type "{editingOrg?.name}" below:</Label>
+                        <Label className="text-[10px] font-bold uppercase text-slate-700">Type "{editingOrg?.name}" to confirm:</Label>
                         <Input 
-                          placeholder="Type organization name" 
+                          placeholder="Type organization name exactly" 
                           value={deleteConfirmName}
                           onChange={(e) => setDeleteConfirmName(e.target.value)}
                           className="border-red-200 focus-visible:ring-red-500"
@@ -599,14 +740,12 @@ export default function AccountHomePage() {
           </div>
         </div>
 
-        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+        {/* Organizations Table */}
+        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-lg">
           <div className="h-1 w-full bg-primary/20" />
           <CardContent className="p-0 min-h-[400px]">
             {isLoadingOrgs ? (
-              <div className="flex flex-col items-center justify-center py-32 gap-3">
-                <Loader2 className="w-10 h-10 animate-spin text-slate-200" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synchronizing Directory...</p>
-              </div>
+              <TableSkeleton />
             ) : orgs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32 text-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center">
@@ -614,63 +753,69 @@ export default function AccountHomePage() {
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-lg font-headline font-bold text-slate-900">No Organizations Registered</h3>
-                  <p className="text-sm text-slate-500 max-w-xs">Start by registering your first organization.</p>
+                  <p className="text-sm text-slate-500 max-w-xs">Start by registering your first organization to manage DNS, websites, and team access.</p>
                 </div>
-                <Button variant="outline" onClick={handleOpenCreate} className="mt-2 font-bold">
-                  Add First Organization
+                <Button variant="outline" onClick={handleOpenCreate} className="mt-2 font-bold rounded">
+                  Register First Organization
                 </Button>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50 hover:bg-slate-50 border-b border-slate-200">
-                    <TableHead className="text-[10px] font-bold uppercase py-5 pl-8 text-slate-400 tracking-widest">Organization Name</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-5 pl-8 text-slate-400 tracking-widest">Organization</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Managed Domain</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-5 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {orgs.map((org) => (
-                    <TableRow key={org.id} className="group hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
+                    <TableRow key={org.id} className="group hover:bg-[#F8FAFC] transition-colors border-b border-slate-100 last:border-0">
                       <TableCell className="pl-8 py-5">
                         <div className="flex items-center gap-4">
-                          <div className="p-2.5 bg-slate-100 rounded-lg border border-slate-200 group-hover:bg-primary/5 transition-all">
-                            <Building2 className="w-4 h-4 text-slate-400 group-hover:text-primary" />
+                          <div className={cn(
+                            "p-2.5 rounded-lg border transition-all",
+                            org.isEducation 
+                              ? "bg-blue-50 border-blue-100 text-blue-600 group-hover:bg-blue-100/50" 
+                              : "bg-slate-100 border-slate-200 text-slate-400 group-hover:bg-primary/5 group-hover:text-primary"
+                          )}>
+                            {org.isEducation ? (
+                              <GraduationCap className="w-4 h-4 text-blue-600" />
+                            ) : (
+                              <Building2 className="w-4 h-4" />
+                            )}
                           </div>
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-bold text-slate-800 text-sm">{org.name}</span>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-800 text-sm">{org.name}</span>
-                              {org.status === "Pending Deletion" && (
-                                <Badge variant="destructive" className="text-[8px] h-4 font-bold px-1.5 uppercase tracking-tighter">
-                                  <Clock className="w-2 h-2 mr-1" />
-                                  Pending Deletion
-                                </Badge>
-                              )}
-                              {org.gEducation && (
-                                <Badge variant="outline" className="text-[8px] h-4 font-bold px-1.5 uppercase tracking-tighter bg-blue-50 text-blue-600 border-blue-100">
-                                  <GraduationCap className="w-2 h-2 mr-1" />
+                              <span className="font-mono text-[10px] text-slate-400 uppercase tracking-tighter">{org.code}</span>
+                              {org.isEducation && (
+                                <Badge className="text-[8px] h-4 font-bold px-1.5 uppercase bg-blue-50 border border-blue-100 text-blue-600 hover:bg-blue-50">
                                   Education
                                 </Badge>
                               )}
+                              {org.status === "Pending Deletion" && (
+                                <Badge variant="destructive" className="text-[8px] h-4 font-bold px-1.5 uppercase tracking-tighter">
+                                  Pending Deletion
+                                </Badge>
+                              )}
                             </div>
-                            <span className="font-mono text-[10px] text-slate-400 uppercase tracking-tighter">{org.code}</span>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Globe className="w-3.5 h-3.5 text-slate-300" />
-                          <span className="text-xs font-semibold text-slate-600">
-                            {org.domain}
-                          </span>
+                          <span className="text-xs font-semibold text-slate-600">{org.domain}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-right pr-8">
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm"
+                          className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm rounded"
                           onClick={() => handleOpenEdit(org)}
+                          disabled={org.status === "Pending Deletion"}
                         >
                           Manage
                           <Edit2 className="w-3 h-3" />

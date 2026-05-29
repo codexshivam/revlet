@@ -9,13 +9,17 @@
 const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
 
 async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: RequestInit = {}) {
+  const dnsToken = process.env.CLOUDFLARE_DNS_TOKEN;
+  const infraToken = process.env.CLOUDFLARE_INFRA_TOKEN;
+  
+  // High-fidelity fallback: Support single all-access token deployments cleanly
   const API_TOKEN = tokenType === 'DNS' 
-    ? process.env.CLOUDFLARE_DNS_TOKEN 
-    : process.env.CLOUDFLARE_INFRA_TOKEN;
+    ? (dnsToken || infraToken) 
+    : (infraToken || dnsToken);
   
   if (!API_TOKEN) {
-    console.error(`[Infrastructure Action] Missing ${tokenType} token in environment variables.`);
-    throw new Error(`Cloudflare ${tokenType} token is not configured. Please add it to your .env.local file.`);
+    console.error(`[Infrastructure Action] Missing token configuration in environment variables.`);
+    throw new Error("Cloudflare authentication token is not configured. Please add CLOUDFLARE_DNS_TOKEN or CLOUDFLARE_INFRA_TOKEN to your .env.local file.");
   }
 
   try {
@@ -48,7 +52,18 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
     return data;
   } catch (error: any) {
     console.error(`Infrastructure API failure [${path}]:`, error.message);
-    throw error;
+    
+    // User-friendly network edge error translation
+    let friendlyMessage = error.message || "An unexpected error occurred.";
+    if (friendlyMessage.includes("fetch failed") || friendlyMessage.includes("ENOTFOUND")) {
+      friendlyMessage = "Connection failed. Failed to reach the Cloudflare network edge. Please check your internet connection.";
+    } else if (friendlyMessage.includes("Unauthorized") || friendlyMessage.includes("403") || friendlyMessage.includes("401") || friendlyMessage.toLowerCase().includes("token")) {
+      friendlyMessage = "Authentication failed. The configured Cloudflare API token is invalid or has insufficient permissions.";
+    } else if (friendlyMessage.includes("429") || friendlyMessage.includes("Too Many Requests")) {
+      friendlyMessage = "Request rate limit reached at the edge. Please wait a moment before trying again.";
+    }
+    
+    throw new Error(friendlyMessage);
   }
 }
 

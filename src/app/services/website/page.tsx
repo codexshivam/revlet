@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useState, useEffect, useMemo } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
-import { OrgSelector } from "@/components/org/org-selector"
+import { useActiveOrg } from "@/hooks/use-active-org"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -54,7 +54,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from "firebase/firestore"
+import { collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
 import Link from "next/link"
@@ -87,10 +87,9 @@ export default function WebsiteManagementPage() {
   const { user, loading: authLoading } = useUser()
   const db = useFirestore()
   
-  const [orgs, setOrgs] = useState<Organization[]>([])
-  const [selectedOrgId, setSelectedOrgId] = useState<string>("")
+  const { orgs, activeOrg: selectedOrg, activeOrgId: selectedOrgId, loading: orgLoading } = useActiveOrg()
   const [modifications, setModifications] = useState<SiteModification[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const isLoading = orgLoading
   const [isUpdating, setIsUpdating] = useState(false)
   const [expandedModId, setExpandedModId] = useState<string | null>(null)
   const [isUpgradeConfirmOpen, setIsUpgradeConfirmOpen] = useState(false)
@@ -99,8 +98,6 @@ export default function WebsiteManagementPage() {
   const [modTitle, setModTitle] = useState("")
   const [modDesc, setModDesc] = useState("")
   const [isModDialogOpen, setIsModDialogOpen] = useState(false)
-
-  const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
 
   // Quota Reset Logic (Client Side)
   useEffect(() => {
@@ -127,26 +124,7 @@ export default function WebsiteManagementPage() {
     }
   }, [selectedOrg, db]);
 
-  useEffect(() => {
-    if (authLoading || !user) return
-
-    const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
-    const unsub = onSnapshot(q, (snap) => {
-      const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Organization[]
-      setOrgs(fetched)
-      if (fetched.length > 0 && !selectedOrgId) {
-        setSelectedOrgId(fetched[0].id)
-      }
-      setIsLoading(false)
-    }, (error) => {
-      const permissionError = new FirestorePermissionError({
-        path: 'organizations',
-        operation: 'list',
-      });
-      errorEmitter.emit('permission-error', permissionError);
-    })
-    return unsub
-  }, [user, authLoading, db, selectedOrgId])
+  // Unified active organization syncing via global context hook
 
   useEffect(() => {
     if (!selectedOrgId || !user) return
@@ -157,16 +135,21 @@ export default function WebsiteManagementPage() {
       where("ownerId", "==", user.uid)
     )
 
-    const unsub = onSnapshot(q, (snap) => {
-      const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SiteModification[]
-      setModifications(fetched.sort((a, b) => {
-        const timeA = a.requestedAt?.toMillis() || 0
-        const timeB = b.requestedAt?.toMillis() || 0
-        return timeB - timeA
-      }))
-    })
+    const fetchModifications = async () => {
+      try {
+        const snap = await getDocs(q);
+        const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SiteModification[];
+        setModifications(fetched.sort((a, b) => {
+          const timeA = a.requestedAt?.toMillis() || 0;
+          const timeB = b.requestedAt?.toMillis() || 0;
+          return timeB - timeA;
+        }));
+      } catch (error) {
+        console.error("Error fetching site modifications", error);
+      }
+    };
 
-    return unsub
+    fetchModifications();
   }, [selectedOrgId, user, db])
 
   const handleDeclareWebsite = (hasWebsite: boolean) => {
@@ -310,7 +293,7 @@ export default function WebsiteManagementPage() {
           </div>
         </div>
         
-        <OrgSelector selectedId={selectedOrgId} onSelect={setSelectedOrgId} />
+        
 
         {selectedOrg?.siteActiveOn === true ? (
           <div className="space-y-8">
@@ -385,7 +368,7 @@ export default function WebsiteManagementPage() {
                   <DialogContent className="max-w-md border-none shadow-2xl bg-white p-0 overflow-hidden [&>button]:text-white [&>button]:opacity-100">
                     <DialogHeader className="bg-slate-900 text-white p-6 relative">
                       <DialogTitle className="font-headline font-bold text-xl">Request Website Modification</DialogTitle>
-                      <div className="flex items-center gap-1.5 mt-1 text-[10px] text-primary font-bold uppercase tracking-widest">
+                      <div className="flex items-center gap-1.5 mt-1 text-[10px] text-white/60 font-bold uppercase tracking-widest">
                         <MessageSquare className="w-3 h-3" />
                         Processed within 24 business hours
                       </div>
@@ -431,10 +414,10 @@ export default function WebsiteManagementPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/30 border-b border-slate-100">
-                      <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-widest">Request Title</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-widest">Request Date</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-widest">Updated On</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-widest">Status</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-wider">Request Title</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider">Request Date</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider">Updated On</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-wider">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -457,9 +440,13 @@ export default function WebsiteManagementPage() {
                             )}
                             onClick={() => toggleRow(mod.id)}
                           >
-                            <TableCell className="font-bold text-slate-800 text-sm pl-8">
+                            <TableCell className="font-semibold text-slate-800 text-xs pl-8">
                               <div className="flex items-center gap-3">
-                                {expandedModId === mod.id ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                                {expandedModId === mod.id ? (
+                                  <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-colors" />
+                                ) : (
+                                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-colors" />
+                                )}
                                 {mod.title}
                               </div>
                             </TableCell>
@@ -507,9 +494,9 @@ export default function WebsiteManagementPage() {
             </Card>
           </div>
         ) : selectedOrg?.siteActiveOn === false ? (
-          <div className="max-w-4xl mx-auto py-20">
+          <div className="w-full py-8">
             <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
-              <CardContent className="p-20 flex flex-col items-center text-center gap-6">
+              <CardContent className="p-12 md:p-20 flex flex-col items-center text-center gap-6">
                 <div className="relative">
                   <div className="w-20 h-20 rounded-full bg-white border-primary/20 flex items-center justify-center shadow-sm relative">
                     <Clock className="w-10 h-10 text-amber-500" />
@@ -533,7 +520,7 @@ export default function WebsiteManagementPage() {
                 </div>
                 <div className="flex gap-3">
                   <Link href="/support">
-                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-8">
+                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-yellow-500 hover:text-white hover:border-yellow-500 transition-colors font-bold gap-2 h-11 px-8">
                       <MessageSquare className="w-4 h-4" />
                       Contact Support
                     </Button>
@@ -559,17 +546,17 @@ export default function WebsiteManagementPage() {
                 <Button 
                   onClick={() => handleDeclareWebsite(true)}
                   disabled={isUpdating}
-                  className="flex-1 h-14 bg-white hover:bg-slate-50 text-slate-900 border-slate-200 border shadow-sm font-bold gap-3"
+                  className="group flex-1 h-14 bg-white hover:bg-slate-50 text-slate-900 border-slate-200 border shadow-sm font-bold gap-3"
                 >
-                  <Globe className="w-5 h-5 text-primary" />
+                  <Globe className="w-5 h-5 text-primary group-hover:scale-105 transition-all" />
                   We have a website
                 </Button>
                 <Button 
                   onClick={() => handleDeclareWebsite(false)}
                   disabled={isUpdating}
-                  className="flex-1 h-14 bg-slate-900 hover:bg-black text-white shadow-xl shadow-slate-200 font-bold gap-3"
+                  className="group flex-1 h-14 bg-slate-900 hover:bg-black text-white shadow-xl shadow-slate-200 font-bold gap-3"
                 >
-                  <Ban className="w-5 h-5 text-slate-400" />
+                  <Ban className="w-5 h-5 text-white/50 group-hover:text-white transition-colors" />
                   No website yet
                 </Button>
               </div>

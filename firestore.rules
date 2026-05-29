@@ -2,34 +2,93 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper to check if the user is the owner of the resource
-    function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    // Organizations
+    function isOwner(ownerId) {
+      return isAuthenticated() && request.auth.uid == ownerId;
+    }
+
+    function isResourceOwner() {
+      return isOwner(resource.data.ownerId);
+    }
+
+    // ─── Organizations ────────────────────────────────────────────────────────
+    // Owners can fully manage their organizations.
+    // Create requires auth; only valid fields are written.
     match /organizations/{orgId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.domain is string
+        && request.resource.data.contactName is string
+        && request.resource.data.contactEmail is string;
+      allow read, update: if isResourceOwner();
+      allow delete: if false; // Deletion is handled via status flag, not hard delete
     }
 
-    // Payment Vouchers
+    // ─── Payment Vouchers ─────────────────────────────────────────────────────
+    // Users can submit and view their own vouchers; records are immutable.
     match /paymentVouchers/{voucherId} {
-      allow create: if request.auth != null;
-      allow read: if isOwner(resource.data.ownerId);
-      allow update, delete: if false; // History is immutable for users
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0;
+      allow read: if isResourceOwner();
+      allow update, delete: if false; // Immutable audit trail
     }
 
-    // Team Members
+    // ─── Team Members ─────────────────────────────────────────────────────────
+    // Admins can invite, read, update (toggle status) their team members.
     match /teamMembers/{memberId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.email is string;
+      allow read, update: if isResourceOwner();
+      allow delete: if isResourceOwner();
     }
 
-    // Site Modifications
+    // ─── DNS Records ─────────────────────────────────────────────────────────
+    // Owners of the associated organization can manage DNS records.
+    match /dnsRecords/{recordId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.type in ['A', 'CNAME', 'MX', 'TXT']
+        && request.resource.data.name is string
+        && request.resource.data.content is string;
+      allow read, update, delete: if isResourceOwner();
+    }
+
+    // ─── Site Modifications ───────────────────────────────────────────────────
+    // Owners can create and read modification requests; updates are admin-only.
     match /siteModifications/{modId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid;
+      allow read: if isResourceOwner();
+      allow update, delete: if false; // Managed by admin backend only
+    }
+
+    // ─── Support Tickets ──────────────────────────────────────────────────────
+    // Authenticated users can submit support tickets and view their own.
+    match /supportTickets/{ticketId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() > 0
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0;
+      allow read: if isResourceOwner();
+      allow update, delete: if false; // Managed by support team only
+    }
+
+    // ─── User Profiles ────────────────────────────────────────────────────────
+    // Users can only read/write their own profile document.
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
   }
 }

@@ -2,11 +2,10 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Lock, Mail, ChevronRight, Loader2 } from "lucide-react"
+import { Eye, EyeOff, ArrowRight, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -27,7 +26,9 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState("")
+  const [isResetOpen, setIsResetOpen] = useState(false)
 
   const getFriendlyErrorMessage = (errorCode: string) => {
     switch (errorCode) {
@@ -54,24 +55,55 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Missing credentials",
-        description: "Please enter both email and password.",
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <span>Please enter both email and password.</span>
+          </span>
+        ),
       })
       return
     }
 
     setIsLoading(true)
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      
+      // Reactive Sync: Keep user profile index up to date
+      try {
+        const { getFirestore } = await import("firebase/firestore")
+        const db = getFirestore(auth.app, "itmanager")
+        const { syncUserOrganizations } = await import("@/firebase")
+        await syncUserOrganizations(
+          db, 
+          userCredential.user.uid, 
+          userCredential.user.email || "", 
+          userCredential.user.displayName || ""
+        )
+      } catch (e) {
+        console.error("Error executing user sync at login:", e)
+      }
+
       toast({
         title: "Login Successful",
-        description: "Redirecting to your dashboard...",
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>Welcome back! Redirecting to your dashboard...</span>
+          </span>
+        ),
       })
       router.push("/account/home")
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Authentication Failed",
-        description: getFriendlyErrorMessage(error.code),
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <span>{getFriendlyErrorMessage(error.code)}</span>
+          </span>
+        ),
       })
     } finally {
       setIsLoading(false)
@@ -81,132 +113,207 @@ export default function LoginPage() {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!resetEmail) {
-      toast({ variant: "destructive", title: "Email required" })
+      toast({
+        variant: "destructive",
+        title: "Email required",
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <span>Please enter your work email to reset.</span>
+          </span>
+        ),
+      })
       return
     }
     try {
       await sendPasswordResetEmail(auth, resetEmail)
       toast({
         title: "Reset link sent",
-        description: "Please check your email for instructions to reset your password.",
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>Please check your email for reset instructions.</span>
+          </span>
+        ),
       })
+      setIsResetOpen(false)
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.code === "auth/user-not-found" 
-          ? "No account found with this email address." 
-          : getFriendlyErrorMessage(error.code),
+        title: "Reset Failed",
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <span>
+              {error.code === "auth/user-not-found" 
+                ? "No account found with this email address." 
+                : getFriendlyErrorMessage(error.code)}
+            </span>
+          </span>
+        ),
       })
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
-      <div className="w-full max-w-[420px] space-y-8">
-        <div className="flex flex-col items-center text-center space-y-2">
-          <h1 className="text-4xl font-body font-black tracking-[0.2em] text-slate-900 mb-1 ml-[0.2em]">REVLET</h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest max-w-[280px]">Enterprise Infrastructure Management</p>
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500">
+      <div className="w-full max-w-[540px] space-y-6 sm:space-y-8">
+        
+        {/* LOGO */}
+        <div className="text-center select-none">
+          <h1 className="text-[20px] sm:text-[22px] font-headline font-bold tracking-[0.1em] text-[#191c1e] ml-[0.1em]">
+            REVLET
+          </h1>
         </div>
 
-        <Card className="border-slate-200 shadow-2xl shadow-slate-200/50 bg-white">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-xl font-headline font-bold">Welcome back</CardTitle>
-            <CardDescription className="text-xs">Enter your administrative credentials to continue</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Work Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="admin@yourcompany.com" 
-                    className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
+        {/* CARD CONTAINER */}
+        <div className="bg-white border border-[#eceef0] shadow-[0px_4px_12px_rgba(15,23,42,0.03)] rounded-lg p-6 sm:p-10 space-y-5 sm:space-y-6">
+          
+          <div className="text-center space-y-2">
+            <h2 className="text-[22px] sm:text-[24px] font-headline font-semibold text-[#191c1e] tracking-tight">
+              Welcome back
+            </h2>
+            <p className="text-xs text-[#45464d] font-normal leading-normal whitespace-normal sm:whitespace-nowrap px-2">
+              Enter your credentials to access the administrative dashboard.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
+            {/* WORK EMAIL */}
+            <div className="space-y-2">
+              <Label 
+                htmlFor="email" 
+                className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+              >
+                Work Email
+              </Label>
+              <Input 
+                id="email" 
+                type="email" 
+                placeholder="hello@world.com" 
+                className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3 placeholder-slate-400"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            {/* SECURITY PASSWORD */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label 
+                  htmlFor="password" 
+                  className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+                >
+                  Security Password
+                </Label>
+                
+                <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+                  <DialogTrigger asChild>
+                    <button 
+                      type="button" 
+                      className="text-[10px] text-slate-500 hover:text-[#191c1e] transition-colors font-bold uppercase tracking-wider"
+                    >
+                      Forgot password?
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] border border-[#eceef0] shadow-[0px_12px_32px_rgba(15,23,42,0.08)] rounded-lg p-6 bg-white animate-in zoom-in duration-300">
+                    <DialogHeader className="space-y-2 text-left">
+                      <DialogTitle className="font-headline font-semibold text-lg text-[#191c1e]">
+                        Reset your password
+                      </DialogTitle>
+                      <DialogDescription className="text-xs text-[#45464d] leading-relaxed font-normal">
+                        Enter your work email and we will dispatch a secure reset link.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleForgotPassword} className="space-y-4 pt-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="reset-email" className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+                          Work Email
+                        </Label>
+                        <Input 
+                          id="reset-email" 
+                          type="email" 
+                          placeholder="hello@world.com" 
+                          required 
+                          className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white text-xs font-normal rounded"
+                          value={resetEmail}
+                          onChange={(e) => setResetEmail(e.target.value)}
+                        />
+                      </div>
+                      <DialogFooter className="pt-2">
+                        <Button 
+                          type="submit" 
+                          className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white rounded text-xs transition-all shadow-sm"
+                        >
+                          Send Reset Link
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Security Password</Label>
-                  
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <button type="button" className="text-[11px] text-primary hover:underline font-bold uppercase tracking-tight">Forgot password?</button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-[400px]">
-                      <DialogHeader>
-                        <DialogTitle className="font-headline">Reset your password</DialogTitle>
-                        <DialogDescription>
-                          Enter your email address and we'll send you a link to reset your password.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <form onSubmit={handleForgotPassword} className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="reset-email">Work Email</Label>
-                          <Input 
-                            id="reset-email" 
-                            type="email" 
-                            placeholder="admin@yourcompany.com" 
-                            required 
-                            value={resetEmail}
-                            onChange={(e) => setResetEmail(e.target.value)}
-                          />
-                        </div>
-                        <DialogFooter>
-                          <Button type="submit" className="w-full font-bold">Send Reset Link</Button>
-                        </DialogFooter>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <Input 
-                    id="password" 
-                    type="password" 
-                    placeholder="••••••••" 
-                    className="pl-10 h-11 border-slate-200 focus:ring-primary/10"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-              </div>
-              <Button type="submit" className="w-full font-bold h-12 shadow-lg shadow-primary/20 text-sm group" disabled={isLoading}>
-                {isLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    Access Dashboard
-                    <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-0.5 transition-transform" />
-                  </>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-6 pt-2 pb-8">
-            <div className="relative w-full">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-slate-100" />
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-[0.2em] text-slate-400">
-                <span className="bg-white px-3">Authentication Required</span>
+
+              {/* PASSWORD INPUT & EYE TOGGLE */}
+              <div className="relative">
+                <Input 
+                  id="password" 
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="••••••••••" 
+                  className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal pl-3 pr-10 placeholder-slate-300"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
-            <p className="text-sm text-slate-500 text-center font-medium">
-              New to us? <Link href="/signup" className="text-primary font-bold hover:underline transition-colors">Signup here</Link>
+
+            {/* SUBMIT BUTTON */}
+            <Button 
+              type="submit" 
+              className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.15)] flex items-center justify-center"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <>
+                  Access Dashboard
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                </>
+              )}
+            </Button>
+          </form>
+
+          {/* DIVIDER */}
+          <div className="border-t border-[#eceef0] my-5 sm:my-6"></div>
+
+          {/* LINK TO SIGNUP */}
+          <div className="text-center">
+            <p className="text-xs text-[#45464d] font-normal">
+              New user?{" "}
+              <Link 
+                href="/signup" 
+                className="text-[#191c1e] font-semibold hover:underline transition-colors"
+              >
+                Create an account
+              </Link>
             </p>
-          </CardFooter>
-        </Card>
-        
-        <div className="text-center">
-          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
-            © 2026 Revlet Platform • hello@revlet.me
-          </p>
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="text-center text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em] select-none px-4 leading-normal">
+          © 2026 REVLET PLATFORM • HELLO@REVLET.ME
         </div>
       </div>
     </div>

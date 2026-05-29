@@ -1,0 +1,9 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "apphosting": {
+    "backendId": "revlet",
+    "rootDir": "./"
+  }
+}

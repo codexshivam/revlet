@@ -57,6 +57,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
+import { useActiveOrg } from "@/hooks/use-active-org"
+
+const SUPPORTED_TYPES = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA", "PTR", "NAPTR"]
+const PROXY_SUPPORTED_TYPES = ["A", "AAAA", "CNAME"]
+
 type DNSRecord = {
   id: string
   type: string
@@ -67,26 +72,13 @@ type DNSRecord = {
   priority?: number
 }
 
-interface Organization {
-  id: string
-  name: string
-  domain: string
-  cloudflareZoneId?: string
-  dnsRequested?: boolean
-}
-
-const SUPPORTED_TYPES = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA", "PTR", "NAPTR"]
-const PROXY_SUPPORTED_TYPES = ["A", "AAAA", "CNAME"]
-
 export default function DNSManagementPage() {
   const { toast } = useToast()
   const { user } = useUser()
   const db = useFirestore()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [orgs, setOrgs] = useState<Organization[]>([])
-  const [selectedOrgId, setSelectedOrgId] = useState<string>("")
-  const [isLoadingOrgs, setIsLoadingOrgs] = useState(true)
+  const { orgs, activeOrg: selectedOrg, activeOrgId: selectedOrgId, loading: isLoadingOrgs } = useActiveOrg()
 
   const [records, setRecords] = useState<DNSRecord[]>([])
   const [zoneDetails, setZoneDetails] = useState<any>(null)
@@ -108,11 +100,16 @@ export default function DNSManagementPage() {
     priority: 10
   })
 
+  // Validation & confirmation states
+  const [formErrors, setFormErrors] = useState<{ name?: string; content?: string; priority?: string }>({})
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null)
+  const [importConfirmed, setImportConfirmed] = useState(false)
+
   // Import state
   const [importFile, setImportFile] = useState<File | null>(null)
   const [proxyAllImported, setProxyAllImported] = useState(true)
 
-  const selectedOrg = useMemo(() => orgs.find(o => o.id === selectedOrgId), [orgs, selectedOrgId])
   const zoneId = selectedOrg?.cloudflareZoneId
 
   const fetchDNSData = useCallback(async () => {
@@ -143,20 +140,6 @@ export default function DNSManagementPage() {
   }, [zoneId, toast])
 
   useEffect(() => {
-    if (!user) return
-    const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
-    const unsub = onSnapshot(q, (snap) => {
-      const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Organization[]
-      setOrgs(fetched)
-      if (fetched.length > 0 && !selectedOrgId) {
-        setSelectedOrgId(fetched[0].id)
-      }
-      setIsLoadingOrgs(false)
-    })
-    return unsub
-  }, [user, db, selectedOrgId])
-
-  useEffect(() => {
     if (zoneId) {
       fetchDNSData()
     } else {
@@ -165,14 +148,122 @@ export default function DNSManagementPage() {
     }
   }, [zoneId, fetchDNSData])
 
+  const handleInputChange = (field: string, value: any) => {
+    const updatedForm = { ...formData, [field]: value }
+    setFormData(updatedForm)
+
+    const errors = { ...formErrors }
+    delete errors[field as keyof typeof errors]
+
+    if (field === 'name') {
+      const cleanVal = String(value).trim()
+      if (!cleanVal) {
+        errors.name = "Record name is required."
+      } else if (cleanVal.includes("://")) {
+        errors.name = "Name should not contain protocol prefixes (e.g. http://)."
+      } else if (/\s/.test(cleanVal)) {
+        errors.name = "Name cannot contain spaces."
+      }
+    }
+
+    if (field === 'content') {
+      const cleanVal = String(value).trim()
+      if (!cleanVal) {
+        errors.content = "Record value target is required."
+      } else {
+        const type = updatedForm.type
+        if (type === "A") {
+          const ipv4Regex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+          if (!ipv4Regex.test(cleanVal)) {
+            errors.content = "Must be a valid IPv4 address (e.g., 192.168.1.1)."
+          }
+        } else if (type === "AAAA") {
+          const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/
+          if (!ipv6Regex.test(cleanVal)) {
+            errors.content = "Must be a valid IPv6 address."
+          }
+        } else if (type === "CNAME") {
+          if (cleanVal.includes("://")) {
+            errors.content = "CNAME target cannot contain protocol prefixes."
+          } else {
+            const ipv4Regex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+            if (ipv4Regex.test(cleanVal)) {
+              errors.content = "CNAME targets must be hostnames, not IP addresses."
+            }
+          }
+        }
+      }
+    }
+
+    if (field === 'priority' && updatedForm.type === 'MX') {
+      const priorityVal = parseInt(value)
+      if (isNaN(priorityVal) || priorityVal < 0 || priorityVal > 65535) {
+        errors.priority = "Priority must be an integer between 0 and 65535."
+      }
+    }
+
+    setFormErrors(errors)
+  }
+
+  const handleTypeChange = (value: string) => {
+    const isStandardProxy = PROXY_SUPPORTED_TYPES.includes(value)
+    setFormData({ ...formData, type: value, proxied: isStandardProxy })
+    setFormErrors({}) // Clear error states on type toggle
+  }
+
   const handleSaveRecord = async () => {
     if (!zoneId) return
-    
-    if (!formData.name || !formData.content) {
+
+    // Standard empty check
+    if (!formData.name?.trim() || !formData.content?.trim()) {
       toast({ 
         variant: "destructive", 
         title: "Validation Failed", 
-        description: "Standard DNS requirements: Name and Value fields cannot be empty." 
+        description: "Name and Target Content fields cannot be empty." 
+      })
+      return
+    }
+
+    // Run custom deep validation
+    const errors: typeof formErrors = {}
+    
+    const nameVal = formData.name.trim()
+    if (nameVal.includes("://")) {
+      errors.name = "Name should not contain protocol prefixes."
+    } else if (/\s/.test(nameVal)) {
+      errors.name = "Name cannot contain spaces."
+    }
+
+    const contentVal = formData.content.trim()
+    const type = formData.type
+    if (type === "A") {
+      const ipv4Regex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+      if (!ipv4Regex.test(contentVal)) errors.content = "Must be a valid IPv4 address."
+    } else if (type === "AAAA") {
+      const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/
+      if (!ipv6Regex.test(contentVal)) errors.content = "Must be a valid IPv6 address."
+    } else if (type === "CNAME") {
+      if (contentVal.includes("://")) {
+        errors.content = "CNAME target cannot contain protocol prefixes."
+      } else {
+        const ipv4Regex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+        if (ipv4Regex.test(contentVal)) errors.content = "CNAME targets must be hostnames, not IP addresses."
+      }
+    }
+
+    if (type === "MX") {
+      const priorityVal = parseInt(String(formData.priority))
+      if (isNaN(priorityVal) || priorityVal < 0 || priorityVal > 65535) {
+        errors.priority = "Priority must be an integer between 0 and 65535."
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      toast({ 
+        variant: "destructive", 
+        title: "Validation Failed", 
+        description: "Please resolve form input errors before submitting." 
       })
       return
     }
@@ -206,7 +297,6 @@ export default function DNSManagementPage() {
 
   const handleDeleteRecord = async (id: string) => {
     if (!zoneId) return
-    if (!confirm("Are you sure you want to permanently remove this record?")) return
 
     try {
       const res = await deleteDNSRecord(zoneId, id)
@@ -277,7 +367,10 @@ export default function DNSManagementPage() {
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) setImportFile(file)
+    if (file) {
+      setImportFile(file)
+      setImportConfirmed(false)
+    }
   }
 
   const processImport = async () => {
@@ -347,16 +440,6 @@ export default function DNSManagementPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Domain Management</h1>
             <div className="flex items-center gap-3">
-               <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
-                 <SelectTrigger className="w-full md:w-[280px] bg-white font-bold text-xs h-10 shadow-sm border-slate-200">
-                   <SelectValue placeholder="Select Institution" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   {orgs.map(org => (
-                     <SelectItem key={org.id} value={org.id} className="text-xs">{org.name}</SelectItem>
-                   ))}
-                 </SelectContent>
-               </Select>
                {zoneId && (
                  <div className="flex gap-2">
                    <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="h-10 font-bold text-xs border-slate-200">
@@ -381,7 +464,28 @@ export default function DNSManagementPage() {
           </div>
         </div>
 
-        {selectedOrg && !selectedOrg.dnsRequested && !zoneId ? (
+        {orgs.length === 0 ? (
+          <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500">
+            <Card className="bg-slate-50 border-slate-200 border-dashed shadow-sm">
+              <CardContent className="p-16 flex flex-col items-center text-center gap-6">
+                <div className="p-4 bg-white rounded-full border border-slate-100 shadow-sm shrink-0">
+                  <Globe className="w-10 h-10 text-slate-300 animate-pulse" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-headline font-bold text-slate-900">No Registered Organizations</h3>
+                  <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed font-medium">
+                    To manage DNS edge configurations, you must first register your organization on the Account Home screen.
+                  </p>
+                </div>
+                <Link href="/account/home">
+                  <Button className="font-bold gap-2 h-11 px-6 bg-slate-900 hover:bg-black text-white transition-all shadow-md">
+                    Go to Account Home
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        ) : selectedOrg && !selectedOrg.dnsRequested && !zoneId ? (
           <div className="max-w-5xl mx-auto py-12 animate-in slide-in-from-bottom-4 duration-500">
             <div className="space-y-12 text-center">
               <div className="space-y-4">
@@ -398,7 +502,7 @@ export default function DNSManagementPage() {
                   { title: "Advanced Security", desc: "Enterprise-grade DDoS protection and managed edge firewall rules.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
                   { title: "Ultra-Fast DNS", desc: "Global Anycast network ensures sub-second propagation and resolution.", icon: Globe, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
                   { title: "Edge Control", desc: "Manage MX, CNAME, and TXT records directly from your administrative dashboard.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" },
-                  { title: "High Availability", desc: "Redundant global nodes with a 99.9% uptime guarantee for all services.", icon: CheckCircle2, color: "bg-amber-50 text-amber-600 border-amber-100" }
+                  { title: "High Availability", desc: "Redundant global nameservers with a 99.9% uptime guarantee for all services.", icon: CheckCircle2, color: "bg-amber-50 text-amber-600 border-amber-100" }
                 ].map((feature) => (
                   <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
                     <div className="p-3 bg-white rounded-xl shadow-sm shrink-0">
@@ -426,9 +530,9 @@ export default function DNSManagementPage() {
             </div>
           </div>
         ) : selectedOrg && selectedOrg.dnsRequested && !zoneId ? (
-          <div className="max-w-4xl mx-auto py-20">
+          <div className="w-full py-8">
             <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
-              <CardContent className="p-20 flex flex-col items-center text-center gap-6">
+              <CardContent className="p-12 md:p-20 flex flex-col items-center text-center gap-6">
                 <div className="relative">
                   <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
                     <Clock className="w-10 h-10 text-amber-500" />
@@ -440,12 +544,12 @@ export default function DNSManagementPage() {
                 <div className="space-y-2">
                   <h3 className="text-2xl font-headline font-bold text-amber-900">Infrastructure Provisioning</h3>
                   <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
-                    We are currently configuring your secure edge environment for <span className="font-bold">{selectedOrg.domain}</span>. Once complete, your assigned network nodes will appear here.
+                    We are currently configuring your secure edge environment for <span className="font-bold">{selectedOrg.domain}</span>. Once complete, your assigned network nameservers will appear here.
                   </p>
                 </div>
                 <div className="flex gap-3">
                   <Link href="/support">
-                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100 font-bold gap-2 h-11 px-6">
+                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-yellow-500 hover:text-white hover:border-yellow-500 transition-colors font-bold gap-2 h-11 px-6">
                       <MessageSquare className="w-4 h-4" />
                       Contact Network Desk
                     </Button>
@@ -460,7 +564,7 @@ export default function DNSManagementPage() {
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-slate-400" />
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Network Nodes</CardTitle>
+                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Network Nameservers</CardTitle>
                 </div>
                 <Badge className={cn(
                   "text-[9px] font-bold px-2 py-0.5 border shadow-none",
@@ -484,21 +588,21 @@ export default function DNSManagementPage() {
                            <Globe className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
                          </div>
                        ))}
-                       {!zoneDetails?.nameServers?.length && <p className="text-xs text-slate-400 italic">Nodes will appear once initialized.</p>}
+                       {!zoneDetails?.nameServers?.length && <p className="text-xs text-slate-400 italic">Nameservers will appear once initialized.</p>}
                      </div>
                    </div>
                    <div className="space-y-4 flex flex-col justify-center border-l border-slate-100 pl-8">
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-slate-900">Infrastructure Connection</h4>
                         <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                          Update your domain's name servers at your registrar to point to the nodes listed above. 
+                          Update your domain's name servers at your registrar to point to the nameservers listed above. 
                           Propagation typically occurs within 1-2 hours.
                         </p>
                       </div>
                       <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex gap-3">
                         <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                         <p className="text-[10px] text-primary font-bold leading-relaxed">
-                          Your records will only take effect after your registrar is pointed to these nodes.
+                          Your records will only take effect after your registrar is pointed to these nameservers.
                         </p>
                       </div>
                    </div>
@@ -595,7 +699,9 @@ export default function DNSManagementPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                               {rec.proxied ? (
+                               {!isProxyAllowed(rec.type) ? (
+                                 <span className="text-[10px] text-slate-300 font-bold ml-1.5">—</span>
+                               ) : rec.proxied ? (
                                  <div className="flex items-center gap-1.5 text-amber-500">
                                    <ShieldCheck className="w-4 h-4" />
                                    <span className="text-[9px] font-bold uppercase tracking-tighter">On</span>
@@ -612,7 +718,7 @@ export default function DNSManagementPage() {
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
-                                  className="h-8 w-8 text-slate-400 hover:text-primary transition-colors"
+                                  className="h-8 w-8 text-slate-400 hover:bg-primary hover:text-white transition-all rounded-md"
                                   onClick={() => {
                                     setEditingRecord(rec)
                                     setFormData(rec)
@@ -624,8 +730,11 @@ export default function DNSManagementPage() {
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
-                                  className="h-8 w-8 text-slate-400 hover:text-destructive transition-colors"
-                                  onClick={() => handleDeleteRecord(rec.id)}
+                                  className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
+                                  onClick={() => {
+                                    setDeletingRecordId(rec.id)
+                                    setIsDeleteOpen(true)
+                                  }}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -642,26 +751,26 @@ export default function DNSManagementPage() {
           </div>
         )}
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-lg p-0 overflow-hidden border-none shadow-2xl bg-white">
-            <DialogHeader className="bg-slate-900 text-white p-6">
-              <DialogTitle className="font-headline font-bold text-xl">
-                {editingRecord ? "Edit Record" : "Add Record"}
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open)
+          if (!open) setFormErrors({}) // Clear errors on close
+        }}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border border-slate-200/80 shadow-2xl bg-white rounded-xl">
+            <DialogHeader className="bg-white border-b border-slate-100 px-5 py-4">
+              <DialogTitle className="font-headline font-bold text-base text-slate-900">
+                {editingRecord ? "Edit DNS Record" : "Create DNS Record"}
               </DialogTitle>
-              <p className="text-slate-400 text-xs mt-1">Configure DNS parameters for {selectedOrg?.domain}.</p>
+              <p className="text-slate-400 text-[10px] mt-0.5 uppercase font-bold tracking-wider">Zone: {selectedOrg?.domain}</p>
             </DialogHeader>
-            <div className="p-6 space-y-6">
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-slate-500">Record Type</Label>
+            <div className="px-5 py-4 space-y-3.5">
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Record Type</Label>
                   <Select 
                     value={formData.type} 
-                    onValueChange={(v) => {
-                      const isStandardProxy = PROXY_SUPPORTED_TYPES.includes(v)
-                      setFormData({...formData, type: v, proxied: isStandardProxy})
-                    }}
+                    onValueChange={handleTypeChange}
                   >
-                    <SelectTrigger className="h-10 font-bold border-slate-200">
+                    <SelectTrigger className="h-9 font-bold border-slate-200 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -672,45 +781,55 @@ export default function DNSManagementPage() {
                   </Select>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-slate-500">Name (e.g. @ or www)</Label>
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Name (e.g. @ or www)</Label>
                   <Input 
                     placeholder="e.g. www" 
-                    className="h-10 font-bold text-xs border-slate-200" 
+                    className={cn(
+                      "h-9 font-semibold text-xs border-slate-200 transition-all",
+                      formErrors.name && "border-red-400 focus-visible:ring-red-500 bg-red-50/20"
+                    )}
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
                   />
-                  {formData.name === "" && <p className="text-[9px] text-red-500 font-bold mt-1 uppercase">Field required</p>}
+                  {formErrors.name && <p className="text-[9px] text-red-500 font-bold uppercase tracking-wide">{formErrors.name}</p>}
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-slate-500">Value / Target</Label>
-                  <Textarea 
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Value / Target</Label>
+                  <Input 
                     placeholder="e.g. 192.168.1.1" 
-                    className="min-h-[100px] font-bold text-xs border-slate-200 leading-relaxed" 
+                    className={cn(
+                      "h-9 font-semibold text-xs border-slate-200 transition-all",
+                      formErrors.content && "border-red-400 focus-visible:ring-red-500 bg-red-50/20"
+                    )}
                     value={formData.content}
-                    onChange={(e) => setFormData({...formData, content: e.target.value})}
+                    onChange={(e) => handleInputChange('content', e.target.value)}
                   />
-                  {formData.content === "" && <p className="text-[9px] text-red-500 font-bold mt-1 uppercase">Field required</p>}
+                  {formErrors.content && <p className="text-[9px] text-red-500 font-bold uppercase tracking-wide">{formErrors.content}</p>}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  {formData.type === "MX" && (
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase text-slate-500">Priority</Label>
+                <div className="grid grid-cols-2 gap-3.5">
+                  {formData.type === "MX" ? (
+                    <div className="space-y-1">
+                      <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Priority</Label>
                       <Input 
                         type="number" 
-                        className="h-10 font-bold text-xs border-slate-200" 
+                        className={cn(
+                          "h-9 font-semibold text-xs border-slate-200 transition-all",
+                          formErrors.priority && "border-red-400 focus-visible:ring-red-500 bg-red-50/20"
+                        )}
                         value={formData.priority}
-                        onChange={(e) => setFormData({...formData, priority: parseInt(e.target.value) || 0})}
+                        onChange={(e) => handleInputChange('priority', e.target.value)}
                       />
+                      {formErrors.priority && <p className="text-[9px] text-red-500 font-bold uppercase tracking-wide">{formErrors.priority}</p>}
                     </div>
-                  )}
+                  ) : <div />}
 
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-bold uppercase text-slate-500">TTL</Label>
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">TTL</Label>
                     <Select value={formData.ttl} onValueChange={(v) => setFormData({...formData, ttl: v})}>
-                      <SelectTrigger className="h-10 text-xs font-bold border-slate-200">
+                      <SelectTrigger className="h-9 text-xs font-semibold border-slate-200">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -724,40 +843,44 @@ export default function DNSManagementPage() {
                   </div>
                 </div>
 
-                <div className={cn(
-                  "flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-lg transition-opacity",
-                  !isProxyAllowed(formData.type!) && "opacity-40 pointer-events-none"
-                )}>
-                   <div className="space-y-0.5">
-                     <div className="flex items-center gap-2">
-                        <Label className="text-xs font-bold text-slate-900">Proxied</Label>
-                        <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+                {isProxyAllowed(formData.type!) && (
+                  <div className="flex items-center justify-between p-3 bg-slate-50/50 border border-slate-100 rounded-lg transition-all">
+                     <div className="space-y-0.5">
+                       <div className="flex items-center gap-1.5">
+                          <Label className="text-xs font-bold text-slate-800">Proxied</Label>
+                          <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+                       </div>
+                       <p className="text-[9px] text-slate-400 font-medium leading-none">Route traffic through the edge.</p>
                      </div>
-                     <p className="text-[10px] text-slate-400 font-medium">Route traffic through the secure network edge.</p>
-                   </div>
-                   <Switch 
-                    disabled={!isProxyAllowed(formData.type!)}
-                    checked={formData.proxied} 
-                    onCheckedChange={(v) => setFormData({...formData, proxied: v})} 
-                  />
-                </div>
+                     <Switch 
+                      checked={formData.proxied} 
+                      onCheckedChange={(v) => setFormData({...formData, proxied: v})} 
+                    />
+                  </div>
+                )}
               </div>
             </div>
-            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
-              <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
-              <Button onClick={handleSaveRecord} disabled={isSubmitting} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11 shadow-lg shadow-slate-200">
-                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Save Record"}
+            <DialogFooter className="bg-white border-t border-slate-100/60 px-5 py-3 flex gap-2 justify-end">
+              <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 h-9">Cancel</Button>
+              <Button onClick={handleSaveRecord} disabled={isSubmitting} className="h-9 px-6 bg-slate-900 hover:bg-black text-white font-bold text-xs shadow-md rounded-lg">
+                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : editingRecord ? "Save Changes" : "Save Record"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         {/* Import Dialog */}
-        <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <Dialog open={isImportDialogOpen} onOpenChange={(open) => {
+          setIsImportDialogOpen(open)
+          if (!open) {
+            setImportFile(null)
+            setImportConfirmed(false)
+          }
+        }}>
           <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
             <DialogHeader className="bg-slate-900 text-white p-6">
               <DialogTitle className="font-headline font-bold text-xl">Import DNS Records</DialogTitle>
-              <p className="text-slate-400 text-xs mt-1">Upload a BIND zone file to bulk import records.</p>
+              <p className="text-white/60 text-xs mt-1">Upload a BIND zone file to bulk import records.</p>
             </DialogHeader>
             <div className="p-6 space-y-6">
               <div 
@@ -795,11 +918,75 @@ export default function DNSManagementPage() {
                   onCheckedChange={setProxyAllImported} 
                 />
               </div>
+
+              {/* High-fidelity Import Confirmation Block */}
+              {importFile && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-amber-900">Review Import Action</p>
+                      <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
+                        Bulk-importing records from <span className="font-bold">{importFile.name}</span> will populate new settings directly to your Cloudflare network edge zone.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 pl-6 mt-1">
+                    <input 
+                      type="checkbox" 
+                      id="confirm-chk"
+                      checked={importConfirmed}
+                      onChange={(e) => setImportConfirmed(e.target.checked)}
+                      className="h-3.5 w-3.5 text-primary border-slate-300 rounded focus:ring-primary cursor-pointer"
+                    />
+                    <label htmlFor="confirm-chk" className="text-[10px] font-bold text-slate-600 cursor-pointer select-none uppercase tracking-wider">
+                      I confirm and authorize this import
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
             <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
-              <Button variant="ghost" onClick={() => setIsImportDialogOpen(false)} className="text-xs font-bold uppercase text-slate-400">Abort</Button>
-              <Button onClick={processImport} disabled={isSubmitting || !importFile} className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11">
+              <Button 
+                onClick={processImport} 
+                disabled={isSubmitting || !importFile || !importConfirmed} 
+                className="px-8 bg-slate-900 hover:bg-black text-white font-bold h-11 shadow-lg shadow-slate-200"
+              >
                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Start Import"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Premium Deletion Confirmation Dialog */}
+        <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white animate-in zoom-in duration-300">
+            <DialogHeader className="bg-red-600 text-white p-6">
+              <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 animate-bounce text-white" />
+                Confirm DNS Record Deletion
+              </DialogTitle>
+              <p className="text-red-100 text-xs mt-1">This operation is irreversible and propagates instantly.</p>
+            </DialogHeader>
+            <div className="p-6 space-y-3">
+              <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                Are you absolutely sure you want to permanently remove this record from your DNS zone settings? 
+                Any traffic routed through this hostname will be interrupted.
+              </p>
+            </div>
+            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100 flex gap-2 justify-end">
+              <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
+              <Button 
+                onClick={async () => {
+                  if (deletingRecordId) {
+                    await handleDeleteRecord(deletingRecordId)
+                    setIsDeleteOpen(false)
+                    setDeletingRecordId(null)
+                  }
+                }} 
+                className="px-6 bg-red-600 hover:bg-red-700 text-white font-bold h-10 shadow-lg shadow-red-200"
+              >
+                Confirm Removal
               </Button>
             </DialogFooter>
           </DialogContent>

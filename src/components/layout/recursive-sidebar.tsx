@@ -5,44 +5,25 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { 
   Globe, 
-  Database, 
-  Mail, 
   Users, 
   Settings, 
   ShieldCheck,
   Briefcase,
   LayoutDashboard,
-  HardDrive,
-  Archive,
-  LayoutGrid,
-  Shield
+  Database,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, onSnapshot } from "firebase/firestore"
 
 interface NavItem {
   title: string
   href?: string
   icon?: React.ElementType
+  badge?: React.ReactNode
   children?: NavItem[]
 }
 
-export function RecursiveSidebar() {
+export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname()
-  const { user } = useUser()
-  const db = useFirestore()
-  const [workspaceActive, setWorkspaceActive] = React.useState(false)
-
-  React.useEffect(() => {
-    if (!user) return
-    const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
-    const unsub = onSnapshot(q, (snap) => {
-      const active = snap.docs.some(doc => doc.data().managedWorkspace === true)
-      setWorkspaceActive(active)
-    })
-    return unsub
-  }, [user, db])
 
   const navItems: NavItem[] = [
     {
@@ -59,18 +40,8 @@ export function RecursiveSidebar() {
       children: [
         { title: "DNS Management", icon: Globe, href: "/services/dns" },
         { title: "Website Management", icon: Database, href: "/services/website" },
-        { title: "Google Workspace", icon: Mail, href: "/services/workspace" },
       ]
     },
-    ...(workspaceActive ? [{
-      title: "GOOGLE WORKSPACE",
-      icon: Shield,
-      children: [
-        { title: "Identity Directory", icon: Users, href: "/services/workspace/users" },
-        { title: "Retention Archive", icon: Archive, href: "/services/workspace/archived" },
-        { title: "Storage Policies", icon: HardDrive, href: "/services/workspace/storage" },
-      ]
-    }] : []),
     {
       title: "MANAGEMENT",
       icon: ShieldCheck,
@@ -82,50 +53,58 @@ export function RecursiveSidebar() {
   ]
 
   return (
-    <aside className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col pt-12 shrink-0">
+    <aside className={cn(
+      "bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 transition-all",
+      mobile ? "w-full pt-4 border-r-0 h-full" : "w-64 pt-12 hidden lg:flex"
+    )}>
       <div className="px-6 mb-8">
         <Link href="/account/home" className="flex flex-col gap-0 group">
-          <span className="font-body font-black text-2xl tracking-[0.2em] text-slate-900 leading-none ml-[0.2em]">
+          <span className="font-headline font-bold text-[20px] tracking-[0.1em] text-[#191c1e] leading-none ml-[0.1em]">
             REVLET
           </span>
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar">
-        {navItems.map((section, idx) => (
-          <div key={idx} className="mb-6">
-            <div className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              {section.title}
-              <div className="flex-1 h-px bg-slate-200" />
+      <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar pb-6">
+        {navItems.map((section, idx) => {
+          if (!section.children || section.children.length === 0) return null
+
+          return (
+            <div key={idx} className="mb-6 animate-in fade-in duration-300">
+              <div className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                {section.title}
+                <div className="flex-1 h-px bg-slate-200 animate-in slide-in-from-left duration-500" />
+              </div>
+              <div className="space-y-1">
+                {section.children.map((item, childIdx) => {
+                  const isActive = pathname === item.href
+                  
+                  return (
+                    <Link
+                      key={childIdx}
+                      href={item.href || "#"}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-md text-xs font-semibold tracking-wide transition-all group relative",
+                        isActive 
+                          ? "bg-white text-primary shadow-sm border border-slate-200/80" 
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      )}
+                    >
+                      {item.icon && (
+                        <item.icon className={cn(
+                          "w-3.5 h-3.5 transition-colors shrink-0",
+                          isActive ? "text-primary" : "text-slate-400 group-hover:text-slate-600"
+                        )} />
+                      )}
+                      <span className="truncate">{item.title}</span>
+                      {item.badge}
+                    </Link>
+                  )
+                })}
+              </div>
             </div>
-            <div className="space-y-1">
-              {section.children?.map((item, childIdx) => {
-                const isActive = pathname === item.href
-                
-                return (
-                  <Link
-                    key={childIdx}
-                    href={item.href || "#"}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all group",
-                      isActive 
-                        ? "bg-white text-primary shadow-sm border border-slate-200" 
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    )}
-                  >
-                    {item.icon && (
-                      <item.icon className={cn(
-                        "w-4 h-4 transition-colors",
-                        isActive ? "text-primary" : "text-slate-400 group-hover:text-slate-600"
-                      )} />
-                    )}
-                    {item.title}
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </nav>
     </aside>
   )

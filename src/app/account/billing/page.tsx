@@ -19,7 +19,8 @@ import {
   Check, 
   User as UserIcon,
   CreditCard,
-  X
+  X,
+  Eye
 } from "lucide-react"
 import {
   Dialog,
@@ -33,17 +34,18 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/hooks/use-toast"
-import { useUser, useFirestore } from "@/firebase"
+import { useUser, useFirestore, useFirebaseApp } from "@/firebase"
 import { 
   collection, 
   query, 
   where, 
-  onSnapshot, 
+  getDocs, 
   addDoc, 
   serverTimestamp 
 } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
 
 interface Organization {
   id: string
@@ -58,12 +60,33 @@ interface PaymentVoucher {
   amount: number
   submittedAt: any
   voucherFileName: string
+  voucherUrl?: string
   status: "Not verified" | "Verified" | "Rejected"
+}
+
+function PaymentTableSkeleton() {
+  return (
+    <div className="w-full divide-y divide-slate-100 animate-pulse bg-white">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center justify-between py-5 pl-8 pr-8">
+          <div className="flex flex-col gap-2">
+            <div className="h-4 w-28 bg-slate-200 rounded" />
+            <div className="h-3 w-16 bg-slate-100 rounded" />
+          </div>
+          <div className="h-4 w-36 bg-slate-150 rounded hidden md:block" />
+          <div className="h-4 w-20 bg-slate-100 rounded" />
+          <div className="h-6 w-20 bg-slate-100 rounded-full" />
+          <div className="h-8 w-24 bg-slate-100 rounded" />
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function BillingPage() {
   const { user, loading: authLoading } = useUser()
   const db = useFirestore()
+  const app = useFirebaseApp()
 
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [vouchers, setVouchers] = useState<PaymentVoucher[]>([])
@@ -86,39 +109,40 @@ export default function BillingPage() {
     const orgsRef = collection(db, "organizations")
     const qOrgs = query(orgsRef, where("ownerId", "==", user.uid))
     
-    const unsubOrgs = onSnapshot(qOrgs, (snap) => {
-      setOrgs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Organization[])
-    })
-
-    // Fetch Vouchers
     const vouchersRef = collection(db, "paymentVouchers")
     const qVouchers = query(vouchersRef, where("ownerId", "==", user.uid))
 
-    const unsubVouchers = onSnapshot(qVouchers, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as PaymentVoucher[]
-      
-      setVouchers(fetched.sort((a, b) => {
-        const dateA = a.submittedAt?.toMillis?.() || 0
-        const dateB = b.submittedAt?.toMillis?.() || 0
-        return dateB - dateA
-      }))
-      setIsLoading(false)
-    }, async (error) => {
-      const permissionError = new FirestorePermissionError({
-        path: 'paymentVouchers',
-        operation: 'list',
-      });
-      errorEmitter.emit('permission-error', permissionError);
-      setIsLoading(false)
-    })
+    const fetchData = async () => {
+      try {
+        const [orgsSnap, vouchersSnap] = await Promise.all([
+          getDocs(qOrgs),
+          getDocs(qVouchers)
+        ]);
 
-    return () => {
-      unsubOrgs()
-      unsubVouchers()
-    }
+        setOrgs(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Organization[]);
+
+        const fetched = vouchersSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as PaymentVoucher[];
+        
+        setVouchers(fetched.sort((a, b) => {
+          const dateA = a.submittedAt?.toMillis?.() || 0
+          const dateB = b.submittedAt?.toMillis?.() || 0
+          return dateB - dateA
+        }));
+        setIsLoading(false);
+      } catch (error) {
+        const permissionError = new FirestorePermissionError({
+          path: 'paymentVouchers',
+          operation: 'list',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
   }, [user, authLoading, db])
 
   const handleCopyId = (id: string) => {
@@ -145,6 +169,62 @@ export default function BillingPage() {
     }
   }
 
+  const compressImage = (file: File): Promise<Blob | File> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith("image/")) {
+        resolve(file); // PDFs or other documents uploaded directly without compression
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+
+          // Standard premium target resolution for verification is 1200px max edge
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  resolve(blob);
+                } else {
+                  resolve(file);
+                }
+              },
+              "image/jpeg",
+              0.65 // Compress to highly efficient 65% quality
+            );
+          } else {
+            resolve(file);
+          }
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleConfirmSubmission = async () => {
     if (!user) return
     if (!selectedFile || !submissionData.organizationId || !submissionData.amount) {
@@ -157,35 +237,56 @@ export default function BillingPage() {
     }
 
     setIsSubmitting(true)
-    const vouchersRef = collection(db, "paymentVouchers")
-    const targetOrg = orgs.find(o => o.id === submissionData.organizationId)
-    
-    addDoc(vouchersRef, {
-      organizationId: submissionData.organizationId,
-      organizationName: targetOrg?.name || "Unknown Institution",
-      amount: parseFloat(submissionData.amount),
-      ownerId: user.uid,
-      submittedAt: serverTimestamp(),
-      voucherFileName: selectedFile.name,
-      status: "Not verified"
-    }).then(() => {
+    try {
+      // 1. Process and compress file to save bandwidth & storage
+      const processedFile = await compressImage(selectedFile)
+
+      // 2. Upload proof to Firebase Storage
+      const storageInstance = getStorage(app)
+      const storagePath = `vouchers/${user.uid}/${Date.now()}_${selectedFile.name}`
+      const storageRef = ref(storageInstance, storagePath)
+
+      const uploadResult = await uploadBytes(storageRef, processedFile)
+      const voucherUrl = await getDownloadURL(uploadResult.ref)
+
+      // 3. Write metadata to Cloud Firestore
+      const vouchersRef = collection(db, "paymentVouchers")
+      const targetOrg = orgs.find(o => o.id === submissionData.organizationId)
+      
+      await addDoc(vouchersRef, {
+        organizationId: submissionData.organizationId,
+        organizationName: targetOrg?.name || "Unknown Institution",
+        amount: parseFloat(submissionData.amount),
+        ownerId: user.uid,
+        submittedAt: serverTimestamp(),
+        voucherFileName: selectedFile.name,
+        voucherUrl: voucherUrl,
+        status: "Not verified"
+      })
+
       toast({
         title: "Payment Submitted",
-        description: "Proof of payment has been sent for administrative verification.",
+        description: "Proof of payment has been successfully compressed, uploaded, and submitted for verification.",
       })
       setIsSubmitting(false)
       setIsDialogOpen(false)
       setSelectedFile(null)
       setSubmissionData({ organizationId: "", amount: "" })
-    }).catch(async (error) => {
+    } catch (error: any) {
       const permissionError = new FirestorePermissionError({
         path: 'paymentVouchers',
         operation: 'create',
         requestResourceData: submissionData
       });
       errorEmitter.emit('permission-error', permissionError);
+      
+      toast({
+        variant: "destructive",
+        title: "Submission Failed",
+        description: error.message || "An unexpected error occurred during receipt upload.",
+      })
       setIsSubmitting(false)
-    })
+    }
   }
 
   const totalOutstanding = orgs.reduce((sum, o) => sum + (o.outstandingAmount || 0), 0)
@@ -203,165 +304,125 @@ export default function BillingPage() {
 
   return (
     <DashboardShell>
-      <div className="space-y-8">
+      <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Billing & Finance</span>
-          <h1 className="text-3xl font-headline font-bold text-slate-900">Manage Payments</h1>
+          <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Manage Payments</h1>
         </div>
         
-        <Card className="bg-white border-slate-200 shadow-sm">
+        <Card className="bg-white border-slate-200 shadow-sm rounded-lg overflow-hidden">
           <CardContent className="pt-6">
-            <div className="bg-red-50 border border-red-100 p-6 rounded-lg flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-slate-50 border border-slate-100 p-6 rounded-lg flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Total Outstanding Balance</span>
-                <p className="text-3xl font-headline font-bold text-red-700">रू {totalOutstanding.toLocaleString()}</p>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Outstanding Balance</span>
+                <p className="text-3xl font-headline font-bold text-slate-900">रू {totalOutstanding.toLocaleString()}</p>
               </div>
               
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="lg" className="bg-red-600 hover:bg-red-700 text-white font-bold h-12 px-8 shadow-lg shadow-red-200">
+                  <Button size="lg" className="bg-primary hover:bg-primary/95 text-white font-bold h-11 px-8 shadow-md shadow-primary/10 rounded-lg">
                     Submit Payment Voucher
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-4xl bg-white p-0 overflow-hidden border-none shadow-2xl [&>button]:text-white [&>button]:opacity-100 [&>button]:transition-opacity [&>button]:hover:opacity-80">
-                  <DialogHeader className="p-6 bg-slate-900 text-white relative">
-                    <DialogTitle className="text-xl font-headline font-bold">Payment Submission Portal</DialogTitle>
-                    <p className="text-slate-400 text-xs">Verify your bank transfer and upload proof.</p>
+                <DialogContent className="max-w-xl bg-white p-6 border border-slate-200 rounded-lg shadow-2xl space-y-6">
+                  <DialogHeader className="p-0">
+                    <DialogTitle className="text-lg font-headline font-semibold text-slate-900">Submit Payment Voucher</DialogTitle>
+                    <p className="text-slate-400 text-xs mt-1">Upload proof of bank transfer for manual verification.</p>
                   </DialogHeader>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
-                    <div className="p-8 bg-slate-50 border-r border-slate-100 space-y-8">
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-2 text-primary">
-                          <Landmark className="w-5 h-5" />
-                          <h3 className="font-bold text-sm uppercase tracking-wider">Authorised Bank Details</h3>
-                        </div>
-                        
-                        <div className="space-y-4">
-                          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5">
-                            <div className="flex items-start gap-4">
-                              <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center shrink-0">
-                                <CreditCard className="w-5 h-5 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight mb-1.5 leading-none">Account Number</p>
-                                <p className="text-lg font-mono font-bold text-slate-900 tracking-tight">16007010030603</p>
-                              </div>
-                            </div>
 
-                            <div className="flex items-start gap-4">
-                              <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center shrink-0">
-                                <Landmark className="w-5 h-5 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight mb-1.5 leading-none">Bank & Branch</p>
-                                <p className="text-sm font-bold text-slate-900">Global IME Bank Limited</p>
-                                <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">Bhaisepati Branch, Lalitpur</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-start gap-4">
-                              <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center shrink-0">
-                                <UserIcon className="w-5 h-5 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight mb-1.5 leading-none">Account Name</p>
-                                <p className="text-sm font-bold text-slate-900 uppercase">Shivam Yadav</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 flex gap-3">
-                        <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-                        <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
-                          Verification is manually processed by our accounts team. Please ensure the reference note includes your Institution Code for faster processing.
-                        </p>
-                      </div>
+                  {/* Compact Bank Details Box in clean row grid */}
+                  <div className="bg-slate-50 p-4 border border-slate-200/80 rounded-lg grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-1 leading-none">Beneficiary</p>
+                      <p className="font-bold text-slate-800 uppercase truncate">Shivam Yadav</p>
                     </div>
-                    
-                    <div className="p-8 space-y-6 flex flex-col justify-center">
-                      <div className="space-y-4">
-                        <div className="space-y-1.5">
-                          <Label className="text-[10px] font-bold text-slate-500 uppercase">Institution</Label>
-                          <Select 
-                            value={submissionData.organizationId} 
-                            onValueChange={(v) => setSubmissionData({...submissionData, organizationId: v})}
-                          >
-                            <SelectTrigger className="h-10 text-xs font-bold border-slate-200">
-                              <SelectValue placeholder="Select institution" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {orgs.map(org => (
-                                <SelectItem key={org.id} value={org.id} className="text-xs">
-                                  {org.name} (NPR {org.outstandingAmount?.toLocaleString() || 0})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-[10px] font-bold text-slate-500 uppercase">Transfer Amount (NPR)</Label>
-                          <Input 
-                            type="number"
-                            placeholder="e.g. 15000"
-                            className="h-10 text-xs font-bold border-slate-200"
-                            value={submissionData.amount}
-                            onChange={(e) => setSubmissionData({...submissionData, amount: e.target.value})}
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-[10px] font-bold text-slate-500 uppercase">Voucher Upload</Label>
-                          <div 
-                            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer group
-                              ${selectedFile ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 hover:border-primary hover:bg-slate-50'}`}
-                            onClick={() => document.getElementById('voucher-upload')?.click()}
-                          >
-                            {selectedFile ? <FileCheck className="w-10 h-10 text-emerald-500" /> : <Upload className="w-10 h-10 text-slate-300 group-hover:text-primary transition-colors" />}
-                            <div className="text-center">
-                              <p className="text-[11px] font-bold text-slate-700 truncate max-w-[200px]">
-                                {selectedFile ? selectedFile.name : 'Click to attach payment receipt'}
-                              </p>
-                              <p className="text-[9px] text-slate-400 mt-0.5">PDF, JPG or PNG (Max 5MB)</p>
-                            </div>
-                            <Input id="voucher-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} />
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <Button 
-                        onClick={handleConfirmSubmission} 
-                        className="w-full bg-slate-900 text-white font-bold h-12 rounded-lg hover:bg-black transition-all"
-                        disabled={isSubmitting || !selectedFile || !submissionData.organizationId}
-                      >
-                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Submit for Verification"}
-                      </Button>
+                    <div>
+                      <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-1 leading-none">Account Number</p>
+                      <p className="font-mono font-bold text-slate-800 truncate">16007010030603</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-1 leading-none">Bank Name</p>
+                      <p className="font-bold text-slate-800 truncate">Global IME Bank</p>
                     </div>
                   </div>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Institution</Label>
+                        <Select 
+                          value={submissionData.organizationId} 
+                          onValueChange={(v) => setSubmissionData({...submissionData, organizationId: v})}
+                        >
+                          <SelectTrigger className="h-10 text-xs font-semibold border-slate-200 bg-white rounded">
+                            <SelectValue placeholder="Select institution" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {orgs.map(org => (
+                              <SelectItem key={org.id} value={org.id} className="text-xs">
+                                {org.name} (NPR {org.outstandingAmount?.toLocaleString() || 0})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Transfer Amount (NPR)</Label>
+                        <Input 
+                          type="number"
+                          placeholder="e.g. 15000"
+                          className="h-10 text-xs font-normal border-[#c6c6cd] rounded"
+                          value={submissionData.amount}
+                          onChange={(e) => setSubmissionData({...submissionData, amount: e.target.value})}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Voucher Upload</Label>
+                      <div 
+                        className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer group
+                          ${selectedFile ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 hover:border-primary hover:bg-slate-50'}`}
+                        onClick={() => document.getElementById('voucher-upload')?.click()}
+                      >
+                        {selectedFile ? <FileCheck className="w-8 h-8 text-emerald-500" /> : <Upload className="w-8 h-8 text-slate-300 group-hover:text-primary transition-colors" />}
+                        <div className="text-center">
+                          <p className="text-[10px] font-bold text-slate-700 truncate max-w-[320px]">
+                            {selectedFile ? selectedFile.name : 'Click or drag to attach receipt'}
+                          </p>
+                          <p className="text-[8px] text-slate-400 mt-0.5">PDF, JPG or PNG (Max 5MB)</p>
+                        </div>
+                        <Input id="voucher-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    onClick={handleConfirmSubmission} 
+                    className="w-full bg-primary hover:bg-primary/95 text-white font-bold h-11 rounded hover:bg-black transition-all text-xs"
+                    disabled={isSubmitting || !selectedFile || !submissionData.organizationId}
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Submit for Verification"}
+                  </Button>
                 </DialogContent>
               </Dialog>
             </div>
           </CardContent>
         </Card>
-
-        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
+ 
+        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-lg">
           <CardHeader className="bg-slate-50/50 border-b border-slate-200 px-8 py-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment Submission History</CardTitle>
-              <Badge variant="outline" className="text-[10px] font-bold text-slate-400 h-5 px-2 bg-white">
+              <Badge variant="outline" className="text-[10px] font-bold text-slate-400 h-5 px-2 bg-white rounded">
                 {vouchers.length} Records
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="p-0 min-h-[300px]">
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-32 gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Submissions...</p>
-              </div>
+              <PaymentTableSkeleton />
             ) : vouchers.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32 text-center gap-3">
                 <ReceiptText className="w-12 h-12 text-slate-100" />
@@ -371,17 +432,17 @@ export default function BillingPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/50 border-b border-slate-200">
-                    <TableHead className="text-[10px] font-bold uppercase py-4 pl-8">Voucher ID</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4">Institution</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4">Amount (NPR)</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4">Submitted Date</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4">Status</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8">Actions</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 text-slate-400 tracking-widest">Voucher ID</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Institution</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Amount (NPR)</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Submitted Date</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Status</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {vouchers.map((v) => (
-                    <TableRow key={v.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
+                    <TableRow key={v.id} className="hover:bg-[#F8FAFC] transition-colors border-b border-slate-100 last:border-0">
                       <TableCell className="font-bold text-slate-700 py-5 pl-8">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono">{v.id.substring(0, 8)}...</span>
@@ -412,9 +473,20 @@ export default function BillingPage() {
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="h-8 gap-1.5 text-slate-500 hover:text-primary hover:bg-primary/5 text-xs font-bold"
-                          onClick={() => toast({ title: "View Document", description: `File: ${v.voucherFileName}` })}
+                          className="h-8 gap-1.5 text-slate-500 hover:text-primary hover:bg-primary/5 text-xs font-bold rounded"
+                          onClick={() => {
+                            if (v.voucherUrl) {
+                              window.open(v.voucherUrl, "_blank")
+                            } else {
+                              toast({ 
+                                variant: "destructive",
+                                title: "Document Not Found", 
+                                description: `Receipt file "${v.voucherFileName}" does not have a public upload URL.` 
+                              })
+                            }
+                          }}
                         >
+                          <Eye className="w-3.5 h-3.5" />
                           View Receipt
                         </Button>
                       </TableCell>

@@ -216,10 +216,13 @@ export default function WorkspaceManagementPage() {
               
               <div className="space-y-8">
                 <div className="space-y-3">
-                  <h3 className="text-3xl font-headline font-bold text-slate-900">Workspace Context Declaration</h3>
-                  <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed font-medium">
-                    Please declare the current Google Workspace status for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span> to initialize management contexts.
-                  </p>
+                  <h3 className="text-3xl font-headline font-bold text-slate-900 uppercase tracking-tight">Workspace Infrastructure Configuration</h3>
+                  <div className="space-y-1">
+                    <p className="text-primary font-bold text-sm uppercase tracking-widest">Simplified Administration for Modern Institutions</p>
+                    <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed font-medium">
+                      Select your institution's current workspace status for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span> to activate the managed administrative interface and automated security protocols.
+                    </p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto text-left">
@@ -351,7 +354,7 @@ export default function WorkspaceManagementPage() {
                          <div className="space-y-1">
                             <h4 className="text-sm font-bold text-slate-900">Step 3 & 4: Finalize in Google Admin</h4>
                             <p className="text-xs text-slate-500 leading-relaxed">
-                              Navigate to <span className="font-bold text-slate-900">Security &gt; API Controls &gt; Manage Domain Wide Delegation</span> in your Google Admin console. 
+                              Navigate to <span className="font-bold text-slate-900">Security {'&gt;'} API Controls {'&gt;'} Manage Domain Wide Delegation</span> in your Google Admin console. 
                               Add a new API Client, paste the values copied above, and click <span className="font-bold text-slate-900">Authorize</span>.
                             </p>
                          </div>

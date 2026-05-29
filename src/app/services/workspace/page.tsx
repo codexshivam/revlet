@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { OrgSelector } from "@/components/org/org-selector"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -16,14 +16,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   ShieldCheck, 
   Settings, 
-  MoreVertical,
   Key,
   Archive,
   Trash2,
   Loader2,
   Network,
   Cloud,
-  ChevronRight,
   UserPlus,
   ArrowUpRight,
   Search,
@@ -36,13 +34,10 @@ import {
   Globe,
   GraduationCap,
   Users,
-  CheckCircle,
   Plus,
   Calendar,
-  X,
   Lock,
   ArrowRightLeft,
-  Mail,
   MessageSquare,
   Clock
 } from "lucide-react"
@@ -98,7 +93,7 @@ const SCOPES = [
 const ALERT_LOGS = [
   { id: 1, type: "CRITICAL", msg: "Multiple failed login attempts detected on administrative account", time: "2m ago" },
   { id: 2, type: "WARNING", msg: "Students OU collective storage has reached 88% capacity", time: "1h ago" },
-  { id: 3, type: "INFO", msg: "Directory sync with local infrastructure executed successfully", time: "4h ago" },
+  { id: 3, type: "INFO", msg: "Directory sync executed successfully", time: "4h ago" },
 ]
 
 export default function WorkspaceManagementPage() {
@@ -284,7 +279,7 @@ export default function WorkspaceManagementPage() {
                   <div className="space-y-1">
                     <p className="text-primary font-bold text-sm tracking-widest uppercase">Most Simplest and Effective Way to Manage Infrastructure Globally</p>
                     <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed font-medium">
-                      Select your current status below to activate the managed administrative interface and see how we optimize your workspace environment for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span>.
+                      Select your institution's current workspace status to activate the managed administrative interface and automated security protocols for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span>.
                     </p>
                   </div>
                 </div>
@@ -370,7 +365,7 @@ export default function WorkspaceManagementPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle className="font-headline font-bold">Confirm Application Request?</AlertDialogTitle>
                   <AlertDialogDescription className="text-sm leading-relaxed">
-                    This will initiate the Google Workspace deployment request for <span className="font-bold">{selectedOrg.domain}</span>. Our engineering team will verify your institutional eligibility and contact you for DNS requirements.
+                    This will initiate the Google Workspace deployment request for <span className="font-bold">{selectedOrg.domain}</span>. Our engineering team will contact you to discuss your specific infrastructure plan before finalized setup.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -396,20 +391,15 @@ export default function WorkspaceManagementPage() {
                   <div className="w-24 h-24 rounded-full bg-white border-primary/20 flex items-center justify-center shadow-sm relative">
                     <Clock className="w-12 h-12 text-amber-500" />
                     <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white uppercase text-[9px] px-2 h-5">
-                      PROCESSING
+                      PENDING
                     </Badge>
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <h3 className="text-3xl font-headline font-bold text-amber-900">Deployment Consultation in Progress</h3>
+                    <h3 className="text-3xl font-headline font-bold text-amber-900">Infrastructure Setup in Progress</h3>
                     <p className="text-amber-700/80 max-w-xl mx-auto text-sm leading-relaxed font-medium">
-                      Our engineering team is reviewing your deployment request for <span className="font-bold">{selectedOrg.domain}</span>. A specialist will call you shortly to discuss your organizational needs and finalize the Google Workspace setup.
-                    </p>
-                  </div>
-                  <div className="bg-amber-100/50 p-4 rounded-lg border border-amber-200/50 max-w-lg mx-auto">
-                    <p className="text-xs text-amber-800 font-bold leading-relaxed">
-                      Our team will reach out to you to clarify your doubts and get a proper concept of your workspace before we finalize the deployment.
+                      Our engineering team is reviewing your request for <span className="font-bold">{selectedOrg.domain}</span>. A specialist from our team will contact you shortly to discuss your specific plan and finalized the Google Workspace deployment.
                     </p>
                   </div>
                 </div>
@@ -433,7 +423,7 @@ export default function WorkspaceManagementPage() {
               <div className="text-center space-y-2">
                 <Badge className="bg-blue-50 text-blue-600 border-blue-100 mb-2">MIGRATION PROTOCOL</Badge>
                 <h2 className="text-2xl font-headline font-bold text-slate-900">Authorize Domain-Wide Delegation</h2>
-                <p className="text-slate-500 text-sm font-medium">Follow Approach A to securely link your Google Admin environment to our platform.</p>
+                <p className="text-slate-500 text-sm font-medium">Follow these steps to securely link your Google Admin environment to our platform.</p>
               </div>
 
               <div className="grid gap-6">
@@ -481,7 +471,7 @@ export default function WorkspaceManagementPage() {
                          <div className="space-y-1">
                             <h4 className="text-sm font-bold text-slate-900">Step 3 & 4: Finalize in Google Admin</h4>
                             <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                              Navigate to <span className="font-bold">Security {'{'}'>'{'}' API Controls {'{'}'>'{'}' Manage Domain Wide Delegation</span>. 
+                              Navigate to <span className="font-bold">Security &gt; API Controls &gt; Manage Domain Wide Delegation</span>. 
                               Add a new API Client, paste the values copied above, and click <span className="font-bold text-slate-900">Authorize</span>.
                             </p>
                          </div>

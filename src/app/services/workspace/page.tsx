@@ -214,7 +214,7 @@ export default function WorkspaceManagementPage() {
                 <div className="space-y-3">
                   <h3 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Managed Workspace for You</h3>
                   <div className="space-y-1">
-                    <p className="text-primary font-bold text-sm tracking-widest">Simplest and most effective way to manage infrastructure globally</p>
+                    <p className="text-primary font-bold text-sm tracking-widest uppercase">Most Simplest and Effective Way to Manage Infrastructure Globally</p>
                     <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed font-medium">
                       Select your current status below to activate the managed administrative interface and see how we optimize your workspace environment for <span className="font-bold text-slate-900">{selectedOrg?.domain}</span>.
                     </p>

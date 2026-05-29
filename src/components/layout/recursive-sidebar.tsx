@@ -15,7 +15,8 @@ import {
   LayoutDashboard,
   HardDrive,
   Archive,
-  LayoutGrid
+  LayoutGrid,
+  Shield
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser, useFirestore } from "@/firebase"
@@ -38,11 +39,7 @@ export function RecursiveSidebar() {
     if (!user) return
     const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
     const unsub = onSnapshot(q, (snap) => {
-      // Check if any organization has an active and managed workspace
-      const active = snap.docs.some(doc => {
-        const data = doc.data()
-        return data.managedWorkspace === true
-      })
+      const active = snap.docs.some(doc => doc.data().managedWorkspace === true)
       setWorkspaceActive(active)
     })
     return unsub
@@ -68,12 +65,12 @@ export function RecursiveSidebar() {
     },
     ...(workspaceActive ? [{
       title: "GOOGLE WORKSPACE",
-      icon: Mail,
+      icon: Shield,
       children: [
-        { title: "Workspace Hub", icon: LayoutGrid, href: "/services/workspace?tab=hub" },
-        { title: "Users", icon: Users, href: "/services/workspace?tab=users" },
-        { title: "Storage", icon: HardDrive, href: "/services/workspace?tab=storage" },
-        { title: "Archived", icon: Archive, href: "/services/workspace?tab=archived" },
+        { title: "Workspace Hub", icon: LayoutGrid, href: "/services/workspace" },
+        { title: "Directory", icon: Users, href: "/services/workspace/users" },
+        { title: "Retention Archive", icon: Archive, href: "/services/workspace/archived" },
+        { title: "Storage Policies", icon: HardDrive, href: "/services/workspace/storage" },
       ]
     }] : []),
     {
@@ -105,10 +102,7 @@ export function RecursiveSidebar() {
             </div>
             <div className="space-y-1">
               {section.children?.map((item, childIdx) => {
-                // For sub-tabs in workspace, match exact href with query params if present
-                const isActive = item.href?.includes('?') 
-                  ? pathname + (typeof window !== 'undefined' ? window.location.search : '') === item.href
-                  : pathname === item.href
+                const isActive = pathname === item.href
                 
                 return (
                   <Link

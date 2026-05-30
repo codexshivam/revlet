@@ -16,19 +16,39 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { toast } from "@/hooks/use-toast"
-import { useState } from "react"
-import { useAuth } from "@/firebase"
+import { useState, useEffect } from "react"
+import { useAuth, useUser } from "@/firebase"
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth"
 
 export default function LoginPage() {
   const router = useRouter()
   const auth = useAuth()
+  const { user, loading: authLoading } = useUser()
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState("")
   const [isResetOpen, setIsResetOpen] = useState(false)
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.push("/account/home")
+    }
+  }, [user, authLoading, router])
+
+  if (authLoading || user) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-[10px] text-slate-500 animate-pulse font-semibold uppercase tracking-widest">
+            Securing session...
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const getFriendlyErrorMessage = (errorCode: string) => {
     switch (errorCode) {

@@ -10,10 +10,6 @@ const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
 
 async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: RequestInit = {}) {
   const dnsToken = process.env.CLOUDFLARE_DNS_TOKEN;
-  const infraToken = process.env.CLOUDFLARE_INFRA_TOKEN;
-  const genericToken = process.env.CLOUDFLARE_API_TOKEN;
-  const apiEmail = process.env.CLOUDFLARE_EMAIL;
-  const apiKey = process.env.CLOUDFLARE_API_KEY;
 
   const resolvedHeaders: Record<string, string> = {};
 
@@ -22,20 +18,14 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
   }
 
   // High-fidelity sanitation: strip outer spaces and literal single/double quotes loaded from env
-  const cleanToken = (dnsToken || infraToken || genericToken)?.trim().replace(/^["']|["']$/g, '');
-  const cleanEmail = apiEmail?.trim().replace(/^["']|["']$/g, '');
-  const cleanKey = apiKey?.trim().replace(/^["']|["']$/g, '');
+  const cleanToken = dnsToken?.trim().replace(/^["']|["']$/g, '');
 
-  if (cleanEmail && cleanKey) {
-    // Model B: Legacy Global Key Auth
-    resolvedHeaders['X-Auth-Email'] = cleanEmail;
-    resolvedHeaders['X-Auth-Key'] = cleanKey;
-  } else if (cleanToken) {
-    // Model A: Secure API Token Auth
+  if (cleanToken) {
+    // Secure Bearer Token Authentication
     resolvedHeaders['Authorization'] = `Bearer ${cleanToken}`;
   } else {
-    console.error(`[Email Routing Action] Missing authentication configuration in environment variables.`);
-    throw new Error("No authentication parameters found. Please configure CLOUDFLARE_DNS_TOKEN or CLOUDFLARE_API_TOKEN in your .env.local file.");
+    console.error(`[Email Routing Action] Missing CLOUDFLARE_DNS_TOKEN in environment variables.`);
+    throw new Error("Authentication failed. Please configure CLOUDFLARE_DNS_TOKEN in your .env.local file.");
   }
 
   try {

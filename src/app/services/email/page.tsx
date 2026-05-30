@@ -38,6 +38,7 @@ import {
   Sparkles,
   MailOpen,
   Zap,
+  Search,
 } from "lucide-react"
 import {
   getEmailRoutingStatus,
@@ -75,7 +76,25 @@ export default function EmailRoutingPage() {
   const [destinationEmail, setDestinationEmail] = useState("")
   const [formErrors, setFormErrors] = useState<{ alias?: string; destination?: string }>({})
 
+  const [searchTerm, setSearchTerm] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+
   const zoneId = selectedOrg?.cloudflareZoneId
+  const verifiedRules = rules.filter(r => r.verified)
+
+  const filteredRules = verifiedRules.filter(
+    (rule) =>
+      rule.alias.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rule.destination.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const itemsPerPage = 10
+  const totalPages = Math.ceil(filteredRules.length / itemsPerPage)
+  const activePage = Math.min(currentPage, Math.max(1, totalPages))
+  const paginatedRules = filteredRules.slice(
+    (activePage - 1) * itemsPerPage,
+    activePage * itemsPerPage
+  )
 
   // Check email service status on mount / org change
   useEffect(() => {
@@ -219,18 +238,9 @@ export default function EmailRoutingPage() {
         throw new Error(res.error)
       }
 
-      // Save to Firestore forwardingRules collection
-      await addDoc(collection(db, "forwardingRules"), {
-        organizationId: selectedOrg.id,
-        aliasEmail,
-        destinationEmail: cleanDest,
-        ownerId: user.uid,
-        createdAt: serverTimestamp(),
-      })
-
       toast({
         title: "Forwarding Rule Created",
-        description: `${aliasEmail} → ${cleanDest} is now active.`,
+        description: `Your custom address ${aliasEmail} is now active.`,
       })
 
       setIsCreateDialogOpen(false)
@@ -247,7 +257,7 @@ export default function EmailRoutingPage() {
       if (isVerificationError) {
         toast({
           title: "Verification Email Sent!",
-          description: `A secure confirmation link has been sent to ${cleanDest}. Please open that inbox, click the verification link from Cloudflare, and then try adding this rule again!`,
+          description: `A secure confirmation link has been sent to ${cleanDest}. Please check your inbox, click the verification link inside, and then add this address again!`,
           duration: 8000,
         })
       } else {
@@ -298,7 +308,7 @@ export default function EmailRoutingPage() {
   }
 
   return (
-    <DashboardShell>
+    <DashboardShell className="max-w-7xl">
       <div className="space-y-8 animate-in fade-in duration-500">
         {/* Page Header */}
         <div className="flex flex-col gap-1">
@@ -314,10 +324,10 @@ export default function EmailRoutingPage() {
                     setFormErrors({})
                     setIsCreateDialogOpen(true)
                   }}
-                  className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200"
+                  className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200 text-xs"
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Rule
+                  Create Custom Email
                 </Button>
               )}
             </div>
@@ -505,7 +515,134 @@ export default function EmailRoutingPage() {
         ) : selectedOrg && zoneId && emailServiceActive && (
           /* STATE 5: Active Management Workspace */
           <div className="space-y-8 animate-in fade-in duration-700">
-            {/* Security Status Dashboard */}
+            {/* Email Service Rules Table */}
+            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
+              <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Custom Emails</CardTitle>
+                  <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white border-slate-200">{verifiedRules.length}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isLoadingRules ? (
+                  <div className="flex flex-col items-center justify-center py-32 gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Updating custom emails...</p>
+                  </div>
+                ) : verifiedRules.length === 0 && !searchTerm ? (
+                  <div className="p-24 text-center space-y-3">
+                    <Mail className="w-8 h-8 text-slate-100 mx-auto" />
+                    <p className="text-sm font-bold text-slate-400">No active custom email addresses found.</p>
+                    <p className="text-xs text-slate-400 font-medium">Create your first address above to start forwarding mail!</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Search and Filters Bar */}
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/20 flex flex-col sm:flex-row items-center gap-3">
+                      <div className="relative w-full sm:max-w-xs">
+                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                        <Input
+                          placeholder="Search email addresses..."
+                          className="pl-9 h-9 text-xs border-slate-200 focus-visible:ring-slate-300 font-semibold"
+                          value={searchTerm}
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value)
+                            setCurrentPage(1)
+                          }}
+                        />
+                      </div>
+                      {searchTerm && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setSearchTerm("")
+                            setCurrentPage(1)
+                          }}
+                          className="text-[11px] font-bold text-slate-500 h-9 px-3 hover:bg-slate-100"
+                        >
+                          Clear Search
+                        </Button>
+                      )}
+                      <div className="ml-auto text-[10px] text-slate-400 font-bold uppercase tracking-wider hidden sm:block">
+                        Showing {paginatedRules.length} of {filteredRules.length} matches
+                      </div>
+                    </div>
+
+                    {filteredRules.length === 0 ? (
+                      <div className="p-20 text-center space-y-2">
+                        <Search className="w-8 h-8 text-slate-200 mx-auto" />
+                        <p className="text-xs font-bold text-slate-600">No matching email addresses found</p>
+                        <p className="text-[11px] text-slate-400 font-medium">Try checking your spelling or clearing the search term.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <Table>
+                          <TableHeader className="bg-slate-50/50">
+                            <TableRow className="border-b border-slate-100">
+                              <TableHead className="text-[10px] font-bold uppercase py-4 pl-6">Professional Custom Email</TableHead>
+                              <TableHead className="text-[10px] font-bold uppercase py-4">Forwards Messages To</TableHead>
+                              <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-24">Remove</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {paginatedRules.map((rule) => (
+                              <TableRow key={rule.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
+                                <TableCell className="pl-6 py-4">
+                                  <span className="font-bold text-xs text-slate-800">{rule.alias}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="font-mono text-[11px] text-slate-500">{rule.destination}</span>
+                                </TableCell>
+                                <TableCell className="text-right pr-6">
+                                  <Button
+                                    variant="ghost" size="icon"
+                                    className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
+                                    onClick={() => { setDeletingRuleId(rule.id); setIsDeleteOpen(true) }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                          <div className="p-4 border-t border-slate-100 bg-slate-50/30 flex items-center justify-between">
+                            <div className="text-[11px] text-slate-500 font-medium">
+                              Page <span className="font-bold text-slate-700">{activePage}</span> of <span className="font-bold text-slate-700">{totalPages}</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-[11px] font-bold border-slate-200"
+                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                disabled={activePage === 1}
+                              >
+                                Previous
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-[11px] font-bold border-slate-200"
+                                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                                disabled={activePage === totalPages}
+                              >
+                                Next
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Security Status Dashboard (Placed at the bottom) */}
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6">
                 <div className="flex items-center gap-2">
@@ -540,72 +677,6 @@ export default function EmailRoutingPage() {
                     <code className="text-[10px] font-mono text-slate-500 block leading-relaxed">v=DMARC1; p=none;</code>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Email Service Rules Table */}
-            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Forwarding Rules</CardTitle>
-                  <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white border-slate-200">{rules.length}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {isLoadingRules ? (
-                  <div className="flex flex-col items-center justify-center py-32 gap-3">
-                    <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Rules...</p>
-                  </div>
-                ) : rules.length === 0 ? (
-                  <div className="p-24 text-center space-y-3">
-                    <Mail className="w-8 h-8 text-slate-100 mx-auto" />
-                    <p className="text-sm font-bold text-slate-400">No active forwarding rules found.</p>
-                    <p className="text-xs text-slate-400 font-medium">Create your first email alias to start routing mail.</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader className="bg-slate-50/50">
-                      <TableRow className="border-b border-slate-100">
-                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-6">Source Email Alias</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4">Active Target Destination</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 w-40">Verification Status</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-24">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {rules.map((rule) => (
-                        <TableRow key={rule.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                          <TableCell className="pl-6 py-4">
-                            <span className="font-bold text-xs text-slate-800">{rule.alias}</span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="font-mono text-[11px] text-slate-500">{rule.destination}</span>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={cn(
-                              "text-[9px] font-bold px-2 py-0.5 border shadow-none",
-                              rule.verified
-                                ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                                : "bg-amber-50 text-amber-600 border-amber-100"
-                            )}>
-                              {rule.verified ? "VERIFIED" : "PENDING VERIFICATION"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right pr-6">
-                            <Button
-                              variant="ghost" size="icon"
-                              className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
-                              onClick={() => { setDeletingRuleId(rule.id); setIsDeleteOpen(true) }}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
               </CardContent>
             </Card>
           </div>
@@ -644,17 +715,17 @@ export default function EmailRoutingPage() {
           <DialogContent className="max-w-md p-0 overflow-hidden border border-slate-200/80 shadow-2xl bg-white rounded-xl">
             <DialogHeader className="bg-white border-b border-slate-100 px-5 py-4">
               <DialogTitle className="font-headline font-bold text-base text-slate-900">
-                Create Forwarding Rule
+                Create Custom Email Address
               </DialogTitle>
               <p className="text-slate-400 text-[10px] mt-0.5 uppercase font-bold tracking-wider">Domain: {selectedOrg?.domain}</p>
             </DialogHeader>
             <div className="px-5 py-4 space-y-3.5">
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Alias Prefix</Label>
+                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Choose Your Custom Email Name</Label>
                   <div className="flex items-center gap-0">
                     <Input
-                      placeholder="e.g. admissions"
+                      placeholder="e.g. hello, support, info"
                       className={cn(
                         "h-9 font-semibold text-xs border-slate-200 transition-all rounded-r-none",
                         formErrors.alias && "border-red-400 focus-visible:ring-red-500 bg-red-50/20"
@@ -673,10 +744,10 @@ export default function EmailRoutingPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Destination Email</Label>
+                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Forward Messages To</Label>
                   <Input
                     type="email"
-                    placeholder="e.g. admin@gmail.com"
+                    placeholder="Your personal email (e.g. you@gmail.com)"
                     className={cn(
                       "h-9 font-semibold text-xs border-slate-200 transition-all",
                       formErrors.destination && "border-red-400 focus-visible:ring-red-500 bg-red-50/20"
@@ -690,18 +761,25 @@ export default function EmailRoutingPage() {
                   {formErrors.destination && <p className="text-[9px] text-red-500 font-bold uppercase tracking-wide">{formErrors.destination}</p>}
                 </div>
 
-                <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex gap-3">
-                  <Send className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-primary font-bold leading-relaxed">
-                    Emails sent to <span className="font-mono">{aliasPrefix || "prefix"}@{selectedOrg?.domain}</span> will be forwarded to the destination inbox.
-                  </p>
+                <div className="p-4 bg-blue-50/30 border border-blue-100 rounded-xl flex gap-3.5 text-left shadow-sm">
+                  <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5 animate-pulse" />
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-slate-900">One-Time Inbox Verification Required</p>
+                    <p className="text-[11px] text-slate-600 leading-relaxed font-medium text-slate-700">
+                      To protect your security, a secure confirmation link will be sent to <span className="font-bold text-slate-900">{destinationEmail || "your personal email"}</span>. 
+                      <strong> Simply open that inbox, click the verification link inside, and this custom address will automatically activate and appear in your active list!</strong>
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-normal leading-normal">
+                      Emails sent to <span className="font-mono">{aliasPrefix || "name"}@{selectedOrg?.domain || "yourdomain.com"}</span> will begin forwarding to your personal email as soon as it is confirmed.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
             <DialogFooter className="bg-white border-t border-slate-100/60 px-5 py-3 flex gap-2 justify-end">
               <Button variant="ghost" onClick={() => setIsCreateDialogOpen(false)} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 h-9">Cancel</Button>
               <Button onClick={handleCreateRule} disabled={isSubmitting} className="h-9 px-6 bg-slate-900 hover:bg-black text-white font-bold text-xs shadow-md rounded-lg">
-                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : "Create Rule"}
+                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : "Create Custom Email"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -709,26 +787,30 @@ export default function EmailRoutingPage() {
 
         {/* Delete Confirmation Dialog */}
         <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white animate-in zoom-in duration-300 [&>button]:text-white [&>button]:hover:text-white [&>button]:opacity-90 [&>button]:transition-all">
-            <DialogHeader className="bg-red-600 text-white p-6">
-              <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 animate-bounce text-white" />
-                Confirm Routing Rule Deletion
-              </DialogTitle>
-              <p className="text-red-100 text-xs mt-1">This will permanently remove this email forwarding rule.</p>
+          <DialogContent className="max-w-md p-0 overflow-hidden border border-slate-200/80 shadow-2xl bg-white rounded-xl">
+            <DialogHeader className="bg-white border-b border-slate-100 px-5 py-4 flex flex-row items-center gap-3">
+              <div className="p-2 bg-red-50 rounded-lg text-red-600 shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <DialogTitle className="font-headline font-bold text-base text-slate-900">
+                  Delete Custom Email
+                </DialogTitle>
+                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">This action is permanent</p>
+              </div>
             </DialogHeader>
-            <div className="p-6 space-y-3">
-              <p className="text-sm font-medium text-slate-700 leading-relaxed">
-                Are you sure you want to remove this forwarding rule? Emails sent to this alias will no longer be routed to the configured destination.
+            <div className="px-5 py-5 text-left">
+              <p className="text-xs font-medium text-slate-600 leading-relaxed">
+                Are you sure you want to delete this custom email address? Any new emails sent to it will no longer be forwarded to your personal inbox.
               </p>
             </div>
-            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100 flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} className="text-xs font-bold uppercase text-slate-400">Cancel</Button>
+            <DialogFooter className="bg-slate-50 border-t border-slate-100/60 px-5 py-3 flex gap-2 justify-end">
+              <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 h-9">Cancel</Button>
               <Button
                 onClick={handleDeleteRule}
-                className="px-6 bg-red-600 hover:bg-red-700 text-white font-bold h-10 shadow-lg shadow-red-200"
+                className="h-9 px-6 bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md rounded-lg"
               >
-                Confirm Removal
+                Delete Email Address
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -12,25 +12,35 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
   const dnsToken = process.env.CLOUDFLARE_DNS_TOKEN;
   const infraToken = process.env.CLOUDFLARE_INFRA_TOKEN;
   const genericToken = process.env.CLOUDFLARE_API_TOKEN;
+  const apiEmail = process.env.CLOUDFLARE_EMAIL;
+  const apiKey = process.env.CLOUDFLARE_API_KEY;
 
-  // High-fidelity fallback: Support single all-access token deployments cleanly
-  const API_TOKEN = tokenType === 'DNS'
-    ? (dnsToken || infraToken || genericToken)
-    : (infraToken || dnsToken || genericToken);
+  const resolvedHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
 
-  if (!API_TOKEN) {
-    console.error(`[Email Routing Action] Missing token configuration in environment variables.`);
-    throw new Error("Authentication token is not configured. Please add CLOUDFLARE_API_TOKEN to your .env.local file.");
+  // High-fidelity sanitation: strip outer spaces and literal single/double quotes loaded from env
+  const cleanToken = (dnsToken || infraToken || genericToken)?.trim().replace(/^["']|["']$/g, '');
+  const cleanEmail = apiEmail?.trim().replace(/^["']|["']$/g, '');
+  const cleanKey = apiKey?.trim().replace(/^["']|["']$/g, '');
+
+  if (cleanEmail && cleanKey) {
+    // Model B: Legacy Global Key Auth
+    resolvedHeaders['X-Auth-Email'] = cleanEmail;
+    resolvedHeaders['X-Auth-Key'] = cleanKey;
+  } else if (cleanToken) {
+    // Model A: Secure API Token Auth
+    resolvedHeaders['Authorization'] = `Bearer ${cleanToken}`;
+  } else {
+    console.error(`[Email Routing Action] Missing authentication configuration in environment variables.`);
+    throw new Error("No authentication parameters found. Please configure CLOUDFLARE_API_TOKEN (Option A) or CLOUDFLARE_EMAIL & CLOUDFLARE_API_KEY (Option B) in your .env.local file.");
   }
-
-  const CLEAN_TOKEN = API_TOKEN.trim().replace(/^["']|["']$/g, '');
 
   try {
     const response = await fetch(`${CLOUDFLARE_API_URL}${path}`, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${CLEAN_TOKEN}`,
-        'Content-Type': 'application/json',
+        ...resolvedHeaders,
         ...options.headers,
       },
       cache: 'no-store',

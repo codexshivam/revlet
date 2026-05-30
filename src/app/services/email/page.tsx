@@ -239,11 +239,24 @@ export default function EmailRoutingPage() {
       setFormErrors({})
       fetchEmailRules()
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Creation Failed",
-        description: error.message || "Could not create the forwarding rule.",
-      })
+      const errMsg = error.message || "";
+      const isVerificationError = errMsg.toLowerCase().includes("verified") || 
+                            errMsg.toLowerCase().includes("destination") || 
+                            errMsg.toLowerCase().includes("active");
+      
+      if (isVerificationError) {
+        toast({
+          title: "Verification Email Sent!",
+          description: `A secure confirmation link has been sent to ${cleanDest}. Please open that inbox, click the verification link from Cloudflare, and then try adding this rule again!`,
+          duration: 8000,
+        })
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Creation Failed",
+          description: error.message || "Could not create the forwarding rule.",
+        })
+      }
     } finally {
       setIsSubmitting(false)
     }

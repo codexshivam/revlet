@@ -22,6 +22,13 @@ import { doc, setDoc, getDoc, addDoc, collection, serverTimestamp, updateDoc } f
 import Link from "next/link"
 import { useActiveOrg } from "@/hooks/use-active-org"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   Plus,
   Trash2,
   ShieldCheck,
@@ -39,6 +46,7 @@ import {
   MailOpen,
   Zap,
   Search,
+  MoreVertical,
 } from "lucide-react"
 import {
   getEmailRoutingStatus,
@@ -47,7 +55,12 @@ import {
   createEmailRule,
   deleteEmailRule,
 } from "@/app/actions/cloudflare-email"
-import { listDNSRecords } from "@/app/actions/cloudflare-dns"
+import { 
+  listDNSRecords,
+  autoConfigureEmailDNS,
+  disableEmailRouting,
+  removeEmailRoutingDNS
+} from "@/app/actions/cloudflare-dns"
 
 type EmailRule = {
   id: string
@@ -200,6 +213,13 @@ export default function EmailRoutingPage() {
     if (!zoneId || !selectedOrg || !user) return
     setIsActivating(true)
     try {
+      // 1. Auto-configure DNS records (MX, SPF)
+      const dnsRes = await autoConfigureEmailDNS(zoneId, selectedOrg.domain)
+      if (!dnsRes.success) {
+        throw new Error("Failed to configure DNS records: " + dnsRes.error)
+      }
+
+      // 2. Activate Routing via API
       const res = await activateEmailRouting(zoneId)
       if (!res.success) {
         throw new Error(res.error)
@@ -234,6 +254,45 @@ export default function EmailRoutingPage() {
       })
     } finally {
       setIsActivating(false)
+    }
+  }
+
+  // Handle deactivation
+  const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false)
+  const [isDisabling, setIsDisabling] = useState(false)
+
+  const handleDisable = async () => {
+    if (!zoneId || !selectedOrg || !user) return
+    setIsDisabling(true)
+    try {
+      // 1. Disable Routing via API
+      await disableEmailRouting(zoneId)
+
+      // 2. Update Firestore org doc
+      await updateDoc(doc(db, "organizations", selectedOrg.id), { emailServiceActive: false })
+
+      // Update config doc
+      await updateDoc(doc(db, "emailRoutingConfigs", selectedOrg.id), {
+        isServiceActive: false,
+        updatedAt: serverTimestamp(),
+      })
+
+      toast({
+        title: "Email Service Disabled",
+        description: "Email routing has been deactivated and records removed.",
+      })
+
+      setEmailServiceActive(false)
+      setIsDisableDialogOpen(false)
+      setRules([])
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Deactivation Failed",
+        description: error.message || "Could not disable email service.",
+      })
+    } finally {
+      setIsDisabling(false)
     }
   }
 
@@ -356,18 +415,37 @@ export default function EmailRoutingPage() {
             <h1 className="text-3xl font-headline font-bold text-slate-900">Email Service</h1>
             <div className="flex items-center gap-3">
               {zoneId && emailServiceActive && (
-                <Button
-                  onClick={() => {
-                    setAliasPrefix("")
-                    setDestinationEmail("")
-                    setFormErrors({})
-                    setIsCreateDialogOpen(true)
-                  }}
-                  className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200 text-xs"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Custom Email
-                </Button>
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200 hover:bg-slate-50 transition-colors">
+                        <MoreVertical className="w-4 h-4 text-slate-600" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem 
+                        onClick={() => setIsDisableDialogOpen(true)} 
+                        className="gap-2 text-destructive focus:text-destructive focus:bg-red-50 cursor-pointer"
+                      >
+                        <ShieldAlert className="w-4 h-4" />
+                        <span>Disable Service</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <Button
+                    onClick={() => {
+                      setAliasPrefix("")
+                      setDestinationEmail("")
+                      setFormErrors({})
+                      setIsCreateDialogOpen(true)
+                    }}
+                    className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200 text-xs"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Custom Email
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -883,6 +961,31 @@ export default function EmailRoutingPage() {
                 className="h-9 px-6 bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md rounded-lg"
               >
                 Delete Email Address
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Deactivation Confirmation Dialog */}
+        <Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white [&>button]:text-white [&>button]:hover:text-white [&>button]:opacity-90 [&>button]:transition-all">
+            <DialogHeader className="bg-red-600 text-white p-6">
+              <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5" />
+                Confirm Service Deactivation
+              </DialogTitle>
+              <p className="text-white/70 text-xs mt-1">This action will disable email routing for your domain.</p>
+            </DialogHeader>
+            <div className="p-6 space-y-3">
+              <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                Deactivating this service will immediately stop all custom email forwards. Your DNS records will remain intact. Do you wish to proceed?
+              </p>
+            </div>
+            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
+              <Button variant="ghost" onClick={() => setIsDisableDialogOpen(false)} className="text-slate-700 hover:text-slate-900">Cancel</Button>
+              <Button onClick={handleDisable} disabled={isDisabling} variant="destructive">
+                {isDisabling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Disable Service
               </Button>
             </DialogFooter>
           </DialogContent>

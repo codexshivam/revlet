@@ -22,7 +22,10 @@ import {
   Download,
   Upload,
   FileText,
-  X
+  X,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -41,13 +44,14 @@ import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore"
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteField } from "firebase/firestore"
 import { 
   getZoneDetails, 
   listDNSRecords, 
   createDNSRecord, 
   updateDNSRecord, 
-  deleteDNSRecord
+  deleteDNSRecord,
+  createZone
 } from "@/app/actions/cloudflare-dns"
 import Link from "next/link"
 import {
@@ -87,6 +91,8 @@ export default function DNSManagementPage() {
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [isInstructionsOpen, setIsInstructionsOpen] = useState(false)
+  const [isNameserversExpanded, setIsNameserversExpanded] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingRecord, setEditingRecord] = useState<DNSRecord | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -119,12 +125,46 @@ export default function DNSManagementPage() {
       const zoneRes = await getZoneDetails(zoneId)
       if (zoneRes.success) {
         setZoneDetails(zoneRes.data)
+        // Auto-collapse if active
+        setIsNameserversExpanded(zoneRes.data.status !== 'active')
+      } else {
+        // If Cloudflare auto-deleted the zone after 28 days of inactivity (or manual deletion)
+        const errMsg = zoneRes.error?.toLowerCase() || "";
+        if (errMsg.includes("not found") || errMsg.includes("404") || errMsg.includes("1003") || errMsg.includes("403") || errMsg.includes("access denied")) {
+          if (selectedOrg?.id) {
+            const orgRef = doc(db, "organizations", selectedOrg.id)
+            await updateDoc(orgRef, {
+              cloudflareZoneId: deleteField(),
+              dnsRequested: deleteField()
+            })
+            toast({ 
+              title: "Configuration Expired", 
+              description: "The pending domain configuration expired and was removed by the network. Please connect the domain again." 
+            })
+            return // Stop execution
+          }
+        }
       }
       
       const dnsRes = await listDNSRecords(zoneId)
       if (dnsRes.success) {
         setRecords(dnsRes.data)
       } else {
+        const dnsErrMsg = dnsRes.error?.toLowerCase() || "";
+        if (dnsErrMsg.includes("403") || dnsErrMsg.includes("access denied") || dnsErrMsg.includes("not found") || dnsErrMsg.includes("404")) {
+          if (selectedOrg?.id) {
+            const orgRef = doc(db, "organizations", selectedOrg.id)
+            await updateDoc(orgRef, {
+              cloudflareZoneId: deleteField(),
+              dnsRequested: deleteField()
+            })
+            toast({ 
+              title: "Configuration Expired", 
+              description: "The domain configuration was removed from the edge network." 
+            })
+            return // Stop execution
+          }
+        }
         throw new Error(dnsRes.error)
       }
     } catch (error: any) {
@@ -320,20 +360,28 @@ export default function DNSManagementPage() {
     setIsRequesting(true)
     
     try {
+      // Provision domain directly
+      const zoneRes = await createZone(selectedOrg.domain)
+      if (!zoneRes.success || !zoneRes.data) {
+        throw new Error(zoneRes.error)
+      }
+
+      // Update organization with the newly created Zone ID
       const orgRef = doc(db, "organizations", selectedOrg.id)
       await updateDoc(orgRef, {
+        cloudflareZoneId: zoneRes.data.id,
         dnsRequested: true
       })
       
       toast({
-        title: "Activation Requested",
-        description: "Your network management request has been sent to the infrastructure team.",
+        title: "Domain Connected",
+        description: `Successfully provisioned ${selectedOrg.domain}. Please update your registrar.`,
       })
     } catch (error: any) {
       toast({ 
         variant: "destructive", 
-        title: "Request Failed",
-        description: "Could not submit activation request at this time."
+        title: "Connection Failed",
+        description: error.message || "Could not connect domain at this time."
       })
     } finally {
       setIsRequesting(false)
@@ -485,7 +533,7 @@ export default function DNSManagementPage() {
               </CardContent>
             </Card>
           </div>
-        ) : selectedOrg && !selectedOrg.dnsRequested && !zoneId ? (
+        ) : selectedOrg && !zoneId ? (
           <div className="max-w-5xl mx-auto py-12 animate-in slide-in-from-bottom-4 duration-500">
             <div className="space-y-12 text-center">
               <div className="space-y-4">
@@ -529,85 +577,93 @@ export default function DNSManagementPage() {
               </div>
             </div>
           </div>
-        ) : selectedOrg && selectedOrg.dnsRequested && !zoneId ? (
-          <div className="w-full py-8">
-            <Card className="bg-amber-50 border-amber-200 shadow-sm border-dashed">
-              <CardContent className="p-12 md:p-20 flex flex-col items-center text-center gap-6">
-                <div className="relative">
-                  <div className="w-20 h-20 rounded-full bg-white border border-amber-100 flex items-center justify-center shadow-sm relative">
-                    <Clock className="w-10 h-10 text-amber-500" />
-                    <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white font-bold border-2 border-white">
-                      PENDING
-                    </Badge>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-headline font-bold text-amber-900">Infrastructure Provisioning</h3>
-                  <p className="text-amber-700/80 max-w-lg mx-auto text-sm leading-relaxed font-medium">
-                    We are currently configuring your secure edge environment for <span className="font-bold">{selectedOrg.domain}</span>. Once complete, your assigned network nameservers will appear here.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <Link href="/support">
-                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-yellow-500 hover:text-white hover:border-yellow-500 transition-colors font-bold gap-2 h-11 px-6">
-                      <MessageSquare className="w-4 h-4" />
-                      Contact Network Desk
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         ) : selectedOrg && zoneId && (
           <div className="space-y-8 animate-in fade-in duration-700">
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
+              <CardHeader 
+                className={cn(
+                  "bg-slate-50/50 flex flex-row items-center justify-between py-4 px-6 cursor-pointer hover:bg-slate-50 transition-colors",
+                  isNameserversExpanded ? "border-b border-slate-100" : ""
+                )}
+                onClick={() => setIsNameserversExpanded(!isNameserversExpanded)}
+              >
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-slate-400" />
                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Network Nameservers</CardTitle>
                 </div>
-                <Badge className={cn(
-                  "text-[9px] font-bold px-2 py-0.5 border shadow-none",
-                  zoneDetails?.status === 'active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
-                )}>
-                  {zoneDetails?.status?.toUpperCase() || "PENDING"}
-                </Badge>
+                <div className="flex items-center gap-4">
+                  <Badge className={cn(
+                    "text-[9px] font-bold px-2 py-0.5 border shadow-none",
+                    zoneDetails?.status === 'active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                  )}>
+                    {zoneDetails?.status?.toUpperCase() || "PENDING"}
+                  </Badge>
+                  {isNameserversExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                </div>
               </CardHeader>
-              <CardContent className="p-6">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                   <div className="space-y-3">
-                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Name Servers</p>
-                     <div className="space-y-2">
-                       {(zoneDetails?.nameServers || []).map((ns: string) => (
-                         <div 
-                           key={ns} 
-                           className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group hover:border-primary/20 cursor-pointer transition-all"
-                           onClick={() => handleCopyText(ns)}
-                         >
-                           <code className="text-xs font-mono font-bold text-slate-700">{ns}</code>
-                           <Globe className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
-                         </div>
-                       ))}
-                       {!zoneDetails?.nameServers?.length && <p className="text-xs text-slate-400 italic">Nameservers will appear once initialized.</p>}
+              
+              {isNameserversExpanded && (
+                <CardContent className="p-6">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                     <div className="space-y-3">
+                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Name Servers</p>
+                       <div className="space-y-2">
+                         {(zoneDetails?.nameServers || []).map((ns: string) => (
+                           <div 
+                             key={ns} 
+                             className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group hover:border-primary/20 cursor-pointer transition-all"
+                             onClick={() => handleCopyText(ns)}
+                           >
+                             <code className="text-xs font-mono font-bold text-slate-700">{ns}</code>
+                             <Globe className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
+                           </div>
+                         ))}
+                         {!zoneDetails?.nameServers?.length && <p className="text-xs text-slate-400 italic">Nameservers will appear once initialized.</p>}
+                       </div>
+                     </div>
+                     <div className="flex flex-col justify-center border-l border-slate-100 pl-8 space-y-5">
+                        <div className="space-y-2">
+                          {zoneDetails?.status !== 'active' && (
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                              </span>
+                              Action Required
+                            </div>
+                          )}
+                          <h4 className="text-base font-headline font-bold text-slate-900">Configure Registrar</h4>
+                          <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                            Your edge network is ready. Complete the setup by pointing your domain registrar to our global nameservers.
+                          </p>
+                        </div>
+                        
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
+                          <Button 
+                            className="w-full justify-between font-bold text-xs bg-white border border-slate-200 h-11 hover:border-blue-200 hover:bg-blue-50 text-slate-700 hover:text-blue-700 transition-all group shadow-sm rounded-lg"
+                            onClick={() => setIsInstructionsOpen(true)}
+                          >
+                            <span className="flex items-center gap-2.5 overflow-hidden">
+                              <div className="p-1.5 bg-slate-100 rounded-md group-hover:bg-blue-100 transition-colors shrink-0">
+                                <FileText className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-600" />
+                              </div>
+                              <span className="truncate max-w-[130px] sm:max-w-none text-left">Setup Instructions</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400 group-hover:text-blue-500 shrink-0">
+                              Start <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                            </span>
+                          </Button>
+                          <div className="flex gap-2.5 items-start">
+                            <Info className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+                            <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                              DNS propagation typically takes 1-2 hours depending on your registrar.
+                            </p>
+                          </div>
+                        </div>
                      </div>
                    </div>
-                   <div className="space-y-4 flex flex-col justify-center border-l border-slate-100 pl-8">
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-slate-900">Infrastructure Connection</h4>
-                        <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                          Update your domain's name servers at your registrar to point to the nameservers listed above. 
-                          Propagation typically occurs within 1-2 hours.
-                        </p>
-                      </div>
-                      <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex gap-3">
-                        <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                        <p className="text-[10px] text-primary font-bold leading-relaxed">
-                          Your records will only take effect after your registrar is pointed to these nameservers.
-                        </p>
-                      </div>
-                   </div>
-                 </div>
-              </CardContent>
+                </CardContent>
+              )}
             </Card>
 
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
@@ -750,6 +806,121 @@ export default function DNSManagementPage() {
             </Card>
           </div>
         )}
+
+        <Dialog open={isInstructionsOpen} onOpenChange={setIsInstructionsOpen}>
+          <DialogContent className="max-w-4xl p-0 overflow-hidden border border-slate-200 shadow-xl bg-white rounded-xl">
+            <DialogHeader className="bg-white px-8 py-6 border-b border-slate-100">
+              <div className="flex items-center justify-between">
+                <DialogTitle className="font-headline font-bold text-xl text-slate-900">
+                  Domain Configuration Guide
+                </DialogTitle>
+                <div className="text-sm font-medium text-slate-500">
+                  Setting up <strong className="text-slate-900">{selectedOrg?.domain}</strong>
+                </div>
+              </div>
+            </DialogHeader>
+            <div className="px-8 py-8 bg-white max-h-[70vh] overflow-y-auto">
+              {selectedOrg?.domain?.endsWith('.np') ? (
+                <div className="space-y-8">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 1</div>
+                      <h4 className="text-sm font-bold text-slate-900">Access Registry</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed">
+                        Go to <a href="https://register.com.np" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">register.com.np</a> and log in.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 2</div>
+                      <h4 className="text-sm font-bold text-slate-900">Select Domain</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed">
+                        Click on <strong>{selectedOrg?.domain}</strong> and find <strong>Name Servers</strong>.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 3</div>
+                      <h4 className="text-sm font-bold text-slate-900">Update Servers</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed">
+                        Replace existing entries with edge nameservers. Leave IPs blank.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-50 rounded-xl border border-slate-100">
+                    <h4 className="text-sm font-bold text-slate-900 mb-4">Assigned Edge Nameservers</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {(zoneDetails?.nameServers || ['Pending...', 'Pending...']).map((ns: string, i: number) => (
+                        <div key={i} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg">
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{i === 0 ? "Primary" : "Secondary"}</div>
+                            <code className="text-sm font-mono font-bold text-slate-800">{ns}</code>
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-8 px-3 text-xs font-bold" onClick={() => handleCopyText(ns)}>Copy</Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="text-sm text-slate-500 bg-amber-50/50 p-4 rounded-lg border border-amber-100/50">
+                    <strong>Note:</strong> Mercantile propagation takes 12-24 hours.
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 1</div>
+                      <h4 className="text-sm font-bold text-slate-900">Log into Registrar</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed">
+                        Sign into where you purchased <strong>{selectedOrg?.domain}</strong>.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 2</div>
+                      <h4 className="text-sm font-bold text-slate-900">Find DNS Settings</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed">
+                        Navigate to Custom Nameservers for your domain.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 3</div>
+                      <h4 className="text-sm font-bold text-slate-900">Replace Servers</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed">
+                        Use exclusively the nameservers provided below.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-50 rounded-xl border border-slate-100">
+                    <h4 className="text-sm font-bold text-slate-900 mb-4">Assigned Edge Nameservers</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {(zoneDetails?.nameServers || ['Pending...', 'Pending...']).map((ns: string, i: number) => (
+                        <div key={i} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg">
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{i === 0 ? "Primary" : "Secondary"}</div>
+                            <code className="text-sm font-mono font-bold text-slate-800">{ns}</code>
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-8 px-3 text-xs font-bold" onClick={() => handleCopyText(ns)}>Copy</Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="text-sm text-slate-500 bg-blue-50/50 p-4 rounded-lg border border-blue-100/50">
+                    <strong>Propagation Time:</strong> Typically 1-2 hours, up to 24 hours depending on registrar.
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter className="px-8 py-4 bg-white border-t border-slate-100">
+              <Button onClick={() => setIsInstructionsOpen(false)} className="w-full sm:w-auto font-bold bg-slate-900 hover:bg-black text-white px-8">Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open)

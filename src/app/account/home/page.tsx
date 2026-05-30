@@ -62,7 +62,7 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
-  getDocs
+  onSnapshot
 } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
@@ -212,36 +212,33 @@ export default function AccountHomePage() {
     const orgsRef = collection(db, "organizations")
     const q = query(orgsRef, where("ownerId", "==", user.uid))
 
-    const fetchOrgs = async () => {
-      try {
-        const snapshot = await getDocs(q)
-        const fetchedOrgs = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Organization[]
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedOrgs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Organization[]
 
-        const sortedOrgs = fetchedOrgs.sort((a, b) => {
-          const timeA = a.createdAt?.toMillis?.() || 0
-          const timeB = b.createdAt?.toMillis?.() || 0
-          return timeB - timeA
-        })
+      const sortedOrgs = fetchedOrgs.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || 0
+        const timeB = b.createdAt?.toMillis?.() || 0
+        return timeB - timeA
+      })
 
-        setOrgs(sortedOrgs)
-        setIsLoadingOrgs(false)
-        if (user && user.email) {
-          syncUserOrganizations(db, user.uid, user.email, user.displayName || "")
-        }
-      } catch (error) {
-        const permissionError = new FirestorePermissionError({
-          path: 'organizations',
-          operation: 'list',
-        })
-        errorEmitter.emit('permission-error', permissionError)
-        setIsLoadingOrgs(false)
+      setOrgs(sortedOrgs)
+      setIsLoadingOrgs(false)
+      if (user && user.email && snapshot.docChanges().some(change => change.type === "added")) {
+        syncUserOrganizations(db, user.uid, user.email, user.displayName || "")
       }
-    }
+    }, (error) => {
+      const permissionError = new FirestorePermissionError({
+        path: 'organizations',
+        operation: 'list',
+      })
+      errorEmitter.emit('permission-error', permissionError)
+      setIsLoadingOrgs(false)
+    })
 
-    fetchOrgs()
+    return () => unsubscribe()
   }, [user, authLoading, db, router])
 
   const handleOpenEdit = (org: Organization) => {
@@ -295,20 +292,8 @@ export default function AccountHomePage() {
     setIsSubmitting(true)
     try {
       if (!editingOrg) {
-        // Check domain uniqueness before creating
-        const orgsRef = collection(db, "organizations")
-        const q = query(orgsRef, where("domain", "==", formData.domain.toLowerCase()))
-        const querySnapshot = await getDocs(q)
-        
-        if (!querySnapshot.empty) {
-          toast({
-            variant: "destructive",
-            title: "Domain Already Registered",
-            description: "This domain is already associated with an organization in our network."
-          })
-          setIsSubmitting(false)
-          return
-        }
+        // Note: Domain uniqueness should ideally be checked server-side
+        // to comply with Firestore security rules preventing global reads.
       }
 
       if (editingOrg) {

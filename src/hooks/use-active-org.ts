@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { collection, query, where, onSnapshot } from "firebase/firestore"
 
 export interface Organization {
   id: string
@@ -45,36 +45,37 @@ export function useActiveOrg() {
     }
 
     const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
-    const fetchActiveOrgs = async () => {
-      try {
-        const snap = await getDocs(q);
-        const fetched = snap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Organization[];
-        
-        setOrgs(fetched);
+    
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const fetched = snap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Organization[];
+      
+      setOrgs(fetched);
 
-        // Resolve active organization from localStorage or default to first
-        const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null;
-        const found = fetched.find((o) => o.id === storedId);
-        
-        if (found) {
-          setActiveOrgId(found.id);
-        } else if (fetched.length > 0) {
-          setActiveOrgId(fetched[0].id);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("selectedOrgId", fetched[0].id);
-          }
+      // Resolve active organization from localStorage or default to first
+      const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null;
+      const found = fetched.find((o) => o.id === storedId);
+      
+      if (found) {
+        setActiveOrgId(found.id);
+      } else if (fetched.length > 0) {
+        setActiveOrgId(fetched[0].id);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("selectedOrgId", fetched[0].id);
         }
-        setLoading(false);
-      } catch (error) {
-        console.error("Error loading organizations:", error);
-        setLoading(false);
+      } else {
+        // Handle case where orgs are deleted
+        setActiveOrgId("");
       }
-    };
+      setLoading(false);
+    }, (error) => {
+      console.error("Error listening to organizations:", error);
+      setLoading(false);
+    });
 
-    fetchActiveOrgs();
+    return () => unsubscribe();
   }, [user, db])
 
   useEffect(() => {

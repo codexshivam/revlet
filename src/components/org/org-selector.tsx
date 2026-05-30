@@ -46,7 +46,7 @@ export function OrgSelector({
           disabled={loading}
           className={cn(
             "justify-between h-9 text-xs font-bold border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm rounded-lg text-slate-800",
-            compact ? "w-full" : "w-[320px]"
+            compact ? "w-full" : "w-[450px]"
           )}
         >
           <div className="flex items-center gap-2 truncate">
@@ -64,7 +64,7 @@ export function OrgSelector({
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-55 text-slate-500" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className={cn("p-0 shadow-xl border-slate-200 bg-white overflow-hidden rounded-lg", compact ? "w-[224px]" : "w-[320px]")}>
+      <PopoverContent className={cn("p-0 shadow-xl border-slate-200 bg-white overflow-hidden rounded-lg", compact ? "w-[224px]" : "w-[450px]")}>
         <Command className="bg-white">
           <CommandInput 
             placeholder="Search institutions..." 

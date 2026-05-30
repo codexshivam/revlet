@@ -51,7 +51,9 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
 
     if (!response.ok) {
       const message = data.errors?.[0]?.message || data.message || `Cloudflare API error (${response.status})`;
-      throw new Error(message);
+      const err = new Error(message);
+      (err as any).status = response.status;
+      throw err;
     }
     
     return data;
@@ -62,9 +64,15 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
     let friendlyMessage = error.message || "An unexpected error occurred.";
     if (friendlyMessage.includes("fetch failed") || friendlyMessage.includes("ENOTFOUND")) {
       friendlyMessage = "Connection failed. Failed to reach the Cloudflare network edge. Please check your internet connection.";
-    } else if (friendlyMessage.includes("Unauthorized") || friendlyMessage.includes("403") || friendlyMessage.includes("401") || friendlyMessage.toLowerCase().includes("token")) {
-      friendlyMessage = "Authentication failed. The configured Cloudflare API token is invalid or has insufficient permissions.";
-    } else if (friendlyMessage.includes("429") || friendlyMessage.includes("Too Many Requests")) {
+    } else if (error.status === 403 || error.status === 401 || friendlyMessage.includes("Unauthorized") || friendlyMessage.toLowerCase().includes("token")) {
+      if (path.startsWith('/zones/') && path.split('/').length >= 3) {
+        friendlyMessage = `Zone Access Denied (403). The domain may have been deleted from Cloudflare.`;
+      } else {
+        friendlyMessage = "Authentication failed. The configured Cloudflare API token is invalid or has insufficient permissions.";
+      }
+    } else if (error.status === 404 || friendlyMessage.includes("not found")) {
+      friendlyMessage = `Resource not found (404).`;
+    } else if (error.status === 429 || friendlyMessage.includes("Too Many Requests")) {
       friendlyMessage = "Request rate limit reached at the edge. Please wait a moment before trying again.";
     }
     
@@ -161,5 +169,142 @@ export async function deleteDNSRecord(zoneId: string, recordId: string) {
     return { success: true, data: data.result };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to remove domain setting' };
+  }
+}
+
+export async function createZone(domainName: string) {
+  if (!domainName) return { success: false, error: 'No domain name provided' };
+  try {
+    // 1. Fetch accounts to get the Account ID
+    const accountsData = await cfFetch('/accounts', 'DNS');
+    const accountId = accountsData.result?.[0]?.id;
+    
+    if (!accountId) {
+      throw new Error("No Cloudflare account found. Ensure your token has Account level permissions.");
+    }
+
+    // 2. Create the zone
+    const zoneData = await cfFetch('/zones', 'DNS', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: domainName,
+        account: { id: accountId },
+        type: 'full'
+      }),
+    });
+
+    return { 
+      success: true, 
+      data: {
+        id: zoneData.result.id,
+        nameServers: zoneData.result.name_servers
+      }
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to connect domain' };
+  }
+}
+
+// --- Email Routing Automation ---
+
+export async function enableEmailRouting(zoneId: string) {
+  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
+  try {
+    const data = await cfFetch(`/zones/${zoneId}/email/routing/enable`, 'DNS', {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+    return { success: true, data: data.result };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to enable email routing' };
+  }
+}
+
+export async function disableEmailRouting(zoneId: string) {
+  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
+  try {
+    const data = await cfFetch(`/zones/${zoneId}/email/routing/disable`, 'DNS', {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+    return { success: true, data: data.result };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to disable email routing' };
+  }
+}
+
+export async function getEmailRoutingStatus(zoneId: string) {
+  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
+  try {
+    const data = await cfFetch(`/zones/${zoneId}/email/routing`, 'DNS');
+    return { success: true, data: data.result };
+  } catch (error: any) {
+    // If it's disabled, it might return a 404 or a specific error.
+    // Cloudflare email routing API returns 404 if never configured, or status 'disabled'
+    if (error.status === 404 || (error.message && error.message.includes("not found"))) {
+      return { success: true, data: { status: "unconfigured" } };
+    }
+    return { success: false, error: error.message || 'Failed to get email routing status' };
+  }
+}
+
+export async function autoConfigureEmailDNS(zoneId: string, domainName: string) {
+  if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
+  try {
+    const recordsRes = await listDNSRecords(zoneId);
+    if (!recordsRes.success) throw new Error(recordsRes.error);
+    const records = recordsRes.data;
+
+    // Delete conflicting records
+    const conflictingRecords = records.filter((r: any) => {
+      const isRoot = r.name === domainName;
+      if (!isRoot) return false;
+      if (r.type === 'MX') return true;
+      if (r.type === 'TXT' && r.content.includes('v=spf1')) return true;
+      return false;
+    });
+
+    for (const r of conflictingRecords) {
+      await deleteDNSRecord(zoneId, r.id);
+    }
+
+    // Create required records
+    const requiredRecords = [
+      { type: 'MX', name: domainName, content: 'route1.mx.cloudflare.net', priority: 17, ttl: 'Auto', proxied: false },
+      { type: 'MX', name: domainName, content: 'route2.mx.cloudflare.net', priority: 54, ttl: 'Auto', proxied: false },
+      { type: 'MX', name: domainName, content: 'route3.mx.cloudflare.net', priority: 72, ttl: 'Auto', proxied: false },
+      { type: 'TXT', name: domainName, content: 'v=spf1 include:_spf.mx.cloudflare.net ~all', ttl: 'Auto', proxied: false }
+    ];
+
+    for (const rec of requiredRecords) {
+      await createDNSRecord(zoneId, rec);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to configure DNS records' };
+  }
+}
+
+export async function removeEmailRoutingDNS(zoneId: string, domainName: string) {
+  if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
+  try {
+    const recordsRes = await listDNSRecords(zoneId);
+    if (!recordsRes.success) throw new Error(recordsRes.error);
+    
+    const cfRecords = recordsRes.data.filter((r: any) => {
+      const isRoot = r.name === domainName;
+      if (!isRoot) return false;
+      if (r.type === 'MX' && r.content.includes('.mx.cloudflare.net')) return true;
+      if (r.type === 'TXT' && r.content === 'v=spf1 include:_spf.mx.cloudflare.net ~all') return true;
+      return false;
+    });
+
+    for (const r of cfRecords) {
+      await deleteDNSRecord(zoneId, r.id);
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to remove DNS records' };
   }
 }

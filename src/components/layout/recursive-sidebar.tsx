@@ -41,7 +41,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
       children: [
         { title: "DNS Management", icon: Globe, href: "/services/dns" },
         { title: "Website Management", icon: Database, href: "/services/website" },
-        { title: "Email Routing", icon: Mail, href: "/services/email" },
+        { title: "Email Service", icon: Mail, href: "/services/email" },
       ]
     },
     {

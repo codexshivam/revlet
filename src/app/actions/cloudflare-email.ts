@@ -186,6 +186,10 @@ export async function createEmailRule(zoneId: string, aliasEmail: string, destin
         body: JSON.stringify({ email: destinationEmail }),
       });
     } catch (destError: any) {
+      const errMsg = destError.message || "";
+      if (errMsg.includes("403") || errMsg.includes("Unauthorized") || errMsg.includes("permission")) {
+        throw new Error("Your Cloudflare API Token lacks Account-level Email Routing permissions to trigger verification emails. Please either: (1) Add your destination email directly in your Cloudflare Dashboard under 'Email Routing' -> 'Destination Addresses' tab, or (2) Edit your API Token on Cloudflare and add the 'Account - Email Routing - Edit' permission scope.");
+      }
       // Destination may already be registered — this is expected and safe to ignore
       console.log(`[Email Routing] Destination address registration note: ${destError.message}`);
     }

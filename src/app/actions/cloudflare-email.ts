@@ -23,11 +23,13 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
     throw new Error("Authentication token is not configured. Please add CLOUDFLARE_API_TOKEN to your .env.local file.");
   }
 
+  const CLEAN_TOKEN = API_TOKEN.trim().replace(/^["']|["']$/g, '');
+
   try {
     const response = await fetch(`${CLOUDFLARE_API_URL}${path}`, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${API_TOKEN}`,
+        'Authorization': `Bearer ${CLEAN_TOKEN}`,
         'Content-Type': 'application/json',
         ...options.headers,
       },

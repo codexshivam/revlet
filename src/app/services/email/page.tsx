@@ -600,7 +600,7 @@ export default function EmailRoutingPage() {
 
         {/* Activation Confirmation Dialog */}
         <Dialog open={isActivateDialogOpen} onOpenChange={setIsActivateDialogOpen}>
-          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white [&>button]:text-white [&>button]:hover:text-white [&>button]:opacity-90 [&>button]:transition-all">
             <DialogHeader className="bg-primary text-white p-6">
               <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5" />
@@ -696,7 +696,7 @@ export default function EmailRoutingPage() {
 
         {/* Delete Confirmation Dialog */}
         <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white animate-in zoom-in duration-300">
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white animate-in zoom-in duration-300 [&>button]:text-white [&>button]:hover:text-white [&>button]:opacity-90 [&>button]:transition-all">
             <DialogHeader className="bg-red-600 text-white p-6">
               <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 animate-bounce text-white" />

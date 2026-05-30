@@ -11,15 +11,16 @@ const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
 async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: RequestInit = {}) {
   const dnsToken = process.env.CLOUDFLARE_DNS_TOKEN;
   const infraToken = process.env.CLOUDFLARE_INFRA_TOKEN;
+  const genericToken = process.env.CLOUDFLARE_API_TOKEN;
 
   // High-fidelity fallback: Support single all-access token deployments cleanly
   const API_TOKEN = tokenType === 'DNS'
-    ? (dnsToken || infraToken)
-    : (infraToken || dnsToken);
+    ? (dnsToken || infraToken || genericToken)
+    : (infraToken || dnsToken || genericToken);
 
   if (!API_TOKEN) {
     console.error(`[Email Routing Action] Missing token configuration in environment variables.`);
-    throw new Error("Authentication token is not configured. Please add CLOUDFLARE_DNS_TOKEN or CLOUDFLARE_INFRA_TOKEN to your .env.local file.");
+    throw new Error("Authentication token is not configured. Please add CLOUDFLARE_API_TOKEN to your .env.local file.");
   }
 
   try {

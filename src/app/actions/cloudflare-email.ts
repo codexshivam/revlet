@@ -158,7 +158,7 @@ export async function listEmailRules(zoneId: string) {
         : true; // fallback to true if no account context exists to prevent visual errors
 
       return {
-        id: rule.id,
+        id: rule.id || rule.tag,
         alias: aliasEmail,
         destination: destinationEmail,
         enabled: rule.enabled ?? true,

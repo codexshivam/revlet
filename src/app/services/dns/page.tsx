@@ -123,7 +123,7 @@ export default function DNSManagementPage() {
     setIsLoadingRecords(true)
     try {
       const zoneRes = await getZoneDetails(zoneId)
-      if (zoneRes.success) {
+      if (zoneRes.success && zoneRes.data) {
         setZoneDetails(zoneRes.data)
         // Auto-collapse if active
         setIsNameserversExpanded(zoneRes.data.status !== 'active')
@@ -147,7 +147,7 @@ export default function DNSManagementPage() {
       }
       
       const dnsRes = await listDNSRecords(zoneId)
-      if (dnsRes.success) {
+      if (dnsRes.success && dnsRes.data) {
         setRecords(dnsRes.data)
       } else {
         const dnsErrMsg = dnsRes.error?.toLowerCase() || "";

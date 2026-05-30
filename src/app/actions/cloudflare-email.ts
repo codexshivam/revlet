@@ -167,16 +167,41 @@ export async function activateEmailRouting(zoneId: string) {
 export async function listEmailRules(zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}/email/routing/rules`, 'INFRA');
-    const rules = (data.result || []).map((rule: any) => {
+    const rulesData = await cfFetch(`/zones/${zoneId}/email/routing/rules`, 'INFRA');
+    
+    // Dynamically query registered destination verification status from Cloudflare account level
+    const verifiedEmailsSet = new Set<string>();
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    
+    if (accountId) {
+      try {
+        const destData = await cfFetch(`/accounts/${accountId}/email/routing/addresses`, 'INFRA');
+        const dests = destData.result || [];
+        dests.forEach((d: any) => {
+          if (d.verified) {
+            verifiedEmailsSet.add(d.email.toLowerCase().trim());
+          }
+        });
+      } catch (destError) {
+        console.warn("[listEmailRules] Failed to fetch destination addresses list for verification verification:", destError);
+      }
+    }
+
+    const rules = (rulesData.result || []).map((rule: any) => {
       const aliasEmail = rule.matchers?.[0]?.value || '';
       const destinationEmail = rule.actions?.[0]?.value?.[0] || '';
+      
+      // Check if address is explicitly verified on the Cloudflare account
+      const isVerified = accountId && verifiedEmailsSet.size > 0
+        ? verifiedEmailsSet.has(destinationEmail.toLowerCase().trim())
+        : true; // fallback to true if no account context exists to prevent visual errors
+
       return {
         id: rule.id,
         alias: aliasEmail,
         destination: destinationEmail,
         enabled: rule.enabled ?? true,
-        verified: true,
+        verified: isVerified,
       };
     });
     return { success: true, data: rules };

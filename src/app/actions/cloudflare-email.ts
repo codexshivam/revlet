@@ -85,78 +85,19 @@ export async function getEmailRoutingStatus(zoneId: string) {
 export async function activateEmailRouting(zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    // Step 1: List all existing MX records
-    console.log(`[Email Routing] Step 1: Fetching existing MX records for zone ${zoneId}`);
-    const mxData = await cfFetch(`/zones/${zoneId}/dns_records?type=MX&per_page=100`, 'DNS');
-    const existingMxRecords: any[] = mxData.result || [];
-    console.log(`[Email Routing] Step 1 complete: Found ${existingMxRecords.length} existing MX record(s)`);
-
-    // Step 2: Purge all existing MX records
-    console.log(`[Email Routing] Step 2: Purging ${existingMxRecords.length} existing MX record(s)`);
-    let purgedCount = 0;
-    for (const record of existingMxRecords) {
-      await cfFetch(`/zones/${zoneId}/dns_records/${record.id}`, 'DNS', {
-        method: 'DELETE',
-      });
-      purgedCount++;
-    }
-    console.log(`[Email Routing] Step 2 complete: Purged ${purgedCount} MX record(s)`);
-
-    // Step 3: Enable email routing on the zone
-    console.log(`[Email Routing] Step 3: Enabling email routing on zone`);
+    // Simply enable the email routing service on the zone.
+    // Cloudflare automatically provisions and locks the required MX records,
+    // making manual DNS record manipulation redundant and locked.
+    console.log(`[Email Routing] Enabling email routing on zone ${zoneId}`);
     await cfFetch(`/zones/${zoneId}/email/routing/enable`, 'INFRA', {
       method: 'POST',
     });
-    console.log(`[Email Routing] Step 3 complete: Email routing enabled`);
-
-    // Step 4: Create required DNS records (MX + SPF + DMARC)
-    console.log(`[Email Routing] Step 4: Creating mail infrastructure DNS records`);
-    let createdCount = 0;
-
-    const mxRecords = [
-      { type: 'MX', name: '@', content: 'isaac.mx.cloudflare.net', priority: 10 },
-      { type: 'MX', name: '@', content: 'linda.mx.cloudflare.net', priority: 20 },
-      { type: 'MX', name: '@', content: 'amanda.mx.cloudflare.net', priority: 30 },
-    ];
-
-    const txtRecords = [
-      { type: 'TXT', name: '@', content: 'v=spf1 include:_spf.mx.cloudflare.net ~all' },
-      { type: 'TXT', name: '_dmarc', content: 'v=DMARC1; p=none;' },
-    ];
-
-    for (const mx of mxRecords) {
-      await cfFetch(`/zones/${zoneId}/dns_records`, 'DNS', {
-        method: 'POST',
-        body: JSON.stringify({
-          type: mx.type,
-          name: mx.name,
-          content: mx.content,
-          priority: mx.priority,
-          ttl: 1,
-        }),
-      });
-      createdCount++;
-    }
-
-    for (const txt of txtRecords) {
-      await cfFetch(`/zones/${zoneId}/dns_records`, 'DNS', {
-        method: 'POST',
-        body: JSON.stringify({
-          type: txt.type,
-          name: txt.name,
-          content: txt.content,
-          ttl: 1,
-        }),
-      });
-      createdCount++;
-    }
-    console.log(`[Email Routing] Step 4 complete: Created ${createdCount} DNS record(s)`);
+    console.log(`[Email Routing] Email service successfully enabled`);
 
     return {
       success: true,
       data: {
-        purgedCount,
-        createdCount,
+        message: "Email service successfully activated. MX records are automatically managed by Cloudflare."
       },
     };
   } catch (error: any) {

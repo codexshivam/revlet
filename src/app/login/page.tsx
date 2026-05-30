@@ -312,8 +312,29 @@ export default function LoginPage() {
         </div>
 
         {/* FOOTER */}
-        <div className="text-center text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em] select-none px-4 leading-normal">
-          © 2026 REVLET PLATFORM • HELLO@REVLET.ME
+        <div className="text-center select-none px-4 space-y-2">
+          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em] leading-normal">
+            © 2026 REVLET PLATFORM • HELLO@REVLET.ME
+          </div>
+          <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 uppercase tracking-[0.15em]">
+            <a 
+              href="https://revlet.me/privacy/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:text-[#191c1e] transition-colors font-medium"
+            >
+              Privacy Policy
+            </a>
+            <span>•</span>
+            <a 
+              href="https://revlet.me/terms/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:text-[#191c1e] transition-colors font-medium"
+            >
+              Terms of Service
+            </a>
+          </div>
         </div>
       </div>
     </div>

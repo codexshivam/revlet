@@ -138,23 +138,25 @@ export async function listEmailRules(zoneId: string) {
       }
     }
 
-    const rules = (rulesData.result || []).map((rule: any) => {
-      const aliasEmail = rule.matchers?.[0]?.value || '';
-      const destinationEmail = rule.actions?.[0]?.value?.[0] || '';
-      
-      // Check if address is explicitly verified on the Cloudflare account
-      const isVerified = accountId && verifiedEmailsSet.size > 0
-        ? verifiedEmailsSet.has(destinationEmail.toLowerCase().trim())
-        : true; // fallback to true if no account context exists to prevent visual errors
+    const rules = (rulesData.result || [])
+      .map((rule: any) => {
+        const aliasEmail = rule.matchers?.[0]?.value || '';
+        const destinationEmail = rule.actions?.[0]?.value?.[0] || '';
+        
+        // Check if address is explicitly verified on the Cloudflare account
+        const isVerified = accountId && verifiedEmailsSet.size > 0
+          ? verifiedEmailsSet.has(destinationEmail.toLowerCase().trim())
+          : true; // fallback to true if no account context exists to prevent visual errors
 
-      return {
-        id: rule.id || rule.tag,
-        alias: aliasEmail,
-        destination: destinationEmail,
-        enabled: rule.enabled ?? true,
-        verified: isVerified,
-      };
-    });
+        return {
+          id: rule.id || rule.tag,
+          alias: aliasEmail.trim(),
+          destination: destinationEmail.trim(),
+          enabled: rule.enabled ?? true,
+          verified: isVerified,
+        };
+      })
+      .filter((rule: any) => rule.alias !== '' && rule.destination !== '');
     return { success: true, data: rules };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to list email routing rules' };

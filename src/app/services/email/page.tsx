@@ -366,126 +366,126 @@ export default function EmailRoutingPage() {
 
         ) : selectedOrg && zoneId && !emailServiceActive ? (
           /* STATE 4: Pre-activation landing */
-          <div className="max-w-5xl mx-auto py-8 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="space-y-12 text-center flex flex-col">
+          <div className="max-w-6xl mx-auto py-10 px-4 md:px-6 animate-in slide-in-from-bottom-4 duration-500 w-full">
+            <div className="space-y-16 text-center flex flex-col items-center">
               {/* Value Proposition Banner */}
-              <div className="space-y-4 flex flex-col items-center">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-100 bg-blue-50/50 text-[10px] font-bold text-primary uppercase tracking-widest mb-2 shadow-sm animate-pulse">
-                  <Sparkles className="w-3 h-3 text-primary" />
+              <div className="space-y-5 flex flex-col items-center max-w-3xl">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-100 bg-blue-50/50 text-[10px] font-bold text-primary uppercase tracking-widest shadow-sm animate-pulse">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
                   Premium Enterprise Infrastructure
                 </div>
-                <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight max-w-3xl">
+                <h2 className="text-4xl md:text-5xl font-headline font-bold text-slate-900 leading-tight">
                   Activate Professional Email Service
                 </h2>
-                <p className="text-slate-500 text-base leading-relaxed max-w-2xl mx-auto">
+                <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto">
                   Instantly provision custom-domain email alias routes for your organization and enforce hardened global anti-spoofing security frameworks. Secure, reliable, and white-labeled.
                 </p>
               </div>
 
               {/* How it Works Flow Visualization */}
-              <div className="max-w-4xl w-full mx-auto p-6 md:p-8 rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50/30 to-white shadow-xl shadow-slate-100/50 relative overflow-hidden my-4 text-left">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
+              <div className="max-w-5xl w-full p-8 md:p-10 rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50/30 to-white shadow-xl shadow-slate-100/50 relative overflow-hidden text-left transition-all hover:shadow-2xl hover:shadow-slate-100">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none" />
                 
-                <h4 className="text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center mb-8">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center mb-10">
                   Virtual Routing Pipeline Architecture
                 </h4>
                 
-                <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-4 relative z-10">
+                <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-6 relative z-10 w-full px-2">
                   {/* Sender Card */}
-                  <div className="flex-1 w-full max-w-[240px] p-4 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-3">
-                    <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl shrink-0">
-                      <MailOpen className="w-5 h-5 text-slate-500" />
+                  <div className="flex-1 w-full lg:max-w-[280px] p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-4 transition-all hover:border-slate-200">
+                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl shrink-0">
+                      <MailOpen className="w-6 h-6 text-slate-500 animate-pulse" />
                     </div>
-                    <div className="text-left space-y-0.5 min-w-0">
+                    <div className="text-left space-y-1 min-w-0">
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Inbound Message</p>
-                      <p className="text-xs font-bold text-slate-800 truncate">sender@external.com</p>
+                      <p className="text-sm font-bold text-slate-800 truncate">sender@external.com</p>
                     </div>
                   </div>
                   
                   {/* Flow Arrow 1 */}
-                  <div className="flex items-center gap-1.5 text-primary shrink-0">
-                    <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
-                    <div className="h-0.5 w-8 bg-gradient-to-r from-primary to-blue-400 hidden md:block" />
-                    <ArrowRight className="w-4 h-4" />
+                  <div className="flex lg:flex-col items-center gap-2 text-primary shrink-0">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary animate-ping" />
+                    <div className="h-0.5 w-10 lg:w-0.5 lg:h-10 bg-gradient-to-r lg:bg-gradient-to-b from-primary to-blue-400 hidden md:block" />
+                    <ArrowRight className="w-5 h-5 lg:rotate-0 rotate-90" />
                   </div>
                   
                   {/* Custom Domain Gateway */}
-                  <div className="flex-1 w-full max-w-[260px] p-5 rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-900/10 flex items-center gap-3 relative border border-slate-800">
-                    <div className="absolute top-2 right-3">
-                      <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[8px] font-bold py-0.25 px-1.5 rounded-full uppercase tracking-widest">
-                        SECURE
+                  <div className="flex-1 w-full lg:max-w-[320px] p-6 rounded-2xl bg-slate-900 text-white shadow-xl shadow-slate-900/10 flex items-center gap-4 relative border border-slate-800 transition-all hover:bg-black">
+                    <div className="absolute top-3 right-3">
+                      <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[8px] font-bold py-0.5 px-2 rounded-full uppercase tracking-widest">
+                        SECURE GATEWAY
                       </Badge>
                     </div>
-                    <div className="p-2.5 bg-white/10 rounded-xl shrink-0">
-                      <Globe className="w-5 h-5 text-white animate-pulse" />
+                    <div className="p-3 bg-white/10 rounded-xl shrink-0">
+                      <Globe className="w-6 h-6 text-white animate-spin" style={{ animationDuration: '10s' }} />
                     </div>
-                    <div className="text-left space-y-0.5 min-w-0">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Custom Gateway</p>
-                      <p className="text-xs font-bold font-mono truncate text-emerald-400">info@{selectedOrg?.domain || "yourdomain.com"}</p>
+                    <div className="text-left space-y-1 min-w-0 pr-16">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Custom Alias</p>
+                      <p className="text-sm font-bold font-mono truncate text-emerald-400">info@{selectedOrg?.domain || "yourdomain.com"}</p>
                     </div>
                   </div>
                   
                   {/* Flow Arrow 2 */}
-                  <div className="flex items-center gap-1.5 text-emerald-500 shrink-0">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    <div className="h-0.5 w-8 bg-gradient-to-r from-emerald-500 to-teal-400 hidden md:block" />
-                    <ArrowRight className="w-4 h-4" />
+                  <div className="flex lg:flex-col items-center gap-2 text-emerald-500 shrink-0">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                    <div className="h-0.5 w-10 lg:w-0.5 lg:h-10 bg-gradient-to-r lg:bg-gradient-to-b from-emerald-500 to-teal-400 hidden md:block" />
+                    <ArrowRight className="w-5 h-5 lg:rotate-0 rotate-90" />
                   </div>
                   
                   {/* Destination Card */}
-                  <div className="flex-1 w-full max-w-[240px] p-4 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-3">
-                    <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl shrink-0">
-                      <Send className="w-5 h-5 text-emerald-600 animate-bounce" style={{ animationDuration: '3s' }} />
+                  <div className="flex-1 w-full lg:max-w-[280px] p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-4 transition-all hover:border-slate-200">
+                    <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl shrink-0">
+                      <Send className="w-6 h-6 text-emerald-600 animate-bounce" style={{ animationDuration: '4s' }} />
                     </div>
-                    <div className="text-left space-y-0.5 min-w-0">
+                    <div className="text-left space-y-1 min-w-0">
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Target Destination</p>
-                      <p className="text-xs font-bold text-slate-800 truncate">your-inbox@gmail.com</p>
+                      <p className="text-sm font-bold text-slate-800 truncate">your-inbox@gmail.com</p>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Capability Highlights Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto text-left w-full">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto text-left w-full">
                 {[
                   {
                     title: "Zero-Storage Inbound Routing",
                     desc: "Route addresses like admissions@yourdomain.edu.np directly to any primary destination inbox with zero internal data retention.",
                     icon: ArrowRightLeft,
-                    color: "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100/50 hover:border-blue-200",
+                    color: "bg-blue-50/50 hover:bg-blue-50 text-blue-600 border-blue-100 hover:border-blue-200",
                   },
                   {
                     title: "Automated MX Remediation",
                     desc: "Our transaction pipeline automatically purges conflicting legacy mail records to secure global delivery paths.",
                     icon: ShieldAlert,
-                    color: "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100/50 hover:border-emerald-200",
+                    color: "bg-emerald-50/50 hover:bg-emerald-50 text-emerald-600 border-emerald-100 hover:border-emerald-200",
                   },
                   {
                     title: "Security Hardening Suite",
                     desc: "Unconditionally enforces structural SPF, cryptographic DKIM pass-through, and structural DMARC alignment.",
                     icon: Lock,
-                    color: "bg-purple-50 text-purple-600 border-purple-100 hover:bg-purple-100/50 hover:border-purple-200",
+                    color: "bg-purple-50/50 hover:bg-purple-50 text-purple-600 border-purple-100 hover:border-purple-200",
                   },
                 ].map((feature) => (
-                  <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
-                    <div className="p-3 bg-white rounded-xl shadow-sm shrink-0 border border-slate-100">
+                  <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-lg hover:-translate-y-1 duration-300", feature.color)}>
+                    <div className="p-3 bg-white rounded-xl shadow-sm shrink-0 border border-slate-100/80">
                       <feature.icon className="w-5 h-5" />
                     </div>
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-bold">{feature.title}</h4>
-                      <p className="text-xs opacity-80 leading-relaxed font-medium">{feature.desc}</p>
+                    <div className="space-y-1.5">
+                      <h4 className="text-base font-bold text-slate-800">{feature.title}</h4>
+                      <p className="text-xs opacity-90 leading-relaxed font-medium text-slate-500">{feature.desc}</p>
                     </div>
                   </div>
                 ))}
               </div>
 
               {/* Get Started Button */}
-              <div className="pt-8 flex flex-col items-center">
+              <div className="pt-4 flex flex-col items-center">
                 <Button
                   onClick={() => setIsActivateDialogOpen(true)}
                   size="lg"
-                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-base group bg-slate-900 hover:bg-black text-white rounded-xl transition-all"
+                  className="font-bold px-14 h-15 shadow-xl shadow-primary/20 text-base group bg-slate-900 hover:bg-black text-white rounded-xl transition-all"
                 >
                   <Mail className="w-5 h-5 mr-3 group-hover:rotate-12 transition-transform" />
                   Activate Email Service

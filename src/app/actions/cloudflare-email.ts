@@ -279,3 +279,60 @@ export async function listDestinationAddresses() {
     return { success: false, error: error.message || 'Failed to list destination addresses' };
   }
 }
+
+export async function createDestinationAddress(email: string) {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!accountId) return { success: false, error: 'Account ID is not configured. Please add CLOUDFLARE_ACCOUNT_ID to your .env.local file.' };
+
+  try {
+    const data = await cfFetch(`/accounts/${accountId}/email/routing/addresses`, 'INFRA', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+    return {
+      success: true,
+      data: {
+        id: data.result?.id || data.result?.tag,
+        email: data.result?.email,
+        verified: data.result?.verified ? new Date(data.result.verified) : null,
+      },
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to create destination address' };
+  }
+}
+
+export async function deleteDestinationAddress(addressId: string) {
+  if (!addressId) return { success: false, error: 'Missing Destination Address ID' };
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!accountId) return { success: false, error: 'Account ID is not configured. Please add CLOUDFLARE_ACCOUNT_ID to your .env.local file.' };
+
+  try {
+    await cfFetch(`/accounts/${accountId}/email/routing/addresses/${addressId}`, 'INFRA', {
+      method: 'DELETE',
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to delete destination address' };
+  }
+}
+
+export async function getDestinationAddress(addressId: string) {
+  if (!addressId) return { success: false, error: 'Missing Destination Address ID' };
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!accountId) return { success: false, error: 'Account ID is not configured. Please add CLOUDFLARE_ACCOUNT_ID to your .env.local file.' };
+
+  try {
+    const data = await cfFetch(`/accounts/${accountId}/email/routing/addresses/${addressId}`, 'INFRA');
+    return {
+      success: true,
+      data: {
+        id: data.result?.id || data.result?.tag,
+        email: data.result?.email,
+        verified: data.result?.verified ? new Date(data.result.verified) : null,
+      },
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to fetch destination address' };
+  }
+}

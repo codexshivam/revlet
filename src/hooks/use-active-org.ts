@@ -25,6 +25,7 @@ export interface Organization {
   lastWebQuota?: any
   dnsRequested?: boolean
   cloudflareZoneId?: string
+  emailServiceActive?: boolean
   isEducation?: boolean
   createdAt?: any
   updatedAt?: any

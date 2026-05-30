@@ -85,6 +85,30 @@ service cloud.firestore {
       allow update, delete: if false; // Managed by support team only
     }
 
+    // ─── Email Routing Configs ─────────────────────────────────────────────────
+    // Stores per-org email routing activation state and domain security parameters.
+    match /emailRoutingConfigs/{configId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.organizationId is string
+        && request.resource.data.domainName is string
+        && request.resource.data.isServiceActive is bool;
+      allow read, update: if isResourceOwner();
+      allow delete: if false; // Prevent accidental service deactivation
+    }
+
+    // ─── Forwarding Rules ─────────────────────────────────────────────────────
+    // Email forwarding rule audit trail. Rules are immutable — delete and recreate.
+    match /forwardingRules/{ruleId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.aliasPrefix is string
+        && request.resource.data.destinationEmail is string;
+      allow read: if isResourceOwner();
+      allow delete: if isResourceOwner();
+      allow update: if false; // Immutable — delete and recreate
+    }
+
     // ─── User Profiles ────────────────────────────────────────────────────────
     // Users can only read/write their own profile document.
     match /users/{userId} {

@@ -47,6 +47,7 @@ import {
   createEmailRule,
   deleteEmailRule,
 } from "@/app/actions/cloudflare-email"
+import { listDNSRecords } from "@/app/actions/cloudflare-dns"
 
 type EmailRule = {
   id: string
@@ -78,6 +79,7 @@ export default function EmailRoutingPage() {
 
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
+  const [dnsRecords, setDnsRecords] = useState<any[]>([])
 
   const zoneId = selectedOrg?.cloudflareZoneId
   const verifiedRules = rules.filter(r => r.verified)
@@ -95,6 +97,34 @@ export default function EmailRoutingPage() {
     (activePage - 1) * itemsPerPage,
     activePage * itemsPerPage
   )
+
+  // Dynamic live validation of SPF record
+  const spfRecord = dnsRecords.find(
+    (r) =>
+      r.type === "TXT" &&
+      (r.name === selectedOrg?.domain || r.name === "@" || r.name === "") &&
+      r.content.includes("v=spf1") &&
+      r.content.includes("include:_spf.mx.cloudflare.net")
+  )
+  const isSpfValid = !!spfRecord
+
+  // Dynamic live validation of DMARC record
+  const dmarcRecord = dnsRecords.find(
+    (r) =>
+      r.type === "TXT" &&
+      (r.name === `_dmarc.${selectedOrg?.domain}` || r.name === "_dmarc" || r.name.startsWith("_dmarc")) &&
+      r.content.includes("v=DMARC1")
+  )
+  const isDmarcValid = !!dmarcRecord
+
+  // Dynamic live validation of MX Routing records
+  const mxRecords = dnsRecords.filter(
+    (r) =>
+      r.type === "MX" &&
+      (r.name === selectedOrg?.domain || r.name === "@" || r.name === "") &&
+      r.content.includes("mx.cloudflare.net")
+  )
+  const isMxValid = mxRecords.length > 0
 
   // Check email service status on mount / org change
   useEffect(() => {
@@ -125,7 +155,7 @@ export default function EmailRoutingPage() {
     checkEmailStatus()
   }, [selectedOrg, db])
 
-  // Fetch email rules
+  // Fetch email rules and query DNS records for live security verification
   const fetchEmailRules = useCallback(async () => {
     if (!zoneId) return
     setIsLoadingRules(true)
@@ -135,6 +165,14 @@ export default function EmailRoutingPage() {
         setRules(res.data)
       } else {
         throw new Error(res.error)
+      }
+
+      // Query live DNS records
+      const dnsRes = await listDNSRecords(zoneId)
+      if (dnsRes.success) {
+        setDnsRecords(dnsRes.data)
+      } else {
+        console.warn("Live DNS validation sync issue:", dnsRes.error)
       }
     } catch (error: any) {
       console.warn("Email rules sync issue:", error.message)
@@ -153,6 +191,7 @@ export default function EmailRoutingPage() {
       fetchEmailRules()
     } else {
       setRules([])
+      setDnsRecords([])
     }
   }, [emailServiceActive, zoneId, fetchEmailRules])
 
@@ -656,25 +695,58 @@ export default function EmailRoutingPage() {
                   <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">SPF Protocol</span>
-                      <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[9px] font-bold border shadow-none">ALIGNED</Badge>
+                      <Badge className={cn(
+                        "text-[9px] font-bold border shadow-none",
+                        isSpfValid 
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                          : "bg-amber-50 text-amber-600 border-amber-100"
+                      )}>
+                        {isSpfValid ? "ALIGNED" : "NOT CONFIGURED"}
+                      </Badge>
                     </div>
-                    <code className="text-[10px] font-mono text-slate-500 block leading-relaxed break-all">v=spf1 include:_spf.mx.cloudflare.net ~all</code>
+                    <code className="text-[10px] font-mono text-slate-500 block leading-relaxed break-all">
+                      {isSpfValid ? spfRecord.content : "v=spf1 include:_spf.mx.cloudflare.net ~all"}
+                    </code>
+                    {!isSpfValid && (
+                      <p className="text-[9px] text-slate-400 font-medium">Recommended: Add a TXT record pointing to the secure mail relay.</p>
+                    )}
                   </div>
+
                   {/* DKIM Card */}
                   <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">DKIM Verification</span>
-                      <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[9px] font-bold border shadow-none">VERIFIED / PASS-THROUGH</Badge>
+                      <Badge className={cn(
+                        "text-[9px] font-bold border shadow-none",
+                        emailServiceActive 
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                          : "bg-amber-50 text-amber-600 border-amber-100"
+                      )}>
+                        {emailServiceActive ? "VERIFIED / PASS-THROUGH" : "INACTIVE"}
+                      </Badge>
                     </div>
                     <p className="text-[10px] text-slate-400 font-medium">Cryptographic key validation is automatically managed by the routing infrastructure.</p>
                   </div>
+
                   {/* DMARC Card */}
                   <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">DMARC Compliance</span>
-                      <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[9px] font-bold border shadow-none">ENFORCED</Badge>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">DMARC Protection</span>
+                      <Badge className={cn(
+                        "text-[9px] font-bold border shadow-none",
+                        isDmarcValid 
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                          : "bg-amber-50 text-amber-600 border-amber-100"
+                      )}>
+                        {isDmarcValid ? "ENFORCED" : "NOT CONFIGURED"}
+                      </Badge>
                     </div>
-                    <code className="text-[10px] font-mono text-slate-500 block leading-relaxed">v=DMARC1; p=none;</code>
+                    <code className="text-[10px] font-mono text-slate-500 block leading-relaxed">
+                      {isDmarcValid ? dmarcRecord.content : "v=DMARC1; p=none;"}
+                    </code>
+                    {!isDmarcValid && (
+                      <p className="text-[9px] text-slate-400 font-medium">Recommended: Add a TXT record with name _dmarc to prevent address spoofing.</p>
+                    )}
                   </div>
                 </div>
               </CardContent>

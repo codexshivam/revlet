@@ -13,23 +13,21 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
   const infraToken = process.env.CLOUDFLARE_INFRA_TOKEN;
   const genericToken = process.env.CLOUDFLARE_API_TOKEN;
   const apiEmail = process.env.CLOUDFLARE_EMAIL;
-  const apiKey = process.env.CLOUDFLARE_API_KEY || process.env.CLOUDFLARE_DNS_TOKEN;
+  const apiKey = process.env.CLOUDFLARE_API_KEY;
 
-  const resolvedHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const resolvedHeaders: Record<string, string> = {};
+
+  if (options.body) {
+    resolvedHeaders['Content-Type'] = 'application/json';
+  }
 
   // High-fidelity sanitation: strip outer spaces and literal single/double quotes loaded from env
+  const cleanToken = (dnsToken || infraToken || genericToken)?.trim().replace(/^["']|["']$/g, '');
   const cleanEmail = apiEmail?.trim().replace(/^["']|["']$/g, '');
   const cleanKey = apiKey?.trim().replace(/^["']|["']$/g, '');
-  
-  // Clean token falls back to other tokens if CLOUDFLARE_DNS_TOKEN was used as the global key
-  const cleanToken = (cleanEmail && cleanKey && dnsToken === apiKey)
-    ? (infraToken || genericToken)?.trim().replace(/^["']|["']$/g, '')
-    : (dnsToken || infraToken || genericToken)?.trim().replace(/^["']|["']$/g, '');
 
   if (cleanEmail && cleanKey) {
-    // Model B: Legacy Global Key Auth (using resolved apiKey/DNS token)
+    // Model B: Legacy Global Key Auth
     resolvedHeaders['X-Auth-Email'] = cleanEmail;
     resolvedHeaders['X-Auth-Key'] = cleanKey;
   } else if (cleanToken) {
@@ -37,7 +35,7 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
     resolvedHeaders['Authorization'] = `Bearer ${cleanToken}`;
   } else {
     console.error(`[Email Routing Action] Missing authentication configuration in environment variables.`);
-    throw new Error("No authentication parameters found. Please configure CLOUDFLARE_API_TOKEN (Option A) or CLOUDFLARE_EMAIL & CLOUDFLARE_API_KEY (Option B) in your .env.local file.");
+    throw new Error("No authentication parameters found. Please configure CLOUDFLARE_DNS_TOKEN or CLOUDFLARE_API_TOKEN in your .env.local file.");
   }
 
   try {

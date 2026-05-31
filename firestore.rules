@@ -114,5 +114,52 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
+
+    // ─── Workspace Storage Policies ──────────────────────────────────────────
+    // Per-org storage quota tracking. Owners can create, read, and update.
+    match /workspaceStoragePolicies/{policyId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.orgId is string;
+      allow read, update: if isResourceOwner();
+      allow delete: if false;
+    }
+
+    // ─── Workspace Archive Logs ──────────────────────────────────────────────
+    // Immutable audit trail for user suspension/deletion actions.
+    match /workspaceArchiveLogs/{logId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.orgId is string
+        && request.resource.data.userEmail is string
+        && request.resource.data.action is string;
+      allow read: if isResourceOwner();
+      allow update, delete: if false;
+    }
+
+    // ─── Workspace Alumni ────────────────────────────────────────────────────
+    // Tracks active workspace users marked as Alumni.
+    match /workspaceAlumni/{alumniId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.orgId is string
+        && request.resource.data.email is string;
+      allow read: if isResourceOwner();
+      allow update: if isResourceOwner();
+      allow delete: if isResourceOwner();
+    }
+
+    // ─── Workspace Custom OUs ────────────────────────────────────────────────
+    // Custom organizational unit types (up to 5 per org, enforced client-side).
+    match /workspaceCustomOUs/{ouId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.orgId is string
+        && request.resource.data.name is string
+        && request.resource.data.ouPath is string;
+      allow read: if isResourceOwner();
+      allow update: if isResourceOwner();
+      allow delete: if isResourceOwner();
+    }
   }
 }

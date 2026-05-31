@@ -982,7 +982,7 @@ export default function EmailRoutingPage() {
               </p>
             </div>
             <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
-              <Button variant="ghost" onClick={() => setIsDisableDialogOpen(false)} className="text-slate-700 hover:text-slate-900">Cancel</Button>
+              <Button variant="ghost" onClick={() => setIsDisableDialogOpen(false)} className="text-slate-700 hover:bg-blue-600 hover:text-white focus:bg-blue-600 focus:text-white active:bg-blue-700 active:text-white">Cancel</Button>
               <Button onClick={handleDisable} disabled={isDisabling} variant="destructive">
                 {isDisabling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 Disable Service

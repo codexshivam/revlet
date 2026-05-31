@@ -27,6 +27,13 @@ export interface Organization {
   cloudflareZoneId?: string
   emailServiceActive?: boolean
   isEducation?: boolean
+  // Google Workspace fields
+  workspaceStatus?: 'none' | 'applied' | 'pending' | 'active'
+  workspaceAdminEmail?: string
+  workspaceCustomerId?: string
+  workspaceDomain?: string
+  workspaceAppliedAt?: any
+  workspaceActivatedAt?: any
   createdAt?: any
   updatedAt?: any
 }

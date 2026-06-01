@@ -1009,110 +1009,191 @@ export default function WorkspaceDeactivatedPage() {
                   </div>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-slate-50/50">
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-6">
-                          User Profile
-                        </TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          Original Type
-                        </TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          Suspended On
-                        </TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          Created Date
-                        </TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          Storage Held
-                        </TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-32">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredSuspendedUsers.map((u) => {
-                        const userInitials = `${(u.firstName || "?")[0]}${(u.lastName || "?")[0]}`.toUpperCase()
-                        const heldBytes = storageMap[u.email] || 0
+                <div className="text-left">
+                  {/* Desktop View: Suspended Table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50/50">
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-6">
+                            User Profile
+                          </TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Original Type
+                          </TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Suspended On
+                          </TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Created Date
+                          </TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Storage Held
+                          </TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-32">
+                            Actions
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredSuspendedUsers.map((u) => {
+                          const userInitials = `${(u.firstName || "?")[0]}${(u.lastName || "?")[0]}`.toUpperCase()
+                          const heldBytes = storageMap[u.email] || 0
 
-                        return (
-                          <TableRow key={u.id} className="group hover:bg-slate-50/30">
-                            {/* Name + Email stacked */}
-                            <TableCell className="pl-6 py-3.5">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 border border-slate-200">
-                                  {userInitials}
+                          return (
+                            <TableRow key={u.id} className="group hover:bg-slate-50/30">
+                              {/* Name + Email stacked */}
+                              <TableCell className="pl-6 py-3.5">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 border border-slate-200">
+                                    {userInitials}
+                                  </div>
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="text-sm font-semibold text-slate-800 truncate">
+                                      {u.fullName}
+                                    </span>
+                                    <span className="text-xs text-slate-400 font-medium font-mono truncate">
+                                      {u.email}
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="flex flex-col min-w-0">
-                                  <span className="text-sm font-semibold text-slate-800 truncate">
-                                    {u.fullName}
-                                  </span>
-                                  <span className="text-xs text-slate-400 font-medium font-mono truncate">
-                                    {u.email}
-                                  </span>
-                                </div>
-                              </div>
-                            </TableCell>
+                              </TableCell>
 
-                            {/* Original Type */}
-                            <TableCell>
-                              <span className="text-xs font-semibold font-mono text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/50">
+                              {/* Original Type */}
+                              <TableCell>
+                                <span className="text-xs font-semibold font-mono text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/50">
+                                  {formatType(u.orgUnitPath)}
+                                </span>
+                              </TableCell>
+
+                              {/* Suspension Date */}
+                              <TableCell>
+                                <span className="text-xs text-slate-600 font-medium">
+                                  {u.lastLoginTime ? formatDate(u.lastLoginTime) : "Never Logged In"}
+                                </span>
+                              </TableCell>
+
+                              {/* Creation Date */}
+                              <TableCell>
+                                <span className="text-xs text-slate-500 font-medium">
+                                  {formatDate(u.creationTime)}
+                                </span>
+                              </TableCell>
+
+                              {/* Storage Held */}
+                              <TableCell>
+                                <span className="text-xs font-semibold text-slate-700">
+                                  {formatBytes(heldBytes)}
+                                </span>
+                              </TableCell>
+
+                              {/* Actions */}
+                              <TableCell className="text-right pr-6 py-3.5">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    onClick={() => openRestoreAlert(u)}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded"
+                                    title="Reactivate Account"
+                                  >
+                                    <Play className="w-3.5 h-3.5 fill-emerald-600" />
+                                  </Button>
+                                  <Button
+                                    onClick={() => openDeleteAlert(u)}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                    title="Permanently Delete"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile View: High-End Touchable Suspended Cards */}
+                  <div className="block md:hidden space-y-4 p-4 bg-slate-50/20">
+                    {filteredSuspendedUsers.map((u) => {
+                      const userInitials = `${(u.firstName || "?")[0]}${(u.lastName || "?")[0]}`.toUpperCase()
+                      const heldBytes = storageMap[u.email] || 0
+
+                      return (
+                        <div
+                          key={u.id}
+                          className="relative p-5 rounded-xl border bg-white shadow-sm flex flex-col gap-4 border-slate-100 hover:shadow-md transition-all border-l-4 border-l-red-500"
+                        >
+                          {/* Card Header: Avatar & Info */}
+                          <div className="flex items-center gap-3 min-w-0 text-left">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200 shrink-0">
+                              {userInitials}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-bold text-slate-800 truncate leading-none">{u.fullName}</h4>
+                              <p className="text-xs font-mono text-slate-400 truncate mt-1">{u.email}</p>
+                            </div>
+                          </div>
+
+                          {/* Card Body: Details */}
+                          <div className="space-y-2.5 pt-2 border-t border-slate-100/60 text-left">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Original Type</span>
+                              <span className="font-semibold font-mono text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/50">
                                 {formatType(u.orgUnitPath)}
                               </span>
-                            </TableCell>
-
-                            {/* Suspension Date */}
-                            <TableCell>
-                              <span className="text-xs text-slate-600 font-medium">
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Suspended On</span>
+                              <span className="font-semibold text-slate-600">
                                 {u.lastLoginTime ? formatDate(u.lastLoginTime) : "Never Logged In"}
                               </span>
-                            </TableCell>
-
-                            {/* Creation Date */}
-                            <TableCell>
-                              <span className="text-xs text-slate-500 font-medium">
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Created Date</span>
+                              <span className="font-semibold text-slate-600">
                                 {formatDate(u.creationTime)}
                               </span>
-                            </TableCell>
-
-                            {/* Storage Held */}
-                            <TableCell>
-                              <span className="text-xs font-semibold text-slate-700">
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Storage Held</span>
+                              <span className="font-bold text-slate-700">
                                 {formatBytes(heldBytes)}
                               </span>
-                            </TableCell>
+                            </div>
+                          </div>
 
-                            {/* Actions */}
-                            <TableCell className="text-right pr-6 py-3.5">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  onClick={() => openRestoreAlert(u)}
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded"
-                                  title="Reactivate Account"
-                                >
-                                  <Play className="w-3.5 h-3.5 fill-emerald-600" />
-                                </Button>
-                                <Button
-                                  onClick={() => openDeleteAlert(u)}
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                                  title="Permanently Delete"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
+                          {/* Card Footer: Touch actions */}
+                          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100/60">
+                            <Button
+                              onClick={() => openRestoreAlert(u)}
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs font-bold text-emerald-600 border-emerald-100 hover:bg-emerald-50 hover:text-emerald-700 gap-1 rounded-md bg-white shrink-0"
+                              title="Reactivate Account"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-emerald-600" />
+                              Reactivate
+                            </Button>
+                            <Button
+                              onClick={() => openDeleteAlert(u)}
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs font-bold text-red-500 border-red-100 hover:bg-red-50 hover:text-red-700 gap-1 rounded-md bg-white shrink-0"
+                              title="Permanently Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )
             )}
@@ -1151,97 +1232,161 @@ export default function WorkspaceDeactivatedPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-slate-50/50">
-                            <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-6">
-                              Deleted Account
-                            </TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              Original Type
-                            </TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              Date Deleted
-                            </TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-44">
-                              Actions
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredDeletedUsers.map((log) => {
-                            const userInitials = `${(log.userName || "?")[0]}${(log.userName || "?")[1] || ""}`.toUpperCase()
-                            const recovering = isRecovering === log.id
+                    <div className="text-left">
+                      {/* Desktop View: Deleted Table */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-slate-50/50">
+                              <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-6">
+                                Deleted Account
+                              </TableHead>
+                              <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                Original Type
+                              </TableHead>
+                              <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                Date Deleted
+                              </TableHead>
+                              <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-44">
+                                Actions
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredDeletedUsers.map((log) => {
+                              const userInitials = `${(log.userName || "?")[0]}${(log.userName || "?")[1] || ""}`.toUpperCase()
+                              const recovering = isRecovering === log.id
 
-                            // Calculate dynamic remaining recovery days based on deletion timestamp (20 days limit)
-                            const deletionDate = log.timestamp ? new Date(log.timestamp) : null
-                            const remainingDays = deletionDate 
-                              ? Math.max(0, 20 - Math.floor((new Date().getTime() - deletionDate.getTime()) / (1000 * 60 * 60 * 24))) 
-                              : 20
+                              // Calculate dynamic remaining recovery days based on deletion timestamp (20 days limit)
+                              const deletionDate = log.timestamp ? new Date(log.timestamp) : null
+                              const remainingDays = deletionDate 
+                                ? Math.max(0, 20 - Math.floor((new Date().getTime() - deletionDate.getTime()) / (1000 * 60 * 60 * 24))) 
+                                : 20
 
-                            return (
-                              <TableRow key={log.id} className="group hover:bg-slate-50/30">
-                                {/* Name + Email */}
-                                <TableCell className="pl-6 py-3.5">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-[10px] font-bold text-red-600 border border-red-100">
-                                      {userInitials}
+                              return (
+                                <TableRow key={log.id} className="group hover:bg-slate-50/30">
+                                  {/* Name + Email */}
+                                  <TableCell className="pl-6 py-3.5">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-[10px] font-bold text-red-600 border border-red-100">
+                                        {userInitials}
+                                      </div>
+                                      <div className="flex flex-col min-w-0">
+                                        <span className="text-sm font-semibold text-slate-800 truncate">
+                                          {log.userName || "Unknown User"}
+                                        </span>
+                                        <span className="text-xs text-slate-400 font-medium font-mono truncate">
+                                          {log.userEmail}
+                                        </span>
+                                      </div>
                                     </div>
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="text-sm font-semibold text-slate-800 truncate">
-                                        {log.userName || "Unknown User"}
-                                      </span>
-                                      <span className="text-xs text-slate-400 font-medium font-mono truncate">
-                                        {log.userEmail}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </TableCell>
+                                  </TableCell>
 
-                                {/* Original Type */}
-                                <TableCell>
-                                  <span className="text-xs font-semibold font-mono text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/50">
+                                  {/* Original Type */}
+                                  <TableCell>
+                                    <span className="text-xs font-semibold font-mono text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/50">
+                                      {formatType(log.userOrgPath)}
+                                    </span>
+                                  </TableCell>
+
+                                  {/* Deletion Date */}
+                                  <TableCell>
+                                    <span className="text-xs text-slate-600 font-medium">
+                                      {log.timestamp ? formatDate(log.timestamp) : "—"}
+                                    </span>
+                                  </TableCell>
+
+                                  {/* Actions */}
+                                  <TableCell className="text-right pr-6 py-3.5">
+                                    <div className="flex items-center justify-end gap-2.5">
+                                      <span className="inline-flex items-center text-[9px] font-bold text-red-700 bg-red-50 border border-red-100 rounded px-2 py-0.5" title="Google holds deleted users for 20 days in a restorable state.">
+                                        Deleted
+                                      </span>
+                                      <Button
+                                        onClick={() => openRecoverAlert(log)}
+                                        disabled={recovering}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 text-[10px] font-bold text-emerald-600 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 gap-1 rounded transition-all shadow-none"
+                                      >
+                                        {recovering ? (
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <UserCheck className="w-3 h-3" />
+                                        )}
+                                        Recover
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Mobile View: High-End Touchable Deleted Cards */}
+                      <div className="block md:hidden space-y-4 p-4 bg-slate-50/20">
+                        {filteredDeletedUsers.map((log) => {
+                          const userInitials = `${(log.userName || "?")[0]}${(log.userName || "?")[1] || ""}`.toUpperCase()
+                          const recovering = isRecovering === log.id
+
+                          return (
+                            <div
+                              key={log.id}
+                              className="relative p-5 rounded-xl border bg-white shadow-sm flex flex-col gap-4 border-slate-100 hover:shadow-md transition-all border-l-4 border-l-red-500"
+                            >
+                              {/* Card Header: Name + Email */}
+                              <div className="flex items-center gap-3 min-w-0 text-left">
+                                <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-xs font-bold text-red-600 border border-red-100 shrink-0">
+                                  {userInitials}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="text-sm font-bold text-slate-800 truncate leading-none">{log.userName || "Unknown User"}</h4>
+                                  <p className="text-xs font-mono text-slate-400 truncate mt-1">{log.userEmail}</p>
+                                </div>
+                              </div>
+
+                              {/* Card Body: Details */}
+                              <div className="space-y-2.5 pt-2 border-t border-slate-100/60 text-left">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Original Type</span>
+                                  <span className="font-semibold font-mono text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/50">
                                     {formatType(log.userOrgPath)}
                                   </span>
-                                </TableCell>
-
-                                {/* Deletion Date */}
-                                <TableCell>
-                                  <span className="text-xs text-slate-600 font-medium">
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Date Deleted</span>
+                                  <span className="font-semibold text-slate-600">
                                     {log.timestamp ? formatDate(log.timestamp) : "—"}
                                   </span>
-                                </TableCell>
+                                </div>
+                              </div>
 
-
-
-                                {/* Actions */}
-                                <TableCell className="text-right pr-6 py-3.5">
-                                  <div className="flex items-center justify-end gap-2.5">
-                                    <span className="inline-flex items-center text-[9px] font-bold text-red-700 bg-red-50 border border-red-100 rounded px-2 py-0.5" title="Google holds deleted users for 20 days in a restorable state.">
-                                      Deleted
-                                    </span>
-                                    <Button
-                                      onClick={() => openRecoverAlert(log)}
-                                      disabled={recovering}
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-7 text-[10px] font-bold text-emerald-600 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 gap-1 rounded transition-all shadow-none"
-                                    >
-                                      {recovering ? (
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        <UserCheck className="w-3 h-3" />
-                                      )}
-                                      Recover
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
+                              {/* Card Footer: Recover Actions */}
+                              <div className="flex items-center justify-between pt-3 border-t border-slate-100/60">
+                                <span className="inline-flex items-center text-[9px] font-bold text-red-700 bg-red-50 border border-red-100 rounded px-2 py-0.5 uppercase tracking-wider" title="Google holds deleted users for 20 days in a restorable state.">
+                                  Deleted
+                                </span>
+                                <Button
+                                  onClick={() => openRecoverAlert(log)}
+                                  disabled={recovering}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs font-bold text-emerald-600 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 gap-1.5 rounded-md bg-white shrink-0"
+                                >
+                                  {recovering ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <UserCheck className="w-3.5 h-3.5" />
+                                  )}
+                                  Recover
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

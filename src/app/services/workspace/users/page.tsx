@@ -1560,122 +1560,237 @@ export default function WorkspaceUsersPage() {
                   </div>
                 ) : (
                   <>
-                    <Table>
-                      <TableHeader className="bg-slate-50/50">
-                        <TableRow className="border-b border-slate-100">
-                          {isSelectionMode && (
-                            <TableHead className="w-[50px] pl-6">
-                              <Checkbox 
-                                checked={displayedUsers.length > 0 && selectedUserIds.size === displayedUsers.length}
-                                onCheckedChange={toggleAllSelection}
-                                className="border-slate-300"
-                              />
-                            </TableHead>
-                          )}
-                          <TableHead className={cn("text-[10px] font-bold uppercase py-4", !isSelectionMode && "pl-6")}>Name</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4">Email</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4">Type</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {displayedUsers.map((u) => (
-                          <TableRow key={u.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                            {/* Checkbox */}
+                    {/* Desktop View: Dense User Table */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <Table>
+                        <TableHeader className="bg-slate-50/50">
+                          <TableRow className="border-b border-slate-100">
                             {isSelectionMode && (
-                              <TableCell className="pl-6">
+                              <TableHead className="w-[50px] pl-6">
                                 <Checkbox 
-                                  checked={selectedUserIds.has(u.id)}
-                                  onCheckedChange={() => toggleUserSelection(u.id)}
+                                  checked={displayedUsers.length > 0 && selectedUserIds.size === displayedUsers.length}
+                                  onCheckedChange={toggleAllSelection}
                                   className="border-slate-300"
                                 />
-                              </TableCell>
+                              </TableHead>
                             )}
+                            <TableHead className={cn("text-[10px] font-bold uppercase py-4", !isSelectionMode && "pl-6")}>Name</TableHead>
+                            <TableHead className="text-[10px] font-bold uppercase py-4">Email</TableHead>
+                            <TableHead className="text-[10px] font-bold uppercase py-4">Type</TableHead>
+                            <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {displayedUsers.map((u) => (
+                            <TableRow key={u.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
+                              {/* Checkbox */}
+                              {isSelectionMode && (
+                                <TableCell className="pl-6">
+                                  <Checkbox 
+                                    checked={selectedUserIds.has(u.id)}
+                                    onCheckedChange={() => toggleUserSelection(u.id)}
+                                    className="border-slate-300"
+                                  />
+                                </TableCell>
+                              )}
 
-                            {/* Name with avatar and inline suspended status chip */}
-                            <TableCell className={cn("py-4", isSelectionMode ? "pl-2" : "pl-6")}>
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                                  <span className="text-[10px] font-bold">{getInitials(u.firstName, u.lastName)}</span>
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <p className="text-xs font-bold text-slate-800">{u.fullName}</p>
-                                    {u.suspended && (
-                                      <Badge variant="outline" className="text-[8px] font-bold px-1.5 py-0 h-3.5 bg-red-50 text-red-600 border-red-200 shadow-none shrink-0">
-                                        Suspended
+                              {/* Name with avatar and inline suspended status chip */}
+                              <TableCell className={cn("py-4", isSelectionMode ? "pl-2" : "pl-6")}>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                    <span className="text-[10px] font-bold">{getInitials(u.firstName, u.lastName)}</span>
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <p className="text-xs font-bold text-slate-800">{u.fullName}</p>
+                                      {u.suspended && (
+                                        <Badge variant="outline" className="text-[8px] font-bold px-1.5 py-0 h-3.5 bg-red-50 text-red-600 border-red-200 shadow-none shrink-0">
+                                          Suspended
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    {u.isAdmin && (
+                                      <Badge variant="outline" className="text-[8px] font-bold px-1.5 py-0 h-3.5 bg-amber-50 text-amber-600 border-amber-200 shadow-none mt-0.5">
+                                        Admin
                                       </Badge>
                                     )}
                                   </div>
-                                  {u.isAdmin && (
-                                    <Badge variant="outline" className="text-[8px] font-bold px-1.5 py-0 h-3.5 bg-amber-50 text-amber-600 border-amber-200 shadow-none mt-0.5">
-                                      Admin
-                                    </Badge>
-                                  )}
+                                </div>
+                              </TableCell>
+
+                              {/* Email */}
+                              <TableCell>
+                                <span className="font-mono text-[11px] text-slate-500">{u.email}</span>
+                              </TableCell>
+
+                              {/* Type */}
+                              <TableCell>
+                                <span className="text-[11px] text-slate-500 font-medium">{formatType(u.orgUnitPath)}</span>
+                              </TableCell>
+
+                              {/* Actions */}
+                              <TableCell className="text-right pr-6">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all rounded-md"
+                                    onClick={() => openEditDialog(u)}
+                                    title="Edit user"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all rounded-md"
+                                    onClick={() => openResetPasswordDialog(u)}
+                                    title="Reset password"
+                                  >
+                                    <Key className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={cn(
+                                      "h-8 w-8 transition-all rounded-md",
+                                      u.suspended
+                                        ? "text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600"
+                                        : "text-amber-500 hover:bg-amber-50 hover:text-amber-600"
+                                    )}
+                                    onClick={() => openSuspendDialog(u)}
+                                    title={u.suspended ? "Reactivate user" : "Suspend user"}
+                                  >
+                                    {u.suspended ? <Play className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
+                                    onClick={() => openDeleteDialog(u)}
+                                    title="Delete user"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile View: High-End Touchable Cards */}
+                    <div className="block md:hidden space-y-4 p-4 bg-slate-50/20">
+                      {displayedUsers.map((u) => {
+                        const isSuspended = u.suspended
+                        return (
+                          <div
+                            key={u.id}
+                            className={cn(
+                              "relative p-5 rounded-xl border bg-white shadow-sm flex flex-col gap-4 border-slate-100 hover:shadow-md transition-all border-l-4",
+                              isSuspended ? "border-l-red-500" : "border-l-emerald-500"
+                            )}
+                          >
+                            {/* Card Header: Avatar & Info */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                  <span className="text-xs font-bold">{getInitials(u.firstName, u.lastName)}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="text-sm font-bold text-slate-800 truncate leading-none">{u.fullName}</h4>
+                                    {u.suspended && (
+                                      <Badge variant="outline" className="text-[8px] font-extrabold px-1.5 py-0 bg-red-50 text-red-600 border-red-200 uppercase tracking-wider scale-90 shrink-0 leading-none">
+                                        Suspended
+                                      </Badge>
+                                    )}
+                                    {u.isAdmin && (
+                                      <Badge variant="outline" className="text-[8px] font-extrabold px-1.5 py-0 bg-amber-50 text-amber-600 border-amber-200 uppercase tracking-wider scale-90 shrink-0 leading-none">
+                                        Admin
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-xs font-mono text-slate-500 truncate mt-1">{u.email}</p>
                                 </div>
                               </div>
-                            </TableCell>
+                              
+                              {/* Checkbox for batch select */}
+                              {isSelectionMode && (
+                                <Checkbox 
+                                  checked={selectedUserIds.has(u.id)}
+                                  onCheckedChange={() => toggleUserSelection(u.id)}
+                                  className="border-slate-300 w-5 h-5"
+                                />
+                              )}
+                            </div>
 
-                            {/* Email */}
-                            <TableCell>
-                              <span className="font-mono text-[11px] text-slate-500">{u.email}</span>
-                            </TableCell>
+                            {/* Card Body: Type / OU assignment */}
+                            <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100/60">
+                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Type</span>
+                              <span className="font-semibold text-slate-700 bg-slate-50 border border-slate-100 rounded-md px-2 py-0.5">
+                                {formatType(u.orgUnitPath)}
+                              </span>
+                            </div>
 
-                            {/* Type */}
-                            <TableCell>
-                              <span className="text-[11px] text-slate-500 font-medium">{formatType(u.orgUnitPath)}</span>
-                            </TableCell>
-
-                            {/* Actions */}
-                            <TableCell className="text-right pr-6">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all rounded-md"
-                                  onClick={() => openEditDialog(u)}
-                                  title="Edit user"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all rounded-md"
-                                  onClick={() => openResetPasswordDialog(u)}
-                                  title="Reset password"
-                                >
-                                  <Key className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className={cn(
-                                    "h-8 w-8 transition-all rounded-md",
-                                    u.suspended
-                                      ? "text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600"
-                                      : "text-amber-500 hover:bg-amber-50 hover:text-amber-600"
-                                  )}
-                                  onClick={() => openSuspendDialog(u)}
-                                  title={u.suspended ? "Reactivate user" : "Suspend user"}
-                                >
-                                  {u.suspended ? <Play className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
-                                  onClick={() => openDeleteDialog(u)}
-                                  title="Delete user"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                            {/* Card Footer: Touch Quick Actions */}
+                            <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100/60">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 font-bold text-[10px] gap-1 px-3 border-slate-200 text-slate-600 bg-white hover:bg-slate-50 shrink-0"
+                                onClick={() => openEditDialog(u)}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 font-bold text-[10px] gap-1 px-3 border-slate-200 text-slate-600 bg-white hover:bg-slate-50 shrink-0"
+                                onClick={() => openResetPasswordDialog(u)}
+                              >
+                                <Key className="w-3.5 h-3.5" />
+                                Reset
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={cn(
+                                  "h-8 font-bold text-[10px] gap-1 px-3 border-slate-200 shrink-0",
+                                  isSuspended
+                                    ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-100 bg-white"
+                                    : "text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-100 bg-white"
+                                )}
+                                onClick={() => openSuspendDialog(u)}
+                              >
+                                {isSuspended ? (
+                                  <>
+                                    <Play className="w-3.5 h-3.5" />
+                                    Activate
+                                  </>
+                                ) : (
+                                  <>
+                                    <Ban className="w-3.5 h-3.5" />
+                                    Suspend
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 font-bold text-[10px] gap-1 px-3 border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 bg-white shrink-0"
+                                onClick={() => openDeleteDialog(u)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
 
                     {/* Pagination Bar */}
                     {totalPages > 1 && (

@@ -704,8 +704,8 @@ export default function GoogleWorkspacePage() {
                           {/* Client ID field */}
                           <div className="space-y-1">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Client ID</span>
-                            <div className="flex items-center gap-2 max-w-md">
-                              <code className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded font-mono text-[10px] font-bold text-slate-700 select-all tracking-wide text-left block">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 max-w-md w-full">
+                              <code className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded font-mono text-[10px] font-bold text-slate-700 select-all tracking-wide text-left block truncate">
                                 105450959878009279492
                               </code>
                               <Button
@@ -713,7 +713,7 @@ export default function GoogleWorkspacePage() {
                                 size="sm"
                                 variant="outline"
                                 onClick={handleCopyClientId}
-                                className="h-8 font-bold gap-1 text-[10px] shrink-0 border-slate-200 hover:bg-slate-50 active:scale-95 transition-all text-slate-600 hover:text-black bg-white"
+                                className="h-8 font-bold gap-1 text-[10px] shrink-0 border-slate-200 hover:bg-slate-50 active:scale-95 transition-all text-slate-600 hover:text-black bg-white w-full sm:w-auto justify-center"
                               >
                                 {copiedClientId ? (
                                   <>
@@ -731,15 +731,15 @@ export default function GoogleWorkspacePage() {
                           </div>
 
                           {/* OAuth Scopes field */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
+                          <div className="space-y-1 w-full">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">OAuth Scopes</span>
                               <Button
                                 type="button"
                                 size="sm"
                                 variant="ghost"
                                 onClick={handleCopyScopes}
-                                className="h-6 font-bold gap-1 text-[9px] text-slate-500 hover:text-black px-2 hover:bg-slate-50 rounded"
+                                className="h-6 font-bold gap-1 text-[9px] text-slate-500 hover:text-black px-2 hover:bg-slate-50 rounded self-start sm:self-auto"
                               >
                                 {copiedScopes ? (
                                   <>
@@ -754,7 +754,7 @@ export default function GoogleWorkspacePage() {
                                 )}
                               </Button>
                             </div>
-                            <code className="block p-2.5 bg-slate-50 border border-slate-200 rounded text-[9px] font-mono text-slate-500 break-all select-all font-semibold leading-normal bg-slate-50/70 text-left">
+                            <code className="block p-2.5 bg-slate-50 border border-slate-200 rounded text-[9px] font-mono text-slate-500 break-all select-all font-semibold leading-normal bg-slate-50/70 text-left whitespace-pre-wrap">
                               https://www.googleapis.com/auth/admin.directory.user, https://www.googleapis.com/auth/admin.directory.orgunit, https://www.googleapis.com/auth/admin.directory.customer.readonly, https://www.googleapis.com/auth/admin.reports.audit.readonly, https://www.googleapis.com/auth/admin.reports.usage.readonly, https://www.googleapis.com/auth/apps.alerts
                             </code>
                           </div>
@@ -793,38 +793,47 @@ export default function GoogleWorkspacePage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-8">
-                  <div className="flex items-center justify-between max-w-lg mx-auto">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between max-w-lg mx-auto gap-6 md:gap-0">
                     {/* Step 1: Applied */}
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-10 h-10 rounded-full bg-emerald-100 border-2 border-emerald-500 flex items-center justify-center">
+                    <div className="flex flex-row md:flex-col items-center gap-4 md:gap-2">
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 border-2 border-emerald-500 flex items-center justify-center shrink-0">
                         <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                       </div>
-                      <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Applied</span>
+                      <div className="flex flex-col md:items-center text-left md:text-center">
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Applied</span>
+                        <span className="text-[9px] text-slate-400 md:hidden font-medium">Domain details submitted successfully</span>
+                      </div>
                     </div>
 
                     {/* Connector 1 */}
-                    <div className="flex-1 h-0.5 bg-emerald-300 mx-2" />
+                    <div className="hidden md:block flex-1 h-0.5 bg-emerald-300 mx-2" />
 
                     {/* Step 2: Verification (Pulsing) */}
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 border-2 border-blue-400 flex items-center justify-center relative">
+                    <div className="flex flex-row md:flex-col items-center gap-4 md:gap-2">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 border-2 border-blue-400 flex items-center justify-center relative shrink-0">
                         <span className="relative flex h-3 w-3">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
                           <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
                         </span>
                       </div>
-                      <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Verification</span>
+                      <div className="flex flex-col md:items-center text-left md:text-center">
+                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Verification</span>
+                        <span className="text-[9px] text-slate-400 md:hidden font-medium">Authorizing Domain-Wide Delegation</span>
+                      </div>
                     </div>
 
                     {/* Connector 2 */}
-                    <div className="flex-1 h-0.5 bg-slate-200 mx-2" />
+                    <div className="hidden md:block flex-1 h-0.5 bg-slate-200 mx-2" />
 
                     {/* Step 3: Active (Grayed) */}
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-10 h-10 rounded-full bg-slate-100 border-2 border-slate-200 flex items-center justify-center">
+                    <div className="flex flex-row md:flex-col items-center gap-4 md:gap-2">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 border-2 border-slate-200 flex items-center justify-center shrink-0">
                         <CheckCircle2 className="w-5 h-5 text-slate-300" />
                       </div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active</span>
+                      <div className="flex flex-col md:items-center text-left md:text-center">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active</span>
+                        <span className="text-[9px] text-slate-400 md:hidden font-medium">Workspace services activated</span>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -978,7 +987,8 @@ export default function GoogleWorkspacePage() {
                   </CardHeader>
                   <CardContent className="p-6 flex-1 flex flex-col justify-between space-y-4">
                     <div className="space-y-3 flex-1">
-                      <div className="overflow-hidden border border-slate-100 rounded-lg">
+                      {/* Desktop View: Dense Table */}
+                      <div className="hidden md:block overflow-hidden border border-slate-100 rounded-lg">
                         <Table className="text-xs">
                           <TableHeader className="bg-slate-50/50">
                             <TableRow>
@@ -1007,6 +1017,35 @@ export default function GoogleWorkspacePage() {
                             })}
                           </TableBody>
                         </Table>
+                      </div>
+
+                      {/* Mobile View: High-End Interactive Counts Grid */}
+                      <div className="block md:hidden grid grid-cols-2 gap-3">
+                        {OU_CONFIG.map((ou) => {
+                          const data = ouCounts[ou.path] || { total: 0, active: 0, suspended: 0 }
+                          return (
+                            <div
+                              key={ou.path}
+                              className="p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 bg-white border-slate-100 hover:shadow-sm"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={cn("p-1.5 rounded-lg border shrink-0 bg-slate-50 border-slate-100")}>
+                                  <ou.icon className={cn("w-4 h-4", ou.iconColor)} />
+                                </div>
+                                <span className="text-[11px] font-bold text-slate-700 truncate">{ou.label}</span>
+                              </div>
+                              <div className="space-y-1.5">
+                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider leading-none">Total Users</p>
+                                <div className="flex items-baseline justify-between gap-1">
+                                  <p className="text-lg font-headline font-bold text-slate-900 leading-none">{data.total}</p>
+                                  <span className="text-[8px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded px-1 py-0.5 leading-none shrink-0">
+                                    {data.active} Act
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
 
                       {/* Instruct user to manually create missing default OUs */}

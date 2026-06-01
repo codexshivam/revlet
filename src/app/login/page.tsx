@@ -176,34 +176,35 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500">
-      <div className="w-full max-w-[540px] space-y-6 sm:space-y-8">
+    <div className="min-h-screen bg-gradient-to-tr from-slate-50 via-slate-100/50 to-blue-50/30 flex flex-col items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500">
+      <div className="w-full max-w-[480px] space-y-6 sm:space-y-8">
         
         {/* LOGO */}
         <div className="text-center select-none">
-          <h1 className="text-[20px] sm:text-[22px] font-headline font-bold tracking-[0.1em] text-[#191c1e] ml-[0.1em]">
+          <h1 className="text-2xl sm:text-3xl font-headline font-bold tracking-[0.15em] text-[#191c1e] ml-[0.15em] uppercase">
             REVLET
           </h1>
         </div>
 
         {/* CARD CONTAINER */}
-        <div className="bg-white border border-[#eceef0] shadow-[0px_4px_12px_rgba(15,23,42,0.03)] rounded-lg p-6 sm:p-10 space-y-5 sm:space-y-6">
+        <div className="bg-white border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl p-6 sm:p-10 space-y-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/30 via-primary to-primary/30" />
           
           <div className="text-center space-y-2">
-            <h2 className="text-[22px] sm:text-[24px] font-headline font-semibold text-[#191c1e] tracking-tight">
+            <h2 className="text-2xl font-headline font-bold text-[#191c1e] tracking-tight">
               Welcome back
             </h2>
-            <p className="text-xs text-[#45464d] font-normal leading-normal whitespace-normal sm:whitespace-nowrap px-2">
+            <p className="text-xs text-[#45464d] font-normal leading-normal px-2">
               Enter your credentials to access the administrative dashboard.
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4">
             {/* WORK EMAIL */}
             <div className="space-y-2">
               <Label 
                 htmlFor="email" 
-                className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+                className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
               >
                 Work Email
               </Label>
@@ -222,7 +223,7 @@ export default function LoginPage() {
               <div className="flex items-center justify-between">
                 <Label 
                   htmlFor="password" 
-                  className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+                  className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
                 >
                   Security Password
                 </Label>
@@ -236,7 +237,7 @@ export default function LoginPage() {
                       Forgot password?
                     </button>
                   </DialogTrigger>
-                  <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] border border-[#eceef0] shadow-[0px_12px_32px_rgba(15,23,42,0.08)] rounded-lg p-6 bg-white animate-in zoom-in duration-300">
+                  <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] border border-slate-100 shadow-[0_12px_32px_rgba(0,0,0,0.04)] rounded-xl p-6 bg-white animate-in zoom-in duration-300">
                     <DialogHeader className="space-y-2 text-left">
                       <DialogTitle className="font-headline font-semibold text-lg text-[#191c1e]">
                         Reset your password
@@ -247,7 +248,7 @@ export default function LoginPage() {
                     </DialogHeader>
                     <form onSubmit={handleForgotPassword} className="space-y-4 pt-2">
                       <div className="space-y-2">
-                        <Label htmlFor="reset-email" className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+                        <Label htmlFor="reset-email" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                           Work Email
                         </Label>
                         <Input 
@@ -255,7 +256,7 @@ export default function LoginPage() {
                           type="email" 
                           placeholder="hello@world.com" 
                           required 
-                          className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white text-xs font-normal rounded"
+                          className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white text-xs font-normal rounded px-3"
                           value={resetEmail}
                           onChange={(e) => setResetEmail(e.target.value)}
                         />
@@ -300,7 +301,7 @@ export default function LoginPage() {
             {/* SUBMIT BUTTON */}
             <Button 
               type="submit" 
-              className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.15)] flex items-center justify-center"
+              className="w-full font-semibold h-11 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.1)] flex items-center justify-center"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -323,7 +324,7 @@ export default function LoginPage() {
               New user?{" "}
               <Link 
                 href="/signup" 
-                className="text-[#191c1e] font-semibold hover:underline transition-colors"
+                className="text-[#191c1e] font-bold hover:underline transition-colors"
               >
                 Create an account
               </Link>
@@ -333,15 +334,15 @@ export default function LoginPage() {
 
         {/* FOOTER */}
         <div className="text-center select-none px-4 space-y-2">
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em] leading-normal">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] leading-normal">
             © 2026 REVLET PLATFORM • HELLO@REVLET.ME
           </div>
-          <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 uppercase tracking-[0.15em]">
+          <div className="flex items-center justify-center gap-2.5 text-[10px] text-slate-400 uppercase tracking-[0.15em]">
             <a 
               href="https://revlet.me/privacy/" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="hover:text-[#191c1e] transition-colors font-medium"
+              className="hover:text-[#191c1e] transition-colors font-semibold"
             >
               Privacy Policy
             </a>
@@ -350,7 +351,7 @@ export default function LoginPage() {
               href="https://revlet.me/terms/" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="hover:text-[#191c1e] transition-colors font-medium"
+              className="hover:text-[#191c1e] transition-colors font-semibold"
             >
               Terms of Service
             </a>

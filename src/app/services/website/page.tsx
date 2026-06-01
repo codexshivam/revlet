@@ -282,9 +282,9 @@ export default function WebsiteManagementPage() {
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Website Management</h1>
-            <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 self-start sm:self-auto">
               <div className="flex items-center gap-1.5">
                 <Cloud className="w-3 h-3" />
                 Powered by Cloudflare
@@ -298,7 +298,7 @@ export default function WebsiteManagementPage() {
         {selectedOrg?.siteActiveOn === true ? (
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="bg-white border-slate-200 shadow-sm md:col-span-2">
+              <Card className="bg-white border-slate-200 shadow-sm md:col-span-2 rounded-xl">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resource Quota</CardTitle>
@@ -337,7 +337,7 @@ export default function WebsiteManagementPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-primary/5 border-primary/10 shadow-sm flex flex-col justify-center p-6 space-y-2">
+              <Card className="bg-primary/5 border-primary/10 shadow-sm flex flex-col justify-center p-6 space-y-2 rounded-xl">
                 <div className="flex items-center gap-2 text-primary">
                   <Sparkles className="w-4 h-4" />
                   <h4 className="text-[10px] font-bold uppercase tracking-widest">Manage website content</h4>
@@ -348,8 +348,8 @@ export default function WebsiteManagementPage() {
               </Card>
             </div>
 
-            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between px-6 py-4">
+            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+              <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 sm:px-6 py-4">
                 <div className="space-y-1">
                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Change Ledger</CardTitle>
                   <p className="text-[10px] text-slate-500 font-medium">Comprehensive log of modifications requested for the organization's website</p>
@@ -358,7 +358,7 @@ export default function WebsiteManagementPage() {
                   <DialogTrigger asChild>
                     <Button 
                       size="sm" 
-                      className="font-bold h-9 bg-slate-900 hover:bg-black text-white px-6 shadow-md shadow-slate-200 disabled:opacity-50"
+                      className="font-bold h-9 bg-slate-900 hover:bg-black text-white w-full sm:w-auto px-6 shadow-md shadow-slate-200 disabled:opacity-50"
                       disabled={isQuotaExceeded}
                     >
                       <CirclePlus className="w-3.5 h-3.5 mr-2" />
@@ -411,85 +411,175 @@ export default function WebsiteManagementPage() {
                 </Dialog>
               </CardHeader>
               <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/30 border-b border-slate-100">
-                      <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-wider">Request Title</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider">Request Date</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider">Updated On</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-wider">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {modifications.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={4} className="py-24 text-center text-slate-400 text-xs italic font-medium">
-                          <div className="flex flex-col items-center gap-2">
-                             <Server className="w-8 h-8 text-slate-100" />
-                             No active modification records in the global ledger.
-                          </div>
-                        </TableCell>
+                {/* DESKTOP TABLE VIEW */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/30 border-b border-slate-100">
+                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-wider">Request Title</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider">Request Date</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider">Updated On</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-wider">Status</TableHead>
                       </TableRow>
-                    ) : (
-                      modifications.map((mod) => (
-                        <React.Fragment key={mod.id}>
-                          <TableRow 
-                            className={cn(
-                              "hover:bg-slate-50/50 border-b border-b-slate-50 cursor-pointer transition-colors group",
-                              expandedModId === mod.id && "bg-slate-50/30"
-                            )}
-                            onClick={() => toggleRow(mod.id)}
-                          >
-                            <TableCell className="font-semibold text-slate-800 text-xs pl-8">
-                              <div className="flex items-center gap-3">
-                                {expandedModId === mod.id ? (
-                                  <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-colors" />
-                                ) : (
-                                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-colors" />
-                                )}
-                                {mod.title}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-slate-500 text-[11px] font-bold font-mono">
-                              {mod.requestedAt?.toDate?.().toLocaleDateString('en-GB') || 'Syncing...'}
-                            </TableCell>
-                            <TableCell className="text-slate-400 text-[11px] font-bold font-mono">
-                              {mod.updatedAt?.toDate?.().toLocaleDateString('en-GB') || '--'}
-                            </TableCell>
-                            <TableCell className="text-right pr-8">
-                              <Badge className={cn(
-                                "text-[9px] font-bold px-2.5 py-0.5 border shadow-none rounded-sm uppercase tracking-tighter",
-                                mod.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
-                                mod.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" :
-                                mod.status === "Pending" ? "bg-amber-50 text-amber-600 border-amber-100" :
-                                "bg-slate-50 text-slate-500 border-slate-200"
-                              )}>
-                                {mod.status}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                          {expandedModId === mod.id && (
-                            <TableRow className="bg-slate-50/20 border-b border-slate-100">
-                              <TableCell colSpan={4} className="p-8">
-                                <div className="space-y-3 max-w-4xl">
-                                  <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                    <Sparkles className="w-3 h-3" />
-                                    Modification Instructions
-                                  </h5>
-                                  <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
-                                    <p className="text-xs text-slate-600 font-medium leading-relaxed whitespace-pre-wrap">
-                                      {mod.description}
-                                    </p>
-                                  </div>
+                    </TableHeader>
+                    <TableBody>
+                      {modifications.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="py-24 text-center text-slate-400 text-xs italic font-medium">
+                            <div className="flex flex-col items-center gap-2">
+                               <Server className="w-8 h-8 text-slate-100" />
+                               No active modification records in the global ledger.
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        modifications.map((mod) => (
+                          <React.Fragment key={mod.id}>
+                            <TableRow 
+                              className={cn(
+                                "hover:bg-slate-50/50 border-b border-b-slate-50 cursor-pointer transition-colors group",
+                                expandedModId === mod.id && "bg-slate-50/30"
+                              )}
+                              onClick={() => toggleRow(mod.id)}
+                            >
+                              <TableCell className="font-semibold text-slate-800 text-xs pl-8">
+                                <div className="flex items-center gap-3">
+                                  {expandedModId === mod.id ? (
+                                    <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-colors" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-colors" />
+                                  )}
+                                  {mod.title}
                                 </div>
                               </TableCell>
+                              <TableCell className="text-slate-500 text-[11px] font-bold font-mono">
+                                {mod.requestedAt?.toDate?.().toLocaleDateString('en-GB') || 'Syncing...'}
+                              </TableCell>
+                              <TableCell className="text-slate-400 text-[11px] font-bold font-mono">
+                                {mod.updatedAt?.toDate?.().toLocaleDateString('en-GB') || '--'}
+                              </TableCell>
+                              <TableCell className="text-right pr-8">
+                                <Badge className={cn(
+                                  "text-[9px] font-bold px-2.5 py-0.5 border shadow-none rounded-sm uppercase tracking-tighter",
+                                  mod.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                                  mod.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" :
+                                  mod.status === "Pending" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                                  "bg-slate-50 text-slate-500 border-slate-200"
+                                )}>
+                                  {mod.status}
+                                </Badge>
+                              </TableCell>
                             </TableRow>
+                            {expandedModId === mod.id && (
+                              <TableRow className="bg-slate-50/20 border-b border-slate-100">
+                                <TableCell colSpan={4} className="p-8">
+                                  <div className="space-y-3 max-w-4xl">
+                                    <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                      <Sparkles className="w-3 h-3" />
+                                      Modification Instructions
+                                    </h5>
+                                    <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+                                      <p className="text-xs text-slate-600 font-medium leading-relaxed whitespace-pre-wrap">
+                                        {mod.description}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </React.Fragment>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* MOBILE RESPONSIVE CARD LIST VIEW */}
+                <div className="block md:hidden space-y-6 py-6 px-4">
+                  {modifications.length === 0 ? (
+                    <div className="py-16 text-center text-slate-400 text-xs italic font-medium space-y-2">
+                      <Server className="w-8 h-8 text-slate-100 mx-auto" />
+                      <p>No active modification records in the global ledger.</p>
+                    </div>
+                  ) : (
+                    modifications.map((mod) => {
+                      const isExpanded = expandedModId === mod.id
+                      return (
+                        <div 
+                          key={mod.id}
+                          className={cn(
+                            "bg-white border rounded-xl p-6 relative overflow-hidden transition-all shadow-sm flex flex-col gap-4 cursor-pointer hover:border-slate-300",
+                            isExpanded ? "border-primary ring-2 ring-primary/5 shadow-primary/5" : "border-slate-200"
                           )}
-                        </React.Fragment>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                          onClick={() => toggleRow(mod.id)}
+                        >
+                          {/* Left visual accent colored strip */}
+                          <div 
+                            className={cn(
+                              "absolute left-0 top-0 bottom-0 w-[5px]",
+                              mod.status === "Completed" ? "bg-emerald-500" :
+                              mod.status === "Rejected" ? "bg-red-500" :
+                              mod.status === "Pending" ? "bg-amber-500" : "bg-slate-400"
+                            )}
+                          />
+
+                          {/* Top Row: Title & Status Badge */}
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="font-headline font-bold text-slate-800 text-sm leading-snug">{mod.title}</span>
+                            <Badge className={cn(
+                              "text-[9px] font-bold px-2.5 py-0.5 border shadow-none rounded-sm uppercase tracking-tighter shrink-0",
+                              mod.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                              mod.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" :
+                              mod.status === "Pending" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                              "bg-slate-50 text-slate-500 border-slate-200"
+                            )}>
+                              {mod.status}
+                            </Badge>
+                          </div>
+
+                          {/* Middle Row: Request & Update Dates */}
+                          <div className="grid grid-cols-2 gap-3 text-slate-500 text-xs">
+                            <div>
+                              <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5 leading-none">Requested</p>
+                              <p className="font-mono font-bold text-slate-700">
+                                {mod.requestedAt?.toDate?.().toLocaleDateString('en-GB') || 'Syncing...'}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5 leading-none">Updated On</p>
+                              <p className="font-mono font-bold text-slate-700">
+                                {mod.updatedAt?.toDate?.().toLocaleDateString('en-GB') || '--'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Bottom Row: Details Accordion Toggle */}
+                          <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-1 text-[10px] font-bold text-primary">
+                            <span>{isExpanded ? "Hide details" : "View details"}</span>
+                            <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-200 shrink-0", isExpanded && "rotate-180")} />
+                          </div>
+
+                          {/* Expanded Description Accordion */}
+                          {isExpanded && (
+                            <div className="pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                              <div className="space-y-2">
+                                <h5 className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+                                  <Sparkles className="w-3 h-3 text-slate-400" />
+                                  Modification Instructions
+                                </h5>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-150">
+                                  <p className="text-xs text-slate-600 font-medium leading-relaxed whitespace-pre-wrap">
+                                    {mod.description}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>

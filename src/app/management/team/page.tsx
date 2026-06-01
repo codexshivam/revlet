@@ -54,17 +54,25 @@ function TeamTableSkeleton() {
   return (
     <div className="w-full divide-y divide-slate-100 animate-pulse bg-white">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center justify-between py-5 pl-8 pr-8">
-          <div className="flex items-center gap-4">
-            <div className="w-9 h-9 bg-slate-100 rounded-full" />
-            <div className="flex flex-col gap-2">
-              <div className="h-4 w-32 bg-slate-200 rounded" />
-              <div className="h-3 w-24 bg-slate-100 rounded" />
+        <div key={i} className="p-4 sm:p-6 md:py-5 md:px-8 space-y-3 md:space-y-0 md:flex md:items-center md:justify-between">
+          <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-slate-100 rounded-full" />
+              <div className="flex flex-col gap-2">
+                <div className="h-4 w-32 bg-slate-200 rounded" />
+                <div className="h-3 w-24 bg-slate-100 rounded" />
+              </div>
+            </div>
+            <div className="h-5 w-16 bg-slate-100 rounded md:hidden" />
+          </div>
+          <div className="flex items-center justify-between md:contents w-full md:w-auto pt-1 md:pt-0">
+            <div className="h-4 w-28 bg-slate-150 rounded hidden md:block" />
+            <div className="h-5 w-16 bg-slate-100 rounded hidden md:block" />
+            <div className="flex items-center gap-2 md:block">
+              <div className="h-3 w-12 bg-slate-100 rounded md:hidden" />
+              <div className="h-5 w-10 bg-slate-100 rounded-full" />
             </div>
           </div>
-          <div className="h-4 w-28 bg-slate-150 rounded hidden md:block" />
-          <div className="h-5 w-16 bg-slate-100 rounded" />
-          <div className="h-5 w-10 bg-slate-100 rounded-full" />
         </div>
       ))}
     </div>
@@ -209,75 +217,77 @@ export default function TeamManagementPage() {
 
   return (
     <DashboardShell>
-      <div className="space-y-8 animate-in fade-in duration-500">
-        <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Management</span>
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Team Management Panel</h1>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="font-bold gap-2 bg-primary hover:bg-primary/95 text-white px-6 rounded-lg h-10 shadow-md shadow-primary/10">
-                  <UserPlus className="w-4 h-4" />
-                  Invite Member
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md bg-white p-0 overflow-hidden border border-slate-200 rounded-lg">
-                <DialogHeader className="border-b border-slate-100 bg-white p-6">
-                  <DialogTitle className="font-headline font-semibold text-lg text-slate-900">Invite Team Member</DialogTitle>
-                  <p className="text-slate-400 text-xs mt-1">Authorize administrative access for your staff.</p>
-                </DialogHeader>
-                <div className="p-6 space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="member-name" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Staff Full Name</Label>
-                    <Input 
-                      id="member-name" 
-                      placeholder="e.g. Rajesh Karki" 
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="member-email" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Staff Work Email</Label>
-                    <Input 
-                      id="member-email" 
-                      type="email" 
-                      placeholder="staff@institution.edu.np" 
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="member-org" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Assign to Organization</Label>
-                    <Select 
-                      value={formData.organizationId} 
-                      onValueChange={(v) => setFormData({ ...formData, organizationId: v })}
-                    >
-                      <SelectTrigger id="member-org" className="h-10 text-xs font-semibold border-slate-200 bg-white rounded">
-                        <SelectValue placeholder="Select organization" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {orgs.map(org => (
-                          <SelectItem key={org.id} value={org.id} className="text-xs">{org.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="rounded text-xs font-bold h-9">Cancel</Button>
-                  <Button onClick={handleInvite} disabled={isSubmitting} className="bg-primary hover:bg-primary/95 text-white font-bold h-9 px-6 rounded text-xs">
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Send Invitation"}
+      <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500">
+        <div className="flex flex-col gap-4 sm:gap-1">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Management</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Team Management Panel</h1>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full sm:w-auto font-bold gap-2 bg-primary hover:bg-primary/95 text-white px-6 rounded-lg h-10 shadow-md shadow-primary/10">
+                    <UserPlus className="w-4 h-4" />
+                    Invite Member
                   </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md bg-white p-0 overflow-hidden border border-slate-200 rounded-lg">
+                  <DialogHeader className="border-b border-slate-100 bg-white p-6">
+                    <DialogTitle className="font-headline font-semibold text-lg text-slate-900">Invite Team Member</DialogTitle>
+                    <p className="text-slate-400 text-xs mt-1">Authorize administrative access for your staff.</p>
+                  </DialogHeader>
+                  <div className="p-6 space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="member-name" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Staff Full Name</Label>
+                      <Input 
+                        id="member-name" 
+                        placeholder="e.g. Rajesh Karki" 
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="member-email" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Staff Work Email</Label>
+                      <Input 
+                        id="member-email" 
+                        type="email" 
+                        placeholder="staff@institution.edu.np" 
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="member-org" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Assign to Organization</Label>
+                      <Select 
+                        value={formData.organizationId} 
+                        onValueChange={(v) => setFormData({ ...formData, organizationId: v })}
+                      >
+                        <SelectTrigger id="member-org" className="h-10 text-xs font-semibold border-slate-200 bg-white rounded">
+                          <SelectValue placeholder="Select organization" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {orgs.map(org => (
+                            <SelectItem key={org.id} value={org.id} className="text-xs">{org.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-2">
+                    <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto rounded text-xs font-bold h-9">Cancel</Button>
+                    <Button onClick={handleInvite} disabled={isSubmitting} className="w-full sm:w-auto bg-primary hover:bg-primary/95 text-white font-bold h-9 px-6 rounded text-xs">
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Send Invitation"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </div>
 
         <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-lg">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between py-4 px-8">
+          <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between py-4 px-4 sm:px-8">
             <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Access Directory</CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-[9px] font-bold h-5 px-2 bg-white rounded">
@@ -299,21 +309,66 @@ export default function TeamManagementPage() {
                 </div>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50/30 border-b border-slate-200">
-                    <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-wider text-slate-400">Team Member</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-400">Associated Organization</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-400">Status</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-wider text-slate-400">Access Toggle</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* Desktop View */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/30 border-b border-slate-200">
+                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-wider text-slate-400">Team Member</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-400">Associated Organization</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-400">Status</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-wider text-slate-400">Access Toggle</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {members.map((member) => (
+                        <TableRow key={member.id} className="group hover:bg-[#F8FAFC] transition-colors border-b border-slate-100 last:border-0">
+                          <TableCell className="pl-8 py-5">
+                            <div className="flex items-center gap-4">
+                              <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center group-hover:bg-primary/5 transition-all font-headline font-bold text-xs text-slate-400 group-hover:text-primary">
+                                {member.name.substring(0, 1).toUpperCase()}
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-bold text-slate-800 text-sm leading-none">{member.name}</span>
+                                <span className="text-[10px] text-slate-400 font-medium">{member.email}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-3.5 h-3.5 text-slate-300" />
+                              <span className="text-xs font-bold text-slate-600">{member.organizationName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={`text-[9px] px-2 py-0.5 h-5 font-bold shadow-none rounded border transition-colors
+                              ${member.status === "Active" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-100"}`}>
+                              {member.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right pr-8">
+                            <div className="flex items-center justify-end gap-3">
+                              <Switch 
+                                checked={member.status === "Active"} 
+                                onCheckedChange={() => toggleStatus(member)}
+                                className="scale-90" 
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile View */}
+                <div className="block md:hidden divide-y divide-slate-100">
                   {members.map((member) => (
-                    <TableRow key={member.id} className="group hover:bg-[#F8FAFC] transition-colors border-b border-slate-100 last:border-0">
-                      <TableCell className="pl-8 py-5">
-                        <div className="flex items-center gap-4">
-                          <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center group-hover:bg-primary/5 transition-all font-headline font-bold text-xs text-slate-400 group-hover:text-primary">
+                    <div key={member.id} className="p-4 space-y-4 hover:bg-[#F8FAFC]/50 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-headline font-bold text-xs text-slate-500">
                             {member.name.substring(0, 1).toUpperCase()}
                           </div>
                           <div className="flex flex-col gap-0.5">
@@ -321,32 +376,30 @@ export default function TeamManagementPage() {
                             <span className="text-[10px] text-slate-400 font-medium">{member.email}</span>
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-3.5 h-3.5 text-slate-300" />
-                          <span className="text-xs font-bold text-slate-600">{member.organizationName}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
                         <Badge className={`text-[9px] px-2 py-0.5 h-5 font-bold shadow-none rounded border transition-colors
                           ${member.status === "Active" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-100"}`}>
                           {member.status}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-8">
-                        <div className="flex items-center justify-end gap-3">
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-1.5 text-slate-600">
+                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="text-xs font-semibold">{member.organizationName}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Access</span>
                           <Switch 
                             checked={member.status === "Active"} 
                             onCheckedChange={() => toggleStatus(member)}
                             className="scale-90" 
                           />
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

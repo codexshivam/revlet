@@ -122,21 +122,22 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500">
-      <div className="w-full max-w-[540px] space-y-6 sm:space-y-8">
+    <div className="min-h-screen bg-gradient-to-tr from-slate-50 via-slate-100/50 to-blue-50/30 flex flex-col items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500">
+      <div className="w-full max-w-[480px] space-y-6 sm:space-y-8">
         
         {/* LOGO */}
         <div className="text-center select-none">
-          <h1 className="text-[20px] sm:text-[22px] font-headline font-bold tracking-[0.1em] text-[#191c1e] ml-[0.1em]">
+          <h1 className="text-2xl sm:text-3xl font-headline font-bold tracking-[0.15em] text-[#191c1e] ml-[0.15em] uppercase">
             REVLET
           </h1>
         </div>
 
         {/* CARD CONTAINER */}
-        <div className="bg-white border border-[#eceef0] shadow-[0px_4px_12px_rgba(15,23,42,0.03)] rounded-lg p-6 sm:p-10 space-y-5 sm:space-y-6">
+        <div className="bg-white border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl p-6 sm:p-10 space-y-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/30 via-primary to-primary/30" />
           
           <div className="text-center space-y-2">
-            <h2 className="text-[22px] sm:text-[24px] font-headline font-semibold text-[#191c1e] tracking-tight">
+            <h2 className="text-2xl font-headline font-bold text-[#191c1e] tracking-tight">
               Create Account
             </h2>
             <p className="text-xs text-[#45464d] font-normal leading-normal max-w-[320px] mx-auto px-2">
@@ -144,12 +145,12 @@ export default function SignupPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSignup} className="space-y-4 sm:space-y-5">
+          <form onSubmit={handleSignup} className="space-y-4">
             {/* FULL PROFILE NAME */}
             <div className="space-y-2">
               <Label 
                 htmlFor="name" 
-                className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+                className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
               >
                 Full Profile Name
               </Label>
@@ -167,7 +168,7 @@ export default function SignupPage() {
             <div className="space-y-2">
               <Label 
                 htmlFor="email" 
-                className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+                className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
               >
                 Work Email
               </Label>
@@ -186,7 +187,7 @@ export default function SignupPage() {
             <div className="space-y-2">
               <Label 
                 htmlFor="password" 
-                className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block"
+                className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
               >
                 New Secure Password
               </Label>
@@ -218,7 +219,7 @@ export default function SignupPage() {
             {/* SUBMIT BUTTON */}
             <Button 
               type="submit" 
-              className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.15)] flex items-center justify-center"
+              className="w-full font-semibold h-11 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.1)] flex items-center justify-center"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -235,11 +236,11 @@ export default function SignupPage() {
           {/* LEGAL TERMS INFO */}
           <p className="text-[10px] text-[#45464d] text-center font-normal leading-normal px-2 tracking-wide pt-1">
             By clicking "Create Account", you agree to our{" "}
-            <button className="underline font-semibold hover:text-[#191c1e] transition-colors">
+            <button className="underline font-bold hover:text-[#191c1e] transition-colors">
               Terms of Service
             </button>{" "}
             and{" "}
-            <button className="underline font-semibold hover:text-[#191c1e] transition-colors">
+            <button className="underline font-bold hover:text-[#191c1e] transition-colors">
               Privacy Policy
             </button>
             .
@@ -254,7 +255,7 @@ export default function SignupPage() {
               Already have an account?{" "}
               <Link 
                 href="/login" 
-                className="text-[#191c1e] font-semibold hover:underline transition-colors"
+                className="text-[#191c1e] font-bold hover:underline transition-colors"
               >
                 Sign in
               </Link>
@@ -263,7 +264,7 @@ export default function SignupPage() {
         </div>
 
         {/* FOOTER */}
-        <div className="text-center text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em] select-none px-4 leading-normal">
+        <div className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] select-none px-4 leading-normal">
           © 2026 REVLET PLATFORM • HELLO@REVLET.ME
         </div>
       </div>

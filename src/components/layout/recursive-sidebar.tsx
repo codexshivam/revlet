@@ -65,7 +65,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
       children: [
         { title: "Users", icon: Users, href: "/services/workspace/users" },
         { title: "Classes & Sections", icon: Library, href: "/management/academics" },
-        { title: "Storage Policies", icon: HardDrive, href: "/services/workspace/storage" },
+        { title: "Storage", icon: HardDrive, href: "/services/workspace/storage" },
         { title: "Deactivated Users", icon: UserMinus, href: "/services/workspace/deactivated" },
         { title: "Alumni Manager", icon: GraduationCap, href: "/services/workspace/alumni" },
       ]

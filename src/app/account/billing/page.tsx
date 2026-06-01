@@ -46,6 +46,7 @@ import {
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { cn } from "@/lib/utils"
 
 interface Organization {
   id: string
@@ -68,7 +69,7 @@ function PaymentTableSkeleton() {
   return (
     <div className="w-full divide-y divide-slate-100 animate-pulse bg-white">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center justify-between py-5 pl-8 pr-8">
+        <div key={i} className="flex items-center justify-between py-5 pl-4 sm:pl-8 pr-4 sm:pr-8">
           <div className="flex flex-col gap-2">
             <div className="h-4 w-28 bg-slate-200 rounded" />
             <div className="h-3 w-16 bg-slate-100 rounded" />
@@ -310,9 +311,9 @@ export default function BillingPage() {
           <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Manage Payments</h1>
         </div>
         
-        <Card className="bg-white border-slate-200 shadow-sm rounded-lg overflow-hidden">
-          <CardContent className="pt-6">
-            <div className="bg-slate-50 border border-slate-100 p-6 rounded-lg flex flex-col md:flex-row items-center justify-between gap-4">
+        <Card className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden">
+          <CardContent className="p-4 sm:p-6 md:p-8">
+            <div className="bg-slate-50 border border-slate-100 p-4 sm:p-6 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="space-y-1">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Outstanding Balance</span>
                 <p className="text-3xl font-headline font-bold text-slate-900">रू {totalOutstanding.toLocaleString()}</p>
@@ -320,18 +321,18 @@ export default function BillingPage() {
               
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="lg" className="bg-primary hover:bg-primary/95 text-white font-bold h-11 px-8 shadow-md shadow-primary/10 rounded-lg">
+                  <Button size="lg" className="bg-primary hover:bg-primary/95 text-white font-bold h-11 w-full md:w-auto px-8 shadow-md shadow-primary/10 rounded-lg">
                     Submit Payment Voucher
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-xl bg-white p-6 border border-slate-200 rounded-lg shadow-2xl space-y-6">
+                <DialogContent className="max-w-xl bg-white p-5 sm:p-6 border border-slate-200 rounded-xl shadow-2xl space-y-6">
                   <DialogHeader className="p-0">
                     <DialogTitle className="text-lg font-headline font-semibold text-slate-900">Submit Payment Voucher</DialogTitle>
                     <p className="text-slate-400 text-xs mt-1">Upload proof of bank transfer for manual verification.</p>
                   </DialogHeader>
 
-                  {/* Compact Bank Details Box in clean row grid */}
-                  <div className="bg-slate-50 p-4 border border-slate-200/80 rounded-lg grid grid-cols-3 gap-2 text-xs">
+                  {/* Compact Bank Details Box in clean responsive grid */}
+                  <div className="bg-slate-50 p-4 border border-slate-200/80 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                     <div>
                       <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-1 leading-none">Beneficiary</p>
                       <p className="font-bold text-slate-800 uppercase truncate">Shivam Yadav</p>
@@ -411,8 +412,8 @@ export default function BillingPage() {
           </CardContent>
         </Card>
  
-        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-lg">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-200 px-8 py-4">
+        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+          <CardHeader className="bg-slate-50/50 border-b border-slate-200 px-4 sm:px-8 py-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment Submission History</CardTitle>
               <Badge variant="outline" className="text-[10px] font-bold text-slate-400 h-5 px-2 bg-white rounded">
@@ -429,51 +430,134 @@ export default function BillingPage() {
                 <p className="text-sm font-bold text-slate-400">No payment records found.</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50/50 border-b border-slate-200">
-                    <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 text-slate-400 tracking-widest">Voucher ID</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Institution</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Amount (NPR)</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Submitted Date</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Status</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* DESKTOP TABLE VIEW */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/50 border-b border-slate-200">
+                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 text-slate-400 tracking-widest">Voucher ID</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Institution</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Amount (NPR)</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Submitted Date</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Status</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {vouchers.map((v) => (
+                        <TableRow key={v.id} className="hover:bg-[#F8FAFC] transition-colors border-b border-slate-100 last:border-0">
+                          <TableCell className="font-bold text-slate-700 py-5 pl-8">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono">{v.id.substring(0, 8)}...</span>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-slate-300 hover:text-primary transition-colors"
+                                onClick={() => handleCopyId(v.id)}
+                              >
+                                {copiedId === v.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-slate-600 text-xs font-semibold">{v.organizationName}</TableCell>
+                          <TableCell className="font-mono font-bold text-slate-900 text-xs">रू {v.amount.toLocaleString()}</TableCell>
+                          <TableCell className="text-slate-400 text-xs font-medium">
+                            {v.submittedAt?.toDate?.().toLocaleDateString() || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border
+                              ${v.status === "Verified" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
+                                v.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" : 
+                                "bg-amber-50 text-amber-600 border-amber-100"}`}>
+                              {v.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right pr-8">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 gap-1.5 text-slate-500 hover:text-primary hover:bg-primary/5 text-xs font-bold rounded"
+                              onClick={() => {
+                                if (v.voucherUrl) {
+                                  window.open(v.voucherUrl, "_blank")
+                                } else {
+                                  toast({ 
+                                    variant: "destructive",
+                                    title: "Document Not Found", 
+                                    description: `Receipt file "${v.voucherFileName}" does not have a public upload URL.` 
+                                  })
+                                }
+                              }}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              View Receipt
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* MOBILE RESPONSIVE CARD LIST VIEW */}
+                <div className="block md:hidden space-y-6 py-6 px-4">
                   {vouchers.map((v) => (
-                    <TableRow key={v.id} className="hover:bg-[#F8FAFC] transition-colors border-b border-slate-100 last:border-0">
-                      <TableCell className="font-bold text-slate-700 py-5 pl-8">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono">{v.id.substring(0, 8)}...</span>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-6 w-6 text-slate-300 hover:text-primary transition-colors"
-                            onClick={() => handleCopyId(v.id)}
-                          >
-                            {copiedId === v.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-slate-600 text-xs font-semibold">{v.organizationName}</TableCell>
-                      <TableCell className="font-mono font-bold text-slate-900 text-xs">रू {v.amount.toLocaleString()}</TableCell>
-                      <TableCell className="text-slate-400 text-xs font-medium">
-                        {v.submittedAt?.toDate?.().toLocaleDateString() || 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border
+                    <div 
+                      key={v.id}
+                      className="bg-white border border-slate-200 rounded-xl p-6 relative overflow-hidden transition-all shadow-sm flex flex-col gap-4"
+                    >
+                      {/* Left status color indicator strip */}
+                      <div 
+                        className={cn(
+                          "absolute left-0 top-0 bottom-0 w-[5px]",
+                          v.status === "Verified" ? "bg-emerald-500" :
+                          v.status === "Rejected" ? "bg-red-500" : "bg-amber-500"
+                        )}
+                      />
+
+                      {/* Top Row: Institution Name & Status Badge */}
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="font-headline font-bold text-slate-800 text-sm leading-snug">{v.organizationName}</span>
+                        <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border uppercase tracking-wider shrink-0
                           ${v.status === "Verified" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
                             v.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" : 
                             "bg-amber-50 text-amber-600 border-amber-100"}`}>
                           {v.status}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-8">
+                      </div>
+
+                      {/* Middle Row: Amount & Date */}
+                      <div className="grid grid-cols-2 gap-3 text-slate-500 text-xs">
+                        <div>
+                          <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5 leading-none">Amount</p>
+                          <p className="font-mono font-bold text-slate-900 text-sm">रू {v.amount.toLocaleString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5 leading-none">Submitted Date</p>
+                          <p className="font-medium text-slate-600">{v.submittedAt?.toDate?.().toLocaleDateString() || 'N/A'}</p>
+                        </div>
+                      </div>
+
+                      {/* Bottom Row: Voucher ID with Copy & View Receipt Action */}
+                      <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-1">
+                        <div className="flex items-center gap-1 font-mono text-[10px] text-slate-400">
+                          <span className="font-bold uppercase tracking-widest text-[8px] text-slate-400 mr-0.5">ID:</span>
+                          <span>{v.id.substring(0, 8)}...</span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 text-slate-350 hover:text-primary transition-colors shrink-0"
+                            onClick={() => handleCopyId(v.id)}
+                          >
+                            {copiedId === v.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                          </Button>
+                        </div>
+
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="h-8 gap-1.5 text-slate-500 hover:text-primary hover:bg-primary/5 text-xs font-bold rounded"
+                          className="h-8 gap-1.5 text-slate-500 hover:text-primary hover:bg-primary/5 text-xs font-bold rounded-lg px-3 shrink-0"
                           onClick={() => {
                             if (v.voucherUrl) {
                               window.open(v.voucherUrl, "_blank")
@@ -489,11 +573,11 @@ export default function BillingPage() {
                           <Eye className="w-3.5 h-3.5" />
                           View Receipt
                         </Button>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

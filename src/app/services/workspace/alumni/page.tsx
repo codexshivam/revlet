@@ -485,84 +485,159 @@ export default function WorkspaceAlumniPage() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-slate-50/80">
-                    <TableRow className="border-b border-slate-100">
-                      <TableHead className="text-[10px] font-bold uppercase py-4 pl-6 tracking-wider text-slate-500">Name</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500">Account Created</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500">Storage Footprint</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 tracking-wider text-slate-500">Account Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAlumni.map((user) => {
-                      const userStorage = storageMap[user.email.toLowerCase()] || 0
+              <div className="text-left">
+                {/* Desktop View: Alumni Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-slate-50/80">
+                      <TableRow className="border-b border-slate-100">
+                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-6 tracking-wider text-slate-500">Name</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500">Account Created</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500">Storage Footprint</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 tracking-wider text-slate-500">Account Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAlumni.map((user) => {
+                        const userStorage = storageMap[user.email.toLowerCase()] || 0
 
-                      return (
-                        <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
-                          {/* Name and Email */}
-                          <TableCell className="pl-6 py-4">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-bold text-[#191C1E] text-sm truncate max-w-[200px]">
-                                {user.fullName || "Unknown Name"}
+                        return (
+                          <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
+                            {/* Name and Email */}
+                            <TableCell className="pl-6 py-4">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-bold text-[#191C1E] text-sm truncate max-w-[200px]">
+                                  {user.fullName || "Unknown Name"}
+                                </span>
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  {user.email}
+                                </span>
+                              </div>
+                            </TableCell>
+                            
+                            {/* Account Created Date */}
+                            <TableCell>
+                              <span className="text-xs text-slate-600 font-semibold">
+                                {formatDate(user.creationTime)}
                               </span>
-                              <span className="text-[11px] text-slate-500 font-medium">
-                                {user.email}
+                            </TableCell>
+                            
+                            {/* Storage Footprint */}
+                            <TableCell>
+                              <span className="text-xs text-slate-600 font-semibold font-mono">
+                                {formatBytes(userStorage)}
                               </span>
-                            </div>
-                          </TableCell>
-                          
-                          {/* Account Created Date */}
-                          <TableCell>
-                            <span className="text-xs text-slate-600 font-semibold">
+                            </TableCell>
+                            
+                            {/* Account Actions */}
+                            <TableCell className="text-right pr-6">
+                              <div className="flex items-center justify-end gap-4">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRestoreClick(user)}
+                                  disabled={isToggling === user.id || isRestoring}
+                                  className="h-8 text-xs font-bold text-slate-600 border-slate-200"
+                                >
+                                  <RefreshCw className="w-3 h-3 mr-1" />
+                                  Restore
+                                </Button>
+                                <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+                                  <span className={cn(
+                                    "text-[10px] font-bold uppercase tracking-wider",
+                                    user.suspended ? "text-red-500" : "text-emerald-500"
+                                  )}>
+                                    {user.suspended ? "Suspended" : "Active"}
+                                  </span>
+                                  <Switch 
+                                    checked={!user.suspended}
+                                    onCheckedChange={() => handleToggleSuspend(user, user.suspended)}
+                                    disabled={isToggling === user.id}
+                                    className={cn(
+                                      "data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-200"
+                                    )}
+                                  />
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile View: High-End Touchable Alumni Cards */}
+                <div className="block md:hidden space-y-4 p-4 bg-slate-50/20">
+                  {filteredAlumni.map((user) => {
+                    const userStorage = storageMap[user.email.toLowerCase()] || 0
+                    const isSuspended = user.suspended
+                    return (
+                      <div
+                        key={user.id}
+                        className={cn(
+                          "relative p-5 rounded-xl border bg-white shadow-sm flex flex-col gap-4 border-slate-100 hover:shadow-md transition-all border-l-4",
+                          isSuspended ? "border-l-red-500" : "border-l-emerald-500"
+                        )}
+                      >
+                        {/* Card Header: Name & Email */}
+                        <div className="flex flex-col gap-1 min-w-0 text-left">
+                          <span className="font-bold text-[#191C1E] text-sm truncate">
+                            {user.fullName || "Unknown Name"}
+                          </span>
+                          <span className="text-xs text-slate-400 font-medium font-mono truncate">
+                            {user.email}
+                          </span>
+                        </div>
+
+                        {/* Card Body: Details */}
+                        <div className="space-y-2.5 pt-2 border-t border-slate-100/60">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Account Created</span>
+                            <span className="font-semibold text-slate-600">
                               {formatDate(user.creationTime)}
                             </span>
-                          </TableCell>
-                          
-                          {/* Storage Footprint */}
-                          <TableCell>
-                            <span className="text-xs text-slate-600 font-semibold font-mono">
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Storage footprint</span>
+                            <span className="font-semibold font-mono text-slate-600">
                               {formatBytes(userStorage)}
                             </span>
-                          </TableCell>
-                          
-                          {/* Account Actions */}
-                          <TableCell className="text-right pr-6">
-                            <div className="flex items-center justify-end gap-4">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleRestoreClick(user)}
-                                disabled={isToggling === user.id || isRestoring}
-                                className="h-8 text-xs font-bold text-slate-600 border-slate-200"
-                              >
-                                <RefreshCw className="w-3 h-3 mr-1" />
-                                Restore
-                              </Button>
-                              <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
-                                <span className={cn(
-                                  "text-[10px] font-bold uppercase tracking-wider",
-                                  user.suspended ? "text-red-500" : "text-emerald-500"
-                                )}>
-                                  {user.suspended ? "Suspended" : "Active"}
-                                </span>
-                                <Switch 
-                                  checked={!user.suspended}
-                                  onCheckedChange={() => handleToggleSuspend(user, user.suspended)}
-                                  disabled={isToggling === user.id}
-                                  className={cn(
-                                    "data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-200"
-                                  )}
-                                />
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
+                          </div>
+                        </div>
+
+                        {/* Card Footer: Touch actions & active switch */}
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100/60">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRestoreClick(user)}
+                            disabled={isToggling === user.id || isRestoring}
+                            className="h-8 text-xs font-bold text-slate-600 border-slate-200 bg-white hover:bg-slate-50 shrink-0"
+                          >
+                            <RefreshCw className="w-3 h-3 mr-1" />
+                            Restore
+                          </Button>
+
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "text-[10px] font-bold uppercase tracking-wider",
+                              isSuspended ? "text-red-500" : "text-emerald-500"
+                            )}>
+                              {isSuspended ? "Suspended" : "Active"}
+                            </span>
+                            <Switch 
+                              checked={!isSuspended}
+                              onCheckedChange={() => handleToggleSuspend(user, isSuspended)}
+                              disabled={isToggling === user.id}
+                              className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-200"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </CardContent>

@@ -129,57 +129,57 @@ export default function SettingsPage() {
 
   return (
     <DashboardShell>
-      <div className="space-y-6">
-        <div className="flex flex-col gap-1">
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="flex flex-col gap-1 px-1 sm:px-0">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Management</span>
-          <h1 className="text-3xl font-headline font-bold text-slate-900">Account Security</h1>
+          <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Account Security</h1>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <Card className="bg-white border-slate-200 shadow-sm h-fit">
-            <CardHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+          <Card className="bg-white border-slate-200 shadow-sm h-fit rounded-xl overflow-hidden">
+            <CardHeader className="p-4 sm:p-6 md:p-8 pb-3 sm:pb-4 border-b border-slate-100 bg-white">
               <div className="flex items-center gap-2 text-primary mb-1">
                 <Mail className="w-5 h-5" />
                 <CardTitle className="text-lg font-headline font-bold">Administrative Email</CardTitle>
               </div>
               <CardDescription className="text-xs">Update your primary contact. Verification is required for changes to apply.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="p-4 sm:p-6 md:p-8 space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="current-email" className="text-xs font-bold text-slate-500 uppercase">Currently Active</Label>
-                <Input id="current-email" value={user?.email || "Loading..."} disabled className="bg-slate-50 border-slate-200 text-xs" />
+                <Label htmlFor="current-email" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Currently Active</Label>
+                <Input id="current-email" value={user?.email || "Loading..."} disabled className="bg-slate-50 border-slate-200 text-xs h-10 rounded px-3" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="new-email" className="text-xs font-bold text-slate-700 uppercase">Proposed New Email</Label>
+                <Label htmlFor="new-email" className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">Proposed New Email</Label>
                 <Input 
                   id="new-email" 
                   placeholder="new.admin@institution.edu.np" 
-                  className="border-slate-200" 
+                  className="border-slate-200 h-10 rounded px-3" 
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="verify-pass" className="text-xs font-bold text-slate-700 uppercase">Confirm Identity (Current Password)</Label>
+                <Label htmlFor="verify-pass" className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">Confirm Identity (Current Password)</Label>
                 <Input 
                   id="verify-pass" 
                   type="password" 
                   placeholder="Enter current password..." 
-                  className="border-slate-200" 
+                  className="border-slate-200 h-10 rounded px-3" 
                   value={emailConfirmPass}
                   onChange={(e) => setEmailConfirmPass(e.target.value)}
                 />
               </div>
               
-              <div className="flex items-center gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100 mb-2">
-                <Info className="w-4 h-4 text-primary shrink-0" />
-                <p className="text-[10px] text-primary leading-tight font-medium">
+              <div className="flex items-start gap-2.5 p-3 bg-blue-50/50 rounded-lg border border-blue-100 mb-2">
+                <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <p className="text-[10px] text-primary leading-normal font-medium">
                   We will send a verification link to the new email. The change will finalize automatically once verified.
                 </p>
               </div>
 
               <Button 
-                className="w-full font-bold h-11 shadow-lg shadow-primary/10" 
+                className="w-full font-bold h-11 rounded-lg shadow-lg shadow-primary/10 bg-primary hover:bg-primary/95 text-white" 
                 onClick={handleUpdateEmail}
                 disabled={isUpdatingEmail}
               >
@@ -188,50 +188,50 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white border-slate-200 shadow-sm h-fit">
-            <CardHeader>
+          <Card className="bg-white border-slate-200 shadow-sm h-fit rounded-xl overflow-hidden">
+            <CardHeader className="p-4 sm:p-6 md:p-8 pb-3 sm:pb-4 border-b border-slate-100 bg-white">
               <div className="flex items-center gap-2 text-primary mb-1">
                 <Lock className="w-5 h-5" />
                 <CardTitle className="text-lg font-headline font-bold">Access Credentials</CardTitle>
               </div>
               <CardDescription className="text-xs">Ensure your account is protected by a rotating strong password.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="p-4 sm:p-6 md:p-8 space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="old-pass" className="text-xs font-bold text-slate-700 uppercase">Existing Password</Label>
+                <Label htmlFor="old-pass" className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">Existing Password</Label>
                 <Input 
                   id="old-pass" 
                   type="password" 
                   placeholder="••••••••" 
-                  className="border-slate-200" 
+                  className="border-slate-200 h-10 rounded px-3" 
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="new-pass" className="text-xs font-bold text-slate-700 uppercase">New Secure Password</Label>
+                <Label htmlFor="new-pass" className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">New Secure Password</Label>
                 <Input 
                   id="new-pass" 
                   type="password" 
                   placeholder="Minimum 6 characters..." 
-                  className="border-slate-200" 
+                  className="border-slate-200 h-10 rounded px-3" 
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="confirm-pass" className="text-xs font-bold text-slate-700 uppercase">Re-type New Password</Label>
+                <Label htmlFor="confirm-pass" className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">Re-type New Password</Label>
                 <Input 
                   id="confirm-pass" 
                   type="password" 
                   placeholder="Confirm new password..." 
-                  className="border-slate-200" 
+                  className="border-slate-200 h-10 rounded px-3" 
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
               <Button 
-                className="w-full font-bold h-11 bg-slate-900 hover:bg-black text-white shadow-lg" 
+                className="w-full font-bold h-11 rounded-lg bg-slate-900 hover:bg-black text-white shadow-lg shadow-slate-900/10" 
                 onClick={handleUpdatePassword}
                 disabled={isUpdatingPassword}
               >
@@ -241,12 +241,14 @@ export default function SettingsPage() {
           </Card>
         </div>
 
-        <Card className="bg-red-50 border-red-100 border-dashed">
-          <CardContent className="p-6 flex items-center gap-4">
-            <ShieldAlert className="w-6 h-6 text-red-500 shrink-0" />
-            <div className="flex-1">
-              <h4 className="text-sm font-bold text-red-900">Security Enforcement Notice</h4>
-              <p className="text-xs text-red-700/80">Updating your master credentials will immediately invalidate all other active administrative sessions across devices for your protection.</p>
+        <Card className="bg-red-50 border-red-100 border-dashed rounded-xl">
+          <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="p-2 bg-red-100/50 rounded-lg text-red-500 shrink-0">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <h4 className="text-sm font-bold text-red-900 leading-tight">Security Enforcement Notice</h4>
+              <p className="text-xs text-red-700/80 leading-normal">Updating your master credentials will immediately invalidate all other active administrative sessions across devices for your protection.</p>
             </div>
           </CardContent>
         </Card>

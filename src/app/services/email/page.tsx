@@ -411,14 +411,14 @@ export default function EmailRoutingPage() {
         {/* Page Header */}
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Email Service</h1>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end sm:justify-start">
               {zoneId && emailServiceActive && (
                 <>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200 hover:bg-slate-50 transition-colors">
+                      <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200 hover:bg-slate-50 transition-colors shrink-0">
                         <MoreVertical className="w-4 h-4 text-slate-600" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -440,7 +440,7 @@ export default function EmailRoutingPage() {
                       setFormErrors({})
                       setIsCreateDialogOpen(true)
                     }}
-                    className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200 text-xs"
+                    className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200 text-xs w-full sm:w-auto"
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Create Custom Email
@@ -633,8 +633,8 @@ export default function EmailRoutingPage() {
           /* STATE 5: Active Management Workspace */
           <div className="space-y-8 animate-in fade-in duration-700">
             {/* Email Service Rules Table */}
-            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
+            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+              <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-4 sm:px-6">
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Custom Emails</CardTitle>
                   <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white border-slate-200">{verifiedRules.length}</Badge>
@@ -693,36 +693,81 @@ export default function EmailRoutingPage() {
                       </div>
                     ) : (
                       <>
-                        <Table>
-                          <TableHeader className="bg-slate-50/50">
-                            <TableRow className="border-b border-slate-100">
-                              <TableHead className="text-[10px] font-bold uppercase py-4 pl-6">Professional Custom Email</TableHead>
-                              <TableHead className="text-[10px] font-bold uppercase py-4">Forwards Messages To</TableHead>
-                              <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-24">Remove</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {paginatedRules.map((rule) => (
-                              <TableRow key={rule.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                                <TableCell className="pl-6 py-4">
-                                  <span className="font-bold text-xs text-slate-800">{rule.alias}</span>
-                                </TableCell>
-                                <TableCell>
-                                  <span className="font-mono text-[11px] text-slate-500">{rule.destination}</span>
-                                </TableCell>
-                                <TableCell className="text-right pr-6">
-                                  <Button
-                                    variant="ghost" size="icon"
-                                    className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
-                                    onClick={() => { setDeletingRuleId(rule.id); setIsDeleteOpen(true) }}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </TableCell>
+                        {/* DESKTOP TABLE VIEW */}
+                        <div className="hidden md:block">
+                          <Table>
+                            <TableHeader className="bg-slate-50/50">
+                              <TableRow className="border-b border-slate-100">
+                                <TableHead className="text-[10px] font-bold uppercase py-4 pl-6">Professional Custom Email</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase py-4">Forwards Messages To</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-24">Remove</TableHead>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                            </TableHeader>
+                            <TableBody>
+                              {paginatedRules.map((rule) => (
+                                <TableRow key={rule.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
+                                  <TableCell className="pl-6 py-4">
+                                    <span className="font-bold text-xs text-slate-800">{rule.alias}</span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className="font-mono text-[11px] text-slate-500">{rule.destination}</span>
+                                  </TableCell>
+                                  <TableCell className="text-right pr-6">
+                                    <Button
+                                      variant="ghost" size="icon"
+                                      className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
+                                      onClick={() => { setDeletingRuleId(rule.id); setIsDeleteOpen(true) }}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+
+                        {/* MOBILE RESPONSIVE CARD LIST VIEW */}
+                        <div className="block md:hidden space-y-6 py-6 px-4">
+                          {paginatedRules.map((rule) => (
+                            <div 
+                              key={rule.id}
+                              className="bg-white border border-slate-200 rounded-xl p-6 relative overflow-hidden transition-all shadow-sm flex flex-col gap-4"
+                            >
+                              {/* Left status color indicator strip */}
+                              <div className="absolute left-0 top-0 bottom-0 w-[5px] bg-primary" />
+
+                              {/* Top Row: Alias Email Address */}
+                              <div className="space-y-1">
+                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Professional Custom Email</p>
+                                <p className="font-bold text-slate-800 text-sm break-all leading-snug">{rule.alias}</p>
+                              </div>
+
+                              {/* Middle Row: Destination Forward Target */}
+                              <div className="space-y-1">
+                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Forwards Messages To</p>
+                                <p className="font-mono text-xs text-slate-500 break-all leading-relaxed">{rule.destination}</p>
+                              </div>
+
+                              {/* Bottom Row: Actions */}
+                              <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-1">
+                                <span className="flex items-center gap-1.5 text-emerald-500 bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-0.5 h-6">
+                                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="text-[8px] font-bold uppercase tracking-wider">Active</span>
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1.5 text-red-500 hover:text-white hover:bg-red-600 border border-transparent hover:border-red-655 rounded-lg px-3 transition-colors text-xs font-bold shrink-0"
+                                  onClick={() => { setDeletingRuleId(rule.id); setIsDeleteOpen(true) }}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  Remove Email
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
 
                         {/* Pagination Controls */}
                         {totalPages > 1 && (
@@ -760,17 +805,17 @@ export default function EmailRoutingPage() {
             </Card>
 
             {/* Security Status Dashboard (Placed at the bottom) */}
-            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6">
+            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+              <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-4 sm:px-6">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-slate-400" />
                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Domain Security Parameters</CardTitle>
                 </div>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* SPF Card */}
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg space-y-3">
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">SPF Protocol</span>
                       <Badge className={cn(
@@ -791,7 +836,7 @@ export default function EmailRoutingPage() {
                   </div>
 
                   {/* DKIM Card */}
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg space-y-3">
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">DKIM Verification</span>
                       <Badge className={cn(
@@ -807,7 +852,7 @@ export default function EmailRoutingPage() {
                   </div>
 
                   {/* DMARC Card */}
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg space-y-3">
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">DMARC Protection</span>
                       <Badge className={cn(

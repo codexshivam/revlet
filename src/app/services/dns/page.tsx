@@ -487,9 +487,9 @@ export default function DNSManagementPage() {
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Domain Management</h1>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 shrink-0">
                {zoneId && (
-                 <div className="flex gap-2">
+                 <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                    <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="h-10 font-bold text-xs border-slate-200">
                      <Upload className="w-4 h-4 mr-2" />
                      Import
@@ -514,8 +514,8 @@ export default function DNSManagementPage() {
 
         {orgs.length === 0 ? (
           <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500">
-            <Card className="bg-slate-50 border-slate-200 border-dashed shadow-sm">
-              <CardContent className="p-16 flex flex-col items-center text-center gap-6">
+            <Card className="bg-slate-50 border-slate-200 border-dashed shadow-sm rounded-xl">
+              <CardContent className="p-8 sm:p-16 flex flex-col items-center text-center gap-6">
                 <div className="p-4 bg-white rounded-full border border-slate-100 shadow-sm shrink-0">
                   <Globe className="w-10 h-10 text-slate-300 animate-pulse" />
                 </div>
@@ -569,7 +569,7 @@ export default function DNSManagementPage() {
                   onClick={handleRequestDNS} 
                   size="lg" 
                   disabled={isRequesting}
-                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group"
+                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group w-full sm:w-auto"
                 >
                   {isRequesting ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Globe className="w-5 h-5 mr-3 group-hover:rotate-12 transition-transform" />}
                   Activate Global Network
@@ -579,10 +579,10 @@ export default function DNSManagementPage() {
           </div>
         ) : selectedOrg && zoneId && (
           <div className="space-y-8 animate-in fade-in duration-700">
-            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
+            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
               <CardHeader 
                 className={cn(
-                  "bg-slate-50/50 flex flex-row items-center justify-between py-4 px-6 cursor-pointer hover:bg-slate-50 transition-colors",
+                  "bg-slate-50/50 flex flex-row items-center justify-between py-4 px-4 sm:px-6 cursor-pointer hover:bg-slate-50 transition-colors",
                   isNameserversExpanded ? "border-b border-slate-100" : ""
                 )}
                 onClick={() => setIsNameserversExpanded(!isNameserversExpanded)}
@@ -593,8 +593,8 @@ export default function DNSManagementPage() {
                 </div>
                 <div className="flex items-center gap-4">
                   <Badge className={cn(
-                    "text-[9px] font-bold px-2 py-0.5 border shadow-none",
-                    zoneDetails?.status === 'active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                     "text-[9px] font-bold px-2 py-0.5 border shadow-none",
+                     zoneDetails?.status === 'active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
                   )}>
                     {zoneDetails?.status?.toUpperCase() || "PENDING"}
                   </Badge>
@@ -603,7 +603,7 @@ export default function DNSManagementPage() {
               </CardHeader>
               
               {isNameserversExpanded && (
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      <div className="space-y-3">
                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Name Servers</p>
@@ -621,7 +621,7 @@ export default function DNSManagementPage() {
                          {!zoneDetails?.nameServers?.length && <p className="text-xs text-slate-400 italic">Nameservers will appear once initialized.</p>}
                        </div>
                      </div>
-                     <div className="flex flex-col justify-center border-l border-slate-100 pl-8 space-y-5">
+                     <div className="flex flex-col justify-center border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 pl-0 md:pl-8 space-y-5">
                         <div className="space-y-2">
                           {zoneDetails?.status !== 'active' && (
                             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">
@@ -666,19 +666,19 @@ export default function DNSManagementPage() {
               )}
             </Card>
 
-            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
+            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+              <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 px-4 sm:px-6">
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">DNS Records</CardTitle>
                   <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white border-slate-200">{records.length}</Badge>
                 </div>
-                <div className="relative">
+                <div className="relative w-full sm:w-auto">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <Input 
                     placeholder="Search records..." 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-8 pl-8 text-xs w-48 bg-white border-slate-200 font-medium" 
+                    className="h-8 pl-8 text-xs w-full sm:w-48 bg-white border-slate-200 font-medium" 
                   />
                 </div>
               </CardHeader>
@@ -695,36 +695,137 @@ export default function DNSManagementPage() {
                       <p className="text-sm font-bold text-slate-400">No active DNS records found.</p>
                     </div>
                   ) : (
-                    <Table>
-                      <TableHeader className="bg-slate-50/50">
-                        <TableRow className="border-b border-slate-100">
-                          <TableHead className="text-[10px] font-bold uppercase py-4 pl-6 w-20">Type</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4 w-40">Name</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4">Value</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4 w-28">
-                            <div className="flex items-center gap-1.5">
-                              Proxied
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 cursor-help transition-colors" />
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-xs p-3 shadow-xl">
-                                  <p className="text-xs font-medium leading-relaxed">
-                                    Cloudflare responds to DNS queries. HTTP/S traffic is sent to the Cloudflare network and handled by security, caching, performance, and the developer platform.
-                                  </p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-32">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                    <>
+                      {/* DESKTOP TABLE VIEW */}
+                      <div className="hidden md:block">
+                        <Table>
+                          <TableHeader className="bg-slate-50/50">
+                            <TableRow className="border-b border-slate-100">
+                              <TableHead className="text-[10px] font-bold uppercase py-4 pl-6 w-20">Type</TableHead>
+                              <TableHead className="text-[10px] font-bold uppercase py-4 w-40">Name</TableHead>
+                              <TableHead className="text-[10px] font-bold uppercase py-4">Value</TableHead>
+                              <TableHead className="text-[10px] font-bold uppercase py-4 w-28">
+                                <div className="flex items-center gap-1.5">
+                                  Proxied
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 cursor-help transition-colors" />
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs p-3 shadow-xl">
+                                      <p className="text-xs font-medium leading-relaxed">
+                                        Cloudflare responds to DNS queries. HTTP/S traffic is sent to the Cloudflare network and handled by security, caching, performance, and the developer platform.
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </TableHead>
+                              <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-32">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredRecords.map((rec) => (
+                              <TableRow key={rec.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
+                                <TableCell className="pl-6 py-4">
+                                  <Badge className={cn(
+                                    "font-mono text-[9px] font-bold px-2 py-0 h-5 border shadow-none",
+                                    rec.type === "A" ? "bg-blue-50 text-blue-600 border-blue-100" :
+                                    rec.type === "MX" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                                    rec.type === "TXT" ? "bg-slate-50 text-slate-500 border-slate-200" :
+                                    "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                  )}>
+                                    {rec.type}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell 
+                                  className="font-bold text-xs text-slate-800 cursor-pointer hover:bg-slate-50/50 transition-all rounded p-2"
+                                  onClick={() => handleCopyText(rec.name)}
+                                >
+                                  {rec.name}
+                                </TableCell>
+                                <TableCell 
+                                  className="max-w-md cursor-pointer hover:bg-slate-50/50 transition-all rounded p-2"
+                                  onClick={() => handleCopyText(rec.content)}
+                                >
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-mono text-[11px] text-slate-500 whitespace-pre-wrap break-all leading-relaxed">
+                                      {rec.content}
+                                    </span>
+                                    {rec.priority !== undefined && (
+                                      <span className="text-[9px] font-bold text-slate-400 uppercase mt-1">
+                                        Priority: {rec.priority}
+                                      </span>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                   {!isProxyAllowed(rec.type) ? (
+                                     <span className="text-[10px] text-slate-300 font-bold ml-1.5">—</span>
+                                   ) : rec.proxied ? (
+                                     <div className="flex items-center gap-1.5 text-amber-500">
+                                       <ShieldCheck className="w-4 h-4" />
+                                       <span className="text-[9px] font-bold uppercase tracking-tighter">On</span>
+                                     </div>
+                                   ) : (
+                                     <div className="flex items-center gap-1.5 text-slate-400">
+                                       <Globe className="w-4 h-4" />
+                                       <span className="text-[9px] font-bold uppercase tracking-tighter">Off</span>
+                                     </div>
+                                   )}
+                                </TableCell>
+                                <TableCell className="text-right pr-6">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-slate-400 hover:bg-primary hover:text-white transition-all rounded-md"
+                                      onClick={() => {
+                                        setEditingRecord(rec)
+                                        setFormData(rec)
+                                        setIsDialogOpen(true)
+                                      }}
+                                    >
+                                      <Edit3 className="w-4 h-4" />
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
+                                      onClick={() => {
+                                        setDeletingRecordId(rec.id)
+                                        setIsDeleteOpen(true)
+                                      }}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* MOBILE RESPONSIVE CARD LIST VIEW */}
+                      <div className="block md:hidden space-y-6 py-6 px-4">
                         {filteredRecords.map((rec) => (
-                          <TableRow key={rec.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                            <TableCell className="pl-6 py-4">
+                          <div 
+                            key={rec.id}
+                            className="bg-white border border-slate-200 rounded-xl p-6 relative overflow-hidden transition-all shadow-sm flex flex-col gap-4"
+                          >
+                            {/* Left status color indicator strip based on record type */}
+                            <div 
+                              className={cn(
+                                "absolute left-0 top-0 bottom-0 w-[5px]",
+                                rec.type === "A" || rec.type === "AAAA" ? "bg-blue-500" :
+                                rec.type === "CNAME" ? "bg-emerald-500" :
+                                rec.type === "MX" ? "bg-amber-500" : "bg-slate-400"
+                              )}
+                            />
+
+                            {/* Top Row: Type Badge & Proxy indicator */}
+                            <div className="flex items-start justify-between gap-3">
                               <Badge className={cn(
-                                "font-mono text-[9px] font-bold px-2 py-0 h-5 border shadow-none",
+                                "font-mono text-[9px] font-bold px-2.5 py-0.5 h-6 border shadow-none uppercase tracking-wider",
                                 rec.type === "A" ? "bg-blue-50 text-blue-600 border-blue-100" :
                                 rec.type === "MX" ? "bg-amber-50 text-amber-600 border-amber-100" :
                                 rec.type === "TXT" ? "bg-slate-50 text-slate-500 border-slate-200" :
@@ -732,74 +833,83 @@ export default function DNSManagementPage() {
                               )}>
                                 {rec.type}
                               </Badge>
-                            </TableCell>
-                            <TableCell 
-                              className="font-bold text-xs text-slate-800 cursor-pointer hover:bg-slate-50/50 transition-all rounded p-2"
-                              onClick={() => handleCopyText(rec.name)}
-                            >
-                              {rec.name}
-                            </TableCell>
-                            <TableCell 
-                              className="max-w-md cursor-pointer hover:bg-slate-50/50 transition-all rounded p-2"
-                              onClick={() => handleCopyText(rec.content)}
-                            >
-                              <div className="flex flex-col gap-0.5">
-                                <span className="font-mono text-[11px] text-slate-500 whitespace-pre-wrap break-all leading-relaxed">
+
+                              {/* Proxy badge */}
+                              {!isProxyAllowed(rec.type) ? (
+                                <span className="text-[10px] text-slate-300 font-bold">—</span>
+                              ) : rec.proxied ? (
+                                <div className="flex items-center gap-1 text-amber-500 bg-amber-50 border border-amber-100 rounded-full px-2.5 py-0.5 h-6">
+                                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="text-[8px] font-bold uppercase tracking-wider">Proxied</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-0.5 h-6">
+                                  <Globe className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="text-[8px] font-bold uppercase tracking-wider">DNS Only</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Middle details: Name and Target Value */}
+                            <div className="space-y-3">
+                              <div className="space-y-1">
+                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Name</p>
+                                <p 
+                                  className="font-bold text-slate-800 text-sm break-all leading-snug hover:underline cursor-pointer"
+                                  onClick={() => handleCopyText(rec.name)}
+                                >
+                                  {rec.name}
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Value / Target</p>
+                                <p 
+                                  className="font-mono text-xs text-slate-500 break-all leading-relaxed whitespace-pre-wrap hover:underline cursor-pointer"
+                                  onClick={() => handleCopyText(rec.content)}
+                                >
                                   {rec.content}
-                                </span>
+                                </p>
                                 {rec.priority !== undefined && (
-                                  <span className="text-[9px] font-bold text-slate-400 uppercase mt-1">
+                                  <span className="inline-block text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 mt-1">
                                     Priority: {rec.priority}
                                   </span>
                                 )}
                               </div>
-                            </TableCell>
-                            <TableCell>
-                               {!isProxyAllowed(rec.type) ? (
-                                 <span className="text-[10px] text-slate-300 font-bold ml-1.5">—</span>
-                               ) : rec.proxied ? (
-                                 <div className="flex items-center gap-1.5 text-amber-500">
-                                   <ShieldCheck className="w-4 h-4" />
-                                   <span className="text-[9px] font-bold uppercase tracking-tighter">On</span>
-                                 </div>
-                               ) : (
-                                 <div className="flex items-center gap-1.5 text-slate-400">
-                                   <Globe className="w-4 h-4" />
-                                   <span className="text-[9px] font-bold uppercase tracking-tighter">Off</span>
-                                 </div>
-                               )}
-                            </TableCell>
-                            <TableCell className="text-right pr-6">
-                              <div className="flex items-center justify-end gap-1">
+                            </div>
+
+                            {/* Bottom Row: Actions */}
+                            <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-1">
+                              <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">TTL: {rec.ttl === "Auto" ? "Auto" : rec.ttl}</span>
+                              <div className="flex gap-2">
                                 <Button 
                                   variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 text-slate-400 hover:bg-primary hover:text-white transition-all rounded-md"
+                                  size="sm" 
+                                  className="h-8 w-8 p-0 text-slate-400 hover:bg-primary hover:text-white transition-all rounded-lg"
                                   onClick={() => {
                                     setEditingRecord(rec)
                                     setFormData(rec)
                                     setIsDialogOpen(true)
                                   }}
                                 >
-                                  <Edit3 className="w-4 h-4" />
+                                  <Edit3 className="w-3.5 h-3.5" />
                                 </Button>
                                 <Button 
                                   variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
+                                  size="sm" 
+                                  className="h-8 w-8 p-0 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-lg"
                                   onClick={() => {
                                     setDeletingRecordId(rec.id)
                                     setIsDeleteOpen(true)
                                   }}
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
-                            </TableCell>
-                          </TableRow>
+                            </div>
+                          </div>
                         ))}
-                      </TableBody>
-                    </Table>
+                      </div>
+                    </>
                   )}
                 </TooltipProvider>
               </CardContent>

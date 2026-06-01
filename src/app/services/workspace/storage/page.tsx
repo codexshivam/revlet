@@ -14,6 +14,14 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
   Loader2,
   HardDrive,
   Info,
@@ -24,6 +32,7 @@ import {
   TrendingUp,
   AlertTriangle,
   AlertCircle,
+  HelpCircle,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -63,16 +72,46 @@ function unitToBytes(value: number, unit: string): number {
 // ─── Chart Colors ────────────────────────────────────────────────────────────
 
 const OU_COLORS: Record<string, string> = {
-  "/Students": "#3b82f6",
-  "/Teachers": "#10b981",
-  "/Main People": "#8b5cf6",
-  "/Staffs": "#f59e0b",
+  "/Students": "#4F46E5", // Premium Indigo
+  "/Teachers": "#10B981", // Premium Emerald
+  "/Main People": "#8B5CF6", // Premium Violet
+  "/Staffs": "#F59E0B", // Premium Amber
 }
 
-const FALLBACK_COLORS = ["#06b6d4", "#ec4899", "#f97316", "#6366f1", "#14b8a6", "#e11d48"]
+const FALLBACK_COLORS = [
+  "#06B6D4", // Cyan
+  "#EC4899", // Pink
+  "#3B82F6", // Blue
+  "#EF4444", // Red
+  "#14B8A6", // Teal
+  "#F97316", // Orange
+]
 
 function getOUColor(ouPath: string, index: number): string {
   return OU_COLORS[ouPath] || FALLBACK_COLORS[index % FALLBACK_COLORS.length]
+}
+
+function getInitials(email: string, name?: string): string {
+  if (name) {
+    const parts = name.split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  return email.substring(0, 2).toUpperCase();
+}
+
+function getAvatarBg(email: string): string {
+  const colors = [
+    "bg-indigo-50 text-indigo-600 border-indigo-100",
+    "bg-emerald-50 text-emerald-600 border-emerald-100",
+    "bg-violet-50 text-violet-600 border-violet-100",
+    "bg-amber-50 text-amber-600 border-amber-100",
+    "bg-cyan-50 text-cyan-600 border-cyan-100",
+    "bg-rose-50 text-rose-600 border-rose-100",
+  ];
+  let sum = 0;
+  for (let i = 0; i < email.length; i++) sum += email.charCodeAt(i);
+  return colors[sum % colors.length];
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -110,6 +149,7 @@ export default function StoragePage() {
   // Data state
   const [storageEntries, setStorageEntries] = useState<StorageUsageEntry[]>([])
   const [userOUMap, setUserOUMap] = useState<Record<string, string>>({})
+  const [userProfileMap, setUserProfileMap] = useState<Record<string, { fullName: string; thumbnailPhotoUrl?: string }>>({})
   const [orgUnits, setOrgUnits] = useState<Array<{ orgUnitPath: string; name: string }>>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -134,10 +174,16 @@ export default function StoragePage() {
 
       if (usersRes.success && usersRes.data) {
         const mapping: Record<string, string> = {}
+        const profiles: Record<string, { fullName: string; thumbnailPhotoUrl?: string }> = {}
         for (const u of usersRes.data.users) {
           mapping[u.email] = u.orgUnitPath
+          profiles[u.email] = {
+            fullName: u.fullName,
+            thumbnailPhotoUrl: u.thumbnailPhotoUrl,
+          }
         }
         setUserOUMap(mapping)
+        setUserProfileMap(profiles)
       }
 
       if (ouRes.success && ouRes.data) {
@@ -384,27 +430,121 @@ export default function StoragePage() {
         </div>
 
         {/* Info Banner */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-left">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-left animate-in slide-in-from-top-4 duration-500">
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <Info className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
             <p className="text-sm text-blue-800 leading-relaxed font-medium">
-              To manage, configure, or enforce storage limits across your domain, please visit{" "}
+              Storage quotas shown here are tracking targets. To enforce hard limits across your domain, please visit{" "}
               <span className="font-semibold">
                 Google Admin Console → Storage → Storage Settings
               </span>
               .
             </p>
           </div>
-          <Button variant="outline" size="sm" className="shrink-0 text-blue-700 border-blue-300 hover:bg-blue-100 w-full sm:w-auto mt-2 sm:mt-0 justify-center font-bold text-xs" asChild>
-            <a
-              href="https://admin.google.com/ac/storage/settings"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Open Admin Console
-              <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
-            </a>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 shrink-0">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="bg-white hover:bg-blue-100/50 text-blue-700 hover:text-blue-700 border-blue-200 font-bold text-xs flex-1 sm:flex-initial justify-center gap-1.5 shadow-none transition-colors">
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  How to Configure
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md md:max-w-lg select-none text-left border-slate-200">
+                <DialogHeader>
+                  <DialogTitle className="text-lg font-headline font-bold text-slate-900 flex items-center gap-2">
+                    <HardDrive className="w-5 h-5 text-blue-600" />
+                    Enforcing Storage Limits in Google Workspace
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500 font-semibold leading-relaxed mt-1">
+                    Revlet tracks and alerts based on policies you define here. To physically prevent users from exceeding limits, you must enforce them in your Google Admin Console.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-3.5">
+                    {/* Step 1 */}
+                    <div className="flex items-start gap-3">
+                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">
+                        1
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-800">Log in to Google Admin</h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
+                          Go to <a href="https://admin.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">admin.google.com</a> and sign in with your Domain Super Admin account.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="flex items-start gap-3">
+                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">
+                        2
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-800">Navigate to Storage Settings</h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
+                          From the left sidebar menu, expand **Storage** and select **Storage settings** (or click the shortcut button on the banner).
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="flex items-start gap-3">
+                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">
+                        3
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-800">Select Organizational Unit (OU)</h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
+                          In the left tree view panel, click on the target OU (e.g. `/Students` or `/Teachers`) to apply specific storage restrictions.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="flex items-start gap-3">
+                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">
+                        4
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-800">Set Storage Limits</h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
+                          Under **User storage limit**, select **On** and define the hard storage quota (e.g., 20 GB or 100 GB). Click **Save** (or **Override** if inheriting).
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 5 */}
+                    <div className="flex items-start gap-3">
+                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 text-[10px] font-bold shrink-0 mt-0.5">
+                        5
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-800">Track and Alert in Revlet</h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
+                          Return to this screen and configure the same quotas in the **Group-Level Allocation** panel to visually track compliance and flag users in near real-time.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-slate-50 border border-slate-100 p-3 mt-4 text-[10px] text-slate-500 leading-relaxed font-semibold">
+                    ⚠️ <span className="font-extrabold text-slate-700">Notice:</span> Changes applied in the Google Admin Console can take up to 24 hours to propagate across your Google Workspace domain.
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Button variant="outline" size="sm" className="bg-white hover:bg-blue-100/50 text-blue-700 hover:text-blue-700 border-blue-200 font-bold text-xs flex-1 sm:flex-initial justify-center gap-1.5 shadow-none transition-colors" asChild>
+              <a
+                href="https://admin.google.com/ac/storage/settings"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open Admin Console
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </Button>
+          </div>
         </div>
 
         {/* Loading Data */}
@@ -445,41 +585,68 @@ export default function StoragePage() {
                     Distribution by Type
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="h-[200px] flex items-center justify-between gap-4 py-0">
                   {pieData.length === 0 ? (
-                    <div className="flex items-center justify-center h-[200px]">
+                    <div className="flex items-center justify-center w-full h-full">
                       <p className="text-xs text-slate-400">No storage data available</p>
                     </div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie
-                          data={pieData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={50}
-                          outerRadius={80}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {pieData.map((entry, index) => (
-                            <Cell
-                              key={entry.ouPath}
-                              fill={getOUColor(entry.ouPath, index)}
-                              stroke="none"
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<CustomPieTooltip />} />
-                        <Legend
-                          formatter={(value: string) => (
-                            <span className="text-[10px] text-slate-600">{value}</span>
-                          )}
-                          iconSize={8}
-                          wrapperStyle={{ fontSize: 10 }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <>
+                      {/* Donut Chart Container */}
+                      <div className="w-[45%] h-full relative flex items-center justify-center shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={pieData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={45}
+                              outerRadius={65}
+                              paddingAngle={3}
+                              dataKey="value"
+                            >
+                              {pieData.map((entry, index) => (
+                                <Cell
+                                  key={entry.ouPath}
+                                  fill={getOUColor(entry.ouPath, index)}
+                                  stroke="none"
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip content={<CustomPieTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        {/* Center count of OUs with data */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">OUs</span>
+                          <span className="text-sm font-extrabold text-slate-800 leading-none">{pieData.length}</span>
+                        </div>
+                      </div>
+
+                      {/* Custom Dynamic Scrollable Legend */}
+                      <div className="flex-1 max-h-[170px] overflow-y-auto space-y-2 pr-1 custom-scrollbar text-left select-none">
+                        {pieData.map((entry, index) => {
+                          const color = getOUColor(entry.ouPath, index);
+                          const pct = totalUsedBytes > 0 ? ((entry.value / totalUsedBytes) * 100).toFixed(1) : "0";
+                          return (
+                            <div key={entry.ouPath} className="flex items-start gap-2 hover:bg-slate-50 p-1.5 rounded-lg transition-colors duration-150">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full mt-1 shrink-0 shadow-sm border border-white"
+                                style={{ backgroundColor: color }}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] font-bold text-slate-800 truncate leading-tight">
+                                  {entry.name}
+                                </p>
+                                <p className="text-[9px] text-slate-500 font-semibold leading-none mt-0.5">
+                                  {formatBytes(entry.value)} <span className="text-slate-400 font-medium">({pct}%)</span>
+                                </p>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -498,28 +665,44 @@ export default function StoragePage() {
                       <p className="text-xs text-slate-400">No usage data available</p>
                     </div>
                   ) : (
-                    <div className="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar">
+                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar text-left select-none">
                       {topConsumers.map((entry, idx) => {
                         const barWidth = Math.max(5, (entry.usedBytes / maxConsumerBytes) * 100)
+                        const profile = userProfileMap[entry.email]
+                        const name = profile?.fullName || entry.email.split("@")[0]
+                        const avatarClass = getAvatarBg(entry.email)
+                        const initials = getInitials(entry.email, profile?.fullName)
+
                         return (
-                          <div key={entry.email} className="flex items-center gap-2">
-                            <span className="text-[9px] font-mono text-slate-400 w-4 text-right shrink-0">
-                              {idx + 1}
+                          <div key={entry.email} className="group flex items-center gap-3 p-1 rounded-lg hover:bg-slate-50 transition-all duration-200">
+                            <span className="text-[10px] font-mono font-bold text-slate-400 w-4 text-right shrink-0">
+                              {String(idx + 1).padStart(2, "0")}
                             </span>
+                            
+                            {/* Avatar Initials Bubble */}
+                            <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-[10px] font-extrabold shrink-0 shadow-sm transition-transform duration-200 group-hover:scale-105 ${avatarClass}`}>
+                              {initials}
+                            </div>
+
+                            {/* Consumer Details */}
                             <div className="flex-1 min-w-0">
-                              <p className="text-[11px] text-slate-700 truncate leading-tight">
-                                {entry.email}
-                              </p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-primary rounded-full transition-all"
-                                    style={{ width: `${barWidth}%` }}
-                                  />
-                                </div>
-                                <span className="text-[9px] font-medium text-slate-500 shrink-0 w-14 text-right">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <h4 className="text-xs font-bold text-slate-800 truncate group-hover:text-primary transition-colors">
+                                  {name}
+                                </h4>
+                                <span className="text-[10px] font-bold text-slate-700 shrink-0 font-mono">
                                   {formatBytes(entry.usedBytes)}
                                 </span>
+                              </div>
+                              <p className="text-[9px] text-slate-400 truncate mt-0.5">
+                                {entry.email}
+                              </p>
+                              {/* Sleek Line Indicator */}
+                              <div className="w-full h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
+                                <div
+                                  className="h-full bg-primary rounded-full transition-all duration-500"
+                                  style={{ width: `${barWidth}%` }}
+                                />
                               </div>
                             </div>
                           </div>

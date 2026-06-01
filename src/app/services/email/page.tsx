@@ -70,6 +70,33 @@ type EmailRule = {
   enabled: boolean
 }
 
+function EmailRulesSkeleton() {
+  return (
+    <div className="w-full divide-y divide-slate-100 animate-pulse bg-white">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex items-center gap-6 py-5 px-6">
+          {/* Email Mail Icon skeleton */}
+          <div className="h-5 w-5 rounded bg-slate-100 shrink-0" />
+          
+          {/* Professional Custom Email skeleton */}
+          <div className="h-4 w-48 bg-slate-200 rounded shrink-0" />
+          
+          {/* Flow Arrow skeleton */}
+          <div className="h-4 w-8 bg-slate-100 rounded hidden md:block shrink-0" />
+          
+          {/* Destination Email Target skeleton */}
+          <div className="flex-1 min-w-0">
+            <div className="h-4 w-[50%] bg-slate-150 rounded" />
+          </div>
+          
+          {/* Actions skeleton */}
+          <div className="h-8 w-8 bg-slate-100 rounded-md shrink-0" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function EmailRoutingPage() {
   const { toast } = useToast()
   const { user } = useUser()
@@ -642,10 +669,7 @@ export default function EmailRoutingPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {isLoadingRules ? (
-                  <div className="flex flex-col items-center justify-center py-32 gap-3">
-                    <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Updating custom emails...</p>
-                  </div>
+                  <EmailRulesSkeleton />
                 ) : verifiedRules.length === 0 && !searchTerm ? (
                   <div className="p-24 text-center space-y-3">
                     <Mail className="w-8 h-8 text-slate-100 mx-auto" />

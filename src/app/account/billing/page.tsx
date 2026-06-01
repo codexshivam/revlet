@@ -466,10 +466,10 @@ export default function BillingPage() {
                             {v.submittedAt?.toDate?.().toLocaleDateString() || 'N/A'}
                           </TableCell>
                           <TableCell>
-                            <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border
-                              ${v.status === "Verified" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
-                                v.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" : 
-                                "bg-amber-50 text-amber-600 border-amber-100"}`}>
+                            <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border pointer-events-none select-none
+                              ${v.status === "Verified" ? "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-50 hover:text-emerald-600" : 
+                                v.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100 hover:bg-red-50 hover:text-red-600" : 
+                                "bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-50 hover:text-amber-600"}`}>
                               {v.status}
                             </Badge>
                           </TableCell>
@@ -519,10 +519,10 @@ export default function BillingPage() {
                       {/* Top Row: Institution Name & Status Badge */}
                       <div className="flex items-start justify-between gap-3">
                         <span className="font-headline font-bold text-slate-800 text-sm leading-snug">{v.organizationName}</span>
-                        <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border uppercase tracking-wider shrink-0
-                          ${v.status === "Verified" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
-                            v.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" : 
-                            "bg-amber-50 text-amber-600 border-amber-100"}`}>
+                        <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border uppercase tracking-wider shrink-0 pointer-events-none select-none
+                          ${v.status === "Verified" ? "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-50 hover:text-emerald-600" : 
+                            v.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100 hover:bg-red-50 hover:text-red-600" : 
+                            "bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-50 hover:text-amber-600"}`}>
                           {v.status}
                         </Badge>
                       </div>

@@ -76,6 +76,36 @@ type DNSRecord = {
   priority?: number
 }
 
+function DNSRecordsSkeleton() {
+  return (
+    <div className="w-full divide-y divide-slate-100 animate-pulse bg-white">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex items-center gap-6 py-5 px-6">
+          {/* Record Type Badge skeleton */}
+          <div className="h-5 w-14 bg-slate-200 rounded shrink-0" />
+          
+          {/* Record Name skeleton */}
+          <div className="h-4 w-40 bg-slate-150 rounded shrink-0" />
+          
+          {/* Record Value Target skeleton */}
+          <div className="flex-1 min-w-0">
+            <div className="h-4 w-[60%] bg-slate-100 rounded" />
+          </div>
+          
+          {/* Proxied toggle skeleton */}
+          <div className="h-4 w-12 bg-slate-100 rounded hidden md:block shrink-0" />
+          
+          {/* Actions skeleton */}
+          <div className="flex justify-end gap-1.5 shrink-0">
+            <div className="h-8 w-8 bg-slate-100 rounded-md" />
+            <div className="h-8 w-8 bg-slate-100 rounded-md" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function DNSManagementPage() {
   const { toast } = useToast()
   const { user } = useUser()
@@ -602,7 +632,12 @@ export default function DNSManagementPage() {
                 </div>
               </CardHeader>
               
-              {isNameserversExpanded && (
+              <div 
+                className={cn(
+                  "transition-all duration-300 ease-in-out overflow-hidden",
+                  isNameserversExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+                )}
+              >
                 <CardContent className="p-4 sm:p-6">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      <div className="space-y-3">
@@ -663,7 +698,7 @@ export default function DNSManagementPage() {
                      </div>
                    </div>
                 </CardContent>
-              )}
+              </div>
             </Card>
 
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
@@ -685,10 +720,7 @@ export default function DNSManagementPage() {
               <CardContent className="p-0">
                 <TooltipProvider>
                   {isLoadingRecords ? (
-                    <div className="flex flex-col items-center justify-center py-32 gap-3">
-                      <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Synchronizing Records...</p>
-                    </div>
+                    <DNSRecordsSkeleton />
                   ) : filteredRecords.length === 0 ? (
                     <div className="p-24 text-center space-y-3">
                       <AlertCircle className="w-8 h-8 text-slate-100 mx-auto" />

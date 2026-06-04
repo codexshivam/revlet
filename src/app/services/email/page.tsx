@@ -21,6 +21,7 @@ import { useUser, useFirestore } from "@/firebase"
 import { doc, setDoc, getDoc, addDoc, collection, serverTimestamp, updateDoc } from "firebase/firestore"
 import Link from "next/link"
 import { useActiveOrg } from "@/hooks/use-active-org"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -423,10 +424,21 @@ export default function EmailRoutingPage() {
   // STATE 1: Loading orgs
   if (isLoadingOrgs) {
     return (
-      <DashboardShell>
-        <div className="flex flex-col items-center justify-center py-40 gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synchronizing Infrastructure...</p>
+      <DashboardShell className="max-w-7xl">
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <div className="flex flex-col gap-1">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-9 w-64 mt-1" />
+          </div>
+          
+          <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-4 sm:px-6">
+              <Skeleton className="h-4 w-48" />
+            </CardHeader>
+            <CardContent className="p-0">
+              <EmailRulesSkeleton />
+            </CardContent>
+          </Card>
         </div>
       </DashboardShell>
     )

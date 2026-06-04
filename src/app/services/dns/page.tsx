@@ -62,6 +62,7 @@ import {
 } from "@/components/ui/tooltip"
 
 import { useActiveOrg } from "@/hooks/use-active-org"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const SUPPORTED_TYPES = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA", "PTR", "NAPTR"]
 const PROXY_SUPPORTED_TYPES = ["A", "AAAA", "CNAME"]
@@ -502,9 +503,41 @@ export default function DNSManagementPage() {
   if (isLoadingOrgs) {
     return (
       <DashboardShell>
-        <div className="flex flex-col items-center justify-center py-40 gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synchronizing Infrastructure...</p>
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <div className="flex flex-col gap-1">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-9 w-64 mt-1" />
+          </div>
+          
+          <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-4 sm:px-6">
+              <Skeleton className="h-4 w-48" />
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+                <div className="space-y-4 md:pl-8 border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0">
+                  <Skeleton className="h-6 w-40" />
+                  <Skeleton className="h-4 w-full max-w-sm" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 px-4 sm:px-6">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-8 w-full sm:w-48" />
+            </CardHeader>
+            <CardContent className="p-0">
+              <DNSRecordsSkeleton />
+            </CardContent>
+          </Card>
         </div>
       </DashboardShell>
     )
@@ -634,11 +667,12 @@ export default function DNSManagementPage() {
               
               <div 
                 className={cn(
-                  "transition-all duration-300 ease-in-out overflow-hidden",
-                  isNameserversExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+                  "grid transition-all duration-300 ease-in-out",
+                  isNameserversExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
                 )}
               >
-                <CardContent className="p-4 sm:p-6">
+                <div className="overflow-hidden">
+                  <CardContent className="p-4 sm:p-6">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      <div className="space-y-3">
                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Assigned Name Servers</p>
@@ -697,7 +731,8 @@ export default function DNSManagementPage() {
                         </div>
                      </div>
                    </div>
-                </CardContent>
+                  </CardContent>
+                </div>
               </div>
             </Card>
 

@@ -601,21 +601,58 @@ export async function getUserStorageReport(adminEmail: string, date?: string) {
     const auth = await getAdminClient(adminEmail);
     const reports = google.admin({ version: 'reports_v1', auth });
 
-    // Default to yesterday (usage reports have a 1-2 day delay)
-    const reportDate = date || (() => {
-      const d = new Date();
-      d.setDate(d.getDate() - 2);
-      return d.toISOString().split('T')[0];
-    })();
+    // Try up to 7 days ago to find available usage report data
+    let reportData = null;
+    
+    if (date) {
+      try {
+        const res = await (reports as any).userUsageReport.get({
+          userKey: 'all',
+          date: date,
+          parameters: 'accounts:drive_used_quota_in_mb,accounts:total_quota_in_mb',
+          maxResults: 500,
+        });
+        reportData = res.data;
+      } catch (err: any) {
+        if (err.code === 400 || err.message?.includes('Data for dates')) {
+          reportData = null;
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      // Loop backwards from 1 day ago up to 7 days ago
+      for (let i = 1; i <= 7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const testDate = d.toISOString().split('T')[0];
+        
+        try {
+          const res = await (reports as any).userUsageReport.get({
+            userKey: 'all',
+            date: testDate,
+            parameters: 'accounts:drive_used_quota_in_mb,accounts:total_quota_in_mb',
+            maxResults: 500,
+          });
+          if (res.data && res.data.usageReports && res.data.usageReports.length > 0) {
+            reportData = res.data;
+            break; // Found data!
+          }
+        } catch (err: any) {
+          // If 400 'Data for dates... is not available', ignore and try next date
+          if (err.code === 400 || err.message?.includes('Data for dates')) {
+            continue;
+          }
+          throw err; // Real error
+        }
+      }
+    }
 
-    const res = await (reports as any).userUsageReport.get({
-      userKey: 'all',
-      date: reportDate,
-      parameters: 'accounts:drive_used_quota_in_mb,accounts:total_quota_in_mb',
-      maxResults: 500,
-    });
+    if (!reportData) {
+      return { success: true, data: [] as StorageUsageEntry[] };
+    }
 
-    const entries: StorageUsageEntry[] = (res.data.usageReports || [])
+    const entries: StorageUsageEntry[] = (reportData.usageReports || [])
       .filter((report: any) => report.parameters)
       .map((report: any) => {
         const params = report.parameters || [];
@@ -633,7 +670,6 @@ export async function getUserStorageReport(adminEmail: string, date?: string) {
     return { success: true, data: entries };
   } catch (error: any) {
     console.error('[Google Workspace] Storage report failed:', error.message);
-    // Storage reports may not be available for all accounts
     if (error.code === 400 || error.message?.includes('Data for dates')) {
       return { success: true, data: [] as StorageUsageEntry[] };
     }

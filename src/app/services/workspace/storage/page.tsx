@@ -430,12 +430,14 @@ export default function StoragePage() {
         </div>
 
         {/* Info Banner */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-left animate-in slide-in-from-top-4 duration-500">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50/30 p-4 text-left animate-in slide-in-from-top-4 duration-500 shadow-sm">
           <div className="flex items-start gap-3 flex-1 min-w-0">
-            <Info className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-            <p className="text-sm text-blue-800 leading-relaxed font-medium">
+            <div className="p-2 bg-blue-100/50 rounded-lg shrink-0">
+              <Info className="w-5 h-5 text-blue-600" />
+            </div>
+            <p className="text-sm text-blue-900/90 leading-relaxed font-medium mt-0.5">
               Storage quotas shown here are tracking targets. To enforce hard limits across your domain, please visit{" "}
-              <span className="font-semibold">
+              <span className="font-semibold text-blue-900 border-b border-blue-200">
                 Google Admin Console → Storage → Storage Settings
               </span>
               .
@@ -444,97 +446,110 @@ export default function StoragePage() {
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 shrink-0">
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="bg-white hover:bg-blue-100/50 text-blue-700 hover:text-blue-700 border-blue-200 font-bold text-xs flex-1 sm:flex-initial justify-center gap-1.5 shadow-none transition-colors">
+                <Button size="sm" className="bg-white hover:bg-blue-50 text-blue-700 hover:text-blue-700 border border-blue-200 font-bold text-xs flex-1 sm:flex-initial justify-center gap-1.5 shadow-none transition-colors">
                   <HelpCircle className="w-3.5 h-3.5" />
                   How to Configure
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md md:max-w-lg select-none text-left border-slate-200">
-                <DialogHeader>
-                  <DialogTitle className="text-lg font-headline font-bold text-slate-900 flex items-center gap-2">
-                    <HardDrive className="w-5 h-5 text-blue-600" />
-                    Enforcing Storage Limits in Google Workspace
-                  </DialogTitle>
-                  <DialogDescription className="text-xs text-slate-500 font-semibold leading-relaxed mt-1">
-                    Revlet tracks and alerts based on policies you define here. To physically prevent users from exceeding limits, you must enforce them in your Google Admin Console.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-2">
-                  <div className="space-y-3.5">
+              <DialogContent className="max-w-md md:max-w-2xl select-none text-left border-slate-200 shadow-2xl overflow-hidden p-0">
+                <div className="bg-slate-900 p-6 md:p-8">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl md:text-2xl font-headline font-bold text-white flex items-center gap-3">
+                      <div className="p-2 bg-blue-500/20 rounded-lg">
+                        <HardDrive className="w-6 h-6 text-blue-400" />
+                      </div>
+                      Enforcing Storage Limits
+                    </DialogTitle>
+                    <DialogDescription className="text-sm text-slate-400 font-medium leading-relaxed mt-2">
+                      Revlet tracks and alerts based on policies you define here. To physically prevent users from exceeding limits, you must enforce them in your Google Admin Console.
+                    </DialogDescription>
+                  </DialogHeader>
+                </div>
+                <div className="p-6 md:p-8 space-y-6 bg-slate-50/50">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+                    {/* Vertical connecting line */}
+                    <div className="hidden md:block absolute left-[19px] top-[24px] bottom-[24px] w-[2px] bg-slate-200/50" />
+                    
                     {/* Step 1 */}
-                    <div className="flex items-start gap-3">
-                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">
+                    <div className="flex items-start gap-4 md:col-span-2 relative z-10">
+                      <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shrink-0 shadow-sm">
                         1
                       </span>
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-slate-800">Log in to Google Admin</h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
+                      <div className="min-w-0 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex-1">
+                        <h4 className="text-sm font-bold text-slate-800">Log in to Google Admin</h4>
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-medium">
                           Go to <a href="https://admin.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">admin.google.com</a> and sign in with your Domain Super Admin account.
                         </p>
                       </div>
                     </div>
 
                     {/* Step 2 */}
-                    <div className="flex items-start gap-3">
-                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">
+                    <div className="flex items-start gap-4 relative z-10">
+                      <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shrink-0 shadow-sm">
                         2
                       </span>
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-slate-800">Navigate to Storage Settings</h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
-                          From the left sidebar menu, expand **Storage** and select **Storage settings** (or click the shortcut button on the banner).
+                      <div className="min-w-0 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex-1">
+                        <h4 className="text-sm font-bold text-slate-800">Navigate to Storage Settings</h4>
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-medium">
+                          From the left sidebar menu, expand <strong className="text-slate-700">Storage</strong> and select <strong className="text-slate-700">Storage settings</strong>.
                         </p>
                       </div>
                     </div>
 
                     {/* Step 3 */}
-                    <div className="flex items-start gap-3">
-                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">
+                    <div className="flex items-start gap-4 relative z-10">
+                      <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shrink-0 shadow-sm">
                         3
                       </span>
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-slate-800">Select Organizational Unit (OU)</h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
-                          In the left tree view panel, click on the target OU (e.g. `/Students` or `/Teachers`) to apply specific storage restrictions.
+                      <div className="min-w-0 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex-1">
+                        <h4 className="text-sm font-bold text-slate-800">Select Organizational Unit</h4>
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-medium">
+                          In the left tree view panel, click on the target OU (e.g. <code className="text-[10px] bg-slate-100 px-1 py-0.5 rounded text-slate-700">/Students</code>) to apply restrictions.
                         </p>
                       </div>
                     </div>
 
                     {/* Step 4 */}
-                    <div className="flex items-start gap-3">
-                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">
+                    <div className="flex items-start gap-4 relative z-10">
+                      <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shrink-0 shadow-sm">
                         4
                       </span>
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-slate-800">Set Storage Limits</h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
-                          Under **User storage limit**, select **On** and define the hard storage quota (e.g., 20 GB or 100 GB). Click **Save** (or **Override** if inheriting).
+                      <div className="min-w-0 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex-1">
+                        <h4 className="text-sm font-bold text-slate-800">Set Storage Limits</h4>
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-medium">
+                          Under <strong className="text-slate-700">User storage limit</strong>, select <strong className="text-slate-700">On</strong> and define the quota. Click <strong className="text-slate-700">Save</strong>.
                         </p>
                       </div>
                     </div>
 
                     {/* Step 5 */}
-                    <div className="flex items-start gap-3">
-                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 text-[10px] font-bold shrink-0 mt-0.5">
+                    <div className="flex items-start gap-4 relative z-10 md:col-span-2">
+                      <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500 border border-emerald-600 text-white text-sm font-bold shrink-0 shadow-sm shadow-emerald-500/20">
                         5
                       </span>
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-slate-800">Track and Alert in Revlet</h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">
-                          Return to this screen and configure the same quotas in the **Group-Level Allocation** panel to visually track compliance and flag users in near real-time.
+                      <div className="min-w-0 bg-white p-4 rounded-xl border border-emerald-100 shadow-sm shadow-emerald-500/5 ring-1 ring-emerald-500/20 flex-1">
+                        <h4 className="text-sm font-bold text-emerald-800">Track and Alert in Revlet</h4>
+                        <p className="text-xs text-emerald-600/80 mt-1.5 leading-relaxed font-medium">
+                          Return to this screen to visually track compliance and flag users in near real-time.
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-lg bg-slate-50 border border-slate-100 p-3 mt-4 text-[10px] text-slate-500 leading-relaxed font-semibold">
-                    ⚠️ <span className="font-extrabold text-slate-700">Notice:</span> Changes applied in the Google Admin Console can take up to 24 hours to propagate across your Google Workspace domain.
+                  <div className="rounded-xl bg-amber-50 border border-amber-200/50 p-4 text-xs text-amber-800 leading-relaxed font-medium flex items-start gap-3">
+                    <div className="p-1.5 bg-amber-100 rounded-md shrink-0">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <p>
+                      <strong className="font-bold text-amber-900 block mb-0.5">Notice</strong>
+                      Changes applied in the Google Admin Console can take up to 24 hours to propagate across your Google Workspace domain.
+                    </p>
                   </div>
                 </div>
               </DialogContent>
             </Dialog>
 
-            <Button variant="outline" size="sm" className="bg-white hover:bg-blue-100/50 text-blue-700 hover:text-blue-700 border-blue-200 font-bold text-xs flex-1 sm:flex-initial justify-center gap-1.5 shadow-none transition-colors" asChild>
+            <Button size="sm" className="bg-white hover:bg-blue-50 text-blue-700 hover:text-blue-700 border border-blue-200 font-bold text-xs flex-1 sm:flex-initial justify-center gap-1.5 shadow-none transition-colors" asChild>
               <a
                 href="https://admin.google.com/ac/storage/settings"
                 target="_blank"
@@ -624,23 +639,30 @@ export default function StoragePage() {
                       </div>
 
                       {/* Custom Dynamic Scrollable Legend */}
-                      <div className="flex-1 max-h-[170px] overflow-y-auto space-y-2 pr-1 custom-scrollbar text-left select-none">
+                      <div className="flex-1 h-full overflow-y-auto space-y-2 pr-2 custom-scrollbar text-left select-none py-2">
                         {pieData.map((entry, index) => {
                           const color = getOUColor(entry.ouPath, index);
                           const pct = totalUsedBytes > 0 ? ((entry.value / totalUsedBytes) * 100).toFixed(1) : "0";
                           return (
-                            <div key={entry.ouPath} className="flex items-start gap-2 hover:bg-slate-50 p-1.5 rounded-lg transition-colors duration-150">
-                              <span
-                                className="w-2.5 h-2.5 rounded-full mt-1 shrink-0 shadow-sm border border-white"
-                                style={{ backgroundColor: color }}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[10px] font-bold text-slate-800 truncate leading-tight">
-                                  {entry.name}
-                                </p>
-                                <p className="text-[9px] text-slate-500 font-semibold leading-none mt-0.5">
-                                  {formatBytes(entry.value)} <span className="text-slate-400 font-medium">({pct}%)</span>
-                                </p>
+                            <div key={entry.ouPath} className="group flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all duration-200">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span
+                                  className="w-3 h-3 rounded-md shrink-0 shadow-sm"
+                                  style={{ backgroundColor: color }}
+                                />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-800 truncate leading-tight group-hover:text-primary transition-colors">
+                                    {entry.name}
+                                  </p>
+                                  <p className="text-[10px] text-slate-500 font-medium leading-none mt-1">
+                                    {pct}% of pool
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0 bg-slate-50 px-2 py-1 rounded-lg group-hover:bg-white border border-transparent group-hover:border-slate-100 transition-colors">
+                                <span className="text-[10px] font-bold text-slate-700 font-mono">
+                                  {formatBytes(entry.value)}
+                                </span>
                               </div>
                             </div>
                           )
@@ -665,7 +687,7 @@ export default function StoragePage() {
                       <p className="text-xs text-slate-400">No usage data available</p>
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar text-left select-none">
+                    <div className="space-y-2 h-[200px] overflow-y-auto pr-2 custom-scrollbar text-left select-none py-1">
                       {topConsumers.map((entry, idx) => {
                         const barWidth = Math.max(5, (entry.usedBytes / maxConsumerBytes) * 100)
                         const profile = userProfileMap[entry.email]
@@ -674,31 +696,35 @@ export default function StoragePage() {
                         const initials = getInitials(entry.email, profile?.fullName)
 
                         return (
-                          <div key={entry.email} className="group flex items-center gap-3 p-1 rounded-lg hover:bg-slate-50 transition-all duration-200">
-                            <span className="text-[10px] font-mono font-bold text-slate-400 w-4 text-right shrink-0">
-                              {String(idx + 1).padStart(2, "0")}
-                            </span>
+                          <div key={entry.email} className="group flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all duration-200">
+                            <div className="flex flex-col items-center justify-center w-5 shrink-0">
+                              <span className="text-[10px] font-mono font-bold text-slate-400 group-hover:text-slate-600 transition-colors">
+                                {String(idx + 1).padStart(2, "0")}
+                              </span>
+                            </div>
                             
                             {/* Avatar Initials Bubble */}
-                            <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-[10px] font-extrabold shrink-0 shadow-sm transition-transform duration-200 group-hover:scale-105 ${avatarClass}`}>
+                            <div className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs font-extrabold shrink-0 shadow-sm transition-transform duration-200 group-hover:scale-105 ${avatarClass}`}>
                               {initials}
                             </div>
 
                             {/* Consumer Details */}
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-baseline justify-between gap-2">
-                                <h4 className="text-xs font-bold text-slate-800 truncate group-hover:text-primary transition-colors">
-                                  {name}
-                                </h4>
-                                <span className="text-[10px] font-bold text-slate-700 shrink-0 font-mono">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <div className="min-w-0">
+                                  <h4 className="text-xs font-bold text-slate-800 truncate group-hover:text-primary transition-colors">
+                                    {name}
+                                  </h4>
+                                  <p className="text-[10px] text-slate-500 truncate">
+                                    {entry.email}
+                                  </p>
+                                </div>
+                                <span className="text-[11px] font-bold text-slate-700 shrink-0 font-mono bg-slate-50 px-2 py-1 rounded-lg group-hover:bg-white border border-transparent group-hover:border-slate-100 transition-colors">
                                   {formatBytes(entry.usedBytes)}
                                 </span>
                               </div>
-                              <p className="text-[9px] text-slate-400 truncate mt-0.5">
-                                {entry.email}
-                              </p>
                               {/* Sleek Line Indicator */}
-                              <div className="w-full h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
+                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                 <div
                                   className="h-full bg-primary rounded-full transition-all duration-500"
                                   style={{ width: `${barWidth}%` }}

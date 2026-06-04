@@ -52,6 +52,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Loader2,
   UserMinus,
@@ -69,6 +76,8 @@ import {
   Globe,
   AlertCircle,
   Info,
+  MoreVertical,
+  RefreshCw,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -150,6 +159,161 @@ export default function WorkspaceDeactivatedPage() {
   const [deletedLogs, setDeletedLogs] = useState<any[]>([])
   const [isLoadingDeleted, setIsLoadingDeleted] = useState(true)
   const [isRecovering, setIsRecovering] = useState<string | null>(null)
+
+  // ─── Batch Selection State ───────────────────────────────────────────────
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
+  const [selectionAction, setSelectionAction] = useState<"reactivate" | "delete" | "recover" | null>(null)
+  const [isBatchReactivateOpen, setIsBatchReactivateOpen] = useState(false)
+  const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false)
+  const [batchDeleteConfirmText, setBatchDeleteConfirmText] = useState("")
+  const [isBatchRecoverOpen, setIsBatchRecoverOpen] = useState(false)
+  const [batchRecoveryOUPath, setBatchRecoveryOUPath] = useState("/Students")
+
+  // Reset selection when tab changes
+  useEffect(() => {
+    setIsSelectionMode(false)
+    setSelectedUserIds(new Set())
+    setSelectionAction(null)
+  }, [activeTab])
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(userId)) {
+        next.delete(userId)
+      } else {
+        next.add(userId)
+      }
+      return next
+    })
+  }
+
+  const toggleAllSelection = (userIds: string[]) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev)
+      const allSelected = userIds.every((id) => next.has(id))
+      if (allSelected) {
+        userIds.forEach((id) => next.delete(id))
+      } else {
+        userIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const handleBatchReactivate = async () => {
+    if (!adminEmail || selectedUserIds.size === 0) return
+    setIsSubmitting(true)
+    let successCount = 0
+    let failureCount = 0
+
+    for (const userId of Array.from(selectedUserIds)) {
+      try {
+        const res = await updateUser(adminEmail, userId, { suspended: false })
+        if (res.success) {
+          successCount++
+        } else {
+          failureCount++
+        }
+      } catch (err) {
+        failureCount++
+      }
+    }
+
+    toast({
+      title: "Batch Reactivation Complete",
+      description: `Successfully reactivated ${successCount} user(s). ${failureCount > 0 ? `Failed: ${failureCount}` : ""}`,
+      variant: failureCount > 0 ? "destructive" : "default",
+    })
+
+    setIsBatchReactivateOpen(false)
+    setIsSelectionMode(false)
+    setSelectedUserIds(new Set())
+    setSelectionAction(null)
+    fetchSuspendedUsers()
+    setIsSubmitting(false)
+  }
+
+  const handleBatchDelete = async () => {
+    if (!adminEmail || selectedUserIds.size === 0) return
+    if (batchDeleteConfirmText !== "DELETE") {
+      toast({
+        title: "Confirmation Required",
+        description: "Please type DELETE to confirm batch deletion.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    let successCount = 0
+    let failureCount = 0
+
+    for (const userId of Array.from(selectedUserIds)) {
+      try {
+        const res = await deleteUser(adminEmail, userId)
+        if (res.success) {
+          successCount++
+        } else {
+          failureCount++
+        }
+      } catch (err) {
+        failureCount++
+      }
+    }
+
+    toast({
+      title: "Batch Deletion Complete",
+      description: `Successfully deleted ${successCount} user(s) permanently. ${failureCount > 0 ? `Failed: ${failureCount}` : ""}`,
+      variant: failureCount > 0 ? "destructive" : "default",
+    })
+
+    setIsBatchDeleteOpen(false)
+    setBatchDeleteConfirmText("")
+    setIsSelectionMode(false)
+    setSelectedUserIds(new Set())
+    setSelectionAction(null)
+    fetchSuspendedUsers()
+    setIsSubmitting(false)
+  }
+
+  const handleBatchRecover = async () => {
+    if (!adminEmail || selectedUserIds.size === 0) return
+    setIsSubmitting(true)
+    let successCount = 0
+    let failureCount = 0
+
+    for (const logId of Array.from(selectedUserIds)) {
+      const log = deletedLogs.find((d) => d.id === logId)
+      if (!log) continue
+      try {
+        const res = await undeleteUser(adminEmail, log.userEmail, batchRecoveryOUPath)
+        if (res.success) {
+          successCount++
+        } else {
+          failureCount++
+        }
+      } catch (err) {
+        failureCount++
+      }
+    }
+
+    toast({
+      title: "Batch Recovery Complete",
+      description: `Successfully recovered ${successCount} user(s). ${failureCount > 0 ? `Failed: ${failureCount}` : ""}`,
+      variant: failureCount > 0 ? "destructive" : "default",
+    })
+
+    setIsBatchRecoverOpen(false)
+    setIsSelectionMode(false)
+    setSelectedUserIds(new Set())
+    setSelectionAction(null)
+    fetchSuspendedUsers()
+    fetchDeletedUsers()
+    setIsSubmitting(false)
+  }
+
 
   // ─── Live OUs & Recovery Destination ─────────────────────────────────────
   const [availableOUs, setAvailableOUs] = useState<{ label: string; path: string }[]>([
@@ -711,15 +875,110 @@ export default function WorkspaceDeactivatedPage() {
             </span>
             <h1 className="text-3xl font-headline font-bold text-slate-900">Deactivated Users</h1>
           </div>
-          <Badge className="text-[9px] font-bold px-2.5 py-1 border shadow-none bg-white text-slate-500 border-slate-200 self-start md:self-auto pointer-events-none select-none">
-            <svg className="w-3 h-3 mr-1.5" viewBox="0 0 24 24" fill="none">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.76h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Powered by Google
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            {isSelectionMode ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsSelectionMode(false)
+                    setSelectedUserIds(new Set())
+                    setSelectionAction(null)
+                  }}
+                  className="border-slate-200 text-slate-500 font-bold h-10 px-4 text-xs shadow-none mr-2"
+                >
+                  Cancel Selection
+                </Button>
+                {selectionAction === "reactivate" && (
+                  <Button
+                    onClick={() => setIsBatchReactivateOpen(true)}
+                    disabled={isSubmitting || selectedUserIds.size === 0}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                    Reactivate {selectedUserIds.size} Users
+                  </Button>
+                )}
+                {selectionAction === "delete" && (
+                  <Button
+                    onClick={() => {
+                      setBatchDeleteConfirmText("")
+                      setIsBatchDeleteOpen(true)
+                    }}
+                    disabled={isSubmitting || selectedUserIds.size === 0}
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    Delete {selectedUserIds.size} Users
+                  </Button>
+                )}
+                {selectionAction === "recover" && (
+                  <Button
+                    onClick={() => setIsBatchRecoverOpen(true)}
+                    disabled={isSubmitting || selectedUserIds.size === 0}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
+                    Recover {selectedUserIds.size} Users
+                  </Button>
+                )}
+              </>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="border-slate-200 h-10 w-10 p-0 text-slate-500 shadow-none mr-2">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 font-bold">
+                  {activeTab === "suspended" ? (
+                    <>
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          setSelectionAction("reactivate")
+                          setIsSelectionMode(true)
+                        }}
+                        className="cursor-pointer flex items-center gap-2 text-xs focus:bg-emerald-50 focus:text-emerald-750 text-emerald-600"
+                      >
+                        <Play className="w-4 h-4" />
+                        <span>Reactivate Users...</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          setSelectionAction("delete")
+                          setIsSelectionMode(true)
+                        }}
+                        className="cursor-pointer flex items-center gap-2 text-xs focus:bg-red-50 focus:text-red-750 text-red-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete Users...</span>
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        setSelectionAction("recover")
+                        setIsSelectionMode(true)
+                      }}
+                      className="cursor-pointer flex items-center gap-2 text-xs focus:bg-emerald-50 focus:text-emerald-750 text-emerald-600"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      <span>Recover Users...</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <Badge className="text-[9px] font-bold px-2.5 py-1 border shadow-none bg-white text-slate-500 border-slate-200 self-start md:self-auto pointer-events-none select-none">
+              <svg className="w-3 h-3 mr-1.5" viewBox="0 0 24 24" fill="none">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.76h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Powered by Google
+            </Badge>
+          </div>
         </div>
 
         {/* ─── Summary Cards ───────────────────────────────────────────────── */}
@@ -1015,7 +1274,21 @@ export default function WorkspaceDeactivatedPage() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-slate-50/50">
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-6">
+                          {isSelectionMode && (
+                            <TableHead className="w-12 pl-6">
+                              <Checkbox
+                                checked={
+                                  filteredSuspendedUsers.length > 0 &&
+                                  filteredSuspendedUsers.every((u) => selectedUserIds.has(u.id))
+                                }
+                                onCheckedChange={() =>
+                                  toggleAllSelection(filteredSuspendedUsers.map((u) => u.id))
+                                }
+                                className="border-slate-300"
+                              />
+                            </TableHead>
+                          )}
+                          <TableHead className={cn("text-[10px] font-bold text-slate-400 uppercase tracking-widest", !isSelectionMode && "pl-6")}>
                             User Profile
                           </TableHead>
                           <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -1042,8 +1315,17 @@ export default function WorkspaceDeactivatedPage() {
 
                           return (
                             <TableRow key={u.id} className="group hover:bg-slate-50/30">
+                              {isSelectionMode && (
+                                <TableCell className="pl-6 py-3.5">
+                                  <Checkbox
+                                    checked={selectedUserIds.has(u.id)}
+                                    onCheckedChange={() => toggleUserSelection(u.id)}
+                                    className="border-slate-300"
+                                  />
+                                </TableCell>
+                              )}
                               {/* Name + Email stacked */}
-                              <TableCell className="pl-6 py-3.5">
+                              <TableCell className={cn("py-3.5", !isSelectionMode && "pl-6")}>
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 border border-slate-200">
                                     {userInitials}
@@ -1129,14 +1411,23 @@ export default function WorkspaceDeactivatedPage() {
                           className="relative p-5 rounded-xl border bg-white shadow-sm flex flex-col gap-4 border-slate-100 hover:shadow-md transition-all border-l-4 border-l-red-500"
                         >
                           {/* Card Header: Avatar & Info */}
-                          <div className="flex items-center gap-3 min-w-0 text-left">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200 shrink-0">
-                              {userInitials}
+                          <div className="flex items-start justify-between gap-3 text-left">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200 shrink-0">
+                                {userInitials}
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="text-sm font-bold text-slate-800 truncate leading-none">{u.fullName}</h4>
+                                <p className="text-xs font-mono text-slate-400 truncate mt-1">{u.email}</p>
+                              </div>
                             </div>
-                            <div className="min-w-0">
-                              <h4 className="text-sm font-bold text-slate-800 truncate leading-none">{u.fullName}</h4>
-                              <p className="text-xs font-mono text-slate-400 truncate mt-1">{u.email}</p>
-                            </div>
+                            {isSelectionMode && (
+                              <Checkbox
+                                checked={selectedUserIds.has(u.id)}
+                                onCheckedChange={() => toggleUserSelection(u.id)}
+                                className="border-slate-350 w-5 h-5"
+                              />
+                            )}
                           </div>
 
                           {/* Card Body: Details */}
@@ -1238,7 +1529,21 @@ export default function WorkspaceDeactivatedPage() {
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-slate-50/50">
-                              <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-6">
+                              {isSelectionMode && (
+                                <TableHead className="w-12 pl-6">
+                                  <Checkbox
+                                    checked={
+                                      filteredDeletedUsers.length > 0 &&
+                                      filteredDeletedUsers.every((log) => selectedUserIds.has(log.id))
+                                    }
+                                    onCheckedChange={() =>
+                                      toggleAllSelection(filteredDeletedUsers.map((log) => log.id))
+                                    }
+                                    className="border-slate-300"
+                                  />
+                                </TableHead>
+                              )}
+                              <TableHead className={cn("text-[10px] font-bold text-slate-400 uppercase tracking-widest", !isSelectionMode && "pl-6")}>
                                 Deleted Account
                               </TableHead>
                               <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -1263,24 +1568,33 @@ export default function WorkspaceDeactivatedPage() {
                                 ? Math.max(0, 20 - Math.floor((new Date().getTime() - deletionDate.getTime()) / (1000 * 60 * 60 * 24))) 
                                 : 20
 
-                              return (
-                                <TableRow key={log.id} className="group hover:bg-slate-50/30">
-                                  {/* Name + Email */}
-                                  <TableCell className="pl-6 py-3.5">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-[10px] font-bold text-red-600 border border-red-100">
-                                        {userInitials}
+                                return (
+                                  <TableRow key={log.id} className="group hover:bg-slate-50/30">
+                                    {isSelectionMode && (
+                                      <TableCell className="pl-6 py-3.5">
+                                        <Checkbox
+                                          checked={selectedUserIds.has(log.id)}
+                                          onCheckedChange={() => toggleUserSelection(log.id)}
+                                          className="border-slate-300"
+                                        />
+                                      </TableCell>
+                                    )}
+                                    {/* Name + Email */}
+                                    <TableCell className={cn("py-3.5", isSelectionMode ? "pl-2" : "pl-6")}>
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-[10px] font-bold text-red-600 border border-red-100">
+                                          {userInitials}
+                                        </div>
+                                        <div className="flex flex-col min-w-0">
+                                          <span className="text-sm font-semibold text-slate-800 truncate">
+                                            {log.userName || "Unknown User"}
+                                          </span>
+                                          <span className="text-xs text-slate-400 font-medium font-mono truncate">
+                                            {log.userEmail}
+                                          </span>
+                                        </div>
                                       </div>
-                                      <div className="flex flex-col min-w-0">
-                                        <span className="text-sm font-semibold text-slate-800 truncate">
-                                          {log.userName || "Unknown User"}
-                                        </span>
-                                        <span className="text-xs text-slate-400 font-medium font-mono truncate">
-                                          {log.userEmail}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </TableCell>
+                                    </TableCell>
 
                                   {/* Original Type */}
                                   <TableCell>
@@ -1337,14 +1651,23 @@ export default function WorkspaceDeactivatedPage() {
                               className="relative p-5 rounded-xl border bg-white shadow-sm flex flex-col gap-4 border-slate-100 hover:shadow-md transition-all border-l-4 border-l-red-500"
                             >
                               {/* Card Header: Name + Email */}
-                              <div className="flex items-center gap-3 min-w-0 text-left">
-                                <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-xs font-bold text-red-600 border border-red-100 shrink-0">
-                                  {userInitials}
+                              <div className="flex items-start justify-between gap-3 text-left">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-xs font-bold text-red-600 border border-red-100 shrink-0">
+                                    {userInitials}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h4 className="text-sm font-bold text-slate-800 truncate leading-none">{log.userName || "Unknown User"}</h4>
+                                    <p className="text-xs font-mono text-slate-400 truncate mt-1">{log.userEmail}</p>
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <h4 className="text-sm font-bold text-slate-800 truncate leading-none">{log.userName || "Unknown User"}</h4>
-                                  <p className="text-xs font-mono text-slate-400 truncate mt-1">{log.userEmail}</p>
-                                </div>
+                                {isSelectionMode && (
+                                  <Checkbox
+                                    checked={selectedUserIds.has(log.id)}
+                                    onCheckedChange={() => toggleUserSelection(log.id)}
+                                    className="border-slate-350 w-5 h-5"
+                                  />
+                                )}
                               </div>
 
                               {/* Card Body: Details */}
@@ -1554,6 +1877,141 @@ export default function WorkspaceDeactivatedPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Batch Reactivate Account Alert */}
+      <AlertDialog open={isBatchReactivateOpen} onOpenChange={setIsBatchReactivateOpen}>
+        <AlertDialogContent className="bg-white rounded-lg shadow-xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-headline font-bold text-slate-800 flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-emerald-600" />
+              Reactivate Selected Accounts?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs md:text-sm text-slate-500 leading-relaxed font-medium">
+              Are you sure you want to restore and reactivate the {selectedUserIds.size} selected Google Workspace account(s)?
+              This will restore their access to all Google services, Drive files, and Gmail inbox immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting} className="text-xs font-bold border-slate-200 h-10">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleBatchReactivate()
+              }}
+              disabled={isSubmitting}
+              className="text-xs font-bold h-10 px-5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+              Reactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Batch Permanent Delete Alert */}
+      <AlertDialog open={isBatchDeleteOpen} onOpenChange={setIsBatchDeleteOpen}>
+        <AlertDialogContent className="bg-white rounded-lg shadow-xl max-w-md border-red-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-headline font-bold text-red-600 flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5" />
+              Permanently Delete Selected Accounts?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs md:text-sm text-slate-500 leading-relaxed font-medium">
+              You are about to <span className="text-red-600 font-bold">permanently delete</span> the {selectedUserIds.size} selected account(s).
+              <br />
+              <span className="text-red-500 font-semibold text-[11px] block mt-1 bg-red-50/50 p-2 rounded border border-red-100/50">
+                Warning: This action is irreversible. All email messages, Drive documents, and custom workspace data associated with these user accounts will be lost forever.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {/* Typing confirmation */}
+          <div className="space-y-1.5 px-1 py-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Type DELETE to confirm batch deletion:
+            </label>
+            <Input
+              type="text"
+              placeholder="DELETE"
+              value={batchDeleteConfirmText}
+              onChange={(e) => setBatchDeleteConfirmText(e.target.value)}
+              className="h-10 text-xs border-red-100 focus:border-red-400 focus:ring-red-400 font-mono"
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting} className="text-xs font-bold border-slate-200 h-10">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleBatchDelete()
+              }}
+              disabled={isSubmitting || batchDeleteConfirmText !== "DELETE"}
+              className="text-xs font-bold h-10 px-5 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+              Confirm Permanent Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Batch Recover Deleted Accounts Dialog */}
+      <Dialog open={isBatchRecoverOpen} onOpenChange={setIsBatchRecoverOpen}>
+        <DialogContent className="bg-white rounded-lg shadow-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-headline font-bold text-slate-800 flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-emerald-600" />
+              Recover Selected Deleted Accounts?
+            </DialogTitle>
+            <DialogDescription className="text-xs md:text-sm text-slate-500 leading-relaxed font-medium">
+              Restore the workspace profiles and reactivate directory access immediately for the {selectedUserIds.size} selected account(s).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-3">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                Select Type (Organizational Unit) to Recover into:
+              </label>
+              <Select value={batchRecoveryOUPath} onValueChange={setBatchRecoveryOUPath}>
+                <SelectTrigger className="h-10 text-xs font-semibold border-slate-200">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableOUs.map((ou) => (
+                    <SelectItem key={ou.path} value={ou.path} className="text-xs font-semibold">
+                      {ou.label} ({formatType(ou.path)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => setIsBatchRecoverOpen(false)}
+              className="text-xs font-bold border-slate-200 h-10 shadow-none"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBatchRecover}
+              disabled={isSubmitting}
+              className="text-xs font-bold h-10 px-5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+              Recover Accounts
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </DashboardShell>
   )

@@ -9,13 +9,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { Loader2, GraduationCap, Users as UsersIcon, Search, X, Calendar as CalendarIcon, RefreshCw, HardDrive, AlertCircle } from "lucide-react"
+import { Loader2, GraduationCap, Users as UsersIcon, Search, X, Calendar as CalendarIcon, RefreshCw, HardDrive, AlertCircle, MoreVertical, Play, Ban } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { format, subDays, startOfYear } from "date-fns"
 import { cn } from "@/lib/utils"
 
+import { Checkbox } from "@/components/ui/checkbox"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
@@ -44,6 +46,111 @@ export default function WorkspaceAlumniPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isToggling, setIsToggling] = useState<string | null>(null) // track userId being toggled
   const [searchTerm, setSearchTerm] = useState("")
+
+  // Batch Selection State
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
+  const [selectionAction, setSelectionAction] = useState<"restore" | "suspend" | "reactivate" | null>(null)
+  const [isBatchRestoreOpen, setIsBatchRestoreOpen] = useState(false)
+  const [isBatchSuspendOpen, setIsBatchSuspendOpen] = useState(false)
+  const [isBatchReactivateOpen, setIsBatchReactivateOpen] = useState(false)
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(userId)) {
+        next.delete(userId)
+      } else {
+        next.add(userId)
+      }
+      return next
+    })
+  }
+
+  const toggleAllSelection = (userIds: string[]) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev)
+      const allSelected = userIds.every((id) => next.has(id))
+      if (allSelected) {
+        userIds.forEach((id) => next.delete(id))
+      } else {
+        userIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const handleBatchRestore = async () => {
+    if (!selectedOrg?.workspaceAdminEmail || selectedUserIds.size === 0) return
+    setIsRestoring(true)
+    let successCount = 0
+    let failureCount = 0
+
+    for (const userId of Array.from(selectedUserIds)) {
+      try {
+        const user = alumni.find((u) => u.id === userId)
+        if (!user) continue
+        const updates: any = { orgUnitPath: "/" }
+        if (user.suspended) updates.suspended = false
+
+        const res = await updateUser(selectedOrg.workspaceAdminEmail, userId, updates)
+        if (res.success) {
+          successCount++
+        } else {
+          failureCount++
+        }
+      } catch (err) {
+        failureCount++
+      }
+    }
+
+    toast({
+      title: "Batch Restore Complete",
+      description: `Successfully restored ${successCount} user(s). ${failureCount > 0 ? `Failed: ${failureCount}` : ""}`,
+      variant: failureCount > 0 ? "destructive" : "default",
+    })
+
+    setIsBatchRestoreOpen(false)
+    setIsSelectionMode(false)
+    setSelectedUserIds(new Set())
+    setSelectionAction(null)
+    fetchAlumniData()
+    setIsRestoring(false)
+  }
+
+  const handleBatchSuspend = async (suspend: boolean) => {
+    if (!selectedOrg?.workspaceAdminEmail || selectedUserIds.size === 0) return
+    setIsRestoring(true)
+    let successCount = 0
+    let failureCount = 0
+
+    for (const userId of Array.from(selectedUserIds)) {
+      try {
+        const res = await updateUser(selectedOrg.workspaceAdminEmail, userId, { suspended: suspend })
+        if (res.success) {
+          successCount++
+        } else {
+          failureCount++
+        }
+      } catch (err) {
+        failureCount++
+      }
+    }
+
+    toast({
+      title: suspend ? "Batch Suspension Complete" : "Batch Reactivation Complete",
+      description: `Successfully updated ${successCount} user(s). ${failureCount > 0 ? `Failed: ${failureCount}` : ""}`,
+      variant: failureCount > 0 ? "destructive" : "default",
+    })
+
+    setIsBatchSuspendOpen(false)
+    setIsBatchReactivateOpen(false)
+    setIsSelectionMode(false)
+    setSelectedUserIds(new Set())
+    setSelectionAction(null)
+    fetchAlumniData()
+    setIsRestoring(false)
+  }
 
   // Restore Dialog
   const [userToRestore, setUserToRestore] = useState<WorkspaceUser | null>(null)
@@ -321,6 +428,91 @@ export default function WorkspaceAlumniPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h1 className="text-4xl font-headline font-bold text-[#191C1E] tracking-tight">Alumni Manager</h1>
             <div className="flex items-center gap-2">
+              {isSelectionMode ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsSelectionMode(false)
+                      setSelectedUserIds(new Set())
+                      setSelectionAction(null)
+                    }}
+                    className="border-slate-200 text-slate-500 font-bold h-10 px-4 text-xs shadow-none mr-2"
+                  >
+                    Cancel Selection
+                  </Button>
+                  {selectionAction === "restore" && (
+                    <Button
+                      onClick={() => setIsBatchRestoreOpen(true)}
+                      disabled={isRestoring || selectedUserIds.size === 0}
+                      className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
+                    >
+                      {isRestoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      Restore {selectedUserIds.size} Alumni
+                    </Button>
+                  )}
+                  {selectionAction === "suspend" && (
+                    <Button
+                      onClick={() => setIsBatchSuspendOpen(true)}
+                      disabled={isRestoring || selectedUserIds.size === 0}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
+                    >
+                      {isRestoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                      Suspend {selectedUserIds.size} Alumni
+                    </Button>
+                  )}
+                  {selectionAction === "reactivate" && (
+                    <Button
+                      onClick={() => setIsBatchReactivateOpen(true)}
+                      disabled={isRestoring || selectedUserIds.size === 0}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
+                    >
+                      {isRestoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                      Reactivate {selectedUserIds.size} Alumni
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="border-slate-200 h-10 w-10 p-0 text-slate-500 shadow-none mr-2">
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 font-bold">
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        setSelectionAction("restore")
+                        setIsSelectionMode(true)
+                      }}
+                      className="cursor-pointer flex items-center gap-2 text-xs focus:bg-slate-50 focus:text-slate-900"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Restore Alumni...</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        setSelectionAction("suspend")
+                        setIsSelectionMode(true)
+                      }}
+                      className="cursor-pointer flex items-center gap-2 text-xs focus:bg-amber-50 focus:text-amber-750 text-amber-600"
+                    >
+                      <Ban className="w-4 h-4" />
+                      <span>Suspend Alumni...</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        setSelectionAction("reactivate")
+                        setIsSelectionMode(true)
+                      }}
+                      className="cursor-pointer flex items-center gap-2 text-xs focus:bg-emerald-50 focus:text-emerald-750 text-emerald-600"
+                    >
+                      <Play className="w-4 h-4" />
+                      <span>Reactivate Alumni...</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               <Badge className="text-[9px] font-bold px-2.5 py-1 border shadow-none bg-white text-slate-500 border-slate-200 pointer-events-none select-none">
                 <svg className="w-3 h-3 mr-1.5" viewBox="0 0 24 24" fill="none">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.76h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -491,7 +683,21 @@ export default function WorkspaceAlumniPage() {
                   <Table>
                     <TableHeader className="bg-slate-50/80">
                       <TableRow className="border-b border-slate-100">
-                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-6 tracking-wider text-slate-500">Name</TableHead>
+                        {isSelectionMode && (
+                          <TableHead className="w-12 pl-6">
+                            <Checkbox
+                              checked={
+                                filteredAlumni.length > 0 &&
+                                filteredAlumni.every((user) => selectedUserIds.has(user.id))
+                              }
+                              onCheckedChange={() =>
+                                toggleAllSelection(filteredAlumni.map((user) => user.id))
+                              }
+                              className="border-slate-300"
+                            />
+                          </TableHead>
+                        )}
+                        <TableHead className={cn("text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500", !isSelectionMode && "pl-6")}>Name</TableHead>
                         <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500">Account Created</TableHead>
                         <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500">Storage Footprint</TableHead>
                         <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 tracking-wider text-slate-500">Account Actions</TableHead>
@@ -503,8 +709,17 @@ export default function WorkspaceAlumniPage() {
 
                         return (
                           <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
+                            {isSelectionMode && (
+                              <TableCell className="pl-6 py-4">
+                                <Checkbox
+                                  checked={selectedUserIds.has(user.id)}
+                                  onCheckedChange={() => toggleUserSelection(user.id)}
+                                  className="border-slate-300"
+                                />
+                              </TableCell>
+                            )}
                             {/* Name and Email */}
-                            <TableCell className="pl-6 py-4">
+                            <TableCell className={cn("py-4", isSelectionMode ? "pl-2" : "pl-6")}>
                               <div className="flex flex-col gap-0.5">
                                 <span className="font-bold text-[#191C1E] text-sm truncate max-w-[200px]">
                                   {user.fullName || "Unknown Name"}
@@ -581,17 +796,26 @@ export default function WorkspaceAlumniPage() {
                         )}
                       >
                         {/* Card Header: Name & Email */}
-                        <div className="flex flex-col gap-1 min-w-0 text-left">
-                          <span className="font-bold text-[#191C1E] text-sm truncate">
-                            {user.fullName || "Unknown Name"}
-                          </span>
-                          <span className="text-xs text-slate-400 font-medium font-mono truncate">
-                            {user.email}
-                          </span>
+                        <div className="flex items-start justify-between gap-3 text-left">
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <span className="font-bold text-[#191C1E] text-sm truncate max-w-[200px]">
+                              {user.fullName || "Unknown Name"}
+                            </span>
+                            <span className="text-xs text-slate-400 font-medium font-mono truncate">
+                              {user.email}
+                            </span>
+                          </div>
+                          {isSelectionMode && (
+                            <Checkbox
+                              checked={selectedUserIds.has(user.id)}
+                              onCheckedChange={() => toggleUserSelection(user.id)}
+                              className="border-slate-350 w-5 h-5"
+                            />
+                          )}
                         </div>
 
                         {/* Card Body: Details */}
-                        <div className="space-y-2.5 pt-2 border-t border-slate-100/60">
+                        <div className="space-y-2.5 pt-2 border-t border-slate-100/60 text-left">
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Account Created</span>
                             <span className="font-semibold text-slate-600">
@@ -645,7 +869,7 @@ export default function WorkspaceAlumniPage() {
       </div>
       {/* Restore Confirmation Dialog */}
       <AlertDialog open={isRestoreOpen} onOpenChange={setIsRestoreOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-headline font-bold text-slate-900">
               Restore Alumni Account?
@@ -671,6 +895,91 @@ export default function WorkspaceAlumniPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Batch Restore Confirmation Dialog */}
+      <AlertDialog open={isBatchRestoreOpen} onOpenChange={setIsBatchRestoreOpen}>
+        <AlertDialogContent className="bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-headline font-bold text-slate-900">
+              Restore Selected Alumni?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm font-medium text-slate-500">
+              Are you sure you want to restore the {selectedUserIds.size} selected alumni user(s)? 
+              This will move their accounts out of the Alumni Archive and place them in the root directory, reactivating any suspended accounts.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRestoring} className="h-10 text-xs font-bold border-slate-200">
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              disabled={isRestoring}
+              onClick={handleBatchRestore}
+              className="h-10 px-6 text-xs font-bold bg-[#191C1E] hover:bg-black text-white"
+            >
+              {isRestoring ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Confirm Restore
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Batch Suspend Confirmation Dialog */}
+      <AlertDialog open={isBatchSuspendOpen} onOpenChange={setIsBatchSuspendOpen}>
+        <AlertDialogContent className="bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-headline font-bold text-slate-900">
+              Suspend Selected Alumni?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm font-medium text-slate-500">
+              Are you sure you want to suspend the {selectedUserIds.size} selected alumni user(s)? 
+              They will lose access to all Google Workspace services.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRestoring} className="h-10 text-xs font-bold border-slate-200">
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              disabled={isRestoring}
+              onClick={() => handleBatchSuspend(true)}
+              className="h-10 px-6 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {isRestoring ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Confirm Suspend
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Batch Reactivate Confirmation Dialog */}
+      <AlertDialog open={isBatchReactivateOpen} onOpenChange={setIsBatchReactivateOpen}>
+        <AlertDialogContent className="bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-headline font-bold text-slate-900">
+              Reactivate Selected Alumni?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm font-medium text-slate-500">
+              Are you sure you want to reactivate the {selectedUserIds.size} selected alumni user(s)? 
+              Their access to Google Workspace services will be restored.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRestoring} className="h-10 text-xs font-bold border-slate-200">
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              disabled={isRestoring}
+              onClick={() => handleBatchSuspend(false)}
+              className="h-10 px-6 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isRestoring ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Confirm Reactivate
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </DashboardShell>
   )
 }

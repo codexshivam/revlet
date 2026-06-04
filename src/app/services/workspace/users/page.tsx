@@ -187,6 +187,10 @@ export default function WorkspaceUsersPage() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
   const [isMigrating, setIsMigrating] = useState(false)
   const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [selectionAction, setSelectionAction] = useState<"migrate" | "suspend" | "delete" | null>(null)
+  const [isBatchSuspendOpen, setIsBatchSuspendOpen] = useState(false)
+  const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false)
+  const [batchDeleteConfirmText, setBatchDeleteConfirmText] = useState("")
 
   // ─── Form States ─────────────────────────────────────────────────────────
   const [selectedUser, setSelectedUser] = useState<WorkspaceUser | null>(null)
@@ -535,6 +539,93 @@ export default function WorkspaceUsersPage() {
       })
     } finally {
       setIsMigrating(false)
+    }
+  }
+
+  const handleBatchSuspend = async (suspend: boolean) => {
+    if (!adminEmail || !user || !selectedOrgId) return
+    if (selectedUserIds.size === 0) return
+
+    setIsSubmitting(true)
+    let successCount = 0
+    let failCount = 0
+    try {
+      const selectedUsers = users.filter(u => selectedUserIds.has(u.id))
+      for (const targetUser of selectedUsers) {
+        try {
+          const res = await updateUser(adminEmail, targetUser.id, { suspended: suspend })
+          if (res.success) {
+            successCount++
+          } else {
+            failCount++
+          }
+        } catch {
+          failCount++
+        }
+      }
+      toast({
+        title: suspend ? "Batch Suspension Complete" : "Batch Reactivation Complete",
+        description: `Successfully ${suspend ? "suspended" : "reactivated"} ${successCount} users.${failCount > 0 ? ` Failed for ${failCount} users.` : ""}`
+      })
+      setSelectedUserIds(new Set())
+      setIsSelectionMode(false)
+      setIsBatchSuspendOpen(false)
+      refreshCurrentTab()
+      router.refresh()
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Batch Action Error",
+        description: error.message || "Failed to process batch update."
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleBatchDelete = async () => {
+    if (!adminEmail || !user || !selectedOrgId) return
+    if (selectedUserIds.size === 0) return
+    if (batchDeleteConfirmText !== "DELETE") {
+      toast({ variant: "destructive", title: "Confirmation Required", description: "Please type DELETE to confirm batch deletion." })
+      return
+    }
+
+    setIsSubmitting(true)
+    let successCount = 0
+    let failCount = 0
+    try {
+      const selectedUsers = users.filter(u => selectedUserIds.has(u.id))
+      for (const targetUser of selectedUsers) {
+        try {
+          const res = await deleteUser(adminEmail, targetUser.id)
+          if (res.success) {
+            successCount++
+          } else {
+            failCount++
+          }
+        } catch {
+          failCount++
+        }
+      }
+      toast({
+        title: "Batch Deletion Complete",
+        description: `Successfully deleted ${successCount} users.${failCount > 0 ? ` Failed for ${failCount} users.` : ""}`
+      })
+      setSelectedUserIds(new Set())
+      setIsSelectionMode(false)
+      setIsBatchDeleteOpen(false)
+      setBatchDeleteConfirmText("")
+      refreshCurrentTab()
+      router.refresh()
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Batch Action Error",
+        description: error.message || "Failed to process batch deletion."
+      })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -1367,19 +1458,45 @@ export default function WorkspaceUsersPage() {
                     onClick={() => {
                       setIsSelectionMode(false)
                       setSelectedUserIds(new Set())
+                      setSelectionAction(null)
                     }}
                     className="border-slate-200 text-slate-500 font-bold h-10 px-4 text-xs shadow-none mr-2"
                   >
                     Cancel Selection
                   </Button>
-                  <Button
-                    onClick={handleMigrateToAlumni}
-                    disabled={isMigrating || selectedUserIds.size === 0}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
-                  >
-                    {isMigrating ? <Loader2 className="w-4 h-4 animate-spin" /> : <GraduationCap className="w-4 h-4" />}
-                    Migrate {selectedUserIds.size} to Alumni
-                  </Button>
+                  {selectionAction === "migrate" && (
+                    <Button
+                      onClick={handleMigrateToAlumni}
+                      disabled={isMigrating || selectedUserIds.size === 0}
+                      className="bg-purple-600 hover:bg-purple-700 text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
+                    >
+                      {isMigrating ? <Loader2 className="w-4 h-4 animate-spin" /> : <GraduationCap className="w-4 h-4" />}
+                      Migrate {selectedUserIds.size} to Alumni
+                    </Button>
+                  )}
+                  {selectionAction === "suspend" && (
+                    <Button
+                      onClick={() => setIsBatchSuspendOpen(true)}
+                      disabled={isSubmitting || selectedUserIds.size === 0}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
+                    >
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                      Suspend {selectedUserIds.size} Users
+                    </Button>
+                  )}
+                  {selectionAction === "delete" && (
+                    <Button
+                      onClick={() => {
+                        setBatchDeleteConfirmText("")
+                        setIsBatchDeleteOpen(true)
+                      }}
+                      disabled={isSubmitting || selectedUserIds.size === 0}
+                      className="bg-red-600 hover:bg-red-700 text-white font-bold h-10 px-4 text-xs flex items-center gap-2 shadow-sm mr-2"
+                    >
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      Delete {selectedUserIds.size} Users
+                    </Button>
+                  )}
                 </>
               ) : (
                 <DropdownMenu>
@@ -1390,11 +1507,34 @@ export default function WorkspaceUsersPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 font-bold">
                     <DropdownMenuItem 
-                      onClick={() => setIsSelectionMode(true)}
-                      className="cursor-pointer flex items-center gap-2 text-xs focus:bg-purple-50 focus:text-purple-700 text-purple-600"
+                      onClick={() => {
+                        setSelectionAction("migrate")
+                        setIsSelectionMode(true)
+                      }}
+                      className="cursor-pointer flex items-center gap-2 text-xs focus:bg-purple-50 focus:text-purple-750 text-purple-600"
                     >
                       <GraduationCap className="w-4 h-4" />
                       <span>Migrate to Alumni...</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        setSelectionAction("suspend")
+                        setIsSelectionMode(true)
+                      }}
+                      className="cursor-pointer flex items-center gap-2 text-xs focus:bg-amber-50 focus:text-amber-750 text-amber-600"
+                    >
+                      <Ban className="w-4 h-4" />
+                      <span>Suspend Users...</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        setSelectionAction("delete")
+                        setIsSelectionMode(true)
+                      }}
+                      className="cursor-pointer flex items-center gap-2 text-xs focus:bg-red-50 focus:text-red-750 text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete Users...</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -2344,6 +2484,92 @@ export default function WorkspaceUsersPage() {
             <AlertDialogAction
               onClick={handleDeleteUser}
               disabled={isSubmitting || deleteConfirmEmail !== selectedUser?.email}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold h-9"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5 mr-2" />
+                  Permanently Delete
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Batch Suspend Confirmation ─────────────────────────────────────── */}
+      <AlertDialog open={isBatchSuspendOpen} onOpenChange={setIsBatchSuspendOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-headline font-bold text-amber-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Batch Suspend Users
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+              Are you sure you want to suspend access for the <span className="font-bold text-slate-700">{selectedUserIds.size}</span> selected user accounts? 
+              They will be temporarily blocked from signing in to Google Workspace services.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs font-bold h-9 border-slate-200">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => handleBatchSuspend(true)}
+              disabled={isSubmitting}
+              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold h-9"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                  Suspending...
+                </>
+              ) : (
+                <>
+                  <Ban className="w-3.5 h-3.5 mr-2" />
+                  Suspend {selectedUserIds.size} Users
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Batch Delete Confirmation ───────────────────────────────────────── */}
+      <AlertDialog open={isBatchDeleteOpen} onOpenChange={setIsBatchDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-headline font-bold text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Batch Delete Users
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+              Are you sure you want to permanently delete the <span className="font-bold text-slate-700">{selectedUserIds.size}</span> selected user accounts? 
+              They will be removed from the active directory. They can be recovered within <span className="font-bold text-slate-700">20 days</span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-1.5 py-2">
+            <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Type <span className="font-bold text-red-600">DELETE</span> to confirm
+            </Label>
+            <Input
+              placeholder="DELETE"
+              value={batchDeleteConfirmText}
+              onChange={(e) => setBatchDeleteConfirmText(e.target.value)}
+              className="h-9 text-xs font-mono font-semibold border-red-200 focus-visible:ring-red-300"
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs font-bold h-9 border-slate-200">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBatchDelete}
+              disabled={isSubmitting || batchDeleteConfirmText !== "DELETE"}
               className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold h-9"
             >
               {isSubmitting ? (

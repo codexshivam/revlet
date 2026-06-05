@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { useUser } from "@/firebase";
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { useToast } from "@/hooks/use-toast"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
@@ -143,6 +144,7 @@ function CustomPieTooltip({ active, payload }: any) {
 // ─── Page Component ──────────────────────────────────────────────────────────
 
 export default function StoragePage() {
+  const { user } = useUser();
   const { orgs, activeOrg: selectedOrg, activeOrgId: selectedOrgId, loading: isLoadingOrgs } = useActiveOrg()
   const { toast } = useToast()
 
@@ -158,24 +160,24 @@ export default function StoragePage() {
   // ─── Load Data ───────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
-    if (!adminEmail || !selectedOrgId) return
+    if (!adminEmail || !selectedOrgId || !user) return
 
     setIsLoading(true)
     try {
       const [storageRes, usersRes, ouRes] = await Promise.all([
-        getUserStorageReport(adminEmail),
-        listUsers(adminEmail, { maxResults: 500 }),
-        listOrgUnits(adminEmail),
+        getUserStorageReport(await user.getIdToken(), selectedOrgId || selectedOrg?.id || ""),
+        listUsers(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", { maxResults: 500 }),
+        listOrgUnits(await user.getIdToken(), selectedOrgId || selectedOrg?.id || ""),
       ])
 
-      if (storageRes.success && storageRes.data) {
-        setStorageEntries(storageRes.data)
+      if (storageRes.success && (storageRes as any).data) {
+        setStorageEntries((storageRes as any).data)
       }
 
-      if (usersRes.success && usersRes.data) {
+      if (usersRes.success && (usersRes as any).data) {
         const mapping: Record<string, string> = {}
         const profiles: Record<string, { fullName: string; thumbnailPhotoUrl?: string }> = {}
-        for (const u of usersRes.data.users) {
+        for (const u of (usersRes as any).data.users) {
           mapping[u.email] = u.orgUnitPath
           profiles[u.email] = {
             fullName: u.fullName,
@@ -186,9 +188,9 @@ export default function StoragePage() {
         setUserProfileMap(profiles)
       }
 
-      if (ouRes.success && ouRes.data) {
+      if (ouRes.success && (ouRes as any).data) {
         setOrgUnits(
-          ouRes.data.map((ou) => ({
+          (ouRes as any).data.map((ou: any) => ({
             orgUnitPath: ou.orgUnitPath,
             name: ou.name,
           }))

@@ -9,6 +9,7 @@
 
 import { google } from 'googleapis';
 import { revalidatePath } from 'next/cache';
+import { adminAuth, adminDb } from '@/firebase/admin';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -134,13 +135,73 @@ function translateError(error: any): string {
   return message || 'An unexpected error occurred while communicating with Google Workspace.';
 }
 
+// ─── Simple In-Memory Cache ──────────────────────────────────────────────────
+// Caches heavy API calls for 2 minutes to make dashboard loading instantaneous
+const cacheMap = new Map<string, { data: any; expiry: number }>();
+
+async function withCache<T>(key: string, ttlSeconds: number, fetcher: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const cached = cacheMap.get(key);
+  if (cached && cached.expiry > now) {
+    return cached.data;
+  }
+  const data = await fetcher();
+  // Only cache if successful (assuming returned object has { success: true })
+  if ((data as any)?.success === true) {
+    cacheMap.set(key, { data, expiry: now + ttlSeconds * 1000 });
+  }
+  return data;
+}
+
 // ─── Customer / Domain Verification ──────────────────────────────────────────
 
-export async function checkWorkspaceStatus(adminEmail: string) {
-  if (!adminEmail) return { success: false, error: 'Admin email is required.' };
+async function verifyAdminAccess(idToken: string, orgId: string, bypassEmailCheck = false): Promise<string> {
+  if (!idToken || !orgId) throw new Error("Unauthorized: Missing credentials.");
 
   try {
-    const auth = await getAdminClient(adminEmail);
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    
+    const orgDoc = await adminDb.collection('organizations').doc(orgId).get();
+    if (!orgDoc.exists) throw new Error("Organization not found.");
+    
+    const orgData = orgDoc.data();
+    
+    // Check if user is owner or member
+    const isOwner = orgData?.ownerId === decodedToken.uid;
+    
+    let isMember = false;
+    if (!isOwner && decodedToken.email) {
+      const memberQuery = await adminDb.collection('teamMembers')
+        .where('organizationId', '==', orgId)
+        .where('email', '==', decodedToken.email)
+        .where('status', '==', 'Active')
+        .get();
+      isMember = !memberQuery.empty;
+    }
+    
+    if (!isOwner && !isMember) {
+      throw new Error("Unauthorized: You do not have access to this organization.");
+    }
+
+    if (!bypassEmailCheck && !orgData?.workspaceAdminEmail) {
+      throw new Error("Google Workspace is not configured for this organization.");
+    }
+
+    return orgData?.workspaceAdminEmail || '';
+  } catch (error: any) {
+    throw new Error(`Authentication failed: ${error.message}`);
+  }
+}
+
+export async function checkWorkspaceStatus(idToken: string, orgId: string, adminEmail?: string) {
+  try {
+    // Verify user owns the org (bypass email check if custom email is provided, otherwise require email from DB)
+    const dbAdminEmail = await verifyAdminAccess(idToken, orgId, !adminEmail ? false : true);
+    const targetEmail = adminEmail || dbAdminEmail;
+    
+    if (!targetEmail) return { success: false, error: 'Admin email is required.' };
+
+    const auth = await getAdminClient(targetEmail);
     const admin = google.admin({ version: 'directory_v1', auth });
 
     const customerRes = await admin.customers.get({ customerKey: 'my_customer' });
@@ -170,7 +231,9 @@ export async function checkWorkspaceStatus(adminEmail: string) {
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 export async function listUsers(
-  adminEmail: string,
+  idToken: string,
+  orgId: string,
+  
   options?: {
     query?: string
     orgUnitPath?: string
@@ -180,7 +243,10 @@ export async function listUsers(
     showActiveOnly?: boolean
     showArchivedOnly?: boolean
   }
+
 ) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail) return { success: false, error: 'Admin email is required.' };
 
   try {
@@ -256,7 +322,13 @@ export async function listUsers(
   }
 }
 
-export async function getUser(adminEmail: string, userKey: string) {
+export async function getUser(
+  idToken: string,
+  orgId: string,
+   userKey: string
+) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail || !userKey) return { success: false, error: 'Admin email and user key are required.' };
 
   try {
@@ -292,7 +364,9 @@ export async function getUser(adminEmail: string, userKey: string) {
 }
 
 export async function createUser(
-  adminEmail: string,
+  idToken: string,
+  orgId: string,
+  
   userData: {
     firstName: string
     lastName: string
@@ -300,7 +374,10 @@ export async function createUser(
     password: string
     orgUnitPath?: string
   }
+
 ) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail) return { success: false, error: 'Admin email is required.' };
   if (!userData.firstName || !userData.lastName || !userData.email || !userData.password) {
     return { success: false, error: 'First name, last name, email, and password are all required.' };
@@ -344,7 +421,9 @@ export async function createUser(
 }
 
 export async function updateUser(
-  adminEmail: string,
+  idToken: string,
+  orgId: string,
+  
   userKey: string,
   updates: {
     firstName?: string
@@ -354,7 +433,10 @@ export async function updateUser(
     suspended?: boolean
     archived?: boolean
   }
+
 ) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail || !userKey) return { success: false, error: 'Admin email and user key are required.' };
 
   try {
@@ -395,10 +477,15 @@ export async function updateUser(
 }
 
 export async function resetUserPassword(
-  adminEmail: string,
+  idToken: string,
+  orgId: string,
+  
   userKey: string,
   newPassword: string
+
 ) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail || !userKey) return { success: false, error: 'Admin email and user key are required.' };
   if (!newPassword || newPassword.length < 8) {
     return { success: false, error: 'New password must be at least 8 characters long.' };
@@ -425,7 +512,13 @@ export async function resetUserPassword(
   }
 }
 
-export async function deleteUser(adminEmail: string, userKey: string) {
+export async function deleteUser(
+  idToken: string,
+  orgId: string,
+   userKey: string
+) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail || !userKey) return { success: false, error: 'Admin email and user key are required.' };
 
   try {
@@ -444,7 +537,13 @@ export async function deleteUser(adminEmail: string, userKey: string) {
   }
 }
 
-export async function undeleteUser(adminEmail: string, userKey: string, orgUnitPath?: string) {
+export async function undeleteUser(
+  idToken: string,
+  orgId: string,
+   userKey: string, orgUnitPath?: string
+) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail || !userKey) return { success: false, error: 'Admin email and user key are required.' };
 
   try {
@@ -468,7 +567,13 @@ export async function undeleteUser(adminEmail: string, userKey: string, orgUnitP
   }
 }
 
-export async function listDeletedUsers(adminEmail: string) {
+export async function listDeletedUsers(
+  idToken: string,
+  orgId: string,
+  
+) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail) return { success: false, error: 'Admin email is required.' };
 
   try {
@@ -504,12 +609,19 @@ export async function listDeletedUsers(adminEmail: string) {
 
 // ─── Organizational Units ────────────────────────────────────────────────────
 
-export async function listOrgUnits(adminEmail: string) {
+export async function listOrgUnits(
+  idToken: string,
+  orgId: string,
+  
+) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail) return { success: false, error: 'Admin email is required.' };
 
-  try {
-    const auth = await getAdminClient(adminEmail);
-    const admin = google.admin({ version: 'directory_v1', auth });
+  return withCache(`orgunits-${adminEmail}`, 300, async () => {
+    try {
+      const auth = await getAdminClient(adminEmail);
+      const admin = google.admin({ version: 'directory_v1', auth });
 
     const res = await admin.orgunits.list({
       customerId: 'my_customer',
@@ -525,18 +637,24 @@ export async function listOrgUnits(adminEmail: string) {
     }));
 
     return { success: true, data: ous };
-  } catch (error: any) {
-    console.error('[Google Workspace] List OUs failed:', error.message);
-    return { success: false, error: translateError(error) };
-  }
+    } catch (error: any) {
+      console.error('[Google Workspace] List OUs failed:', error.message);
+      return { success: false, error: translateError(error) };
+    }
+  });
 }
 
 export async function createOrgUnit(
-  adminEmail: string,
+  idToken: string,
+  orgId: string,
+  
   name: string,
   parentOrgUnitPath?: string,
   description?: string
+
 ) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail || !name) return { success: false, error: 'Admin email and OU name are required.' };
 
   try {
@@ -568,7 +686,13 @@ export async function createOrgUnit(
   }
 }
 
-export async function deleteOrgUnit(adminEmail: string, orgUnitPath: string) {
+export async function deleteOrgUnit(
+  idToken: string,
+  orgId: string,
+   orgUnitPath: string
+) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail || !orgUnitPath) return { success: false, error: 'Admin email and OU path are required.' };
 
   try {
@@ -594,10 +718,17 @@ export async function deleteOrgUnit(adminEmail: string, orgUnitPath: string) {
 
 // ─── Storage / Usage Reports ─────────────────────────────────────────────────
 
-export async function getUserStorageReport(adminEmail: string, date?: string) {
+export async function getUserStorageReport(
+  idToken: string,
+  orgId: string,
+   date?: string
+) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail) return { success: false, error: 'Admin email is required.' };
 
-  try {
+  return withCache(`storage-${adminEmail}-${date || 'latest'}`, 120, async () => {
+    try {
     const auth = await getAdminClient(adminEmail);
     const reports = google.admin({ version: 'reports_v1', auth });
 
@@ -621,30 +752,34 @@ export async function getUserStorageReport(adminEmail: string, date?: string) {
         }
       }
     } else {
-      // Loop backwards from 1 day ago up to 7 days ago
-      for (let i = 1; i <= 7; i++) {
+      // Execute 7 parallel requests (1 to 7 days ago) to find the most recent available data
+      const fetchPromises = Array.from({ length: 7 }, (_, index) => {
+        const daysAgo = index + 1;
         const d = new Date();
-        d.setDate(d.getDate() - i);
+        d.setDate(d.getDate() - daysAgo);
         const testDate = d.toISOString().split('T')[0];
         
-        try {
-          const res = await (reports as any).userUsageReport.get({
-            userKey: 'all',
-            date: testDate,
-            parameters: 'accounts:drive_used_quota_in_mb,accounts:total_quota_in_mb',
-            maxResults: 500,
-          });
+        return (reports as any).userUsageReport.get({
+          userKey: 'all',
+          date: testDate,
+          parameters: 'accounts:drive_used_quota_in_mb,accounts:total_quota_in_mb',
+          maxResults: 500,
+        }).then((res: any) => {
           if (res.data && res.data.usageReports && res.data.usageReports.length > 0) {
-            reportData = res.data;
-            break; // Found data!
+            return { date: testDate, daysAgo, data: res.data };
           }
-        } catch (err: any) {
-          // If 400 'Data for dates... is not available', ignore and try next date
-          if (err.code === 400 || err.message?.includes('Data for dates')) {
-            continue;
-          }
-          throw err; // Real error
-        }
+          return null;
+        }).catch((err: any) => null); // Ignore errors (e.g. 400 No Data) in parallel fetching
+      });
+
+      const results = await Promise.all(fetchPromises);
+      
+      // Find the valid result with the smallest daysAgo (most recent)
+      const validResults = results.filter(res => res !== null);
+      if (validResults.length > 0) {
+        // Sort by daysAgo ascending (most recent first)
+        validResults.sort((a, b) => a.daysAgo - b.daysAgo);
+        reportData = validResults[0].data;
       }
     }
 
@@ -675,12 +810,15 @@ export async function getUserStorageReport(adminEmail: string, date?: string) {
     }
     return { success: false, error: translateError(error) };
   }
+  });
 }
 
 // ─── Audit Logs ──────────────────────────────────────────────────────────────
 
 export async function getAuditLogs(
-  adminEmail: string,
+  idToken: string,
+  orgId: string,
+  
   options?: {
     application?: string
     startTime?: string
@@ -688,12 +826,17 @@ export async function getAuditLogs(
     maxResults?: number
     eventName?: string
   }
+
 ) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail) return { success: false, error: 'Admin email is required.' };
 
-  try {
-    const auth = await getAdminClient(adminEmail);
-    const reports = google.admin({ version: 'reports_v1', auth });
+  const cacheKey = `audit-${adminEmail}-${JSON.stringify(options || {})}`;
+  return withCache(cacheKey, 120, async () => {
+    try {
+      const auth = await getAdminClient(adminEmail);
+      const reports = google.admin({ version: 'reports_v1', auth });
 
     const params: any = {
       userKey: 'all',
@@ -725,13 +868,21 @@ export async function getAuditLogs(
     console.error('[Google Workspace] Audit logs failed:', error.message);
     return { success: false, error: translateError(error) };
   }
+  });
 }
 
-// ─── Alert Center ────────────────────────────────────────────────────────────
+// ─── Security Alerts ────────────────────────────────────────────────────────────
 
-export async function listAlerts(adminEmail: string) {
+export async function listAlerts(
+  idToken: string,
+  orgId: string,
+  
+) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail) return { success: false, error: 'Admin email is required.' };
 
+  return withCache(`alerts-${adminEmail}`, 300, async () => {
   try {
     const credentials = getServiceAccountCredentials();
 
@@ -772,23 +923,31 @@ export async function listAlerts(adminEmail: string) {
     }
     return { success: false, error: translateError(error) };
   }
+  });
 }
 
 // ─── User Counts by OU (Optimized) ──────────────────────────────────────────
 
 export async function getUserCountsByOU(
-  adminEmail: string,
+  idToken: string,
+  orgId: string,
+  
   ouPaths: string[]
+
 ) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail) return { success: false, error: 'Admin email is required.' };
 
-  try {
+  const cacheKey = `counts-${adminEmail}-${ouPaths.join(',')}`;
+  return withCache(cacheKey, 120, async () => {
+    try {
     const auth = await getAdminClient(adminEmail);
     const admin = google.admin({ version: 'directory_v1', auth });
 
     const counts: Record<string, { total: number; active: number; suspended: number }> = {};
 
-    for (const ouPath of ouPaths) {
+    await Promise.all(ouPaths.map(async (ouPath) => {
       try {
         const listParams: any = {
           customer: 'my_customer',
@@ -809,21 +968,27 @@ export async function getUserCountsByOU(
       } catch {
         counts[ouPath] = { total: 0, active: 0, suspended: 0 };
       }
-    }
+    }));
 
     return { success: true, data: counts };
   } catch (error: any) {
     console.error('[Google Workspace] User counts failed:', error.message);
     return { success: false, error: translateError(error) };
   }
+  });
 }
 
 // ─── Suspended Users (for Archive Ledger) ────────────────────────────────────
 
 export async function listSuspendedUsers(
-  adminEmail: string,
+  idToken: string,
+  orgId: string,
+  
   pageToken?: string
+
 ) {
+  const adminEmail = await verifyAdminAccess(idToken, orgId);
+
   if (!adminEmail) return { success: false, error: 'Admin email is required.' };
 
   try {

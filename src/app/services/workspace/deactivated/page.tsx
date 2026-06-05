@@ -203,16 +203,17 @@ export default function WorkspaceDeactivatedPage() {
   }
 
   const handleBatchReactivate = async () => {
-    if (!adminEmail || selectedUserIds.size === 0) return
+    if (!adminEmail || selectedUserIds.size === 0 || !user || !selectedOrgId) return
     setIsSubmitting(true)
     let successCount = 0
     let failureCount = 0
 
     for (const userId of Array.from(selectedUserIds)) {
       try {
-        const res = await updateUser(adminEmail, userId, { suspended: false })
+        const res = await updateUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", userId, { suspended: false })
         if (res.success) {
           successCount++
+          setSuspendedUsers((prev) => prev.filter((u) => u.id !== userId))
         } else {
           failureCount++
         }
@@ -236,7 +237,7 @@ export default function WorkspaceDeactivatedPage() {
   }
 
   const handleBatchDelete = async () => {
-    if (!adminEmail || selectedUserIds.size === 0) return
+    if (!adminEmail || selectedUserIds.size === 0 || !user || !selectedOrgId) return
     if (batchDeleteConfirmText !== "DELETE") {
       toast({
         title: "Confirmation Required",
@@ -252,9 +253,10 @@ export default function WorkspaceDeactivatedPage() {
 
     for (const userId of Array.from(selectedUserIds)) {
       try {
-        const res = await deleteUser(adminEmail, userId)
+        const res = await deleteUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", userId)
         if (res.success) {
           successCount++
+          setSuspendedUsers((prev) => prev.filter((u) => u.id !== userId))
         } else {
           failureCount++
         }
@@ -279,7 +281,7 @@ export default function WorkspaceDeactivatedPage() {
   }
 
   const handleBatchRecover = async () => {
-    if (!adminEmail || selectedUserIds.size === 0) return
+    if (!adminEmail || selectedUserIds.size === 0 || !user || !selectedOrgId) return
     setIsSubmitting(true)
     let successCount = 0
     let failureCount = 0
@@ -288,7 +290,7 @@ export default function WorkspaceDeactivatedPage() {
       const log = deletedLogs.find((d) => d.id === logId)
       if (!log) continue
       try {
-        const res = await undeleteUser(adminEmail, log.userEmail, batchRecoveryOUPath)
+        const res = await undeleteUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", log.userEmail, batchRecoveryOUPath)
         if (res.success) {
           successCount++
         } else {
@@ -326,15 +328,15 @@ export default function WorkspaceDeactivatedPage() {
   const [recoveryOUPath, setRecoveryOUPath] = useState("/Students")
 
   const fetchAvailableOUs = useCallback(async () => {
-    if (!adminEmail) return
+    if (!user || !adminEmail || !selectedOrgId) return
     try {
-      const res = await listOrgUnits(adminEmail)
-      if (res.success && res.data) {
-        const list = res.data.map((ou: any) => ({
+      const res = await listOrgUnits(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "")
+      if (res.success && (res as any).data) {
+        const list = (res as any).data.map((ou: any) => ({
           label: ou.name || ou.orgUnitPath,
           path: ou.orgUnitPath,
         }))
-        if (!list.some((item) => item.path === "/")) {
+        if (!list.some((item: any) => item.path === "/")) {
           list.push({ label: "None (Root)", path: "/" })
         }
         setAvailableOUs(list)
@@ -346,13 +348,13 @@ export default function WorkspaceDeactivatedPage() {
 
   // ─── Fetch Deleted Users from Live Google Workspace API ──────────────────
   const fetchDeletedUsers = useCallback(async () => {
-    if (!adminEmail) return
+    if (!user || !adminEmail || !selectedOrgId) return
     setIsLoadingDeleted(true)
     try {
-      const res = await listDeletedUsers(adminEmail)
-      if (res.success && res.data) {
+      const res = await listDeletedUsers(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "")
+      if (res.success && (res as any).data) {
         // Filter out users who have been deleted for 20 days or more
-        const filtered = res.data
+        const filtered = (res as any).data
           .filter((u: any) => {
             if (!u.deletionTime) return true
             const delDate = new Date(u.deletionTime)
@@ -398,7 +400,7 @@ export default function WorkspaceDeactivatedPage() {
 
   const fetchSuspendedUsers = useCallback(
     async (pageToken?: string) => {
-      if (!adminEmail) return
+      if (!user || !adminEmail || !selectedOrgId) return
 
       if (pageToken) {
         setIsLoadingMore(true)
@@ -409,12 +411,12 @@ export default function WorkspaceDeactivatedPage() {
       }
 
       try {
-        const res = await listSuspendedUsers(adminEmail, pageToken)
+        const res = await listSuspendedUsers(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", pageToken)
         if (!res.success) {
           throw new Error(res.error)
         }
 
-        const data = res.data!
+        const data = (res as any).data!
         if (pageToken) {
           setSuspendedUsers((prev) => [...prev, ...data.users])
         } else {
@@ -439,12 +441,12 @@ export default function WorkspaceDeactivatedPage() {
   // ─── Fetch Storage Usage for Recoverable Storage calculation ─────────────
 
   const fetchStorageReport = useCallback(async () => {
-    if (!adminEmail) return
+    if (!user || !adminEmail || !selectedOrgId) return
     try {
-      const res = await getUserStorageReport(adminEmail)
-      if (res.success && res.data) {
+      const res = await getUserStorageReport(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "")
+      if (res.success && (res as any).data) {
         const map: Record<string, number> = {}
-        for (const entry of res.data) {
+        for (const entry of (res as any).data) {
           map[entry.email] = entry.usedBytes
         }
         setStorageMap(map)
@@ -596,7 +598,7 @@ export default function WorkspaceDeactivatedPage() {
 
     setIsSubmitting(true)
     try {
-      const res = await updateUser(adminEmail, selectedUser.id, { suspended: false })
+      const res = await updateUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", selectedUser.id, { suspended: false })
       if (!res.success) {
         throw new Error(res.error)
       }
@@ -652,7 +654,7 @@ export default function WorkspaceDeactivatedPage() {
 
     setIsSubmitting(true)
     try {
-      const res = await deleteUser(adminEmail, selectedUser.id)
+      const res = await deleteUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", selectedUser.id)
       if (!res.success) {
         throw new Error(res.error)
       }

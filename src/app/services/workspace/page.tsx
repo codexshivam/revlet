@@ -230,7 +230,7 @@ export default function GoogleWorkspacePage() {
 
     setIsApplying(true)
     try {
-      const res = await checkWorkspaceStatus(adminEmail.trim())
+      const res = await checkWorkspaceStatus(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", adminEmail.trim())
       if (!res.success) {
         throw new Error(res.error)
       }
@@ -265,11 +265,11 @@ export default function GoogleWorkspacePage() {
   // ─── Verification Handler ───────────────────────────────────────────────
 
   const handleVerify = async () => {
-    if (!selectedOrg?.workspaceAdminEmail || !selectedOrg?.id) return
+    if (!user || !selectedOrg?.workspaceAdminEmail || !selectedOrg?.id) return
     setIsVerifying(true)
 
     try {
-      const res = await checkWorkspaceStatus(selectedOrg.workspaceAdminEmail)
+      const res = await checkWorkspaceStatus(await user.getIdToken(), selectedOrgId || selectedOrg?.id)
       if (!res.success) {
         throw new Error(res.error)
       }
@@ -300,45 +300,42 @@ export default function GoogleWorkspacePage() {
   // ─── Dashboard Data Fetch ───────────────────────────────────────────────
 
   const fetchDashboardData = useCallback(async () => {
-    if (!selectedOrg?.workspaceAdminEmail || selectedOrg?.workspaceStatus !== "active") return
+    if (!user || !selectedOrg?.workspaceAdminEmail || selectedOrg?.workspaceStatus !== "active") return
     setIsLoadingDashboard(true)
     setAlertsError(null)
 
     const email = selectedOrg.workspaceAdminEmail
 
     try {
+      // Fetch all data in parallel with resilient error catch handlers
+      const [ouListRes, countsRes, storageRes, auditRes, alertsRes, usersRes] = await Promise.all([
+        listOrgUnits(await user.getIdToken(), selectedOrgId || selectedOrg?.id)
+          .catch((err) => ({ success: false, error: err.message || "Failed to list OUs" })),
+        getUserCountsByOU(await user.getIdToken(), selectedOrgId || selectedOrg?.id, ["/Students", "/Teachers", "/Main People", "/Staffs"])
+          .catch((err) => ({ success: false, error: err.message || "Failed to fetch user counts" })),
+        getUserStorageReport(await user.getIdToken(), selectedOrgId || selectedOrg?.id)
+          .catch((err) => ({ success: false, error: err.message || "Failed to fetch storage report" })),
+        getAuditLogs(await user.getIdToken(), selectedOrgId || selectedOrg?.id)
+          .catch((err) => ({ success: false, error: err.message || "Failed to fetch audit logs" })),
+        listAlerts(await user.getIdToken(), selectedOrgId || selectedOrg?.id)
+          .catch((err) => ({ success: false, error: err.message || "Failed to fetch alerts" })),
+        listUsers(await user.getIdToken(), selectedOrgId || selectedOrg?.id, { maxResults: 500 })
+          .catch((err) => ({ success: false, error: err.message || "Failed to fetch users" })),
+      ]) as [any, any, any, any, any, any]
+
       // Check for missing default organizational units to instruct user
       const missing: string[] = []
-      try {
-        const ouListRes = await listOrgUnits(email)
-        if (ouListRes.success && ouListRes.data) {
-          const existingPaths = new Set(ouListRes.data.map((ou) => ou.orgUnitPath))
-          const defaults = ["Students", "Teachers", "Main People", "Staffs"]
-          for (const name of defaults) {
-            const expectedPath = `/${name}`
-            if (!existingPaths.has(expectedPath)) {
-              missing.push(name)
-            }
+      if (ouListRes.success && ouListRes.data) {
+        const existingPaths = new Set(ouListRes.data.map((ou: any) => ou.orgUnitPath))
+        const defaults = ["Students", "Teachers", "Main People", "Staffs"]
+        for (const name of defaults) {
+          const expectedPath = `/${name}`
+          if (!existingPaths.has(expectedPath)) {
+            missing.push(name)
           }
         }
-      } catch (err) {
-        console.error("Failed to check missing OUs:", err)
       }
       setMissingOUs(missing)
-
-      // Fetch all data in parallel with resilient error catch handlers
-      const [countsRes, storageRes, auditRes, alertsRes, usersRes] = await Promise.all([
-        getUserCountsByOU(email, ["/Students", "/Teachers", "/Main People", "/Staffs"])
-          .catch((err) => ({ success: false, error: err.message || "Failed to fetch user counts" })),
-        getUserStorageReport(email)
-          .catch((err) => ({ success: false, error: err.message || "Failed to fetch storage report" })),
-        getAuditLogs(email)
-          .catch((err) => ({ success: false, error: err.message || "Failed to fetch audit logs" })),
-        listAlerts(email)
-          .catch((err) => ({ success: false, error: err.message || "Failed to fetch alerts" })),
-        listUsers(email, { maxResults: 500 })
-          .catch((err) => ({ success: false, error: err.message || "Failed to fetch users" })),
-      ]) as [any, any, any, any, any]
 
       // Process OU counts
       if (countsRes.success && countsRes.data) {

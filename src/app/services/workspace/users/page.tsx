@@ -352,7 +352,7 @@ export default function WorkspaceUsersPage() {
 
   const fetchUsers = useCallback(
     async (ouPath: string | null) => {
-      if (!adminEmail) return
+      if (!user || !adminEmail) return
 
       setIsLoadingUsers(true)
       setUsers([])
@@ -365,7 +365,7 @@ export default function WorkspaceUsersPage() {
         }
         if (ouPath) options.orgUnitPath = ouPath
 
-        const res = await listUsers(adminEmail, options)
+        const res = await listUsers(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", options)
         if (!res.success) {
           throw new Error(res.error)
         }
@@ -390,7 +390,7 @@ export default function WorkspaceUsersPage() {
   // ─── Tab User Counts ─────────────────────────────────────────────────────
 
   const refreshTabCounts = useCallback(async () => {
-    if (!adminEmail) return
+    if (!user || !adminEmail) return
 
     try {
       const allPaths = [
@@ -399,11 +399,11 @@ export default function WorkspaceUsersPage() {
         ...customOUs.map((ou) => ou.ouPath),
       ]
 
-      const res = await getUserCountsByOU(adminEmail, allPaths)
-      if (res.success && res.data) {
+      const res = await getUserCountsByOU(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", allPaths)
+      if (res.success && (res as any).data) {
         const counts: Record<string, number> = {}
-        for (const [path, data] of Object.entries(res.data)) {
-          counts[path] = data.total
+        for (const [path, data] of Object.entries((res as any).data)) {
+          counts[path] = (data as any).total
         }
         setTabUserCounts(counts)
       }
@@ -415,11 +415,11 @@ export default function WorkspaceUsersPage() {
   // ─── Auto-Provision Missing OUs ─────────────────────────────────────────
 
   const ensureDefaultOUs = useCallback(async () => {
-    if (!adminEmail) return
+    if (!user || !adminEmail) return
     try {
-      const res = await listOrgUnits(adminEmail)
-      if (res.success && res.data) {
-        const existingPaths = new Set(res.data.map((ou) => ou.orgUnitPath))
+      const res = await listOrgUnits(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "")
+      if (res.success && (res as any).data) {
+        const existingPaths = new Set(((res as any).data as any[]).map((ou: any) => ou.orgUnitPath))
         const defaults = ["Students", "Teachers", "Main People", "Staffs"]
         
         let createdAny = false
@@ -427,7 +427,7 @@ export default function WorkspaceUsersPage() {
           const expectedPath = `/${name}`
           if (!existingPaths.has(expectedPath)) {
             console.log(`[Google Workspace] Auto-creating missing default type: ${name}`)
-            const createRes = await createOrgUnit(adminEmail, name, "/")
+            const createRes = await createOrgUnit(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", name, "/")
             if (createRes.success) {
               createdAny = true
             }
@@ -504,7 +504,7 @@ export default function WorkspaceUsersPage() {
     try {
       // Auto-create /Alumni OU if it doesn't exist. Ignore error if it already exists.
       try {
-        await createOrgUnit(adminEmail, "Alumni")
+        await createOrgUnit(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", "Alumni")
       } catch (e) {
         // likely already exists
       }
@@ -512,7 +512,7 @@ export default function WorkspaceUsersPage() {
       const selectedUsers = users.filter(u => selectedUserIds.has(u.id))
       for (const targetUser of selectedUsers) {
         // 1. Move to /Alumni
-        await updateUser(adminEmail, targetUser.id, { orgUnitPath: "/Alumni" })
+        await updateUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", targetUser.id, { orgUnitPath: "/Alumni" })
         // 2. Save metadata in Firestore
         await addDoc(collection(db, "workspaceAlumniMetadata"), {
           orgId: selectedOrgId,
@@ -553,9 +553,12 @@ export default function WorkspaceUsersPage() {
       const selectedUsers = users.filter(u => selectedUserIds.has(u.id))
       for (const targetUser of selectedUsers) {
         try {
-          const res = await updateUser(adminEmail, targetUser.id, { suspended: suspend })
+          const res = await updateUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", targetUser.id, { suspended: suspend })
           if (res.success) {
             successCount++
+            setUsers((prev) =>
+              prev.map((u) => (u.id === targetUser.id ? { ...u, suspended: suspend } : u))
+            )
           } else {
             failCount++
           }
@@ -598,9 +601,10 @@ export default function WorkspaceUsersPage() {
       const selectedUsers = users.filter(u => selectedUserIds.has(u.id))
       for (const targetUser of selectedUsers) {
         try {
-          const res = await deleteUser(adminEmail, targetUser.id)
+          const res = await deleteUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", targetUser.id)
           if (res.success) {
             successCount++
+            setUsers((prev) => prev.filter((u) => u.id !== targetUser.id))
           } else {
             failCount++
           }
@@ -646,7 +650,7 @@ export default function WorkspaceUsersPage() {
   // ─── Create User ─────────────────────────────────────────────────────────
 
   const handleCreateUser = async () => {
-    if (!adminEmail) return
+    if (!user || !adminEmail) return
 
     const firstName = createFirstName.trim()
     const lastName = createLastName.trim()
@@ -679,7 +683,7 @@ export default function WorkspaceUsersPage() {
         }
       }
 
-      const res = await createUser(adminEmail, {
+      const res = await createUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", {
         firstName,
         lastName,
         email,
@@ -837,6 +841,7 @@ export default function WorkspaceUsersPage() {
   }
 
   const handleImportUsers = async (fileText: string) => {
+    if (!user || !adminEmail || !selectedOrgId) return
     setIsImporting(true)
     setImportProgress(0)
     setImportResults(null)
@@ -945,11 +950,11 @@ export default function WorkspaceUsersPage() {
           if (userOUPath !== existingUser.orgUnitPath) {
             updates.orgUnitPath = userOUPath
           }
-          const res = await updateUser(adminEmail, existingUser.id, updates)
+          const res = await updateUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", existingUser.id, updates)
           if (res.success) {
             // If password was explicitly provided, reset it
             if (row[passwordIdx]?.trim()) {
-              const resetRes = await resetUserPassword(adminEmail, existingUser.id, password)
+              const resetRes = await resetUserPassword(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", existingUser.id, password)
               if (!resetRes.success) {
                 errs.push(`Row ${i + 2}: (${email}) Details updated, but password reset failed: ${resetRes.error}`)
               }
@@ -960,7 +965,7 @@ export default function WorkspaceUsersPage() {
           }
         } else {
           // Create new user in the selected organizational unit path
-          const res = await createUser(adminEmail, {
+          const res = await createUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", {
             email: email,
             password: password,
             firstName: firstName,
@@ -1017,7 +1022,7 @@ export default function WorkspaceUsersPage() {
   }
 
   const handleEditUser = async () => {
-    if (!adminEmail || !selectedUser) return
+    if (!adminEmail || !selectedUser || !user) return
 
     const firstName = editFirstName.trim()
     const lastName = editLastName.trim()
@@ -1056,7 +1061,7 @@ export default function WorkspaceUsersPage() {
         return
       }
 
-      const res = await updateUser(adminEmail, selectedUser.id, updates)
+      const res = await updateUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", selectedUser.id, updates)
       if (!res.success) throw new Error(res.error)
 
       toast({
@@ -1106,7 +1111,7 @@ export default function WorkspaceUsersPage() {
   }
 
   const handleResetPassword = async () => {
-    if (!adminEmail || !selectedUser) return
+    if (!adminEmail || !selectedUser || !user) return
     if (!confirmResetConsent) {
       toast({ variant: "destructive", title: "Consent Required", description: "You must confirm and check the consent box to proceed." })
       return
@@ -1119,7 +1124,7 @@ export default function WorkspaceUsersPage() {
 
     setIsSubmitting(true)
     try {
-      const res = await resetUserPassword(adminEmail, selectedUser.id, newPassword)
+      const res = await resetUserPassword(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", selectedUser.id, newPassword)
       if (!res.success) throw new Error(res.error)
 
       toast({
@@ -1165,7 +1170,7 @@ export default function WorkspaceUsersPage() {
     setIsSubmitting(true)
     try {
       const newSuspended = !selectedUser.suspended
-      const res = await updateUser(adminEmail, selectedUser.id, { suspended: newSuspended })
+      const res = await updateUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", selectedUser.id, { suspended: newSuspended })
       if (!res.success) throw new Error(res.error)
 
       toast({
@@ -1214,7 +1219,7 @@ export default function WorkspaceUsersPage() {
 
     setIsSubmitting(true)
     try {
-      const res = await deleteUser(adminEmail, selectedUser.id)
+      const res = await deleteUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", selectedUser.id)
       if (!res.success) throw new Error(res.error)
 
       toast({
@@ -1258,7 +1263,7 @@ export default function WorkspaceUsersPage() {
     setIsCreatingOU(true)
     try {
       // Create OU in Google Workspace
-      const res = await createOrgUnit(adminEmail, name)
+      const res = await createOrgUnit(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", name)
       if (!res.success) throw new Error(res.error)
 
       // Save to Firestore
@@ -1289,12 +1294,12 @@ export default function WorkspaceUsersPage() {
   }
 
   const handleDeleteCustomOU = async (ouDoc: CustomOUDoc) => {
-    if (!adminEmail) return
+    if (!user || !adminEmail) return
 
     setDeletingOUId(ouDoc.id)
     try {
       // Delete from Google Workspace
-      const res = await deleteOrgUnit(adminEmail, ouDoc.ouPath)
+      const res = await deleteOrgUnit(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", ouDoc.ouPath)
       if (!res.success) throw new Error(res.error)
 
       // Delete from Firestore

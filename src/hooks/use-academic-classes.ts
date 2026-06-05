@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react"
 import { useActiveOrg } from "./use-active-org"
+import { useUser } from "@/firebase"
 import { listOrgUnits, createOrgUnit, deleteOrgUnit } from "@/app/actions/google-workspace"
+import type { WorkspaceOU } from "@/app/actions/google-workspace"
 
 export type AcademicSection = {
   id: string
@@ -19,6 +21,7 @@ export type AcademicClass = {
 
 export function useAcademicClasses() {
   const { activeOrg } = useActiveOrg()
+  const { user } = useUser()
   const adminEmail = activeOrg?.workspaceAdminEmail || ""
   
   const [classes, setClasses] = useState<AcademicClass[]>([])
@@ -26,7 +29,7 @@ export function useAcademicClasses() {
   const [error, setError] = useState<string | null>(null)
 
   const fetchClassesAndSections = useCallback(async () => {
-    if (!adminEmail || activeOrg?.workspaceStatus !== "active") {
+    if (!adminEmail || activeOrg?.workspaceStatus !== "active" || !user || !activeOrg?.id) {
       setClasses([])
       setIsLoading(false)
       return
@@ -34,12 +37,12 @@ export function useAcademicClasses() {
 
     setIsLoading(true)
     try {
-      const res = await listOrgUnits(adminEmail)
+      const res = await listOrgUnits(await user.getIdToken(), activeOrg.id)
       if (!res.success) {
         throw new Error(res.error)
       }
 
-      const ous = res.data || []
+      const ous: WorkspaceOU[] = (res as any).data || []
       
       // Parse OUs into AcademicClass and AcademicSection structure
       // Classes are OUs directly under /Students. e.g. parentOrgUnitPath === "/Students"
@@ -61,7 +64,7 @@ export function useAcademicClasses() {
 
         return {
           id: clsOu.name,
-          orgId: activeOrg?.id || "",
+          orgId: activeOrg.id,
           name: clsOu.name,
           sections,
           createdAt: new Date().toISOString(),
@@ -77,14 +80,14 @@ export function useAcademicClasses() {
     } finally {
       setIsLoading(false)
     }
-  }, [adminEmail, activeOrg?.id, activeOrg?.workspaceStatus])
+  }, [adminEmail, activeOrg?.id, activeOrg?.workspaceStatus, user])
 
   useEffect(() => {
     fetchClassesAndSections()
   }, [fetchClassesAndSections])
 
   const createClass = useCallback(async (className: string) => {
-    if (!adminEmail) throw new Error("No active organization or admin email.")
+    if (!adminEmail || !user || !activeOrg?.id) throw new Error("No active organization, user, or admin email.")
     
     // Check for duplicates
     if (classes.some(c => c.name.toLowerCase() === className.toLowerCase())) {
@@ -93,32 +96,32 @@ export function useAcademicClasses() {
 
     // Auto-create parent /Students OU first just in case
     try {
-      await createOrgUnit(adminEmail, "Students", "/")
+      await createOrgUnit(await user.getIdToken(), activeOrg.id, "Students", "/")
     } catch (e) {
       // likely already exists
     }
 
-    const res = await createOrgUnit(adminEmail, className, "/Students")
+    const res = await createOrgUnit(await user.getIdToken(), activeOrg.id, className, "/Students")
     if (!res.success) {
       throw new Error(res.error)
     }
 
     await fetchClassesAndSections()
-  }, [adminEmail, classes, fetchClassesAndSections])
+  }, [adminEmail, classes, fetchClassesAndSections, activeOrg?.id, user])
 
   const deleteClass = useCallback(async (className: string) => {
-    if (!adminEmail) throw new Error("No active organization or admin email.")
+    if (!adminEmail || !user || !activeOrg?.id) throw new Error("No active organization, user, or admin email.")
 
-    const res = await deleteOrgUnit(adminEmail, `/Students/${className}`)
+    const res = await deleteOrgUnit(await user.getIdToken(), activeOrg.id, `/Students/${className}`)
     if (!res.success) {
       throw new Error(res.error)
     }
 
     await fetchClassesAndSections()
-  }, [adminEmail, fetchClassesAndSections])
+  }, [adminEmail, fetchClassesAndSections, activeOrg?.id, user])
 
   const addSection = useCallback(async (className: string, sectionName: string) => {
-    if (!adminEmail) throw new Error("No active organization or admin email.")
+    if (!adminEmail || !user || !activeOrg?.id) throw new Error("No active organization, user, or admin email.")
 
     // Ensure the class exists first
     const cls = classes.find(c => c.id === className)
@@ -128,24 +131,24 @@ export function useAcademicClasses() {
       throw new Error(`Section "${sectionName}" already exists in ${cls.name}.`)
     }
 
-    const res = await createOrgUnit(adminEmail, sectionName, `/Students/${className}`)
+    const res = await createOrgUnit(await user.getIdToken(), activeOrg.id, sectionName, `/Students/${className}`)
     if (!res.success) {
       throw new Error(res.error)
     }
 
     await fetchClassesAndSections()
-  }, [adminEmail, classes, fetchClassesAndSections])
+  }, [adminEmail, classes, fetchClassesAndSections, activeOrg?.id, user])
 
   const removeSection = useCallback(async (className: string, sectionName: string) => {
-    if (!adminEmail) throw new Error("No active organization or admin email.")
+    if (!adminEmail || !user || !activeOrg?.id) throw new Error("No active organization, user, or admin email.")
 
-    const res = await deleteOrgUnit(adminEmail, `/Students/${className}/${sectionName}`)
+    const res = await deleteOrgUnit(await user.getIdToken(), activeOrg.id, `/Students/${className}/${sectionName}`)
     if (!res.success) {
       throw new Error(res.error)
     }
 
     await fetchClassesAndSections()
-  }, [adminEmail, fetchClassesAndSections])
+  }, [adminEmail, fetchClassesAndSections, activeOrg?.id, user])
 
   return {
     classes,

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
+import { useUser } from "@/firebase";
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,6 +38,7 @@ function formatDate(dateVal: string | null | undefined): string {
 
 
 export default function WorkspaceAlumniPage() {
+  const { user } = useUser();
   const { activeOrg: selectedOrg, activeOrgId, loading: isLoadingOrgs } = useActiveOrg()
 
   const [alumni, setAlumni] = useState<WorkspaceUser[]>([])
@@ -81,21 +83,22 @@ export default function WorkspaceAlumniPage() {
   }
 
   const handleBatchRestore = async () => {
-    if (!selectedOrg?.workspaceAdminEmail || selectedUserIds.size === 0) return
+    if (!user || !selectedOrg?.workspaceAdminEmail || selectedUserIds.size === 0) return
     setIsRestoring(true)
     let successCount = 0
     let failureCount = 0
 
     for (const userId of Array.from(selectedUserIds)) {
       try {
-        const user = alumni.find((u) => u.id === userId)
-        if (!user) continue
+        const targetAlum = alumni.find((u) => u.id === userId)
+        if (!targetAlum) continue
         const updates: any = { orgUnitPath: "/" }
-        if (user.suspended) updates.suspended = false
+        if (targetAlum.suspended) updates.suspended = false
 
-        const res = await updateUser(selectedOrg.workspaceAdminEmail, userId, updates)
+        const res = await updateUser(await user.getIdToken(), activeOrgId || selectedOrg?.id || "", userId, updates)
         if (res.success) {
           successCount++
+          setAlumni((prev) => prev.filter((u) => u.id !== userId))
         } else {
           failureCount++
         }
@@ -119,16 +122,17 @@ export default function WorkspaceAlumniPage() {
   }
 
   const handleBatchSuspend = async (suspend: boolean) => {
-    if (!selectedOrg?.workspaceAdminEmail || selectedUserIds.size === 0) return
+    if (!user || !selectedOrg?.workspaceAdminEmail || selectedUserIds.size === 0) return
     setIsRestoring(true)
     let successCount = 0
     let failureCount = 0
 
     for (const userId of Array.from(selectedUserIds)) {
       try {
-        const res = await updateUser(selectedOrg.workspaceAdminEmail, userId, { suspended: suspend })
+        const res = await updateUser(await user.getIdToken(), activeOrgId || selectedOrg?.id || "", userId, { suspended: suspend })
         if (res.success) {
           successCount++
+          setAlumni((prev) => prev.map((u) => u.id === userId ? { ...u, suspended: suspend } : u))
         } else {
           failureCount++
         }
@@ -166,7 +170,7 @@ export default function WorkspaceAlumniPage() {
 
   // ─── Data Fetching ────────────────────────────────────────────────────────
   const fetchAlumniData = useCallback(async () => {
-    if (!selectedOrg?.workspaceAdminEmail || !isWorkspaceActive || !activeOrgId) {
+    if (!user || !selectedOrg?.workspaceAdminEmail || !isWorkspaceActive || !activeOrgId) {
       setAlumni([])
       setIsLoading(false)
       return
@@ -175,22 +179,22 @@ export default function WorkspaceAlumniPage() {
     setIsLoading(true)
     try {
       // 1. Fetch Users in /Alumni OU
-      const res = await listUsers(selectedOrg.workspaceAdminEmail, { orgUnitPath: "/Alumni", maxResults: 500 })
+      const res = await listUsers(await user.getIdToken(), activeOrgId || selectedOrg?.id || "", { orgUnitPath: "/Alumni", maxResults: 500 })
       let fetchedUsers: WorkspaceUser[] = []
       
-      if (res.success && res.data) {
-        fetchedUsers = res.data.users
+      if (res.success && (res as any).data) {
+        fetchedUsers = (res as any).data.users
       } else {
         // If /Alumni doesn't exist, we might get an error. Just show empty state gracefully.
         console.warn("Could not fetch /Alumni OU. It might not exist yet.", res.error)
       }
 
       // 2. Fetch Storage Report
-      const storageRes = await getUserStorageReport(selectedOrg.workspaceAdminEmail)
+      const storageRes = await getUserStorageReport(await user.getIdToken(), activeOrgId || selectedOrg?.id || "")
       const sMap: Record<string, number> = {}
       let totalBytes = 0
-      if (storageRes.success && storageRes.data) {
-        storageRes.data.forEach(entry => {
+      if (storageRes.success && (storageRes as any).data) {
+        ((storageRes as any).data as any[]).forEach(entry => {
           sMap[entry.email.toLowerCase()] = entry.usedBytes
           // Only add to total if they are an alumni
           if (fetchedUsers.some(u => u.email.toLowerCase() === entry.email.toLowerCase())) {
@@ -225,19 +229,19 @@ export default function WorkspaceAlumniPage() {
   }, [fetchAlumniData])
 
   // ─── Toggle Suspension ──────────────────────────────────────────────────
-  const handleToggleSuspend = async (user: WorkspaceUser, currentSuspended: boolean) => {
-    if (!selectedOrg?.workspaceAdminEmail) return
+  const handleToggleSuspend = async (targetUser: WorkspaceUser, currentSuspended: boolean) => {
+    if (!targetUser || !selectedOrg?.workspaceAdminEmail || !user) return
     
-    setIsToggling(user.id)
+    setIsToggling(targetUser.id)
     try {
       const newSuspendedState = !currentSuspended
-      const res = await updateUser(selectedOrg.workspaceAdminEmail, user.id, { suspended: newSuspendedState })
+      const res = await updateUser(await user.getIdToken(), activeOrgId || selectedOrg?.id || "", targetUser.id, { suspended: newSuspendedState })
       if (!res.success) throw new Error(res.error)
 
-      setAlumni(prev => prev.map(u => u.id === user.id ? { ...u, suspended: newSuspendedState } : u))
+      setAlumni(prev => prev.map(u => u.id === targetUser.id ? { ...u, suspended: newSuspendedState } : u))
       toast({
         title: newSuspendedState ? "Alumnus Suspended" : "Alumnus Reactivated",
-        description: `${user.fullName}'s account access has been updated.`
+        description: `${targetUser.fullName}'s account access has been updated.`
       })
     } catch (err: any) {
       toast({
@@ -257,7 +261,7 @@ export default function WorkspaceAlumniPage() {
   }
 
   const confirmRestoreUser = async () => {
-    if (!selectedOrg?.workspaceAdminEmail || !userToRestore) return
+    if (!user || !selectedOrg?.workspaceAdminEmail || !userToRestore) return
     
     setIsRestoring(true)
     try {
@@ -265,7 +269,7 @@ export default function WorkspaceAlumniPage() {
       const updates: any = { orgUnitPath: "/" }
       if (userToRestore.suspended) updates.suspended = false
 
-      const res = await updateUser(selectedOrg.workspaceAdminEmail, userToRestore.id, updates)
+      const res = await updateUser(await user.getIdToken(), activeOrgId || selectedOrg?.id || "", userToRestore.id, updates)
       if (!res.success) throw new Error(res.error)
 
       // Remove from alumni list

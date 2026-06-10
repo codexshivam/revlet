@@ -1,324 +1,230 @@
-# Revlet IT Manager
+# 🏢 Revlet
 
-**Revlet IT Manager** is a high-density B2B SaaS platform for institutional IT administrators. It provides a unified control panel to manage DNS records, website deployments, team access, and billing across one or more organizations — all backed by Firebase.
+> A unified IT management dashboard for institutions. Manage organizations, DNS, email routing, Google Workspace users, team access, billing, and support — all from one place.
 
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Tech Stack](#tech-stack)
-- [Features](#features)
-- [Data Models](#data-models)
-- [Firestore Security Rules](#firestore-security-rules)
-- [Project Structure](#project-structure)
-- [Environment Setup](#environment-setup)
-- [Running Locally](#running-locally)
-- [Deployment](#deployment)
+![Next.js](https://img.shields.io/badge/Next.js_15-black?style=flat-square&logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat-square&logo=firebase&logoColor=black)
+![Cloudflare](https://img.shields.io/badge/Cloudflare_API-F38020?style=flat-square&logo=cloudflare&logoColor=white)
+![Google Workspace](https://img.shields.io/badge/Google_Workspace_Admin_SDK-4285F4?style=flat-square&logo=google&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 
 ---
 
-## Overview
+## 📌 What is this?
 
-Revlet IT Manager is built for IT administrators managing multiple institutions on a single platform. Every authenticated user can register and manage one or more organizations, each mapped to a single domain.
+Revlet is basically a control panel I'm building for managing IT infrastructure across multiple institutions (schools, colleges, orgs). Instead of logging into 5 different admin consoles, everything sits behind one dashboard.
 
-### Key Design Principles
-- **Multi-tenant:** Each user can own multiple organizations.
-- **Domain-locked:** Every organization maps to exactly one domain (immutable after registration).
-- **Audit-safe:** Payment vouchers and support tickets are write-once / immutable for users.
-- **Cost-Optimized:** All data listings use `getDocs` single fetches instead of live streams to significantly reduce Firebase read operations and billing costs.
+An admin signs up, registers their organization (tied to a domain), and gets access to DNS management, email routing, Google Workspace user management, team invites, payment tracking, and a support ticket system.
+
+The whole thing is multi-tenant — one account can manage multiple organizations, and you can switch between them from the header.
 
 ---
 
-## Tech Stack
+## 🧱 Architecture Overview
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 15 (App Router) |
-| Language | TypeScript |
-| Auth & Database | Firebase Auth + Cloud Firestore (`itmanager` database) |
-| UI Components | ShadCN UI |
-| Styling | Tailwind CSS |
-| DNS Management | Cloudflare API (via Server Actions) |
-| AI Engine | Genkit (pre-configured, `src/ai/`) |
-| Deployment | Vercel |
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        Client (Browser)                          │
+│                                                                  │
+│   Next.js 15 App Router ─── React 19 ─── ShadCN/Radix UI       │
+│   Tailwind CSS ─── Lucide Icons ─── Recharts                    │
+└────────────────────────┬─────────────────────────────────────────┘
+                         │
+            ┌────────────┼────────────────┐
+            ▼            ▼                ▼
+   ┌──────────────┐ ┌──────────┐  ┌─────────────────┐
+   │  Firebase     │ │  Server  │  │  Server Actions  │
+   │  Client SDK   │ │  Actions │  │  (Workspace)     │
+   │              │ │ (DNS)    │  │                   │
+   │ • Auth       │ │          │  │ • Google Admin    │
+   │ • Firestore  │ │ • CRUD   │  │   Directory SDK   │
+   │   (itmanager)│ │ • Import │  │ • Reports API     │
+   │              │ │          │  │ • Alert Center     │
+   └──────┬───────┘ └────┬─────┘  └────────┬──────────┘
+          │              │                  │
+          ▼              ▼                  ▼
+   ┌──────────────┐ ┌──────────┐  ┌─────────────────┐
+   │  Cloud        │ │Cloudflare│  │  Google Workspace │
+   │  Firestore    │ │  API     │  │  Admin SDK        │
+   │  (Database)   │ │  (DNS)   │  │  (Directory, etc) │
+   └──────────────┘ └──────────┘  └─────────────────┘
+```
 
-**Typography:**
-- Headlines: *Space Grotesk*
-- Body: *Inter*
+**How data flows:**
+
+- **Auth** → Firebase Authentication handles login/signup/password reset. The `useUser()` hook exposes the auth state app-wide.
+- **Firestore** → All app data (orgs, members, tickets, vouchers) lives in a Firestore database called `itmanager`. Client SDK reads/writes directly with security rules enforcing ownership.
+- **DNS** → Server Actions in `src/app/actions/cloudflare-dns.ts` proxy requests to the Cloudflare API. The Cloudflare token never hits the browser.
+- **Email** → Server Actions in `src/app/actions/cloudflare-email.ts` manage email routing rules through Cloudflare.
+- **Google Workspace** → Server Actions in `src/app/actions/google-workspace.ts` talk to Google's Admin SDK for user/OU/storage management. Uses service account delegation.
+- **Org Context** → `useActiveOrg()` hook keeps track of which organization is selected. All service pages scope their data to this org.
 
 ---
 
-## Features
+## ✨ Features
 
-### Account
-| Screen | Description |
-|---|---|
-| **Account Home** | Register and manage organizations. Live table with status indicators and an inline edit/delete flow. |
-| **Manage Payments** | Submit payment vouchers (NPR) with bank details. Immutable historical transaction log. |
+### 🏠 Account
+| | Feature | What it does |
+|---|---|---|
+| 🏗️ | **Organization Management** | Register orgs with domain, address, contact info. Auto-generated codes (e.g. `REV-AB1C2`). Edit/delete with confirmation flows. |
+| 💳 | **Payment Vouchers** | Submit payment records in NPR with bank details. Immutable after submission for audit trail. |
+| 👤 | **Profile** | View and manage account details. |
 
-### Services *(Context-aware, per selected Organization)*
-| Screen | Description |
-|---|---|
-| **DNS Management** | Full CRUD for A, CNAME, MX, TXT records via the Cloudflare API. Supports import from BIND zone files. |
-| **Website Management** | 4-state machine: `not_found` → `external` → `waiting_for_changes` → `ready_and_published`. Manages change quotas and request history. |
+### 🔧 Services *(scoped to selected org)*
+| | Feature | What it does |
+|---|---|---|
+| 🌐 | **DNS Management** | Full CRUD for A, CNAME, MX, TXT records through Cloudflare. Supports BIND zone file import. |
+| 📧 | **Email Routing** | Manage email forwarding rules and routing configurations via Cloudflare Email Routing. |
+| 🌍 | **Website Management** | 4-state lifecycle: `not_found` → `external` → `waiting_for_changes` → `ready_and_published`. Change quotas and request history. |
+| 🎓 | **Google Workspace** | Full user directory management — create/edit/suspend/delete users. OU-based navigation (Students, Teachers, Staff). Storage monitoring. Alert center. Alumni and deactivated user management. |
 
-### Management
-| Screen | Description |
-|---|---|
-| **Team Management** | Invite team members by name and email. Toggle Active/Inactive status. Per-org RBAC display. |
-| **Settings** | Change administrative email (with verification) and password with re-authentication. |
+### 👥 Management
+| | Feature | What it does |
+|---|---|---|
+| 🤝 | **Team Members** | Invite members by email. Toggle active/inactive. Real-time sync with Firestore listeners. |
+| ⚙️ | **Settings** | Change email (with verification) and password (with re-auth). |
 
-### Support
-Authenticated ticket submission form with category selection and a live list of submitted tickets.
+### 🎫 Support
+Ticket submission with category routing. Tickets are write-once — users can't edit after submission to keep things clean for the support team.
 
 ---
 
-## Data Models
+## 🗂️ Project Structure
 
-All data lives in the `itmanager` Firestore database.
-
-### `organizations/{orgId}`
-```typescript
-{
-  name:          string      // Legal organization name (≥ 3 chars)
-  domain:        string      // Managed domain, lowercase (immutable after creation)
-  address:       string      // Physical office address (optional)
-  phone:         string      // Organization contact phone (optional)
-  currentEmail:  string      // General inquiry email (optional)
-  contactName:   string      // Authorized representative name (required)
-  contactPhone:  string      // Representative phone (optional)
-  contactEmail:  string      // Representative direct email (required)
-  description:   string      // Brief description (optional)
-  code:          string      // Auto-generated ID, e.g. "REV-AB1C2" (read-only)
-  ownerId:       string      // Firebase Auth UID of admin (set on create)
-  status:        string      // "Active" | "Pending Deletion"
-  cloudflareZoneId?: string  // Cloudflare zone ID for DNS management
-  dnsRequested?: boolean     // Whether a DNS setup has been requested
-  hasWebsite?:   boolean     // Whether a website is being managed
-  createdAt:     Timestamp
-  updatedAt?:    Timestamp
-}
 ```
-
-### `paymentVouchers/{voucherId}`
-```typescript
-{
-  organizationId:   string
-  organizationName: string
-  amount:           number      // Amount in NPR (must be > 0)
-  ownerId:          string      // Admin's Firebase Auth UID
-  submittedAt:      Timestamp
-  voucherFileName:  string      // Uploaded voucher file reference
-  status:           "Not verified" | "Verified" | "Rejected"
-}
-```
-> **Immutable.** Users cannot update or delete submitted vouchers.
-
-### `teamMembers/{memberId}`
-```typescript
-{
-  name:             string
-  email:            string
-  organizationId:   string
-  organizationName: string
-  ownerId:          string   // Admin who created the invitation
-  status:           "Active" | "Inactive"
-  invitedAt:        Timestamp
-}
-```
-
-### `dnsRecords/{recordId}`
-```typescript
-{
-  organizationId: string
-  domain:         string
-  type:           "A" | "CNAME" | "MX" | "TXT"
-  name:           string
-  content:        string
-  ttl:            number
-  proxied:        boolean
-  ownerId:        string
-  createdAt:      Timestamp
-  updatedAt:      Timestamp
-}
-```
-
-### `siteModifications/{modId}`
-```typescript
-{
-  organizationId: string
-  ownerId:        string
-  status:         "pending" | "approved" | "rejected"
-  requestType:    string
-  details:        string
-  createdAt:      Timestamp
-}
-```
-> **Immutable for users.** Status is managed by the backend team.
-
-### `supportTickets/{ticketId}`
-```typescript
-{
-  subject:     string   // Non-empty required
-  category:    string
-  description: string   // Non-empty required
-  ownerId:     string
-  ownerEmail:  string
-  ownerName:   string
-  submittedAt: Timestamp
-  status:      "Open" | "In Progress" | "Resolved" | "Closed"
-}
-```
-> **Immutable for users.** Status is managed by the support team.
-
-### `users/{userId}`
-```typescript
-{
-  uid:              string
-  email:            string
-  displayName:      string
-  numOrganizations: number
-  organizations:    Array<{ id: string, name: string, domain: string, role: "owner" | "member" }>
-  updatedAt:        Timestamp
-}
+src/
+├── app/
+│   ├── layout.tsx                 # Root layout, metadata, fonts
+│   ├── login/                     # Login + forgot password (dialog)
+│   ├── signup/                    # Account registration
+│   ├── account/
+│   │   ├── home/                  # Org dashboard (main landing)
+│   │   ├── billing/               # Payment vouchers
+│   │   └── profile/               # User profile
+│   ├── services/
+│   │   ├── dns/                   # Cloudflare DNS management
+│   │   ├── email/                 # Email routing
+│   │   ├── website/               # Website state machine
+│   │   └── workspace/             # Google Workspace hub
+│   │       ├── users/             # User directory (CRUD)
+│   │       ├── storage/           # Storage monitoring
+│   │       ├── alumni/            # Alumni user tracking
+│   │       └── deactivated/       # Suspended user management
+│   ├── management/
+│   │   ├── team/                  # Team member management
+│   │   └── settings/              # Security settings
+│   ├── support/                   # Support tickets
+│   └── actions/                   # Server Actions
+│       ├── cloudflare-dns.ts      # DNS API proxy
+│       ├── cloudflare-email.ts    # Email routing API proxy
+│       └── google-workspace.ts    # Google Admin SDK proxy
+├── components/
+│   ├── layout/                    # DashboardShell, Sidebar, Header
+│   ├── org/                       # OrgSelector (context switcher)
+│   └── ui/                        # ShadCN primitives (Button, Card, Dialog, etc.)
+├── firebase/
+│   ├── config.ts                  # Firebase app init
+│   ├── provider.tsx               # Auth state provider
+│   ├── client-provider.tsx        # Client-side wrapper
+│   ├── user-sync.ts               # Syncs user profile after org changes
+│   └── error-emitter.ts           # Global Firestore error handler
+└── hooks/
+    ├── use-active-org.ts          # Active org context (localStorage + Firestore)
+    ├── use-toast.ts               # Toast notification hook
+    └── use-mobile.tsx             # Responsive breakpoint hook
 ```
 
 ---
 
-## Firestore Security Rules
+## 🛡️ Security Model
 
-Rules are defined in `firestore.rules` and target the `itmanager` database. Key principles:
+Firestore rules (`firestore.rules`) enforce:
 
-- **Only authenticated users** (`request.auth != null`) can read or write data.
-- **Resource ownership** is enforced via `ownerId` field checks on every collection.
-- **Immutability** is enforced on `paymentVouchers`, `siteModifications`, and `supportTickets` — users cannot update or delete these after submission.
-- **Domain uniqueness** is enforced at the application layer (pre-write `getDocs` check) before creating new organizations.
+- **Authentication required** — every read/write needs `request.auth != null`
+- **Ownership checks** — `ownerId` must match `request.auth.uid` on all collections
+- **Immutable records** — payment vouchers, support tickets, and site modification requests can't be updated or deleted by users after creation
+- **Domain uniqueness** — checked at the application layer before org creation
 
----
-
-## Project Structure
-
-```
-project/
-├── src/
-│   ├── app/
-│   │   ├── (auth)/           # Login, register, forgot-password pages
-│   │   ├── account/
-│   │   │   ├── home/         # Organization management dashboard
-│   │   │   ├── billing/      # Payment voucher submission & history
-│   │   │   ├── profile/      # User profile management
-│   │   │   └── tokens/       # API token management (stub)
-│   │   ├── services/
-│   │   │   ├── dns/          # Cloudflare DNS management
-│   │   │   └── website/      # Website state machine
-│   │   ├── management/
-│   │   │   ├── team/         # Team member RBAC
-│   │   │   └── settings/     # Email & password security controls
-│   │   └── support/          # Support ticket submission
-│   ├── ai/                   # Genkit AI flows
-│   ├── components/
-│   │   ├── layout/           # DashboardShell, Sidebar, TopHeader
-│   │   ├── org/              # OrgSelector (context switcher)
-│   │   └── ui/               # ShadCN UI primitives
-│   ├── firebase/             # Firebase init, auth hooks, error emitter
-│   ├── hooks/
-│   │   ├── use-active-org.ts # Active organization context hook
-│   │   └── use-toast.ts
-│   └── lib/
-│       └── utils.ts          # cn() helper
-├── docs/
-│   └── blueprint.md          # Original project design blueprint
-├── firestore.rules           # Firestore security rules
-├── firebase.json             # Firebase project configuration
-└── .env.local                # Environment variables (not committed)
-```
+Server-side secrets (Cloudflare tokens, Google service account credentials) never leave the server. All external API calls go through Next.js Server Actions.
 
 ---
 
-## Environment Setup
+## 🛠️ Tech Stack
 
-Create a `.env.local` file at the project root with the following variables based on `.env.example`:
-
-```env
-# Firebase Configuration (Public)
-NEXT_PUBLIC_FIREBASE_API_KEY=""
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=""
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=""
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=""
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=""
-NEXT_PUBLIC_FIREBASE_APP_ID=""
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=""
-
-# Cloudflare Tokens (Server-side only)
-CLOUDFLARE_DNS_TOKEN=""
-CLOUDFLARE_INFRA_TOKEN=""
-```
-
-> **Never commit `.env.local` to version control.**  
-> The Firebase config values are available in your [Firebase Console](https://console.firebase.google.com) → Project Settings → Web Apps.
+| Layer | Tech | Why |
+|---|---|---|
+| **Framework** | Next.js 15 (App Router + Turbopack) | File-based routing, server actions, fast dev builds |
+| **Language** | TypeScript | Type safety across the whole codebase |
+| **Auth** | Firebase Authentication | Email/password auth with built-in password reset and email verification |
+| **Database** | Cloud Firestore | Real-time capable NoSQL, good security rules, scales without managing infra |
+| **DNS** | Cloudflare API | Programmatic DNS record management |
+| **Email** | Cloudflare Email Routing | Email forwarding and routing rules |
+| **Workspace** | Google Admin SDK | User directory, OUs, storage, alerts for Google Workspace for Education |
+| **UI** | ShadCN + Radix UI | Accessible component primitives that are easy to customize |
+| **Styling** | Tailwind CSS | Utility-first, fast to iterate |
+| **Icons** | Lucide React | Clean, consistent icon set |
+| **Charts** | Recharts | For storage and analytics visualizations |
+| **Fonts** | Space Grotesk (headlines) + Inter (body) | Clean, modern look |
 
 ---
 
-## Running Locally
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- A Firebase project with Auth and Firestore enabled
+- Cloudflare account with API tokens (for DNS features)
+- Google Workspace admin access (for Workspace features)
+
+### Setup
 
 ```bash
-# Install dependencies
+# clone and install
+git clone <repo-url>
+cd project
 npm install
 
-# Start the development server
+# copy env template and fill in your values
+cp .env.example .env.local
+
+# start dev server
 npm run dev
 ```
 
-The app will be available at [http://localhost:3000](http://localhost:3000).
+The app runs at `http://localhost:9002` by default.
+
+### Environment Variables
+
+Check `.env.example` for the full list. You'll need:
+
+| Variable | What |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_*` | Firebase web app config (from Firebase Console → Project Settings) |
+| `CLOUDFLARE_DNS_TOKEN` | Cloudflare API token with DNS edit permissions |
+| `CLOUDFLARE_INFRA_TOKEN` | Cloudflare API token for infrastructure operations |
+| `GOOGLE_*` | Google service account credentials for Admin SDK |
+
+> ⚠️ Never commit `.env.local` to git. It's already in `.gitignore`.
 
 ---
 
-## Deployment (Vercel & GitHub)
+## 📦 Available Scripts
 
-This project is optimized for deployment on **Vercel** via **GitHub**.
-
-### 1. Push to GitHub
-Initialize a git repository and push the code:
 ```bash
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/your-username/revlet-it-manager.git
-git push -u origin main
+npm run dev          # Start dev server (Turbopack, port 9002)
+npm run build        # Production build
+npm run start        # Start production server
+npm run lint         # Run ESLint
+npm run typecheck    # Run tsc --noEmit
 ```
 
-### 2. Deploy to Vercel
-1. Log in to [Vercel](https://vercel.com) and click **Add New** → **Project**.
-2. Import the GitHub repository you just created.
-3. Open the **Environment Variables** section and copy all the variables from your `.env.local` file.
-4. Click **Deploy**. Vercel will automatically detect the Next.js framework and build the project.
-
-### 3. Add Custom Domain (`app.revlet.me`)
-1. Once deployed, go to the project dashboard in Vercel.
-2. Navigate to **Settings** → **Domains**.
-3. Enter `app.revlet.me` and click Add.
-4. Vercel will provide DNS configuration details (usually a CNAME record pointing to `cname.vercel-dns.com.`).
-5. Add this CNAME record to your Cloudflare account for `revlet.me`.
-6. Once DNS propagates, Vercel will automatically provision the SSL certificate and the app will be live at `https://app.revlet.me`.
-
 ---
 
-## Architecture Notes
+## 📝 Notes
 
-### Auth Flow
-- Auth state is managed by `src/firebase/provider.tsx` (server-side) and `src/firebase/client-provider.tsx` (client-side).
-- The `useUser()` hook exposes the current Firebase `User` object anywhere in the app.
-- Protected routes redirect to `/login` if `user` is null after auth resolution.
-
-### Organization Context
-- `useActiveOrg()` hook maintains the "selected organization" in `localStorage` and fetches the user's authorized organizations on load.
-- The `OrgSelector` component in the header allows admins to switch context across services without page reloads.
-
-### Error Handling
-- Firestore permission errors are caught globally via `errorEmitter` (`src/firebase/error-emitter.ts`).
-- The `FirebaseErrorListener` component (`src/components/FirebaseErrorListener.tsx`) surfaces these errors as toast notifications.
-
-### Data Sync
-- `syncUserOrganizations()` (`src/firebase/user-sync.ts`) keeps the `users/{uid}.organizations` array up to date after each organization query.
+- The Firestore database is named `itmanager` (not the default `(default)`)
+- All data listings use single-fetch queries (`getDocs`) instead of live listeners to keep Firebase read costs low. Real-time listeners are only used where instant UI feedback matters (team members, org list).
+- Google Workspace features require a service account with domain-wide delegation set up in the Google Admin Console.
+- The forgot password flow is handled as a dialog inside the login page, not a separate route.

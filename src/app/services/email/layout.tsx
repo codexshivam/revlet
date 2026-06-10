@@ -18,7 +18,8 @@ export default function EmailLayout({ children }: { children: React.ReactNode })
     description: 'Secure and scalable enterprise email infrastructure management tailored for businesses.',
     provider: {
       '@type': 'Organization',
-      name: 'Revlet IT Management',
+      '@id': 'https://revlet.me/#organization',
+      name: 'Revlet',
     },
   };
 

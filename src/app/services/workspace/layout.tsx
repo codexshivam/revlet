@@ -21,7 +21,8 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
     description: 'Google Workspace for Education centralized administration for institutions.',
     provider: {
       '@type': 'Organization',
-      name: 'Revlet IT Management',
+      '@id': 'https://revlet.me/#organization',
+      name: 'Revlet',
     },
   };
 

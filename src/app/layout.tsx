@@ -3,13 +3,24 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Toaster } from '@/components/ui/toaster';
+import { JsonLd } from '@/components/seo/json-ld';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://app.revlet.me'),
   title: {
     default: 'Revlet Dashboard',
     template: '%s | Revlet Dashboard'
   },
-  description: 'Enterprise Infrastructure Management Platform for business owners and educational institutions. Manage DNS, Email, Google Workspace, and Team access securely.',
+  description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, teams, and billing from one unified dashboard.',
+  applicationName: 'Revlet',
+  keywords: ['Revlet', 'IT management', 'infrastructure platform', 'DNS management', 'Google Workspace', 'enterprise dashboard', 'SaaS', 'institutional IT'],
+  authors: [{ name: 'Revlet', url: 'https://revlet.me' }],
+  creator: 'Revlet',
+  publisher: 'Revlet',
+  alternates: {
+    canonical: 'https://app.revlet.me',
+  },
+  manifest: '/manifest.json',
   icons: {
     icon: [
       {
@@ -40,17 +51,128 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: 'Revlet IT Management | Enterprise IT Solutions',
-    description: 'Enterprise Infrastructure Management Platform for business owners and educational institutions.',
+    title: 'Revlet — Enterprise Infrastructure Dashboard',
+    description: 'Unified platform for managing DNS, email, Google Workspace, teams, and billing for institutions and businesses.',
     type: 'website',
+    url: 'https://app.revlet.me',
     locale: 'en_US',
-    siteName: 'Revlet IT Management',
+    siteName: 'Revlet',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Revlet IT Management',
-    description: 'Enterprise Infrastructure Management Platform for business owners and educational institutions.',
+    title: 'Revlet — Enterprise Infrastructure Dashboard',
+    description: 'Unified platform for managing DNS, email, Google Workspace, teams, and billing for institutions and businesses.',
+    creator: '@revlet',
   },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  category: 'technology',
+};
+
+// Organization entity — the brand itself, pointing to revlet.me as the main website
+const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  '@id': 'https://revlet.me/#organization',
+  name: 'Revlet',
+  url: 'https://revlet.me',
+  logo: {
+    '@type': 'ImageObject',
+    url: 'https://app.revlet.me/favicon-192x192.png',
+    width: 192,
+    height: 192,
+  },
+  contactPoint: {
+    '@type': 'ContactPoint',
+    email: 'hello@revlet.me',
+    contactType: 'customer support',
+    availableLanguage: ['English'],
+  },
+  sameAs: [
+    'https://revlet.me',
+    'https://app.revlet.me',
+  ],
+};
+
+// WebApplication schema — this dashboard app is a product of the Organization
+const webApplicationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://app.revlet.me/#application',
+  name: 'Revlet Dashboard',
+  url: 'https://app.revlet.me',
+  description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, teams, and billing from one unified dashboard.',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Any',
+  browserRequirements: 'Requires a modern web browser',
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+    description: 'Free to get started',
+  },
+  creator: {
+    '@type': 'Organization',
+    '@id': 'https://revlet.me/#organization',
+    name: 'Revlet',
+  },
+  featureList: [
+    'DNS & Domain Management',
+    'Enterprise Email Infrastructure',
+    'Google Workspace Administration',
+    'Team & Access Control',
+    'Billing & Payments',
+    'Website Management',
+  ],
+};
+
+// WebSite schema with SearchAction — helps Google show a search box in sitelinks
+const webSiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  '@id': 'https://app.revlet.me/#website',
+  name: 'Revlet Dashboard',
+  url: 'https://app.revlet.me',
+  publisher: {
+    '@type': 'Organization',
+    '@id': 'https://revlet.me/#organization',
+  },
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: {
+      '@type': 'EntryPoint',
+      urlTemplate: 'https://app.revlet.me/search?q={search_term_string}',
+    },
+    'query-input': 'required name=search_term_string',
+  },
+};
+
+// BreadcrumbList for the root — helps Google understand page hierarchy for sitelinks
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Home',
+      item: 'https://app.revlet.me',
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Login',
+      item: 'https://app.revlet.me/login',
+    },
+    {
+      '@type': 'ListItem',
+      position: 3,
+      name: 'Create Account',
+      item: 'https://app.revlet.me/signup',
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -64,6 +186,10 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <JsonLd data={organizationSchema} />
+        <JsonLd data={webApplicationSchema} />
+        <JsonLd data={webSiteSchema} />
+        <JsonLd data={breadcrumbSchema} />
       </head>
       <body className="font-body antialiased">
         <FirebaseClientProvider>

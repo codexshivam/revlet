@@ -18,6 +18,11 @@ export default function DNSLayout({ children }: { children: React.ReactNode }) {
     description: 'Manage domains and Cloudflare DNS infrastructure for educational institutions and businesses.',
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Any',
+    creator: {
+      '@type': 'Organization',
+      '@id': 'https://revlet.me/#organization',
+      name: 'Revlet',
+    },
     offers: {
       '@type': 'Offer',
       price: '0',

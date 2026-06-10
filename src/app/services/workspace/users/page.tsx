@@ -513,16 +513,6 @@ export default function WorkspaceUsersPage() {
       for (const targetUser of selectedUsers) {
         // 1. Move to /Alumni
         await updateUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", targetUser.id, { orgUnitPath: "/Alumni" })
-        // 2. Save metadata in Firestore
-        await addDoc(collection(db, "workspaceAlumniMetadata"), {
-          orgId: selectedOrgId,
-          userId: targetUser.id,
-          userEmail: targetUser.email,
-          fullName: targetUser.fullName,
-          originalOU: targetUser.orgUnitPath,
-          migratedAt: serverTimestamp(),
-          migratedBy: user.uid
-        })
       }
       toast({
         title: "Migration Complete",

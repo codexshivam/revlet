@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, onSnapshot } from "firebase/firestore"
+import { collection, query, where, or, onSnapshot } from "firebase/firestore"
 
 export interface Organization {
   id: string
@@ -51,7 +51,13 @@ export function useActiveOrg() {
       return
     }
 
-    const q = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
+    const q = query(
+      collection(db, "organizations"),
+      or(
+        where("ownerId", "==", user.uid),
+        where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
+      )
+    )
     
     const unsubscribe = onSnapshot(q, (snap) => {
       const fetched = snap.docs.map((doc) => ({

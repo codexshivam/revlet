@@ -72,6 +72,7 @@ import {
   collection, 
   query, 
   where, 
+  or,
   addDoc, 
   updateDoc,
   doc,
@@ -237,7 +238,13 @@ export default function AccountHomePage() {
     }
 
     const orgsRef = collection(db, "organizations")
-    const q = query(orgsRef, where("ownerId", "==", user.uid))
+    const q = query(
+      orgsRef,
+      or(
+        where("ownerId", "==", user.uid),
+        where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
+      )
+    )
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedOrgs = snapshot.docs.map(doc => ({
@@ -557,16 +564,22 @@ export default function AccountHomePage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right pr-8">
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm rounded-lg"
-                              onClick={() => handleOpenEdit(org)}
-                              disabled={org.status === "Pending Deletion"}
-                            >
-                              Manage
-                              <Edit2 className="w-3 h-3" />
-                            </Button>
+                            {org.ownerId === user?.uid ? (
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm rounded-lg"
+                                onClick={() => handleOpenEdit(org)}
+                                disabled={org.status === "Pending Deletion"}
+                              >
+                                Manage
+                                <Edit2 className="w-3 h-3" />
+                              </Button>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] px-2.5 py-1 font-bold shadow-none rounded border bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-500">
+                                Staff Member
+                              </Badge>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -608,15 +621,21 @@ export default function AccountHomePage() {
                           </div>
                         </div>
                         
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-9 w-9 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl shrink-0"
-                          onClick={() => handleOpenEdit(org)}
-                          disabled={org.status === "Pending Deletion"}
-                        >
-                          <Settings className="w-4 h-4" />
-                        </Button>
+                        {org.ownerId === user?.uid ? (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-9 w-9 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl shrink-0"
+                            onClick={() => handleOpenEdit(org)}
+                            disabled={org.status === "Pending Deletion"}
+                          >
+                            <Settings className="w-4 h-4" />
+                          </Button>
+                        ) : (
+                          <Badge variant="outline" className="text-[9px] px-2 py-0.5 font-bold shadow-none rounded border bg-slate-50 text-slate-500 border-slate-200 shrink-0 hover:bg-slate-50 hover:text-slate-500">
+                            Staff
+                          </Badge>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap gap-2 pl-0.5">

@@ -2,7 +2,10 @@ import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
 
 export const metadata: Metadata = {
-  title: 'Google Workspace',
+  title: {
+    default: 'Google Workspace | Revlet',
+    template: '%s | Google Workspace | Revlet',
+  },
   description: 'Google Workspace for Education centralized administration for institutions.',
   robots: {
     index: false,

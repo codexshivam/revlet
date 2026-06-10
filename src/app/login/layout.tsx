@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Secure Login',
+  title: 'Login',
   description: 'Access the Revlet IT Management portal securely.',
 };
 

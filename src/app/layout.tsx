@@ -6,10 +6,39 @@ import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Revlet IT Management | Enterprise IT Solutions',
-    template: '%s | Revlet IT Management'
+    default: 'Revlet Dashboard',
+    template: '%s | Revlet Dashboard'
   },
   description: 'Enterprise Infrastructure Management Platform for business owners and educational institutions. Manage DNS, Email, Google Workspace, and Team access securely.',
+  icons: {
+    icon: [
+      {
+        url: '/favicon.ico',
+        sizes: 'any',
+      },
+      {
+        url: '/favicon.svg',
+        type: 'image/svg+xml',
+      },
+      {
+        url: '/favicon-48x48.png',
+        type: 'image/png',
+        sizes: '48x48',
+      },
+      {
+        url: '/favicon-192x192.png',
+        type: 'image/png',
+        sizes: '192x192',
+      },
+    ],
+    apple: [
+      {
+        url: '/favicon-192x192.png',
+        sizes: '192x192',
+        type: 'image/png',
+      },
+    ],
+  },
   openGraph: {
     title: 'Revlet IT Management | Enterprise IT Solutions',
     description: 'Enterprise Infrastructure Management Platform for business owners and educational institutions.',

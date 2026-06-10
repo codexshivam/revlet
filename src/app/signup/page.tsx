@@ -236,13 +236,23 @@ export default function SignupPage() {
           {/* LEGAL TERMS INFO */}
           <p className="text-[10px] text-[#45464d] text-center font-normal leading-normal px-2 tracking-wide pt-1">
             By clicking "Create Account", you agree to our{" "}
-            <button className="underline font-bold hover:text-[#191c1e] transition-colors">
+            <a 
+              href="https://revlet.me/terms/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="underline font-bold hover:text-[#191c1e] transition-colors"
+            >
               Terms of Service
-            </button>{" "}
+            </a>{" "}
             and{" "}
-            <button className="underline font-bold hover:text-[#191c1e] transition-colors">
+            <a 
+              href="https://revlet.me/privacy/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="underline font-bold hover:text-[#191c1e] transition-colors"
+            >
               Privacy Policy
-            </button>
+            </a>
             .
           </p>
 

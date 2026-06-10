@@ -337,25 +337,6 @@ export default function LoginPage() {
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] leading-normal">
             © 2026 REVLET PLATFORM • HELLO@REVLET.ME
           </div>
-          <div className="flex items-center justify-center gap-2.5 text-[10px] text-slate-400 uppercase tracking-[0.15em]">
-            <a 
-              href="https://revlet.me/privacy/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="hover:text-[#191c1e] transition-colors font-semibold"
-            >
-              Privacy Policy
-            </a>
-            <span>•</span>
-            <a 
-              href="https://revlet.me/terms/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="hover:text-[#191c1e] transition-colors font-semibold"
-            >
-              Terms of Service
-            </a>
-          </div>
         </div>
       </div>
     </div>

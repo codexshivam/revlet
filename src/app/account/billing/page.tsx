@@ -57,7 +57,6 @@ interface Organization {
 interface PaymentVoucher {
   id: string
   organizationId: string
-  organizationName: string
   amount: number
   submittedAt: any
   voucherFileName: string
@@ -256,7 +255,6 @@ export default function BillingPage() {
       
       await addDoc(vouchersRef, {
         organizationId: submissionData.organizationId,
-        organizationName: targetOrg?.name || "Unknown Institution",
         amount: parseFloat(submissionData.amount),
         ownerId: user.uid,
         submittedAt: serverTimestamp(),
@@ -460,7 +458,9 @@ export default function BillingPage() {
                               </Button>
                             </div>
                           </TableCell>
-                          <TableCell className="text-slate-600 text-xs font-semibold">{v.organizationName}</TableCell>
+                          <TableCell className="text-slate-600 text-xs font-semibold">
+                            {orgs.find(o => o.id === v.organizationId)?.name || "Unknown Institution"}
+                          </TableCell>
                           <TableCell className="font-mono font-bold text-slate-900 text-xs">रू {v.amount.toLocaleString()}</TableCell>
                           <TableCell className="text-slate-400 text-xs font-medium">
                             {v.submittedAt?.toDate?.().toLocaleDateString() || 'N/A'}
@@ -518,7 +518,9 @@ export default function BillingPage() {
 
                       {/* Top Row: Institution Name & Status Badge */}
                       <div className="flex items-start justify-between gap-3">
-                        <span className="font-headline font-bold text-slate-800 text-sm leading-snug">{v.organizationName}</span>
+                        <span className="font-headline font-bold text-slate-800 text-sm leading-snug">
+                          {orgs.find(o => o.id === v.organizationId)?.name || "Unknown Institution"}
+                        </span>
                         <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border uppercase tracking-wider shrink-0 pointer-events-none select-none
                           ${v.status === "Verified" ? "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-50 hover:text-emerald-600" : 
                             v.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100 hover:bg-red-50 hover:text-red-600" : 

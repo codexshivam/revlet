@@ -26,7 +26,13 @@ service cloud.firestore {
         && request.resource.data.domain is string
         && request.resource.data.contactName is string
         && request.resource.data.contactEmail is string;
-      allow read, update: if isResourceOwner();
+      allow read: if isResourceOwner() || (
+        isAuthenticated() && 
+        request.auth.token.email != null && 
+        'memberEmails' in resource.data && 
+        request.auth.token.email.toLowerCase() in resource.data.memberEmails
+      );
+      allow update: if isResourceOwner();
       allow delete: if false; // Deletion is handled via status flag, not hard delete
     }
 
@@ -46,7 +52,6 @@ service cloud.firestore {
     match /teamMembers/{memberId} {
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.name is string
         && request.resource.data.email is string;
       allow read, update: if isResourceOwner();
       allow delete: if isResourceOwner();

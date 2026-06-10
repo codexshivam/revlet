@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { UserPlus, MoreHorizontal, Building2, Loader2, Users as UsersIcon, Search } from "lucide-react"
+import { UserPlus, MoreHorizontal, Building2, Loader2, Users as UsersIcon, Search, Trash2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,16 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -29,8 +39,10 @@ import {
   getDocs, 
   addDoc, 
   updateDoc,
+  deleteDoc,
   doc,
-  serverTimestamp 
+  serverTimestamp,
+  onSnapshot
 } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
@@ -42,10 +54,8 @@ interface Organization {
 
 interface TeamMember {
   id: string
-  name: string
   email: string
   organizationId: string
-  organizationName: string
   status: "Active" | "Inactive"
   ownerId: string
 }
@@ -58,10 +68,7 @@ function TeamTableSkeleton() {
           <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-slate-100 rounded-full" />
-              <div className="flex flex-col gap-2">
-                <div className="h-4 w-32 bg-slate-200 rounded" />
-                <div className="h-3 w-24 bg-slate-100 rounded" />
-              </div>
+              <div className="h-4 w-48 bg-slate-200 rounded" />
             </div>
             <div className="h-5 w-16 bg-slate-100 rounded md:hidden" />
           </div>
@@ -88,10 +95,10 @@ export default function TeamManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null)
   
   // Form State
   const [formData, setFormData] = useState({
-    name: "",
     email: "",
     organizationId: ""
   })
@@ -99,43 +106,44 @@ export default function TeamManagementPage() {
   useEffect(() => {
     if (authLoading || !user) return
 
-    // Fetch User Organizations for the selector
+    // Fetch User Organizations for the selector (real-time)
     const orgsRef = collection(db, "organizations")
     const qOrgs = query(orgsRef, where("ownerId", "==", user.uid))
     
+    const unsubscribeOrgs = onSnapshot(qOrgs, (orgsSnap) => {
+      setOrgs(orgsSnap.docs.map(doc => ({ id: doc.id, name: doc.data().name })) as Organization[])
+    }, (error) => {
+      console.error("Error listening to organizations:", error)
+    })
+    
+    // Fetch Team Members (real-time)
     const membersRef = collection(db, "teamMembers")
     const qMembers = query(membersRef, where("ownerId", "==", user.uid))
 
-    const fetchData = async () => {
-      try {
-        const [orgsSnap, membersSnap] = await Promise.all([
-          getDocs(qOrgs),
-          getDocs(qMembers)
-        ]);
+    const unsubscribeMembers = onSnapshot(qMembers, (membersSnap) => {
+      setMembers(membersSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as TeamMember[])
+      setIsLoading(false)
+    }, (error) => {
+      const permissionError = new FirestorePermissionError({
+        path: 'teamMembers',
+        operation: 'list',
+      })
+      errorEmitter.emit('permission-error', permissionError)
+      setIsLoading(false)
+    })
 
-        setOrgs(orgsSnap.docs.map(doc => ({ id: doc.id, name: doc.data().name })) as Organization[]);
-
-        setMembers(membersSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as TeamMember[]);
-        setIsLoading(false);
-      } catch (error) {
-        const permissionError = new FirestorePermissionError({
-          path: 'teamMembers',
-          operation: 'list',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
+    return () => {
+      unsubscribeOrgs()
+      unsubscribeMembers()
+    }
   }, [user, authLoading, db])
 
   const handleInvite = async () => {
     if (!user) return
-    if (!formData.name || !formData.email || !formData.organizationId) {
+    if (!formData.email || !formData.organizationId) {
       toast({
         variant: "destructive",
         title: "Missing Fields",
@@ -148,18 +156,30 @@ export default function TeamManagementPage() {
     const membersRef = collection(db, "teamMembers")
     const targetOrg = orgs.find(o => o.id === formData.organizationId)
     
+    const targetOrgId = formData.organizationId;
+    const targetEmail = formData.email.toLowerCase().trim();
+
     addDoc(membersRef, {
-      name: formData.name,
-      email: formData.email,
+      email: targetEmail,
       organizationId: formData.organizationId,
-      organizationName: targetOrg?.name || "Unknown Institution",
       ownerId: user.uid,
       status: "Active",
       invitedAt: serverTimestamp()
     }).then(async () => {
+      // Add email to organization memberEmails array
+      try {
+        const { updateDoc, doc, arrayUnion } = await import("firebase/firestore")
+        const orgRef = doc(db, "organizations", targetOrgId)
+        await updateDoc(orgRef, {
+          memberEmails: arrayUnion(targetEmail)
+        })
+      } catch (e) {
+        console.error("Error updating organization memberEmails on invite:", e)
+      }
+
       toast({
         title: "Invitation Sent",
-        description: `A secure access invite has been sent to ${formData.name}.`,
+        description: `A secure access invite has been sent to ${targetEmail}.`,
       })
       setIsSubmitting(false)
       setIsDialogOpen(false)
@@ -168,17 +188,18 @@ export default function TeamManagementPage() {
       try {
         const { getDocs, query, collection, where } = await import("firebase/firestore")
         const usersRef = collection(db, "users")
-        const qUser = query(usersRef, where("email", "==", formData.email))
+        const qUser = query(usersRef, where("email", "==", targetEmail))
         const userSnap = await getDocs(qUser)
         if (!userSnap.empty) {
           const invitedUserDoc = userSnap.docs[0].data()
-          await syncUserOrganizations(db, invitedUserDoc.uid, invitedUserDoc.email, invitedUserDoc.displayName || "")
+          const invitedUserId = userSnap.docs[0].id
+          await syncUserOrganizations(db, invitedUserId, invitedUserDoc.email, invitedUserDoc.displayName || "")
         }
       } catch (e) {
         console.error("Error reactive syncing invited user:", e)
       }
 
-      setFormData({ name: "", email: "", organizationId: "" })
+      setFormData({ email: "", organizationId: "" })
     }).catch(async (error) => {
       const permissionError = new FirestorePermissionError({
         path: 'teamMembers',
@@ -194,14 +215,56 @@ export default function TeamManagementPage() {
     const memberRef = doc(db, "teamMembers", member.id)
     const newStatus = member.status === "Active" ? "Inactive" : "Active"
     
-    updateDoc(memberRef, { status: newStatus }).catch(async (error) => {
+    try {
+      // Update team member status
+      await updateDoc(memberRef, { status: newStatus })
+
+      // Update organization memberEmails array
+      const { arrayUnion, arrayRemove } = await import("firebase/firestore")
+      const orgRef = doc(db, "organizations", member.organizationId)
+      await updateDoc(orgRef, {
+        memberEmails: newStatus === "Active"
+          ? arrayUnion(member.email.toLowerCase().trim())
+          : arrayRemove(member.email.toLowerCase().trim())
+      })
+    } catch (error: any) {
       const permissionError = new FirestorePermissionError({
         path: memberRef.path,
         operation: 'update',
         requestResourceData: { status: newStatus }
       });
       errorEmitter.emit('permission-error', permissionError);
-    })
+    }
+  }
+
+  const handleDeleteMember = async (member: TeamMember) => {
+    try {
+      const memberRef = doc(db, "teamMembers", member.id)
+      await deleteDoc(memberRef)
+
+      // Remove email from organization memberEmails array
+      const { arrayRemove } = await import("firebase/firestore")
+      const orgRef = doc(db, "organizations", member.organizationId)
+      await updateDoc(orgRef, {
+        memberEmails: arrayRemove(member.email.toLowerCase().trim())
+      })
+
+      // Update local state
+      setMembers(prev => prev.filter(m => m.id !== member.id))
+
+      toast({
+        title: "Access Revoked",
+        description: `${member.email} has been removed from the team.`,
+      })
+    } catch (error: any) {
+      const permissionError = new FirestorePermissionError({
+        path: `teamMembers/${member.id}`,
+        operation: 'delete'
+      });
+      errorEmitter.emit('permission-error', permissionError);
+    } finally {
+      setMemberToDelete(null)
+    }
   }
 
   if (authLoading) {
@@ -236,16 +299,6 @@ export default function TeamManagementPage() {
                     <p className="text-slate-400 text-xs mt-1">Authorize administrative access for your staff.</p>
                   </DialogHeader>
                   <div className="p-6 space-y-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="member-name" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Staff Full Name</Label>
-                      <Input 
-                        id="member-name" 
-                        placeholder="e.g. Rajesh Karki" 
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
-                      />
-                    </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="member-email" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Staff Work Email</Label>
                       <Input 
@@ -318,7 +371,7 @@ export default function TeamManagementPage() {
                         <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-wider text-slate-400">Team Member</TableHead>
                         <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-400">Associated Organization</TableHead>
                         <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-400">Status</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-wider text-slate-400">Access Toggle</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-wider text-slate-400">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -327,18 +380,17 @@ export default function TeamManagementPage() {
                           <TableCell className="pl-8 py-5">
                             <div className="flex items-center gap-4">
                               <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center group-hover:bg-primary/5 transition-all font-headline font-bold text-xs text-slate-400 group-hover:text-primary">
-                                {member.name.substring(0, 1).toUpperCase()}
+                                {member.email.substring(0, 1).toUpperCase()}
                               </div>
-                              <div className="flex flex-col gap-0.5">
-                                <span className="font-bold text-slate-800 text-sm leading-none">{member.name}</span>
-                                <span className="text-[10px] text-slate-400 font-medium">{member.email}</span>
-                              </div>
+                              <span className="font-bold text-slate-800 text-sm">{member.email}</span>
                             </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Building2 className="w-3.5 h-3.5 text-slate-300" />
-                              <span className="text-xs font-bold text-slate-600">{member.organizationName}</span>
+                              <span className="text-xs font-bold text-slate-600">
+                                {orgs.find(o => o.id === member.organizationId)?.name || "Unknown Institution"}
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -348,12 +400,20 @@ export default function TeamManagementPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right pr-8">
-                            <div className="flex items-center justify-end gap-3">
+                            <div className="flex items-center justify-end gap-4">
                               <Switch 
                                 checked={member.status === "Active"} 
                                 onCheckedChange={() => toggleStatus(member)}
                                 className="scale-90" 
                               />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setMemberToDelete(member)}
+                                className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                              >
+                                <Trash2 className="w-4.5 h-4.5" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -369,12 +429,9 @@ export default function TeamManagementPage() {
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-headline font-bold text-xs text-slate-500">
-                            {member.name.substring(0, 1).toUpperCase()}
+                            {member.email.substring(0, 1).toUpperCase()}
                           </div>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-bold text-slate-800 text-sm leading-none">{member.name}</span>
-                            <span className="text-[10px] text-slate-400 font-medium">{member.email}</span>
-                          </div>
+                          <span className="font-bold text-slate-800 text-sm">{member.email}</span>
                         </div>
                         <Badge className={`text-[9px] px-2 py-0.5 h-5 font-bold shadow-none rounded border transition-colors
                           ${member.status === "Active" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-100"}`}>
@@ -385,15 +442,27 @@ export default function TeamManagementPage() {
                       <div className="flex items-center justify-between pt-1">
                         <div className="flex items-center gap-1.5 text-slate-600">
                           <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="text-xs font-semibold">{member.organizationName}</span>
+                          <span className="text-xs font-semibold">
+                            {orgs.find(o => o.id === member.organizationId)?.name || "Unknown Institution"}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Access</span>
-                          <Switch 
-                            checked={member.status === "Active"} 
-                            onCheckedChange={() => toggleStatus(member)}
-                            className="scale-90" 
-                          />
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Access</span>
+                            <Switch 
+                              checked={member.status === "Active"} 
+                              onCheckedChange={() => toggleStatus(member)}
+                              className="scale-90" 
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setMemberToDelete(member)}
+                            className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -403,6 +472,26 @@ export default function TeamManagementPage() {
             )}
           </CardContent>
         </Card>
+
+        <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
+          <AlertDialogContent className="bg-white border border-slate-200 rounded-lg p-6 max-w-md">
+            <AlertDialogHeader className="space-y-2 text-left">
+              <AlertDialogTitle className="font-headline font-semibold text-lg text-[#191c1e]">Remove Team Member</AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-500 text-xs leading-normal">
+                Are you sure you want to remove <strong>{memberToDelete?.email}</strong>? This will permanently revoke their access to the organization <strong>{orgs.find(o => o.id === memberToDelete?.organizationId)?.name || "Unknown Institution"}</strong>.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="bg-slate-50 -mx-6 -mb-6 p-4 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-2 mt-6">
+              <AlertDialogCancel className="w-full sm:w-auto rounded text-xs font-bold h-9">Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => memberToDelete && handleDeleteMember(memberToDelete)}
+                className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold h-9 px-6 rounded text-xs"
+              >
+                Remove Member
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardShell>
   )

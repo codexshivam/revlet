@@ -30,7 +30,7 @@ export async function syncUserOrganizations(
 
     // 2. Fetch organizations the user is invited to as a team member
     const membersRef = collection(db, "teamMembers")
-    const qInvited = query(membersRef, where("email", "==", userEmail), where("status", "==", "Active"))
+    const qInvited = query(membersRef, where("email", "==", userEmail.toLowerCase().trim()), where("status", "==", "Active"))
     const invitedSnap = await getDocs(qInvited)
     
     // Fetch domains for these organizations for thorough details
@@ -62,12 +62,10 @@ export async function syncUserOrganizations(
     // 4. Update the user's document
     const userRef = doc(db, "users", userId)
     await setDoc(userRef, {
-      uid: userId,
       email: userEmail,
       displayName: userDisplayName || "",
       numOrganizations: uniqueOrgs.length,
-      organizations: uniqueOrgs,
-      updatedAt: serverTimestamp()
+      organizations: uniqueOrgs.map(org => org.id)
     }, { merge: true })
 
     console.log(`Synced ${uniqueOrgs.length} organizations in document /users/${userId}`)

@@ -133,7 +133,8 @@ const webSiteSchema = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
   '@id': 'https://app.revlet.me/#website',
-  name: 'Revlet Dashboard',
+  name: 'Revlet',
+  alternateName: ['Revlet Dashboard', 'Revlet App'],
   url: 'https://app.revlet.me',
   publisher: {
     '@type': 'Organization',

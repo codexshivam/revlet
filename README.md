@@ -9,6 +9,6 @@
 ![Google Workspace](https://img.shields.io/badge/Google_Workspace_Admin_SDK-4285F4?style=flat-square&logo=google&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 
----
+Know more on revlet.me
 
-## Know more on revlet.me
+---

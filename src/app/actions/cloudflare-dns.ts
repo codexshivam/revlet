@@ -187,12 +187,19 @@ export async function createZone(idToken: string, orgId: string, domainName: str
       throw new Error(`Domain "${domainName}" does not match the active organization domain.`);
     }
 
-    // 1. Fetch accounts to get the Account ID
-    const accountsData = await cfFetch('/accounts');
-    const accountId = accountsData.result?.[0]?.id;
+    // 1. Resolve Account ID from environment or Cloudflare API
+    let accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+    if (!accountId) {
+      try {
+        const accountsData = await cfFetch('/accounts');
+        accountId = accountsData.result?.[0]?.id;
+      } catch {
+        // Scoped tokens might not have permission to list accounts directly
+      }
+    }
     
     if (!accountId) {
-      throw new Error("No Cloudflare account found. Ensure your token has Account level permissions.");
+      throw new Error("No Cloudflare account found. Ensure CLOUDFLARE_ACCOUNT_ID is set in your environment.");
     }
 
     // 2. Create the zone

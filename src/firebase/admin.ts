@@ -5,7 +5,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 const firebaseClientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 const firebasePrivateKey = process.env.FIREBASE_PRIVATE_KEY;
-const firebaseProjectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+const firebaseProjectId = process.env.FIREBASE_PROJECT_ID;
 
 const apps = getApps();
 let app;

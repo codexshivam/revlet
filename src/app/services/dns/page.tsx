@@ -63,6 +63,7 @@ import {
 
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { Skeleton } from "@/components/ui/skeleton"
+import { containsMaliciousScript } from "@/lib/security/sanitize"
 
 const SUPPORTED_TYPES = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA", "PTR", "NAPTR"]
 const PROXY_SUPPORTED_TYPES = ["A", "AAAA", "CNAME"]
@@ -305,9 +306,14 @@ export default function DNSManagementPage() {
       errors.name = "Name should not contain protocol prefixes."
     } else if (/\s/.test(nameVal)) {
       errors.name = "Name cannot contain spaces."
+    } else if (containsMaliciousScript(nameVal)) {
+      errors.name = "Record name cannot contain script tags or executable characters."
     }
 
     const contentVal = formData.content.trim()
+    if (containsMaliciousScript(contentVal)) {
+      errors.content = "Record content cannot contain executable script tags or event handlers."
+    }
     const type = formData.type
     if (type === "A") {
       const ipv4Regex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/

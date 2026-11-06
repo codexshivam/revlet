@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Mail, MessageSquare, Send, Loader2, Copy, Check, Clock, ChevronRight } from "lucide-react"
 import { useUser, useFirestore } from "@/firebase"
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore"
+import { stripScripts, containsMaliciousScript } from "@/lib/security/sanitize"
 import { toast } from "@/hooks/use-toast"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
@@ -91,13 +92,25 @@ export default function SupportPage() {
       return
     }
 
+    if (containsMaliciousScript(subject) || containsMaliciousScript(message)) {
+      toast({
+        variant: "destructive",
+        title: "Disallowed Content",
+        description: "Executable scripts and HTML tags are strictly blocked in support requests."
+      })
+      return
+    }
+
+    const cleanSubject = stripScripts(subject, { maxLength: 200 })
+    const cleanMessage = stripScripts(message, { maxLength: 4000 })
+
     setIsSubmitting(true)
     try {
       const ticketsRef = collection(db, "supportTickets")
       const docRef = await addDoc(ticketsRef, {
-        subject: subject.trim(),
+        subject: cleanSubject,
         category: category.trim(),
-        description: message.trim(),
+        description: cleanMessage,
         ownerId: user.uid,
         submittedAt: serverTimestamp(),
         status: "Open"
@@ -106,9 +119,9 @@ export default function SupportPage() {
       setTickets(prev => [
         {
           id: docRef.id,
-          subject: subject.trim(),
+          subject: cleanSubject,
           category: category.trim(),
-          description: message.trim(),
+          description: cleanMessage,
           ownerId: user.uid,
           submittedAt: { seconds: Math.floor(Date.now() / 1000) },
           status: "Open"

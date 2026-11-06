@@ -54,6 +54,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useUser, useFirestore } from "@/firebase"
+import { stripScripts } from "@/lib/security/sanitize"
 import { collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from "firebase/firestore"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
@@ -207,6 +208,19 @@ export default function WebsiteManagementPage() {
   const handleRequestModification = async () => {
     if (!selectedOrgId || !user || !modTitle || !modDesc) return
     
+    // Strict input sanitization to block script injection
+    const cleanTitle = stripScripts(modTitle, { maxLength: 120 })
+    const cleanDesc = stripScripts(modDesc, { maxLength: 2000 })
+
+    if (!cleanTitle || !cleanDesc) {
+      toast({
+        variant: "destructive",
+        title: "Disallowed Content",
+        description: "Scripts, executable code, and HTML tags are strictly blocked in modification requests."
+      });
+      return;
+    }
+
     if (usedEdits >= maxEdits) {
       toast({
         variant: "destructive",
@@ -221,8 +235,8 @@ export default function WebsiteManagementPage() {
     const payload = {
       organizationId: selectedOrgId,
       ownerId: user.uid,
-      title: modTitle,
-      description: modDesc,
+      title: cleanTitle,
+      description: cleanDesc,
       status: "Not started",
       requestedAt: serverTimestamp()
     }

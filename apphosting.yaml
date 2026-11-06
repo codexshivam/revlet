@@ -1,0 +1,37 @@
+# Production App Hosting Configuration for Revlet Platform
+# Configured for high availability, zero idle costs, and runaway spend protection.
+
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+
+env:
+  # Public Firebase client configurations
+  - variable: FIREBASE_PROJECT_ID
+    value: revlet
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: FIREBASE_AUTH_DOMAIN
+    value: revlet.me
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: FIREBASE_STORAGE_BUCKET
+    value: revlet.firebasestorage.app
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: FIREBASE_MESSAGING_SENDER_ID
+    value: "759307383400"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: FIREBASE_APP_ID
+    value: "1:759307383400:web:f7d3d41fb771c91f8f81dd"
+    availability:
+      - BUILD
+      - RUNTIME

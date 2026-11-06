@@ -5,6 +5,7 @@ import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { JsonLd } from '@/components/seo/json-ld';
+import { DevToolsGuard } from '@/components/security/devtools-guard';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -203,6 +204,7 @@ export default function RootLayout({
         <JsonLd data={breadcrumbSchema} />
       </head>
       <body className="font-body antialiased">
+        <DevToolsGuard />
         <FirebaseClientProvider>
           {children}
           <Toaster />

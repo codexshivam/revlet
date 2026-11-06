@@ -22,25 +22,28 @@
 
 # misc
 .DS_Store
+# Security & Secret exclusions
+.env*
+!.env.example
 *.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# vercel
-.vercel
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+*credentials*.json
+*serviceAccount*.json
+*service-account*.json
+secrets.*
+google-services.json
+GoogleService-Info.plist
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
-.genkit/*
-.env*
-!.env.example
-
 # firebase
 firebase-debug.log
 firestore-debug.log
+ui-debug.log
+.firebase/

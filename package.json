@@ -60,7 +60,7 @@
   "overrides": {
     "postcss": "$postcss",
     "@grpc/grpc-js": "^1.14.7",
-    "glob": "^10.5.0",
+    "glob": "^14.0.2",
     "minimatch": "^11.0.5",
     "uuid": "^11.1.1",
     "@opentelemetry/auto-instrumentations-node": "^0.83.0",

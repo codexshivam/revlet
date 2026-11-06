@@ -16,6 +16,13 @@ service cloud.firestore {
       return isOwner(resource.data.ownerId);
     }
 
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'shivam@revlet.me') ||
+        (request.auth.token.admin == true)
+      );
+    }
+
     // ─── Organizations ────────────────────────────────────────────────────────
     // Owners can fully manage their organizations.
     // Create requires auth; only valid fields are written.
@@ -88,6 +95,7 @@ service cloud.firestore {
 
     // ─── Support Tickets ──────────────────────────────────────────────────────
     // Authenticated users can submit support tickets and view their own.
+    // SuperAdmin can view and update ticket status / resolution.
     match /supportTickets/{ticketId} {
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
@@ -95,8 +103,9 @@ service cloud.firestore {
         && request.resource.data.subject.size() > 0
         && request.resource.data.description is string
         && request.resource.data.description.size() > 0;
-      allow read: if isResourceOwner();
-      allow update, delete: if false; // Managed by support team only
+      allow read: if isResourceOwner() || isSuperAdmin();
+      allow update: if isSuperAdmin();
+      allow delete: if false; // Immutable audit trail
     }
 
     // ─── Email Routing Configs ─────────────────────────────────────────────────

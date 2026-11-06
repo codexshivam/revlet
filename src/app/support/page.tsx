@@ -107,11 +107,15 @@ export default function SupportPage() {
     setIsSubmitting(true)
     try {
       const ticketsRef = collection(db, "supportTickets")
+      const userEmail = user.email || ""
+      const userDisplayName = user.displayName || user.email?.split('@')[0] || "User"
       const docRef = await addDoc(ticketsRef, {
         subject: cleanSubject,
         category: category.trim(),
         description: cleanMessage,
         ownerId: user.uid,
+        userEmail,
+        userDisplayName,
         submittedAt: serverTimestamp(),
         status: "Open"
       })
@@ -123,6 +127,8 @@ export default function SupportPage() {
           category: category.trim(),
           description: cleanMessage,
           ownerId: user.uid,
+          userEmail,
+          userDisplayName,
           submittedAt: { seconds: Math.floor(Date.now() / 1000) },
           status: "Open"
         },

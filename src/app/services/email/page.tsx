@@ -198,10 +198,12 @@ export default function EmailRoutingPage() {
 
   // Fetch email rules and query DNS records for live security verification
   const fetchEmailRules = useCallback(async () => {
-    if (!zoneId) return
+    if (!zoneId || !selectedOrg?.id || !user) return
     setIsLoadingRules(true)
     try {
-      const res = await listEmailRules(zoneId)
+      const idToken = await user.getIdToken()
+      const orgId = selectedOrg.id
+      const res = await listEmailRules(idToken, orgId, zoneId)
       if (res.success) {
         setRules(res.data)
       } else {
@@ -209,7 +211,7 @@ export default function EmailRoutingPage() {
       }
 
       // Query live DNS records
-      const dnsRes = await listDNSRecords(zoneId)
+      const dnsRes = await listDNSRecords(idToken, orgId, zoneId)
       if (dnsRes.success) {
         setDnsRecords(dnsRes.data)
       } else {
@@ -225,7 +227,7 @@ export default function EmailRoutingPage() {
     } finally {
       setIsLoadingRules(false)
     }
-  }, [zoneId, toast])
+  }, [zoneId, selectedOrg?.id, user, toast])
 
   useEffect(() => {
     if (emailServiceActive && zoneId) {
@@ -241,14 +243,16 @@ export default function EmailRoutingPage() {
     if (!zoneId || !selectedOrg || !user) return
     setIsActivating(true)
     try {
+      const idToken = await user.getIdToken()
+      const orgId = selectedOrg.id
       // 1. Auto-configure DNS records (MX, SPF)
-      const dnsRes = await autoConfigureEmailDNS(zoneId, selectedOrg.domain)
+      const dnsRes = await autoConfigureEmailDNS(idToken, orgId, zoneId, selectedOrg.domain)
       if (!dnsRes.success) {
         throw new Error("Failed to configure DNS records: " + dnsRes.error)
       }
 
       // 2. Activate Routing via API
-      const res = await activateEmailRouting(zoneId)
+      const res = await activateEmailRouting(idToken, orgId, zoneId)
       if (!res.success) {
         throw new Error(res.error)
       }
@@ -293,8 +297,10 @@ export default function EmailRoutingPage() {
     if (!zoneId || !selectedOrg || !user) return
     setIsDisabling(true)
     try {
+      const idToken = await user.getIdToken()
+      const orgId = selectedOrg.id
       // 1. Disable Routing via API
-      await disableEmailRouting(zoneId)
+      await disableEmailRouting(idToken, orgId, zoneId)
 
       // 2. Update Firestore org doc
       await updateDoc(doc(db, "organizations", selectedOrg.id), { emailServiceActive: false })
@@ -357,8 +363,10 @@ export default function EmailRoutingPage() {
 
     setIsSubmitting(true)
     try {
+      const idToken = await user.getIdToken()
+      const orgId = selectedOrg.id
       const aliasEmail = `${cleanAlias}@${selectedOrg.domain}`
-      const res = await createEmailRule(zoneId, aliasEmail, cleanDest)
+      const res = await createEmailRule(idToken, orgId, zoneId, aliasEmail, cleanDest)
 
       if (!res.success) {
         throw new Error(res.error)
@@ -400,9 +408,11 @@ export default function EmailRoutingPage() {
 
   // Handle delete rule
   const handleDeleteRule = async () => {
-    if (!zoneId || !deletingRuleId) return
+    if (!zoneId || !deletingRuleId || !selectedOrg?.id || !user) return
     try {
-      const res = await deleteEmailRule(zoneId, deletingRuleId)
+      const idToken = await user.getIdToken()
+      const orgId = selectedOrg.id
+      const res = await deleteEmailRule(idToken, orgId, zoneId, deletingRuleId)
       if (res.success) {
         toast({ title: "Rule Removed", description: "The forwarding rule has been deleted." })
         fetchEmailRules()

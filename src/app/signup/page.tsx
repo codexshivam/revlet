@@ -235,7 +235,7 @@ export default function SignupPage() {
 
           {/* LEGAL TERMS INFO */}
           <p className="text-[10px] text-[#45464d] text-center font-normal leading-normal px-2 tracking-wide pt-1">
-            By clicking "Create Account", you agree to our{" "}
+            By clicking &quot;Create Account&quot;, you agree to our{" "}
             <a 
               href="https://revlet.me/terms/" 
               target="_blank" 

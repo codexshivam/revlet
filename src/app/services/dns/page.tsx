@@ -150,10 +150,12 @@ export default function DNSManagementPage() {
   const zoneId = selectedOrg?.cloudflareZoneId
 
   const fetchDNSData = useCallback(async () => {
-    if (!zoneId) return
+    if (!zoneId || !selectedOrg?.id || !user) return
     setIsLoadingRecords(true)
     try {
-      const zoneRes = await getZoneDetails(zoneId)
+      const idToken = await user.getIdToken()
+      const orgId = selectedOrg.id
+      const zoneRes = await getZoneDetails(idToken, orgId, zoneId)
       if (zoneRes.success && zoneRes.data) {
         setZoneDetails(zoneRes.data)
         // Auto-collapse if active
@@ -177,7 +179,7 @@ export default function DNSManagementPage() {
         }
       }
       
-      const dnsRes = await listDNSRecords(zoneId)
+      const dnsRes = await listDNSRecords(idToken, orgId, zoneId)
       if (dnsRes.success && dnsRes.data) {
         setRecords(dnsRes.data)
       } else {
@@ -339,13 +341,24 @@ export default function DNSManagementPage() {
       return
     }
 
+    if (!user || !selectedOrg?.id || !zoneId) {
+      toast({
+        variant: "destructive",
+        title: "Session Required",
+        description: "User session or organization is not available."
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
+      const idToken = await user.getIdToken()
+      const orgId = selectedOrg.id
       let res;
       if (editingRecord) {
-        res = await updateDNSRecord(zoneId, editingRecord.id, formData)
+        res = await updateDNSRecord(idToken, orgId, zoneId, editingRecord.id, formData)
       } else {
-        res = await createDNSRecord(zoneId, formData)
+        res = await createDNSRecord(idToken, orgId, zoneId, formData)
       }
       
       if (res.success) {
@@ -367,10 +380,11 @@ export default function DNSManagementPage() {
   }
 
   const handleDeleteRecord = async (id: string) => {
-    if (!zoneId) return
+    if (!zoneId || !selectedOrg?.id || !user) return
 
     try {
-      const res = await deleteDNSRecord(zoneId, id)
+      const idToken = await user.getIdToken()
+      const res = await deleteDNSRecord(idToken, selectedOrg.id, zoneId, id)
       if (res.success) {
         toast({ title: "Record Removed", description: "The configuration has been deleted." })
         fetchDNSData()
@@ -387,12 +401,13 @@ export default function DNSManagementPage() {
   }
 
   const handleRequestDNS = async () => {
-    if (!selectedOrg) return
+    if (!selectedOrg || !user) return
     setIsRequesting(true)
     
     try {
+      const idToken = await user.getIdToken()
       // Provision domain directly
-      const zoneRes = await createZone(selectedOrg.domain)
+      const zoneRes = await createZone(idToken, selectedOrg.id, selectedOrg.domain)
       if (!zoneRes.success || !zoneRes.data) {
         throw new Error(zoneRes.error)
       }
@@ -453,44 +468,51 @@ export default function DNSManagementPage() {
   }
 
   const processImport = async () => {
-    if (!importFile || !zoneId) return
+    if (!importFile || !zoneId || !selectedOrg?.id || !user) return
     setIsSubmitting(true)
     
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      const text = e.target?.result as string
-      const lines = text.split('\n')
-      let count = 0
-      
-      for (const line of lines) {
-        const parts = line.split(/\s+/)
-        if (parts.length >= 4) {
-          // Very basic BIND parser: name [ttl] IN type content
-          const name = parts[0]
-          const type = parts.includes('IN') ? parts[parts.indexOf('IN') + 1] : parts[2]
-          const content = parts.slice(parts.indexOf(type) + 1).join(' ')
-          
-          if (SUPPORTED_TYPES.includes(type)) {
-            const isProxied = proxyAllImported && PROXY_SUPPORTED_TYPES.includes(type)
-            await createDNSRecord(zoneId, {
-              name,
-              type,
-              content,
-              ttl: "Auto",
-              proxied: isProxied
-            })
-            count++
+    try {
+      const idToken = await user.getIdToken()
+      const orgId = selectedOrg.id
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const text = e.target?.result as string
+        const lines = text.split('\n')
+        let count = 0
+        
+        for (const line of lines) {
+          const parts = line.split(/\s+/)
+          if (parts.length >= 4) {
+            // Very basic BIND parser: name [ttl] IN type content
+            const name = parts[0]
+            const type = parts.includes('IN') ? parts[parts.indexOf('IN') + 1] : parts[2]
+            const content = parts.slice(parts.indexOf(type) + 1).join(' ')
+            
+            if (SUPPORTED_TYPES.includes(type)) {
+              const isProxied = proxyAllImported && PROXY_SUPPORTED_TYPES.includes(type)
+              await createDNSRecord(idToken, orgId, zoneId, {
+                name,
+                type,
+                content,
+                ttl: "Auto",
+                proxied: isProxied
+              })
+              count++
+            }
           }
         }
+        
+        toast({ title: "Import Complete", description: `Successfully queued ${count} records for propagation.` })
+        setIsImportDialogOpen(false)
+        setImportFile(null)
+        fetchDNSData()
       }
-      
-      toast({ title: "Import Complete", description: `Successfully queued ${count} records for propagation.` })
-      setIsImportDialogOpen(false)
-      setImportFile(null)
-      fetchDNSData()
+      reader.readAsText(importFile)
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Import Failed", description: err.message })
+    } finally {
       setIsSubmitting(false)
     }
-    reader.readAsText(importFile)
   }
 
   const filteredRecords = records.filter(r => 
@@ -604,7 +626,7 @@ export default function DNSManagementPage() {
                   Premium Domain Infrastructure
                 </h2>
                 <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto">
-                  Unlock advanced security, ultra-fast propagation, and centralized management by activating your organization's global network context.
+                  Unlock advanced security, ultra-fast propagation, and centralized management by activating your organization&apos;s global network context.
                 </p>
               </div>
 

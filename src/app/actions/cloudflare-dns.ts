@@ -2,13 +2,15 @@
 
 /**
  * @fileOverview Network Infrastructure Server Actions
- * Handles API interactions for domain status and edge record management.
- * Uses dual-token security: DNS Token for CRUD, Infra Token for Status.
+ * Handles authenticated API interactions for domain status and edge record management.
+ * Authenticates callers via Firebase ID token and verifies organization tenancy.
  */
+
+import { verifyUserOrgAccess } from './auth-helper';
 
 const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
 
-async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: RequestInit = {}) {
+async function cfFetch(path: string, options: RequestInit = {}) {
   const dnsToken = process.env.CLOUDFLARE_DNS_TOKEN;
 
   const resolvedHeaders: Record<string, string> = {};
@@ -21,11 +23,10 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
   const cleanToken = dnsToken?.trim().replace(/^["']|["']$/g, '');
 
   if (cleanToken) {
-    // Secure Bearer Token Authentication
     resolvedHeaders['Authorization'] = `Bearer ${cleanToken}`;
   } else {
     console.error(`[Infrastructure Action] Missing CLOUDFLARE_DNS_TOKEN in environment variables.`);
-    throw new Error("Authentication failed. Please configure CLOUDFLARE_DNS_TOKEN in your .env.local file.");
+    throw new Error("Authentication failed. Please configure CLOUDFLARE_DNS_TOKEN in your environment variables.");
   }
 
   try {
@@ -80,10 +81,11 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
   }
 }
 
-export async function getZoneDetails(zoneId: string) {
+export async function getZoneDetails(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}`, 'INFRA');
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}`);
     return {
       success: true,
       data: {
@@ -99,10 +101,11 @@ export async function getZoneDetails(zoneId: string) {
   }
 }
 
-export async function listDNSRecords(zoneId: string) {
+export async function listDNSRecords(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100`, 'DNS');
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100`);
     return {
       success: true,
       data: data.result.map((r: any) => ({
@@ -120,10 +123,11 @@ export async function listDNSRecords(zoneId: string) {
   }
 }
 
-export async function createDNSRecord(zoneId: string, record: any) {
+export async function createDNSRecord(idToken: string, orgId: string, zoneId: string, record: any) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}/dns_records`, 'DNS', {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/dns_records`, {
       method: 'POST',
       body: JSON.stringify({
         type: record.type,
@@ -140,10 +144,11 @@ export async function createDNSRecord(zoneId: string, record: any) {
   }
 }
 
-export async function updateDNSRecord(zoneId: string, recordId: string, record: any) {
+export async function updateDNSRecord(idToken: string, orgId: string, zoneId: string, recordId: string, record: any) {
   if (!zoneId || !recordId) return { success: false, error: 'Missing Zone ID or Record ID' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, 'DNS', {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {
       method: 'PATCH',
       body: JSON.stringify({
         type: record.type,
@@ -160,10 +165,11 @@ export async function updateDNSRecord(zoneId: string, recordId: string, record: 
   }
 }
 
-export async function deleteDNSRecord(zoneId: string, recordId: string) {
+export async function deleteDNSRecord(idToken: string, orgId: string, zoneId: string, recordId: string) {
   if (!zoneId || !recordId) return { success: false, error: 'Missing Zone ID or Record ID' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, 'DNS', {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {
       method: 'DELETE',
     });
     return { success: true, data: data.result };
@@ -172,11 +178,17 @@ export async function deleteDNSRecord(zoneId: string, recordId: string) {
   }
 }
 
-export async function createZone(domainName: string) {
+export async function createZone(idToken: string, orgId: string, domainName: string) {
   if (!domainName) return { success: false, error: 'No domain name provided' };
   try {
+    const verified = await verifyUserOrgAccess(idToken, orgId);
+    const targetDomain = verified.orgData?.domain?.toLowerCase()?.trim();
+    if (targetDomain && targetDomain !== domainName.toLowerCase().trim()) {
+      throw new Error(`Domain "${domainName}" does not match the active organization domain.`);
+    }
+
     // 1. Fetch accounts to get the Account ID
-    const accountsData = await cfFetch('/accounts', 'DNS');
+    const accountsData = await cfFetch('/accounts');
     const accountId = accountsData.result?.[0]?.id;
     
     if (!accountId) {
@@ -184,7 +196,7 @@ export async function createZone(domainName: string) {
     }
 
     // 2. Create the zone
-    const zoneData = await cfFetch('/zones', 'DNS', {
+    const zoneData = await cfFetch('/zones', {
       method: 'POST',
       body: JSON.stringify({
         name: domainName,
@@ -207,10 +219,11 @@ export async function createZone(domainName: string) {
 
 // --- Email Routing Automation ---
 
-export async function enableEmailRouting(zoneId: string) {
+export async function enableEmailRouting(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}/email/routing/enable`, 'DNS', {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/email/routing/enable`, {
       method: 'POST',
       body: JSON.stringify({})
     });
@@ -220,10 +233,11 @@ export async function enableEmailRouting(zoneId: string) {
   }
 }
 
-export async function disableEmailRouting(zoneId: string) {
+export async function disableEmailRouting(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}/email/routing/disable`, 'DNS', {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/email/routing/disable`, {
       method: 'POST',
       body: JSON.stringify({})
     });
@@ -233,14 +247,13 @@ export async function disableEmailRouting(zoneId: string) {
   }
 }
 
-export async function getEmailRoutingStatus(zoneId: string) {
+export async function getEmailRoutingStatus(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}/email/routing`, 'DNS');
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/email/routing`);
     return { success: true, data: data.result };
   } catch (error: any) {
-    // If it's disabled, it might return a 404 or a specific error.
-    // Cloudflare email routing API returns 404 if never configured, or status 'disabled'
     if (error.status === 404 || (error.message && error.message.includes("not found"))) {
       return { success: true, data: { status: "unconfigured" } };
     }
@@ -248,10 +261,11 @@ export async function getEmailRoutingStatus(zoneId: string) {
   }
 }
 
-export async function autoConfigureEmailDNS(zoneId: string, domainName: string) {
+export async function autoConfigureEmailDNS(idToken: string, orgId: string, zoneId: string, domainName: string) {
   if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
   try {
-    const recordsRes = await listDNSRecords(zoneId);
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!recordsRes.success) throw new Error(recordsRes.error);
     const records = recordsRes.data;
 
@@ -265,7 +279,7 @@ export async function autoConfigureEmailDNS(zoneId: string, domainName: string) 
     });
 
     for (const r of conflictingRecords) {
-      await deleteDNSRecord(zoneId, r.id);
+      await deleteDNSRecord(idToken, orgId, zoneId, r.id);
     }
 
     // Create required records
@@ -277,7 +291,7 @@ export async function autoConfigureEmailDNS(zoneId: string, domainName: string) 
     ];
 
     for (const rec of requiredRecords) {
-      await createDNSRecord(zoneId, rec);
+      await createDNSRecord(idToken, orgId, zoneId, rec);
     }
 
     return { success: true };
@@ -286,10 +300,11 @@ export async function autoConfigureEmailDNS(zoneId: string, domainName: string) 
   }
 }
 
-export async function removeEmailRoutingDNS(zoneId: string, domainName: string) {
+export async function removeEmailRoutingDNS(idToken: string, orgId: string, zoneId: string, domainName: string) {
   if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
   try {
-    const recordsRes = await listDNSRecords(zoneId);
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!recordsRes.success) throw new Error(recordsRes.error);
     
     const cfRecords = recordsRes.data.filter((r: any) => {
@@ -301,7 +316,7 @@ export async function removeEmailRoutingDNS(zoneId: string, domainName: string) 
     });
 
     for (const r of cfRecords) {
-      await deleteDNSRecord(zoneId, r.id);
+      await deleteDNSRecord(idToken, orgId, zoneId, r.id);
     }
     return { success: true };
   } catch (error: any) {

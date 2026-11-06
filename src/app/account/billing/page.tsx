@@ -253,7 +253,7 @@ export default function BillingPage() {
       const vouchersRef = collection(db, "paymentVouchers")
       const targetOrg = orgs.find(o => o.id === submissionData.organizationId)
       
-      await addDoc(vouchersRef, {
+      const docRef = await addDoc(vouchersRef, {
         organizationId: submissionData.organizationId,
         amount: parseFloat(submissionData.amount),
         ownerId: user.uid,
@@ -262,6 +262,19 @@ export default function BillingPage() {
         voucherUrl: voucherUrl,
         status: "Not verified"
       })
+
+      setVouchers(prev => [
+        {
+          id: docRef.id,
+          organizationId: submissionData.organizationId,
+          amount: parseFloat(submissionData.amount),
+          submittedAt: { toMillis: () => Date.now() },
+          voucherFileName: selectedFile.name,
+          voucherUrl: voucherUrl,
+          status: "Not verified"
+        },
+        ...prev
+      ])
 
       toast({
         title: "Payment Submitted",

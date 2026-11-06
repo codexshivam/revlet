@@ -352,7 +352,7 @@ export default function WebsiteManagementPage() {
               <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 sm:px-6 py-4">
                 <div className="space-y-1">
                   <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Change Ledger</CardTitle>
-                  <p className="text-[10px] text-slate-500 font-medium">Comprehensive log of modifications requested for the organization's website</p>
+                  <p className="text-[10px] text-slate-500 font-medium">Comprehensive log of modifications requested for the organization&apos;s website</p>
                 </div>
                 <Dialog open={isModDialogOpen} onOpenChange={setIsModDialogOpen}>
                   <DialogTrigger asChild>

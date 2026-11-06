@@ -94,7 +94,7 @@ export default function SupportPage() {
     setIsSubmitting(true)
     try {
       const ticketsRef = collection(db, "supportTickets")
-      await addDoc(ticketsRef, {
+      const docRef = await addDoc(ticketsRef, {
         subject: subject.trim(),
         category: category.trim(),
         description: message.trim(),
@@ -102,6 +102,19 @@ export default function SupportPage() {
         submittedAt: serverTimestamp(),
         status: "Open"
       })
+
+      setTickets(prev => [
+        {
+          id: docRef.id,
+          subject: subject.trim(),
+          category: category.trim(),
+          description: message.trim(),
+          ownerId: user.uid,
+          submittedAt: { seconds: Math.floor(Date.now() / 1000) },
+          status: "Open"
+        },
+        ...prev
+      ])
 
       toast({
         title: "Ticket Created",

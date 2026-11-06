@@ -30,9 +30,9 @@ service cloud.firestore {
         isAuthenticated() && 
         request.auth.token.email != null && 
         'memberEmails' in resource.data && 
-        request.auth.token.email.toLowerCase() in resource.data.memberEmails
+        request.auth.token.email.lower() in resource.data.memberEmails
       );
-      allow update: if isResourceOwner();
+      allow update: if isResourceOwner() && request.resource.data.ownerId == resource.data.ownerId;
       allow delete: if false; // Deletion is handled via status flag, not hard delete
     }
 
@@ -48,12 +48,21 @@ service cloud.firestore {
     }
 
     // ─── Team Members ─────────────────────────────────────────────────────────
-    // Admins can invite, read, update (toggle status) their team members.
+    // Org owners can invite, read, update, delete team members.
+    // Invited members can read their own membership records.
     match /teamMembers/{memberId} {
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.email is string;
-      allow read, update: if isResourceOwner();
+        && request.resource.data.email is string
+        && request.resource.data.organizationId is string
+        && exists(/databases/$(database)/documents/organizations/$(request.resource.data.organizationId))
+        && get(/databases/$(database)/documents/organizations/$(request.resource.data.organizationId)).data.ownerId == request.auth.uid;
+      allow read: if isResourceOwner() || (
+        isAuthenticated() &&
+        request.auth.token.email != null &&
+        resource.data.email.lower() == request.auth.token.email.lower()
+      );
+      allow update: if isResourceOwner() && request.resource.data.ownerId == resource.data.ownerId;
       allow delete: if isResourceOwner();
     }
 

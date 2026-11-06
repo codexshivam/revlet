@@ -126,24 +126,40 @@ function formatType(path: string | undefined | null): string {
   return path.startsWith("/") ? path.substring(1) : path
 }
 
-function generateRandomPassword(length = 12): string {
+function generateRandomPassword(length = 14): string {
   const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   const lower = "abcdefghijklmnopqrstuvwxyz"
   const digits = "0123456789"
   const special = "!@#$%&*"
   const all = upper + lower + digits + special
-  let password = ""
-  password += upper[Math.floor(Math.random() * upper.length)]
-  password += lower[Math.floor(Math.random() * lower.length)]
-  password += digits[Math.floor(Math.random() * digits.length)]
-  password += special[Math.floor(Math.random() * special.length)]
-  for (let i = 4; i < length; i++) {
-    password += all[Math.floor(Math.random() * all.length)]
+
+  const getCryptoRandomInt = (max: number) => {
+    if (typeof window !== "undefined" && window.crypto) {
+      const array = new Uint32Array(1)
+      window.crypto.getRandomValues(array)
+      return array[0] % max
+    }
+    return Math.floor(Math.random() * max)
   }
-  return password
-    .split("")
-    .sort(() => Math.random() - 0.5)
-    .join("")
+
+  const chars: string[] = [
+    upper[getCryptoRandomInt(upper.length)],
+    lower[getCryptoRandomInt(lower.length)],
+    digits[getCryptoRandomInt(digits.length)],
+    special[getCryptoRandomInt(special.length)],
+  ]
+
+  for (let i = chars.length; i < length; i++) {
+    chars.push(all[getCryptoRandomInt(all.length)])
+  }
+
+  // Cryptographically robust Fisher-Yates shuffle
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = getCryptoRandomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+
+  return chars.join("")
 }
 
 function getInitials(firstName: string, lastName: string): string {
@@ -893,7 +909,7 @@ export default function WorkspaceUsersPage() {
 
       let password = (passwordIdx !== -1 ? row[passwordIdx]?.trim() : "") || ""
       if (!password) {
-        password = "Hello@9864"
+        password = generateRandomPassword(12)
       }
 
       let userOUPath = importOUPath

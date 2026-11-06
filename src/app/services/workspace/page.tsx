@@ -766,7 +766,7 @@ export default function GoogleWorkspacePage() {
                         <div className="space-y-1">
                           <h5 className="font-bold text-slate-800 font-headline">Submit Dashboard Activation</h5>
                           <p className="text-slate-500 font-medium leading-relaxed">
-                            Click the <strong className="text-slate-700">Apply for Google Workspace</strong> button above, enter your domain's <strong className="text-slate-700">Super Admin Email Address</strong> (e.g. <code className="font-mono text-slate-600">admin@yourschool.edu</code>), and click <strong className="text-slate-700">Submit</strong>.
+                            Click the <strong className="text-slate-700">Apply for Google Workspace</strong> button above, enter your domain&apos;s <strong className="text-slate-700">Super Admin Email Address</strong> (e.g. <code className="font-mono text-slate-600">admin@yourschool.edu</code>), and click <strong className="text-slate-700">Submit</strong>.
                           </p>
                         </div>
                       </div>

@@ -135,9 +135,9 @@ function translateError(error: any): string {
   return message || 'An unexpected error occurred while communicating with Google Workspace.';
 }
 
-// ─── Simple In-Memory Cache ──────────────────────────────────────────────────
-// Caches heavy API calls for 2 minutes to make dashboard loading instantaneous
+// ─── Simple In-Memory Cache with Size Cap & Expiry Pruning ─────────────────
 const cacheMap = new Map<string, { data: any; expiry: number }>();
+const MAX_CACHE_ENTRIES = 200;
 
 async function withCache<T>(key: string, ttlSeconds: number, fetcher: () => Promise<T>): Promise<T> {
   const now = Date.now();
@@ -146,8 +146,19 @@ async function withCache<T>(key: string, ttlSeconds: number, fetcher: () => Prom
     return cached.data;
   }
   const data = await fetcher();
-  // Only cache if successful (assuming returned object has { success: true })
+  // Only cache if successful
   if ((data as any)?.success === true) {
+    if (cacheMap.size >= MAX_CACHE_ENTRIES) {
+      // Prune expired entries
+      for (const [k, v] of cacheMap.entries()) {
+        if (v.expiry <= now) cacheMap.delete(k);
+      }
+      // If still above limit, drop oldest entry
+      if (cacheMap.size >= MAX_CACHE_ENTRIES) {
+        const firstKey = cacheMap.keys().next().value;
+        if (firstKey) cacheMap.delete(firstKey);
+      }
+    }
     cacheMap.set(key, { data, expiry: now + ttlSeconds * 1000 });
   }
   return data;
@@ -166,14 +177,15 @@ async function verifyAdminAccess(idToken: string, orgId: string, bypassEmailChec
     
     const orgData = orgDoc.data();
     
-    // Check if user is owner or member
+    // Check if user is owner or legitimate member added by the owner
     const isOwner = orgData?.ownerId === decodedToken.uid;
     
     let isMember = false;
     if (!isOwner && decodedToken.email) {
       const memberQuery = await adminDb.collection('teamMembers')
         .where('organizationId', '==', orgId)
-        .where('email', '==', decodedToken.email)
+        .where('ownerId', '==', orgData?.ownerId)
+        .where('email', '==', decodedToken.email.toLowerCase().trim())
         .where('status', '==', 'Active')
         .get();
       isMember = !memberQuery.empty;
@@ -195,9 +207,18 @@ async function verifyAdminAccess(idToken: string, orgId: string, bypassEmailChec
 
 export async function checkWorkspaceStatus(idToken: string, orgId: string, adminEmail?: string) {
   try {
-    // Verify user owns the org (bypass email check if custom email is provided, otherwise require email from DB)
     const dbAdminEmail = await verifyAdminAccess(idToken, orgId, !adminEmail ? false : true);
-    const targetEmail = adminEmail || dbAdminEmail;
+    
+    // If adminEmail is provided, verify it belongs to the organization's domain
+    if (adminEmail) {
+      const orgDoc = await adminDb.collection('organizations').doc(orgId).get();
+      const orgDomain = orgDoc.data()?.domain?.toLowerCase().trim();
+      if (orgDomain && !adminEmail.toLowerCase().trim().endsWith(`@${orgDomain}`)) {
+        return { success: false, error: `Admin email must belong to the organization domain (@${orgDomain}).` };
+      }
+    }
+
+    const targetEmail = dbAdminEmail || adminEmail;
     
     if (!targetEmail) return { success: false, error: 'Admin email is required.' };
 

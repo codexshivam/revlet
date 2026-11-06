@@ -2,13 +2,15 @@
 
 /**
  * @fileOverview Email Routing Infrastructure Server Actions
- * Handles secure email forwarding configuration and domain security hardening.
- * All third-party platform credentials remain isolated in server-side environment variables.
+ * Handles authenticated email forwarding configuration and domain security hardening.
+ * Authenticates callers via Firebase ID token and verifies organization tenancy.
  */
+
+import { verifyUserOrgAccess } from './auth-helper';
 
 const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
 
-async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: RequestInit = {}) {
+async function cfFetch(path: string, options: RequestInit = {}) {
   const dnsToken = process.env.CLOUDFLARE_DNS_TOKEN;
 
   const resolvedHeaders: Record<string, string> = {};
@@ -21,11 +23,10 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
   const cleanToken = dnsToken?.trim().replace(/^["']|["']$/g, '');
 
   if (cleanToken) {
-    // Secure Bearer Token Authentication
     resolvedHeaders['Authorization'] = `Bearer ${cleanToken}`;
   } else {
     console.error(`[Email Routing Action] Missing CLOUDFLARE_DNS_TOKEN in environment variables.`);
-    throw new Error("Authentication failed. Please configure CLOUDFLARE_DNS_TOKEN in your .env.local file.");
+    throw new Error("Authentication failed. Please configure CLOUDFLARE_DNS_TOKEN in your environment variables.");
   }
 
   try {
@@ -58,7 +59,6 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
   } catch (error: any) {
     console.error(`Email Routing API failure [${path}]:`, error.message);
 
-    // User-friendly error translation
     let friendlyMessage = error.message || "An unexpected error occurred.";
     if (friendlyMessage.includes("fetch failed") || friendlyMessage.includes("ENOTFOUND")) {
       friendlyMessage = "Connection failed. Failed to reach the mail infrastructure. Please check your internet connection.";
@@ -72,10 +72,11 @@ async function cfFetch(path: string, tokenType: 'DNS' | 'INFRA', options: Reques
   }
 }
 
-export async function getEmailRoutingStatus(zoneId: string) {
+export async function getEmailRoutingStatus(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const data = await cfFetch(`/zones/${zoneId}/email/routing`, 'INFRA');
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/email/routing`);
     return {
       success: true,
       data: {
@@ -87,16 +88,13 @@ export async function getEmailRoutingStatus(zoneId: string) {
   }
 }
 
-export async function activateEmailRouting(zoneId: string) {
+export async function activateEmailRouting(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    // Attempt to programmatically enable email routing on the zone.
-    // If the token lacks the highly-privileged 'Zone.Email Routing.Edit' scope,
-    // but contains the standard 'Zone.Email Routing Rules.Edit' scope to manage forwarding rules,
-    // we bypass the activation step gracefully since the user can enable it natively via the Cloudflare dashboard.
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
     console.log(`[Email Routing] Enabling email routing on zone ${zoneId}`);
     try {
-      await cfFetch(`/zones/${zoneId}/email/routing/enable`, 'INFRA', {
+      await cfFetch(`/zones/${zoneId}/email/routing/enable`, {
         method: 'POST',
       });
       console.log(`[Email Routing] Email service successfully enabled`);
@@ -115,18 +113,18 @@ export async function activateEmailRouting(zoneId: string) {
   }
 }
 
-export async function listEmailRules(zoneId: string) {
+export async function listEmailRules(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const rulesData = await cfFetch(`/zones/${zoneId}/email/routing/rules`, 'INFRA');
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const rulesData = await cfFetch(`/zones/${zoneId}/email/routing/rules`);
     
-    // Dynamically query registered destination verification status from Cloudflare account level
     const verifiedEmailsSet = new Set<string>();
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     
     if (accountId) {
       try {
-        const destData = await cfFetch(`/accounts/${accountId}/email/routing/addresses`, 'INFRA');
+        const destData = await cfFetch(`/accounts/${accountId}/email/routing/addresses`);
         const dests = destData.result || [];
         dests.forEach((d: any) => {
           if (d.verified) {
@@ -134,7 +132,7 @@ export async function listEmailRules(zoneId: string) {
           }
         });
       } catch (destError) {
-        console.warn("[listEmailRules] Failed to fetch destination addresses list for verification verification:", destError);
+        console.warn("[listEmailRules] Failed to fetch destination addresses list for verification:", destError);
       }
     }
 
@@ -143,10 +141,9 @@ export async function listEmailRules(zoneId: string) {
         const aliasEmail = rule.matchers?.[0]?.value || '';
         const destinationEmail = rule.actions?.[0]?.value?.[0] || '';
         
-        // Check if address is explicitly verified on the Cloudflare account
         const isVerified = accountId && verifiedEmailsSet.size > 0
           ? verifiedEmailsSet.has(destinationEmail.toLowerCase().trim())
-          : true; // fallback to true if no account context exists to prevent visual errors
+          : true;
 
         return {
           id: rule.id || rule.tag,
@@ -163,31 +160,36 @@ export async function listEmailRules(zoneId: string) {
   }
 }
 
-export async function createEmailRule(zoneId: string, aliasEmail: string, destinationEmail: string) {
+export async function createEmailRule(
+  idToken: string,
+  orgId: string,
+  zoneId: string,
+  aliasEmail: string,
+  destinationEmail: string
+) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   if (!aliasEmail || !destinationEmail) return { success: false, error: 'Alias email and destination email are required' };
 
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  if (!accountId) return { success: false, error: 'Account ID is not configured. Please add CLOUDFLARE_ACCOUNT_ID to your .env.local file.' };
-
   try {
-    // First, attempt to register the destination address (may already exist)
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    if (!accountId) return { success: false, error: 'Account ID is not configured in environment variables.' };
+
+    // Register destination address if needed
     try {
-      await cfFetch(`/accounts/${accountId}/email/routing/addresses`, 'INFRA', {
+      await cfFetch(`/accounts/${accountId}/email/routing/addresses`, {
         method: 'POST',
         body: JSON.stringify({ email: destinationEmail }),
       });
     } catch (destError: any) {
       const errMsg = destError.message || "";
       if (errMsg.includes("403") || errMsg.includes("Unauthorized") || errMsg.includes("permission")) {
-        throw new Error("Your Cloudflare API Token lacks Account-level Email Routing permissions to trigger verification emails. Please either: (1) Add your destination email directly in your Cloudflare Dashboard under 'Email Routing' -> 'Destination Addresses' tab, or (2) Edit your API Token on Cloudflare and add the 'Account - Email Routing - Edit' permission scope.");
+        throw new Error("Your Cloudflare API Token lacks Account-level Email Routing permissions to trigger verification emails. Please verify destination email in Cloudflare dashboard.");
       }
-      // Destination may already be registered — this is expected and safe to ignore
-      console.log(`[Email Routing] Destination address registration note: ${destError.message}`);
     }
 
     // Create the routing rule
-    const data = await cfFetch(`/zones/${zoneId}/email/routing/rules`, 'INFRA', {
+    const data = await cfFetch(`/zones/${zoneId}/email/routing/rules`, {
       method: 'POST',
       body: JSON.stringify({
         matchers: [{ type: 'literal', field: 'to', value: aliasEmail }],
@@ -208,10 +210,11 @@ export async function createEmailRule(zoneId: string, aliasEmail: string, destin
   }
 }
 
-export async function deleteEmailRule(zoneId: string, ruleId: string) {
+export async function deleteEmailRule(idToken: string, orgId: string, zoneId: string, ruleId: string) {
   if (!zoneId || !ruleId) return { success: false, error: 'Missing Zone ID or Rule ID' };
   try {
-    await cfFetch(`/zones/${zoneId}/email/routing/rules/${ruleId}`, 'INFRA', {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    await cfFetch(`/zones/${zoneId}/email/routing/rules/${ruleId}`, {
       method: 'DELETE',
     });
     return { success: true };
@@ -220,12 +223,13 @@ export async function deleteEmailRule(zoneId: string, ruleId: string) {
   }
 }
 
-export async function listDestinationAddresses() {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  if (!accountId) return { success: false, error: 'Account ID is not configured. Please add CLOUDFLARE_ACCOUNT_ID to your .env.local file.' };
-
+export async function listDestinationAddresses(idToken: string, orgId: string) {
   try {
-    const data = await cfFetch(`/accounts/${accountId}/email/routing/addresses`, 'INFRA');
+    await verifyUserOrgAccess(idToken, orgId);
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    if (!accountId) return { success: false, error: 'Account ID is not configured.' };
+
+    const data = await cfFetch(`/accounts/${accountId}/email/routing/addresses`);
     const addresses = (data.result || []).map((addr: any) => ({
       id: addr.id,
       email: addr.email,
@@ -237,12 +241,13 @@ export async function listDestinationAddresses() {
   }
 }
 
-export async function createDestinationAddress(email: string) {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  if (!accountId) return { success: false, error: 'Account ID is not configured. Please add CLOUDFLARE_ACCOUNT_ID to your .env.local file.' };
-
+export async function createDestinationAddress(idToken: string, orgId: string, email: string) {
   try {
-    const data = await cfFetch(`/accounts/${accountId}/email/routing/addresses`, 'INFRA', {
+    await verifyUserOrgAccess(idToken, orgId);
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    if (!accountId) return { success: false, error: 'Account ID is not configured.' };
+
+    const data = await cfFetch(`/accounts/${accountId}/email/routing/addresses`, {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
@@ -259,13 +264,14 @@ export async function createDestinationAddress(email: string) {
   }
 }
 
-export async function deleteDestinationAddress(addressId: string) {
+export async function deleteDestinationAddress(idToken: string, orgId: string, addressId: string) {
   if (!addressId) return { success: false, error: 'Missing Destination Address ID' };
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  if (!accountId) return { success: false, error: 'Account ID is not configured. Please add CLOUDFLARE_ACCOUNT_ID to your .env.local file.' };
-
   try {
-    await cfFetch(`/accounts/${accountId}/email/routing/addresses/${addressId}`, 'INFRA', {
+    await verifyUserOrgAccess(idToken, orgId);
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    if (!accountId) return { success: false, error: 'Account ID is not configured.' };
+
+    await cfFetch(`/accounts/${accountId}/email/routing/addresses/${addressId}`, {
       method: 'DELETE',
     });
     return { success: true };
@@ -274,13 +280,14 @@ export async function deleteDestinationAddress(addressId: string) {
   }
 }
 
-export async function getDestinationAddress(addressId: string) {
+export async function getDestinationAddress(idToken: string, orgId: string, addressId: string) {
   if (!addressId) return { success: false, error: 'Missing Destination Address ID' };
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  if (!accountId) return { success: false, error: 'Account ID is not configured. Please add CLOUDFLARE_ACCOUNT_ID to your .env.local file.' };
-
   try {
-    const data = await cfFetch(`/accounts/${accountId}/email/routing/addresses/${addressId}`, 'INFRA');
+    await verifyUserOrgAccess(idToken, orgId);
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    if (!accountId) return { success: false, error: 'Account ID is not configured.' };
+
+    const data = await cfFetch(`/accounts/${accountId}/email/routing/addresses/${addressId}`);
     return {
       success: true,
       data: {

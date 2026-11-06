@@ -332,7 +332,7 @@ export default function AccountHomePage() {
 
       if (editingOrg) {
         const orgRef = doc(db, "organizations", editingOrg.id)
-        updateDoc(orgRef, {
+        await updateDoc(orgRef, {
           name: formData.name.trim(),
           address: formData.address.trim(),
           phone: formData.phone.trim(),
@@ -343,13 +343,6 @@ export default function AccountHomePage() {
           description: formData.description.trim(),
           isEducation: !!formData.isEducation,
           updatedAt: serverTimestamp()
-        }).catch(async () => {
-          const permissionError = new FirestorePermissionError({
-            path: orgRef.path,
-            operation: 'update',
-            requestResourceData: formData,
-          })
-          errorEmitter.emit('permission-error', permissionError)
         })
         toast({ title: "Organization Updated", description: "Details have been saved successfully." })
       } else {
@@ -357,7 +350,7 @@ export default function AccountHomePage() {
         const orgCode = `${formData.name.substring(0, 3).toUpperCase()}-${uniqueSuffix}`
         
         const orgsRef = collection(db, "organizations")
-        addDoc(orgsRef, {
+        await addDoc(orgsRef, {
           name: formData.name.trim(),
           address: formData.address.trim(),
           phone: formData.phone.trim(),
@@ -372,13 +365,6 @@ export default function AccountHomePage() {
           ownerId: user.uid,
           status: "Active",
           createdAt: serverTimestamp()
-        }).catch(async () => {
-          const permissionError = new FirestorePermissionError({
-            path: 'organizations',
-            operation: 'create',
-            requestResourceData: formData,
-          })
-          errorEmitter.emit('permission-error', permissionError)
         })
         toast({ title: "Organization Registered", description: `${formData.name} has been added to your account.` })
       }
@@ -903,13 +889,13 @@ export default function AccountHomePage() {
                 <AlertDialogTitle className="text-red-600 font-headline font-bold">Confirm Organization Deletion</AlertDialogTitle>
                 <AlertDialogDescription className="space-y-4">
                   <p className="font-bold text-slate-900 text-sm">
-                    Are you absolutely sure? This will permanently remove "{editingOrg?.name}".
+                    Are you absolutely sure? This will permanently remove &quot;{editingOrg?.name}&quot;.
                   </p>
                   <p className="text-xs text-slate-500">
                     All DNS records, website configurations, and team member access for this organization will be permanently decommissioned. This action cannot be undone.
                   </p>
                   <div className="space-y-2 pt-2">
-                    <Label className="text-[10px] font-bold uppercase text-slate-700">Type "{editingOrg?.name}" to confirm:</Label>
+                    <Label className="text-[10px] font-bold uppercase text-slate-700">Type &quot;{editingOrg?.name}&quot; to confirm:</Label>
                     <Input 
                       placeholder="Type organization name exactly" 
                       value={deleteConfirmName}

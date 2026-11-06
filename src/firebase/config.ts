@@ -1,6 +1,6 @@
 
 export const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY || "AIzaSyBFX1ZKHReDsgJlUfsIhisX346-SJbVa5o",
+  apiKey: process.env.FIREBASE_API_KEY || "",
   authDomain: process.env.FIREBASE_AUTH_DOMAIN || "revlet.firebaseapp.com",
   projectId: process.env.FIREBASE_PROJECT_ID || "revlet",
   storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "revlet.firebasestorage.app",

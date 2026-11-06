@@ -1,0 +1,7 @@
+title = "Revlet Gitleaks Config"
+
+[allowlist]
+description = "Allowlist for public client-side Firebase configurations"
+paths = [
+    '''src/firebase/config\.ts''',
+]

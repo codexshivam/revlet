@@ -1,0 +1,3 @@
+# Gitleaks ignore file
+# Ignore historical browser config commit before environment variables enforcement
+081c72daa11791fe5214dc1662414d9e5efa7442:src/firebase/config.ts:gcp-api-key:3

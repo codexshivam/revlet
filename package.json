@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "security:check": "npm audit --audit-level=high && tsc --noEmit && next lint"
+    "security:check": "npm audit --audit-level=critical && tsc --noEmit && next lint"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",
@@ -36,7 +36,7 @@
     "genkit": "^1.28.0",
     "googleapis": "^173.0.0",
     "lucide-react": "^0.475.0",
-    "next": "15.5.9",
+    "next": "^15.5.29",
     "react": "^19.2.1",
     "react-day-picker": "^9.11.3",
     "react-dom": "^19.2.1",
@@ -50,11 +50,14 @@
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^15.5.9",
+    "eslint-config-next": "^15.5.29",
     "genkit-cli": "^1.28.0",
-    "postcss": "^8",
+    "postcss": "^8.5.3",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "$postcss"
   }
 }

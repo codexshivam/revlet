@@ -59,7 +59,7 @@ export function OrgSelector({
               <School className="h-3.5 w-3.5 text-slate-500 shrink-0 animate-in fade-in zoom-in duration-300" />
             )}
             <span className="truncate text-slate-800">
-              {selected ? selected.name : (loading ? "Syncing..." : "Select Institution")}
+              {selected ? selected.name : (loading ? "Syncing..." : "Select Organization")}
             </span>
           </div>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-55 text-slate-500" />
@@ -68,11 +68,11 @@ export function OrgSelector({
       <PopoverContent className={cn("p-0 shadow-xl border-slate-200 bg-white overflow-hidden rounded-lg", compact ? "w-[224px]" : "w-[450px]")}>
         <Command className="bg-white">
           <CommandInput 
-            placeholder="Search institutions..." 
+            placeholder="Search organizations..." 
             className="h-9 text-xs text-slate-800 placeholder:text-slate-400 bg-transparent outline-none focus:ring-0" 
           />
           <CommandList className="border-t border-slate-100">
-            <CommandEmpty className="text-xs py-4 text-slate-400">No institutions found.</CommandEmpty>
+            <CommandEmpty className="text-xs py-4 text-slate-400">No organizations found.</CommandEmpty>
             <CommandGroup>
               {orgs.map((inst) => {
                 const isSelected = currentId === inst.id

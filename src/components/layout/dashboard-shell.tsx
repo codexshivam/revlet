@@ -1,10 +1,8 @@
-
 "use client"
 
 import * as React from "react"
 import { RecursiveSidebar } from "@/components/layout/recursive-sidebar"
 import { TopHeader } from "@/components/layout/top-header"
-import { RevletLogo } from "@/components/brand/revlet-logo"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase"
 import { useRouter } from "next/navigation"
@@ -28,16 +26,14 @@ export function DashboardShell({
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-white">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-lg shadow-slate-900/10 animate-pulse">
-            <RevletLogo variant="mark" size="md" className="w-6 h-6 text-white" />
+      <div className="min-h-screen w-full flex items-center justify-center bg-[#f8f9fa] bg-[radial-gradient(#d1d5db_1px,transparent_1px)] [background-size:16px_16px]">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="font-bold text-xs uppercase tracking-wider text-slate-800 font-headline">
+            REVLET
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 text-slate-500 text-xs">
             <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
-              Securing Revlet Session...
-            </p>
+            <span>Securing session...</span>
           </div>
         </div>
       </div>
@@ -55,19 +51,15 @@ export function DashboardShell({
               {children}
             </div>
 
-            {/* Strict Global Brand Footer */}
-            <footer className="mt-16 pt-8 pb-6 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-600 select-none">
+            {/* Global Brand Footer */}
+            <footer className="mt-16 pt-8 pb-6 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 select-none">
               <div className="flex items-center gap-2 text-slate-600">
-                <RevletLogo variant="mark" size="sm" className="w-3.5 h-3.5 text-slate-600" />
-                <span className="font-semibold text-slate-600">Revlet IT Manager</span>
-                <span className="text-slate-600">&bull;</span>
-                <span className="text-slate-600">Enterprise Infrastructure Platform</span>
+                <span className="font-semibold text-slate-700">Revlet</span>
+                <span className="text-slate-400">|</span>
+                <span className="text-slate-500">Enterprise Infrastructure Platform</span>
               </div>
-              <div className="flex items-center gap-4 text-slate-600 font-medium">
-                <a href="https://revlet.me/terms" target="_blank" rel="noopener noreferrer" className="hover:text-slate-800 transition-colors">Terms</a>
-                <a href="https://revlet.me/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-slate-800 transition-colors">Privacy</a>
-                <a href="mailto:hello@revlet.me" className="hover:text-slate-800 transition-colors">hello@revlet.me</a>
-                <span className="text-slate-600">&copy; 2026 Revlet</span>
+              <div className="text-xs text-slate-500 font-normal">
+                <span>&copy; 2026 Revlet Platforms Private Limited</span>
               </div>
             </footer>
           </div>
@@ -76,5 +68,3 @@ export function DashboardShell({
     </div>
   )
 }
-
-

@@ -367,7 +367,7 @@ export default function BillingPage() {
                           onValueChange={(v) => setSubmissionData({...submissionData, organizationId: v})}
                         >
                           <SelectTrigger className="h-10 text-xs font-semibold border-slate-200 bg-white rounded">
-                            <SelectValue placeholder="Select institution" />
+                            <SelectValue placeholder="Select organization" />
                           </SelectTrigger>
                           <SelectContent>
                             {orgs.map(org => (

@@ -185,7 +185,7 @@ export default function SupportPage() {
           </div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 bg-slate-50 px-3.5 py-2 border border-slate-200 rounded-full shadow-sm shrink-0 max-w-full overflow-hidden">
             <Mail className="w-3.5 h-3.5 text-primary shrink-0" />
-            <span className="truncate">Direct support email:</span>
+            <span className="truncate">direct support email:</span>
             <a href="mailto:hello@revlet.me" className="text-primary hover:underline font-bold truncate">hello@revlet.me</a>
           </div>
         </div>

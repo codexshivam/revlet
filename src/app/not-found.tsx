@@ -6,12 +6,9 @@ import { AuthFrame } from "@/components/layout/auth-frame"
 export default function NotFound() {
   return (
     <AuthFrame>
-      <div className="w-full max-w-[440px] mx-auto text-center space-y-6 animate-in fade-in duration-300">
-        <div className="space-y-3">
-          <span className="inline-block font-mono text-xs font-bold uppercase tracking-widest text-primary px-3 py-1 rounded-full bg-primary/5 border border-primary/10">
-            Error 404
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-headline font-bold text-slate-900 tracking-tight pt-1">
+      <div className="w-full max-w-[460px] bg-white border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl p-6 sm:p-10 space-y-6 text-center animate-in fade-in duration-300">
+        <div className="space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-headline font-bold text-slate-900 tracking-tight">
             Resource Not Found
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-normal leading-relaxed">

@@ -22,8 +22,8 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL('https://app.revlet.me'),
   title: {
-    default: 'Revlet IT Manager',
-    template: '%s | Revlet IT Manager'
+    default: 'Revlet | Enterprise Infrastructure Platform',
+    template: '%s | Revlet'
   },
   description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, teams, and billing from one unified dashboard.',
   applicationName: 'Revlet',
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: 'Revlet — Enterprise Infrastructure Dashboard',
+    title: 'Revlet | Enterprise Infrastructure Dashboard',
     description: 'Unified platform for managing DNS, email, Google Workspace, teams, and billing for institutions and businesses.',
     type: 'website',
     url: 'https://app.revlet.me',
@@ -74,7 +74,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Revlet — Enterprise Infrastructure Dashboard',
+    title: 'Revlet | Enterprise Infrastructure Dashboard',
     description: 'Unified platform for managing DNS, email, Google Workspace, teams, and billing for institutions and businesses.',
     creator: '@revlet',
   },

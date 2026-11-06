@@ -127,13 +127,13 @@ export default function SignupPage() {
 
   return (
     <AuthFrame>
-      <div className="w-full max-w-[420px] mx-auto space-y-6 animate-in fade-in duration-300">
+      <div className="w-full max-w-[460px] bg-white border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl p-6 sm:p-10 space-y-6 animate-in fade-in duration-300">
         <div className="text-center space-y-1.5">
           <h1 className="text-2xl sm:text-3xl font-headline font-bold text-[#191c1e] tracking-tight">
             Create Account
           </h1>
           <p className="text-xs sm:text-sm text-[#45464d] font-normal leading-normal max-w-[320px] mx-auto">
-            Join our network of managed institutions.
+            Join our network of managed organizations.
           </p>
         </div>
 

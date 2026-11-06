@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ShieldAlert, Lock, Mail, Loader2, Info } from "lucide-react"
+import { Lock, Mail, Loader2, Info } from "lucide-react"
 import { useUser, useAuth } from "@/firebase"
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail } from "firebase/auth"
 import { toast } from "@/hooks/use-toast"
@@ -240,18 +240,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </div>
-
-        <Card className="bg-red-50 border-red-100 border-dashed rounded-xl">
-          <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="p-2 bg-red-100/50 rounded-lg text-red-500 shrink-0">
-              <ShieldAlert className="w-6 h-6" />
-            </div>
-            <div className="flex-1 space-y-1">
-              <h4 className="text-sm font-bold text-red-900 leading-tight">Security Enforcement Notice</h4>
-              <p className="text-xs text-red-700/80 leading-normal">Updating your master credentials will immediately invalidate all other active administrative sessions across devices for your protection.</p>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </DashboardShell>
   )

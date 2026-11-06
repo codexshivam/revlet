@@ -153,8 +153,8 @@ export default function ProfilePage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account Settings</span>
-          <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Security & Settings</h1>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Revlet Account</span>
+          <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Administrator Profile</h1>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -206,7 +206,7 @@ export default function ProfilePage() {
                       id="prof-name" 
                       value={displayName} 
                       onChange={(e) => setDisplayName(e.target.value)} 
-                      placeholder="Rajesh Karki"
+                      placeholder="e.g. Alex Morgan"
                       className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
                     />
                   </div>

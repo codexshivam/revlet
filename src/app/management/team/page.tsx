@@ -304,7 +304,7 @@ export default function TeamManagementPage() {
                       <Input 
                         id="member-email" 
                         type="email" 
-                        placeholder="staff@institution.edu.np" 
+                        placeholder="staff@organization.com" 
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"

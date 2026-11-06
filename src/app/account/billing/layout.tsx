@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Payments',
+  title: 'Billing & Payments',
 };
 
 export default function BillingLayout({ children }: { children: React.ReactNode }) {

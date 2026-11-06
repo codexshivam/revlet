@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
 
 export const metadata: Metadata = {
-  title: 'Email',
+  title: 'Enterprise Email',
   description: 'Secure and scalable enterprise email infrastructure management tailored for businesses.',
   robots: {
     index: false,

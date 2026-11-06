@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import { useAuth, useUser } from "@/firebase"
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
+import { RevletLogo } from "@/components/brand/revlet-logo"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -33,10 +34,15 @@ export default function SignupPage() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6">
         <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-[10px] text-slate-500 animate-pulse font-semibold uppercase tracking-widest">
-            Securing session...
-          </p>
+          <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-lg shadow-slate-900/10 animate-pulse">
+            <RevletLogo variant="mark" size="md" className="w-6 h-6 text-white" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
+              Securing Revlet Session...
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -126,11 +132,7 @@ export default function SignupPage() {
       <div className="w-full max-w-[480px] space-y-6 sm:space-y-8">
         
         {/* LOGO */}
-        <div className="text-center select-none">
-          <h1 className="text-2xl sm:text-3xl font-headline font-bold tracking-[0.15em] text-[#191c1e] ml-[0.15em] uppercase">
-            REVLET
-          </h1>
-        </div>
+        <RevletLogo variant="vertical" size="lg" subtitle="Enterprise Infrastructure Platform" />
 
         {/* CARD CONTAINER */}
         <div className="bg-white border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl p-6 sm:p-10 space-y-6 relative overflow-hidden">
@@ -156,7 +158,7 @@ export default function SignupPage() {
               </Label>
               <Input 
                 id="name" 
-                placeholder="Sagar Poudel" 
+                placeholder="Alex Morgan" 
                 required
                 className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3 placeholder-slate-400"
                 value={formData.name}
@@ -274,8 +276,16 @@ export default function SignupPage() {
         </div>
 
         {/* FOOTER */}
-        <div className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] select-none px-4 leading-normal">
-          © 2026 REVLET PLATFORM • HELLO@REVLET.ME
+        <div className="text-center select-none px-4 space-y-2">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] leading-normal flex items-center justify-center gap-3">
+            <span>&copy; 2026 Revlet Platform</span>
+            <span>&bull;</span>
+            <a href="https://revlet.me/terms" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 transition-colors">Terms</a>
+            <span>&bull;</span>
+            <a href="https://revlet.me/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 transition-colors">Privacy</a>
+            <span>&bull;</span>
+            <a href="mailto:hello@revlet.me" className="hover:text-slate-600 transition-colors">hello@revlet.me</a>
+          </div>
         </div>
       </div>
     </div>

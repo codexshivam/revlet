@@ -1,43 +1,5 @@
-import { DashboardShell } from "@/components/layout/dashboard-shell"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { Key } from "lucide-react"
+import { redirect } from "next/navigation"
 
 export default function TokensPage() {
-  return (
-    <DashboardShell>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-headline font-bold">API Tokens</h1>
-          <Button><Key className="mr-2 h-4 w-4" /> Create New Token</Button>
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Access Tokens</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Label</TableHead>
-                  <TableHead>Last Used</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell className="font-medium">Infrastructure-Watcher</TableCell>
-                  <TableCell>2 hours ago</TableCell>
-                  <TableCell>Mar 10, 2024</TableCell>
-                  <TableCell className="text-right"><Button variant="ghost" size="sm">Revoke</Button></TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
-    </DashboardShell>
-  )
+  redirect("/management/settings")
 }

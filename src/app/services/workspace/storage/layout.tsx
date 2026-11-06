@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Storage',
+  title: 'Storage Policies',
 };
 
 export default function WorkspaceStorageLayout({ children }: { children: React.ReactNode }) {

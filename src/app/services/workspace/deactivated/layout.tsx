@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Archive',
+  title: 'Deactivated Accounts',
 };
 
 export default function WorkspaceDeactivatedLayout({ children }: { children: React.ReactNode }) {

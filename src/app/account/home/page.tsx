@@ -664,7 +664,7 @@ export default function AccountHomePage() {
                     id="acc-name" 
                     value={accountName} 
                     onChange={(e) => setAccountName(e.target.value)}
-                    placeholder="e.g. Sagar Poudel"
+                    placeholder="e.g. Alex Morgan"
                     className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
                   />
                 </div>

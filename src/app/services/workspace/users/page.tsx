@@ -255,7 +255,7 @@ export default function WorkspaceUsersPage() {
 
   // ─── Derived Values ──────────────────────────────────────────────────────
   const adminEmail = selectedOrg?.workspaceAdminEmail || ""
-  const domain = selectedOrg?.domain || "example.com"
+  const domain = selectedOrg?.domain || "revlet.me"
   const isWorkspaceActive = selectedOrg?.workspaceStatus === "active"
 
   // Build complete OU tabs from defaults + custom

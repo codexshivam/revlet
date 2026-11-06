@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown, School, Loader2, GraduationCap } from "lucide-react"
+import Link from "next/link"
+import { Check, ChevronsUpDown, School, Loader2, GraduationCap, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -109,6 +110,16 @@ export function OrgSelector({
               })}
             </CommandGroup>
           </CommandList>
+          <div className="p-1 border-t border-slate-100 bg-slate-50/50">
+            <Link 
+              href="/account/home" 
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-slate-100 rounded transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Manage Organizations</span>
+            </Link>
+          </div>
         </Command>
       </PopoverContent>
     </Popover>

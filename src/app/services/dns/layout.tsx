@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
 
 export const metadata: Metadata = {
-  title: 'DNS',
+  title: 'DNS Infrastructure',
   description: 'Manage domains and Cloudflare DNS infrastructure for educational institutions and businesses.',
   robots: {
     index: false,

@@ -18,11 +18,13 @@ import {
   UserMinus,
   BookOpen,
   Library,
-  Network
+  Network,
+  UserCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { useAcademicClasses } from "@/hooks/use-academic-classes"
+import { RevletLogo } from "@/components/brand/revlet-logo"
 
 interface NavItem {
   title: string
@@ -45,6 +47,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
       icon: Briefcase,
       children: [
         { title: "Account Home", href: "/account/home" },
+        { title: "Admin Profile", icon: UserCircle, href: "/account/profile" },
         { title: "Manage Payments", href: "/account/billing" },
       ]
     },
@@ -85,11 +88,9 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
       "bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 transition-all",
       mobile ? "w-full pt-4 border-r-0 h-full" : "w-64 pt-6 hidden lg:flex"
     )}>
-      <div className="px-6 mb-8">
-        <Link href="/account/home" className="flex flex-col gap-0 group">
-          <span className="font-headline font-bold text-[20px] tracking-[0.1em] text-[#191c1e] leading-none ml-[0.1em]">
-            REVLET
-          </span>
+      <div className="px-5 mb-7">
+        <Link href="/account/home" className="inline-block transition-opacity hover:opacity-90">
+          <RevletLogo variant="horizontal" size="md" subtitle="IT Manager" badgeText="OS" />
         </Link>
       </div>
 

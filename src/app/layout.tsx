@@ -1,15 +1,28 @@
 
 import type { Metadata } from 'next';
+import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { JsonLd } from '@/components/seo/json-ld';
 
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://app.revlet.me'),
   title: {
-    default: 'Revlet Dashboard',
-    template: '%s | Revlet Dashboard'
+    default: 'Revlet IT Manager',
+    template: '%s | Revlet IT Manager'
   },
   description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, teams, and billing from one unified dashboard.',
   applicationName: 'Revlet',
@@ -182,11 +195,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <JsonLd data={organizationSchema} />
         <JsonLd data={webApplicationSchema} />
         <JsonLd data={webSiteSchema} />

@@ -153,7 +153,7 @@ export default function SettingsPage() {
                 <Label htmlFor="new-email" className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">Proposed New Email</Label>
                 <Input 
                   id="new-email" 
-                  placeholder="new.admin@institution.edu.np" 
+                  placeholder="new.admin@organization.com" 
                   className="border-slate-200 h-10 rounded px-3" 
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}

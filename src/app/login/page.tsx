@@ -19,7 +19,7 @@ import { toast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import { useAuth, useUser } from "@/firebase"
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth"
-import { RevletLogo } from "@/components/brand/revlet-logo"
+import { AuthFrame } from "@/components/layout/auth-frame"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -40,16 +40,14 @@ export default function LoginPage() {
 
   if (authLoading || user) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-lg shadow-slate-900/10 animate-pulse">
-            <RevletLogo variant="mark" size="md" className="w-6 h-6 text-white" />
+      <div className="min-h-screen bg-[#f8f9fa] bg-[radial-gradient(#d1d5db_1px,transparent_1px)] [background-size:16px_16px] flex flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="font-bold text-xs uppercase tracking-wider text-slate-800 font-headline">
+            REVLET
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 text-slate-500 text-xs">
             <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
-              Securing Revlet Session...
-            </p>
+            <span>Securing session...</span>
           </div>
         </div>
       </div>
@@ -182,171 +180,150 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-tr from-slate-50 via-slate-100/50 to-blue-50/30 flex flex-col items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500">
-      <div className="w-full max-w-[480px] space-y-6 sm:space-y-8">
-        
-        {/* LOGO */}
-        <RevletLogo variant="vertical" size="lg" subtitle="Enterprise Infrastructure Platform" />
+    <AuthFrame>
+      <div className="w-full max-w-[420px] mx-auto space-y-6 animate-in fade-in duration-300">
+        <div className="text-center space-y-1.5">
+          <h1 className="text-2xl sm:text-3xl font-headline font-bold text-[#191c1e] tracking-tight">
+            Welcome back
+          </h1>
+          <p className="text-xs sm:text-sm text-[#45464d] font-normal leading-normal">
+            Enter your credentials to access the administrative dashboard.
+          </p>
+        </div>
 
-        {/* CARD CONTAINER */}
-        <div className="bg-white border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl p-6 sm:p-10 space-y-6 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/30 via-primary to-primary/30" />
-          
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl font-headline font-bold text-[#191c1e] tracking-tight">
-              Welcome back
-            </h2>
-            <p className="text-xs text-[#45464d] font-normal leading-normal px-2">
-              Enter your credentials to access the administrative dashboard.
-            </p>
+        <form onSubmit={handleLogin} className="space-y-4">
+          {/* WORK EMAIL */}
+          <div className="space-y-1.5">
+            <Label 
+              htmlFor="email" 
+              className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
+            >
+              Work Email
+            </Label>
+            <Input 
+              id="email" 
+              type="email" 
+              placeholder="hello@world.com" 
+              className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal px-3 placeholder-slate-400"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            {/* WORK EMAIL */}
-            <div className="space-y-2">
+          {/* SECURITY PASSWORD */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
               <Label 
-                htmlFor="email" 
+                htmlFor="password" 
                 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
               >
-                Work Email
+                Security Password
               </Label>
+              
+              <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+                <DialogTrigger asChild>
+                  <button 
+                    type="button" 
+                    className="text-[10px] text-slate-500 hover:text-[#191c1e] transition-colors font-bold uppercase tracking-wider"
+                  >
+                    Forgot password?
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] border border-slate-100 shadow-[0_12px_32px_rgba(0,0,0,0.04)] rounded-xl p-6 bg-white animate-in zoom-in duration-300">
+                  <DialogHeader className="space-y-2 text-left">
+                    <DialogTitle className="font-headline font-semibold text-lg text-[#191c1e]">
+                      Reset your password
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-[#45464d] leading-relaxed font-normal">
+                      Enter your work email and we will dispatch a secure reset link.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleForgotPassword} className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="reset-email" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Work Email
+                      </Label>
+                      <Input 
+                        id="reset-email" 
+                        type="email" 
+                        placeholder="hello@world.com" 
+                        required 
+                        className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white text-xs sm:text-sm font-normal rounded px-3"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                      />
+                    </div>
+                    <DialogFooter className="pt-2">
+                      <Button 
+                        type="submit" 
+                        className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white rounded text-xs transition-all shadow-sm"
+                      >
+                        Send Reset Link
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* PASSWORD INPUT & EYE TOGGLE */}
+            <div className="relative">
               <Input 
-                id="email" 
-                type="email" 
-                placeholder="hello@world.com" 
-                className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3 placeholder-slate-400"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="password" 
+                type={showPassword ? "text" : "password"} 
+                placeholder="••••••••••" 
+                className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal pl-3 pr-10 placeholder-slate-300"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
-            </div>
-
-            {/* SECURITY PASSWORD */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label 
-                  htmlFor="password" 
-                  className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
-                >
-                  Security Password
-                </Label>
-                
-                <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
-                  <DialogTrigger asChild>
-                    <button 
-                      type="button" 
-                      className="text-[10px] text-slate-500 hover:text-[#191c1e] transition-colors font-bold uppercase tracking-wider"
-                    >
-                      Forgot password?
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] border border-slate-100 shadow-[0_12px_32px_rgba(0,0,0,0.04)] rounded-xl p-6 bg-white animate-in zoom-in duration-300">
-                    <DialogHeader className="space-y-2 text-left">
-                      <DialogTitle className="font-headline font-semibold text-lg text-[#191c1e]">
-                        Reset your password
-                      </DialogTitle>
-                      <DialogDescription className="text-xs text-[#45464d] leading-relaxed font-normal">
-                        Enter your work email and we will dispatch a secure reset link.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleForgotPassword} className="space-y-4 pt-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="reset-email" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                          Work Email
-                        </Label>
-                        <Input 
-                          id="reset-email" 
-                          type="email" 
-                          placeholder="hello@world.com" 
-                          required 
-                          className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white text-xs font-normal rounded px-3"
-                          value={resetEmail}
-                          onChange={(e) => setResetEmail(e.target.value)}
-                        />
-                      </div>
-                      <DialogFooter className="pt-2">
-                        <Button 
-                          type="submit" 
-                          className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white rounded text-xs transition-all shadow-sm"
-                        >
-                          Send Reset Link
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              {/* PASSWORD INPUT & EYE TOGGLE */}
-              <div className="relative">
-                <Input 
-                  id="password" 
-                  type={showPassword ? "text" : "password"} 
-                  placeholder="••••••••••" 
-                  className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal pl-3 pr-10 placeholder-slate-300"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* SUBMIT BUTTON */}
-            <Button 
-              type="submit" 
-              className="w-full font-semibold h-11 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.1)] flex items-center justify-center"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <>
-                  Access Dashboard
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                </>
-              )}
-            </Button>
-          </form>
-
-          {/* DIVIDER */}
-          <div className="border-t border-[#eceef0] my-5 sm:my-6"></div>
-
-          {/* LINK TO SIGNUP */}
-          <div className="text-center">
-            <p className="text-xs text-[#45464d] font-normal">
-              New user?{" "}
-              <Link 
-                href="/signup" 
-                className="text-[#191c1e] font-bold hover:underline transition-colors"
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                Create an account
-              </Link>
-            </p>
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* FOOTER */}
-        <div className="text-center select-none px-4 space-y-2">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] leading-normal flex items-center justify-center gap-3">
-            <span>&copy; 2026 Revlet Platform</span>
-            <span>&bull;</span>
-            <a href="https://revlet.me/terms" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 transition-colors">Terms</a>
-            <span>&bull;</span>
-            <a href="https://revlet.me/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 transition-colors">Privacy</a>
-            <span>&bull;</span>
-            <a href="mailto:hello@revlet.me" className="hover:text-slate-600 transition-colors">hello@revlet.me</a>
-          </div>
+          {/* SUBMIT BUTTON */}
+          <Button 
+            type="submit" 
+            className="w-full font-semibold h-11 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.1)] flex items-center justify-center"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <>
+                Access Dashboard
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+              </>
+            )}
+          </Button>
+        </form>
+
+        {/* DIVIDER */}
+        <div className="border-t border-[#eceef0] my-5 sm:my-6"></div>
+
+        {/* LINK TO SIGNUP */}
+        <div className="text-center">
+          <p className="text-xs sm:text-sm text-[#45464d] font-normal">
+            New user?{" "}
+            <Link 
+              href="/signup" 
+              className="text-[#191c1e] font-bold hover:underline transition-colors"
+            >
+              Create an account
+            </Link>
+          </p>
         </div>
       </div>
-    </div>
+    </AuthFrame>
   )
 }

@@ -32,7 +32,7 @@ export function AuthFrame({ children, className }: AuthFrameProps) {
             rel="noopener noreferrer" 
             className="text-slate-600 hover:text-slate-900 underline underline-offset-4 transition-colors font-medium"
           >
-            Know more on revlet.me
+            Know us on revlet.me
           </a>
         </nav>
       </header>

@@ -6,6 +6,7 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { JsonLd } from '@/components/seo/json-ld';
 import { DevToolsGuard } from '@/components/security/devtools-guard';
+import { PointerEventsGuard } from '@/components/layout/pointer-events-guard';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -204,6 +205,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <DevToolsGuard />
+        <PointerEventsGuard />
         <FirebaseClientProvider>
           {children}
           <Toaster />

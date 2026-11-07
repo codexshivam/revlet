@@ -284,7 +284,7 @@ export default function TeamManagementPage() {
         <div className="flex flex-col gap-4 sm:gap-1">
           <div className="flex flex-col gap-1">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Team Management Panel</h1>
+              <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Team Management</h1>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="w-full sm:w-auto font-bold gap-2 bg-primary hover:bg-primary/95 text-white px-6 rounded-lg h-10 shadow-md shadow-primary/10">

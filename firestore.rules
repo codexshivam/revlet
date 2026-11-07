@@ -46,7 +46,7 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'memberEmails', 'updatedAt'])
         );
-      allow delete: if false; // Deletion is handled via status flag, not hard delete
+      allow delete: if isResourceOwner() || isSuperAdmin();
     }
 
     // ─── Payment Vouchers ─────────────────────────────────────────────────────

@@ -69,6 +69,7 @@ import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore, syncUserOrganizations } from "@/firebase"
 import { signOut, updateProfile } from "firebase/auth"
 import { useRouter } from "next/navigation"
+import { deleteOrganization } from "@/app/actions/organization"
 import { 
   collection, 
   query, 
@@ -232,6 +233,15 @@ export default function AccountHomePage() {
   }, [user])
 
   useEffect(() => {
+    // Safety cleanup: Guarantee document.body pointer-events is restored whenever dialogs close
+    if (!isDialogOpen && !isDeleteDialogOpen && !isSignOutOpen && !isEditNameOpen) {
+      if (typeof document !== "undefined") {
+        document.body.style.pointerEvents = ""
+      }
+    }
+  }, [isDialogOpen, isDeleteDialogOpen, isSignOutOpen, isEditNameOpen])
+
+  useEffect(() => {
     if (authLoading) return
 
     if (!user) {
@@ -380,31 +390,56 @@ export default function AccountHomePage() {
   }
 
   const handleDeleteOrg = async () => {
-    if (!editingOrg) return
+    if (!editingOrg || !user) return
     setIsSubmitting(true)
     
-    const orgRef = doc(db, "organizations", editingOrg.id)
-    updateDoc(orgRef, { 
-      status: "Pending Deletion",
-      updatedAt: serverTimestamp()
-    })
-      .then(() => {
-        toast({ title: "Deletion Requested", description: "The organization has been queued for permanent removal." })
-        setIsDeleteDialogOpen(false)
-        setIsDialogOpen(false)
-        setDeleteConfirmName("")
+    try {
+      const idToken = await user.getIdToken()
+      const res = await deleteOrganization(idToken, editingOrg.id)
+      
+      if (!res.success) {
+        // Fallback to client SDK deleteDoc if needed
+        const { deleteDoc, doc } = await import("firebase/firestore")
+        await deleteDoc(doc(db, "organizations", editingOrg.id))
+      }
+
+      toast({ 
+        title: "Organization Deleted", 
+        description: `"${editingOrg.name}" has been permanently removed.` 
       })
-      .catch(async () => {
-        const permissionError = new FirestorePermissionError({
-          path: orgRef.path,
-          operation: 'update',
-          requestResourceData: { status: "Pending Deletion" }
-        })
-        errorEmitter.emit('permission-error', permissionError)
+
+      // If the deleted org was currently active in localStorage, switch to another
+      if (typeof window !== "undefined") {
+        const storedId = localStorage.getItem("selectedOrgId")
+        if (storedId === editingOrg.id) {
+          const remaining = orgs.filter(o => o.id !== editingOrg.id)
+          const nextId = remaining.length > 0 ? remaining[0].id : ""
+          if (nextId) {
+            localStorage.setItem("selectedOrgId", nextId)
+          } else {
+            localStorage.removeItem("selectedOrgId")
+          }
+          window.dispatchEvent(new Event("active-org-changed"))
+        }
+      }
+
+      setIsDeleteDialogOpen(false)
+      setIsDialogOpen(false)
+      setDeleteConfirmName("")
+      setEditingOrg(null)
+    } catch (error: any) {
+      console.error("Error deleting organization:", error)
+      toast({
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: error.message || "Could not delete organization. Please try again.",
       })
-      .finally(() => {
-        setIsSubmitting(false)
-      })
+    } finally {
+      setIsSubmitting(false)
+      if (typeof document !== "undefined") {
+        document.body.style.pointerEvents = ""
+      }
+    }
   }
 
   const handleUpdateAccountName = async () => {
@@ -542,11 +577,6 @@ export default function AccountHomePage() {
                                       Education
                                     </Badge>
                                   )}
-                                  {org.status === "Pending Deletion" && (
-                                    <Badge variant="destructive" className="text-[8px] h-4 font-bold px-1.5 uppercase tracking-tighter">
-                                      Pending Deletion
-                                    </Badge>
-                                  )}
                                 </div>
                               </div>
                             </div>
@@ -564,7 +594,6 @@ export default function AccountHomePage() {
                                 variant="outline" 
                                 className="h-8 font-bold text-xs gap-2 border-slate-200 hover:bg-primary hover:text-white transition-all shadow-sm rounded-lg"
                                 onClick={() => handleOpenEdit(org)}
-                                disabled={org.status === "Pending Deletion"}
                               >
                                 Manage
                                 <Edit2 className="w-3 h-3" />
@@ -621,7 +650,6 @@ export default function AccountHomePage() {
                             size="icon" 
                             className="h-9 w-9 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl shrink-0"
                             onClick={() => handleOpenEdit(org)}
-                            disabled={org.status === "Pending Deletion"}
                           >
                             <Settings className="w-4 h-4" />
                           </Button>
@@ -636,11 +664,6 @@ export default function AccountHomePage() {
                         {org.isEducation && (
                           <Badge className="text-[9px] h-5 font-bold px-2 uppercase bg-blue-50 border border-blue-100 text-blue-600 hover:bg-blue-50">
                             Education
-                          </Badge>
-                        )}
-                        {org.status === "Pending Deletion" && (
-                          <Badge variant="destructive" className="text-[9px] h-5 font-bold px-2 uppercase tracking-tighter">
-                            Pending Deletion
                           </Badge>
                         )}
                       </div>
@@ -713,7 +736,7 @@ export default function AccountHomePage() {
                         </Label>
                         <Input 
                           id="org-name" 
-                          placeholder="e.g. Revlet Tech Solutions" 
+                          placeholder="e.g. Example Company" 
                           value={formData.name}
                           onChange={(e) => handleInputChange("name", e.target.value)}
                           className={cn("h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3", errors.name && "border-red-400 focus-visible:ring-red-400/20")}
@@ -853,7 +876,7 @@ export default function AccountHomePage() {
                   </div>
  
                   {/* Danger Zone — Edit mode only */}
-                  {editingOrg && editingOrg.status !== "Pending Deletion" && (
+                  {editingOrg && (
                     <div className="space-y-4 pt-4">
                       <Separator />
                       <div className="flex items-center gap-2 text-destructive">
@@ -862,7 +885,7 @@ export default function AccountHomePage() {
                       </div>
                       <div className="p-4 bg-red-50 border border-red-100 rounded-lg flex flex-col gap-4">
                         <div className="space-y-1">
-                          <p className="text-sm font-bold text-red-900">Request Organization Deletion</p>
+                          <p className="text-sm font-bold text-red-900">Delete Organization</p>
                           <p className="text-xs text-red-700/80 leading-relaxed">
                             This action is permanent and cannot be reversed. All associated DNS configurations, website data, and service settings will be permanently decommissioned.
                           </p>
@@ -871,10 +894,13 @@ export default function AccountHomePage() {
                           variant="destructive" 
                           size="sm" 
                           className="w-fit font-bold gap-2"
-                          onClick={() => setIsDeleteDialogOpen(true)}
+                          onClick={() => {
+                            setIsDialogOpen(false)
+                            setIsDeleteDialogOpen(true)
+                          }}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          Request Deletion
+                          Delete Organization
                         </Button>
                       </div>
                     </div>
@@ -918,21 +944,29 @@ export default function AccountHomePage() {
           </AlertDialog>
 
           {/* Deletion Confirmation Dialog */}
-          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+            setIsDeleteDialogOpen(open)
+            if (!open) {
+              setDeleteConfirmName("")
+              if (typeof document !== "undefined") {
+                document.body.style.pointerEvents = ""
+              }
+            }
+          }}>
             <AlertDialogContent className="max-w-md">
               <AlertDialogHeader>
-                <AlertDialogTitle className="text-red-600 font-headline font-bold">Confirm Organization Deletion</AlertDialogTitle>
-                <AlertDialogDescription className="space-y-4">
+                <AlertDialogTitle className="text-red-600 font-headline font-bold text-lg">Confirm Organization Deletion</AlertDialogTitle>
+                <AlertDialogDescription className="space-y-4 text-left">
                   <p className="font-bold text-slate-900 text-sm">
                     Are you absolutely sure? This will permanently remove &quot;{editingOrg?.name}&quot;.
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 leading-relaxed">
                     All DNS records, website configurations, and team member access for this organization will be permanently decommissioned. This action cannot be undone.
                   </p>
                   <div className="space-y-2 pt-2">
-                    <Label className="text-[10px] font-bold uppercase text-slate-700">Type &quot;{editingOrg?.name}&quot; to confirm:</Label>
+                    <Label className="text-xs font-semibold text-slate-700">Type &quot;{editingOrg?.name}&quot; to confirm:</Label>
                     <Input 
-                      placeholder="Type organization name exactly" 
+                      placeholder={editingOrg?.name || "Organization name"} 
                       value={deleteConfirmName}
                       onChange={(e) => setDeleteConfirmName(e.target.value)}
                       className="border-red-200 focus-visible:ring-red-500 h-10 text-xs px-3"
@@ -941,14 +975,20 @@ export default function AccountHomePage() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setDeleteConfirmName("")} className="text-xs h-9 font-bold">Cancel</AlertDialogCancel>
+                <AlertDialogCancel onClick={() => {
+                  setDeleteConfirmName("")
+                  setIsDeleteDialogOpen(false)
+                  if (typeof document !== "undefined") {
+                    document.body.style.pointerEvents = ""
+                  }
+                }} className="text-xs h-9 font-bold">Cancel</AlertDialogCancel>
                 <Button 
                   variant="destructive" 
                   onClick={handleDeleteOrg}
-                  disabled={deleteConfirmName !== editingOrg?.name || isSubmitting}
+                  disabled={deleteConfirmName.trim() !== editingOrg?.name?.trim() || isSubmitting}
                   className="font-bold text-xs h-9 px-4"
                 >
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Confirm Deletion"}
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Delete Organization"}
                 </Button>
               </AlertDialogFooter>
             </AlertDialogContent>

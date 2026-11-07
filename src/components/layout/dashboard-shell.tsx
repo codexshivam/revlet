@@ -26,15 +26,9 @@ export function DashboardShell({
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-[#f8f9fa] bg-[radial-gradient(#d1d5db_1px,transparent_1px)] [background-size:16px_16px]">
-        <div className="flex flex-col items-center space-y-3">
-          <div className="font-bold text-xs uppercase tracking-wider text-slate-800 font-headline">
-            REVLET
-          </div>
-          <div className="flex items-center gap-2 text-slate-500 text-xs">
-            <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
-            <span>Securing session...</span>
-          </div>
+      <div className="min-h-screen w-full flex items-center justify-center bg-white">
+        <div className="font-bold text-sm uppercase tracking-widest text-slate-900 font-headline animate-pulse">
+          REVLET
         </div>
       </div>
     )

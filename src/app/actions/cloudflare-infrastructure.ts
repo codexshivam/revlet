@@ -16,14 +16,16 @@ export async function purgeZoneCache(
   idToken: string,
   orgId: string,
   zoneId: string,
-  purgeEverything: boolean = true
+  purgeEverything: boolean = true,
+  files?: string[]
 ) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
     await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const body = purgeEverything ? { purge_everything: true } : { files: files || [] };
     const data = await cfFetch(`/zones/${zoneId}/purge_cache`, {
       method: 'POST',
-      body: JSON.stringify({ purge_everything: purgeEverything }),
+      body: JSON.stringify(body),
     });
     return { success: true, data: data.result };
   } catch (error: any) {
@@ -527,4 +529,172 @@ export async function getAccountKVNamespaces(idToken: string, orgId: string) {
     return { success: false, error: error.message, data: [] };
   }
 }
+
+// --- 7. PAGE RULES & DOMAIN REDIRECTS ---
+
+export async function getZonePageRules(idToken: string, orgId: string, zoneId: string) {
+  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
+  try {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/pagerules`);
+    return {
+      success: true,
+      data: (data.result || []).map((r: any) => ({
+        id: r.id,
+        status: r.status,
+        targets: r.targets,
+        actions: r.actions,
+        urlPattern: r.targets?.[0]?.constraint?.value,
+        forwardUrl: r.actions?.find((a: any) => a.id === 'forwarding_url')?.value?.url,
+        statusCode: r.actions?.find((a: any) => a.id === 'forwarding_url')?.value?.status_code,
+      })),
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to fetch page rules', data: [] };
+  }
+}
+
+export async function createZonePageRule(
+  idToken: string,
+  orgId: string,
+  zoneId: string,
+  targetUrl: string,
+  forwardUrl: string,
+  statusCode: number = 301
+) {
+  if (!zoneId || !targetUrl || !forwardUrl) return { success: false, error: 'Missing parameters' };
+  try {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const payload = {
+      targets: [
+        {
+          target: 'url',
+          constraint: {
+            operator: 'matches',
+            value: targetUrl.trim(),
+          },
+        },
+      ],
+      actions: [
+        {
+          id: 'forwarding_url',
+          value: {
+            url: forwardUrl.trim(),
+            status_code: statusCode,
+          },
+        },
+      ],
+      status: 'active',
+    };
+    const data = await cfFetch(`/zones/${zoneId}/pagerules`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return { success: true, data: data.result };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to create redirect rule' };
+  }
+}
+
+export async function deleteZonePageRule(
+  idToken: string,
+  orgId: string,
+  zoneId: string,
+  ruleId: string
+) {
+  if (!zoneId || !ruleId) return { success: false, error: 'Missing rule ID' };
+  try {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/pagerules/${ruleId}`, {
+      method: 'DELETE',
+    });
+    return { success: true, data: data.result };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to remove redirect rule' };
+  }
+}
+
+export async function toggleApexWwwRedirect(
+  idToken: string,
+  orgId: string,
+  zoneId: string,
+  domain: string,
+  enable: boolean
+) {
+  if (!zoneId || !domain) return { success: false, error: 'Missing domain or zone' };
+  try {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const rulesRes = await getZonePageRules(idToken, orgId, zoneId);
+    if (!rulesRes.success) throw new Error(rulesRes.error);
+
+    const targetPattern = `${domain}/*`;
+    const forwardTarget = `https://www.${domain}/$1`;
+
+    const existingRule = (rulesRes.data || []).find((r: any) => r.urlPattern === targetPattern);
+
+    if (enable) {
+      if (existingRule) return { success: true, data: existingRule };
+      return await createZonePageRule(idToken, orgId, zoneId, targetPattern, forwardTarget, 301);
+    } else {
+      if (existingRule) {
+        return await deleteZonePageRule(idToken, orgId, zoneId, existingRule.id);
+      }
+      return { success: true, data: null };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to toggle Apex redirect' };
+  }
+}
+
+// --- 8. WORKERS ROUTES ON DOMAIN ---
+
+export async function getZoneWorkerRoutes(idToken: string, orgId: string, zoneId: string) {
+  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
+  try {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/workers/routes`);
+    return { success: true, data: data.result || [] };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to fetch workers routes', data: [] };
+  }
+}
+
+export async function createZoneWorkerRoute(
+  idToken: string,
+  orgId: string,
+  zoneId: string,
+  pattern: string,
+  scriptName: string
+) {
+  if (!zoneId || !pattern || !scriptName) return { success: false, error: 'Missing route parameters' };
+  try {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/workers/routes`, {
+      method: 'POST',
+      body: JSON.stringify({ pattern: pattern.trim(), script: scriptName.trim() }),
+    });
+    return { success: true, data: data.result };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to bind route to worker' };
+  }
+}
+
+export async function deleteZoneWorkerRoute(
+  idToken: string,
+  orgId: string,
+  zoneId: string,
+  routeId: string
+) {
+  if (!zoneId || !routeId) return { success: false, error: 'Missing route ID' };
+  try {
+    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const data = await cfFetch(`/zones/${zoneId}/workers/routes/${routeId}`, {
+      method: 'DELETE',
+    });
+    return { success: true, data: data.result };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to remove worker route' };
+  }
+}
+
 

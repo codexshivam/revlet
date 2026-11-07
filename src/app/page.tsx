@@ -226,6 +226,44 @@ export default function RootPage() {
             </Link>
           </div>
         </section>
+
+        {/* About Entity & Open Source Specifications (Entity Home NLP Grounding) */}
+        <section aria-labelledby="about-revlet-title" className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div>
+              <h2 id="about-revlet-title" className="text-lg font-headline font-bold text-slate-900">
+                About Revlet
+              </h2>
+              <p className="text-xs text-slate-500">
+                Open-Source Infrastructure Control Plane for Institutions &amp; Enterprises
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-[11px] font-mono font-medium self-start sm:self-auto">
+              <span>License: Apache-2.0</span>
+            </div>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+            Revlet is an open-source, multi-tenant enterprise IT management control plane engineered to streamline institutional cloud operations. Designed for schools, academies, and distributed enterprises, it unifies authoritative Cloudflare API v4 DNS management, custom domain email routing, and Google Workspace for Education user directory orchestration into a high-assurance control plane with zero-trust isolation.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-[11px]">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-0.5">
+              <span className="text-slate-400 font-semibold uppercase tracking-wider block text-[9px]">Framework</span>
+              <span className="font-bold text-slate-800">Next.js 15 &amp; React 19</span>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-0.5">
+              <span className="text-slate-400 font-semibold uppercase tracking-wider block text-[9px]">Language</span>
+              <span className="font-bold text-slate-800">TypeScript (Strict)</span>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-0.5">
+              <span className="text-slate-400 font-semibold uppercase tracking-wider block text-[9px]">Edge Network</span>
+              <span className="font-bold text-slate-800">Cloudflare Anycast</span>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-0.5">
+              <span className="text-slate-400 font-semibold uppercase tracking-wider block text-[9px]">Identity SDK</span>
+              <span className="font-bold text-slate-800">Google Admin SDK</span>
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* Footer */}

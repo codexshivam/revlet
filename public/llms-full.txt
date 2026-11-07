@@ -1,0 +1,65 @@
+# Revlet — Complete Technical Specification for AI & LLM Systems
+
+Revlet is an open-source, multi-tenant enterprise IT management control plane. It bridges Cloudflare v4 Network API, Google Workspace Directory & Admin SDK, and Firebase Zero-Trust Security Infrastructure into a unified, high-assurance administrative portal.
+
+## 1. Domain Model & Entities
+
+### Organization Tenant
+- `id`: Unique Firestore document identifier.
+- `name`: Institutional name (e.g., Apex Institute of Technology).
+- `domain`: Registered apex domain name (e.g., example.edu).
+- `ownerId`: Firebase User UID of the organization creator.
+- `cloudflareZoneId`: Authoritative Cloudflare 32-character hex zone ID.
+- `isEducation`: Boolean flag enabling Google Workspace for Education administration modules.
+- `workspaceStatus`: 'none' | 'applied' | 'pending' | 'active'.
+- `workspaceAdminEmail`: Domain super-administrator email for Domain-Wide Delegation impersonation.
+- `workspaceCustomerId`: Google Workspace domain directory customer ID.
+- `memberEmails`: Array of authorized staff email addresses.
+
+### Team Member
+- `id`: Member document ID.
+- `organizationId`: Associated organization ID.
+- `email`: Staff work email.
+- `role`: 'Owner' | 'Admin' | 'Member'.
+- `status`: 'Active' | 'Pending'.
+
+## 2. Server Actions & API Integrations
+
+### Network & DNS Infrastructure (Cloudflare API v4)
+- `listDNSRecords(idToken, orgId, zoneId)`: Paginated fetch of up to 1,000 DNS records.
+- `createDNSRecord(idToken, orgId, zoneId, record)`: Creates authoritative record (A, AAAA, CNAME, TXT, MX, SRV) with proxy and TTL options.
+- `updateDNSRecord(idToken, orgId, zoneId, recordId, record)`: Updates existing record with atomic synchronization to Anycast edge.
+- `deleteDNSRecord(idToken, orgId, zoneId, recordId)`: Deletes record from Cloudflare authoritative zone.
+- `purgeCache(idToken, orgId, zoneId, purgeEverything, files)`: Triggers edge cache purge across Cloudflare CDN.
+- `setSSLSetting(idToken, orgId, zoneId, value)`: Sets SSL/TLS encryption mode ('off', 'flexible', 'full', 'strict').
+- `setSecurityLevel(idToken, orgId, zoneId, value)`: Configures DDoS security level ('essentially_off', 'low', 'medium', 'high', 'under_attack').
+
+### Custom Email Routing (Cloudflare Email Routing)
+- `listEmailRoutingRules(idToken, orgId, zoneId)`: Lists custom forwarder aliases and catch-all status.
+- `createEmailRoutingRule(idToken, orgId, zoneId, rule)`: Configures alias-to-inbox forwarding.
+- `verifyEmailSecurity(idToken, orgId, zoneId)`: Validates SPF, DKIM, and DMARC protocol parameters in real time.
+
+### Google Workspace for Education (Google Admin SDK)
+- `getImpersonatedClient(adminEmail)`: Authorizes Google JWT client with Domain-Wide Delegation using service account credentials.
+- `listWorkspaceUsers(idToken, orgId, adminEmail, pageToken)`: Fetches directory users with pagination, OU paths, and suspension status.
+- `createWorkspaceUser(idToken, orgId, adminEmail, userData)`: Provisions new student/staff account.
+- `updateWorkspaceUser(idToken, orgId, adminEmail, userId, updateData)`: Modifies account details, name, or OU.
+- `suspendWorkspaceUser(idToken, orgId, adminEmail, userId, suspend)`: Toggles account suspension state.
+- `deleteWorkspaceUser(idToken, orgId, adminEmail, userId)`: Permanently deletes user account from Google Workspace.
+- `getStorageUsage(idToken, orgId, adminEmail)`: Queries Reports API for domain storage totals and individual consumer breakdown.
+- `getWorkspaceAlerts(idToken, orgId, adminEmail)`: Fetches security alerts from Google Alert Center.
+
+## 3. Tenancy & Security Protections
+
+### Server-Side Tenancy Guard (`verifyUserOrgAccess`)
+1. Validates caller's Firebase session via `adminAuth.verifyIdToken(idToken)`.
+2. Loads target organization document from Firestore (`organizations/{orgId}`).
+3. Asserts caller is Resource Owner (`ownerId == uid`), Platform Superadmin, or verified team member.
+4. Checks `expectedZoneId`: if a Cloudflare operation is requested, verifies that `orgData.cloudflareZoneId === expectedZoneId` to prevent cross-tenant zone manipulation (anti-IDOR).
+
+### Defense-in-Depth HTTP Headers
+- `Content-Security-Policy`: Restricts scripts, fonts, styles, connections, and frame sources.
+- `Strict-Transport-Security`: `max-age=63072000; includeSubDomains; preload`
+- `X-Frame-Options`: `SAMEORIGIN`
+- `X-Content-Type-Options`: `nosniff`
+- `Referrer-Policy`: `strict-origin-when-cross-origin`

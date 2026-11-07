@@ -23,12 +23,27 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL('https://app.revlet.me'),
   title: {
-    default: 'Revlet',
-    template: '%s | Revlet'
+    default: 'Revlet | Enterprise IT Management & Cloud Infrastructure Control Plane',
+    template: '%s | Revlet',
   },
-  description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, teams, and billing from one unified dashboard.',
+  description: 'Open-source enterprise multi-tenant IT management control plane. Unified orchestration for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
   applicationName: 'Revlet',
-  keywords: ['Revlet', 'IT management', 'infrastructure platform', 'DNS management', 'Google Workspace', 'enterprise dashboard', 'SaaS', 'institutional IT'],
+  keywords: [
+    'Revlet',
+    'IT Management Platform',
+    'Cloudflare DNS Management',
+    'Cloudflare API v4',
+    'Google Workspace for Education',
+    'Google Admin SDK',
+    'Domain-Wide Delegation',
+    'Custom Email Routing',
+    'SPF DKIM DMARC Validator',
+    'Multi-Tenant Control Plane',
+    'Zero-Trust Tenancy',
+    'Institutional IT Dashboard',
+    'EdTech Infrastructure',
+    'School Domain Management',
+  ],
   authors: [{ name: 'Revlet', url: 'https://revlet.me' }],
   creator: 'Revlet',
   publisher: 'Revlet',
@@ -66,24 +81,47 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: 'Revlet | Enterprise Infrastructure Dashboard',
-    description: 'Unified platform for managing DNS, email, Google Workspace, teams, and billing for institutions and businesses.',
+    title: 'Revlet | Enterprise IT Management & Cloud Infrastructure Control Plane',
+    description: 'Unified multi-tenant orchestration for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
     type: 'website',
     url: 'https://app.revlet.me',
     locale: 'en_US',
     siteName: 'Revlet',
+    images: [
+      {
+        url: '/banner.svg',
+        width: 1200,
+        height: 320,
+        alt: 'Revlet Enterprise IT Management Control Plane',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Revlet | Enterprise Infrastructure Dashboard',
-    description: 'Unified platform for managing DNS, email, Google Workspace, teams, and billing for institutions and businesses.',
+    title: 'Revlet | Enterprise IT Management & Cloud Infrastructure Control Plane',
+    description: 'Unified multi-tenant orchestration for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
     creator: '@revlet',
+    images: ['/banner.svg'],
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
   category: 'technology',
+  other: {
+    'geo.region': 'Global',
+    'geo.placename': 'Worldwide',
+    'DC.title': 'Revlet - Enterprise IT Management & Cloud Infrastructure Control Plane',
+    'DC.description': 'Unified control plane for Cloudflare DNS, Email Routing, and Google Workspace for Education.',
+    'DC.subject': 'Cloudflare DNS, Google Workspace Admin SDK, Email Routing, Multi-Tenant IT Platform',
+  },
 };
 
 // Organization entity — the brand itself, pointing to revlet.me as the main website
@@ -108,6 +146,20 @@ const organizationSchema = {
   sameAs: [
     'https://revlet.me',
     'https://app.revlet.me',
+    'https://github.com/codexshivam/revlet',
+  ],
+  areaServed: {
+    '@type': 'Place',
+    name: 'Worldwide',
+  },
+  knowsAbout: [
+    'Cloudflare DNS & Edge Infrastructure',
+    'Google Workspace for Education',
+    'Google Admin SDK',
+    'Domain-Wide Delegation',
+    'Email Routing Protocols',
+    'SPF, DKIM, and DMARC Verification',
+    'Zero-Trust Multi-Tenancy',
   ],
 };
 
@@ -120,13 +172,14 @@ const webApplicationSchema = {
   url: 'https://app.revlet.me',
   description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, teams, and billing from one unified dashboard.',
   applicationCategory: 'BusinessApplication',
-  operatingSystem: 'Any',
-  browserRequirements: 'Requires a modern web browser',
+  applicationSubCategory: 'NetworkInfrastructureManagement',
+  operatingSystem: 'All modern web browsers (Cloud Web Application)',
+  browserRequirements: 'Requires a modern web browser with JavaScript enabled',
   offers: {
     '@type': 'Offer',
     price: '0',
     priceCurrency: 'USD',
-    description: 'Free to get started',
+    description: 'Open-source software licensed under Apache-2.0',
   },
   creator: {
     '@type': 'Organization',
@@ -134,11 +187,54 @@ const webApplicationSchema = {
     name: 'Revlet',
   },
   featureList: [
-    'DNS & Domain Management',
-    'Enterprise Email Infrastructure',
-    'Google Workspace Administration',
-    'Team & Access Control',
-    'Billing & Payments',
+    'Authoritative Cloudflare DNS Management',
+    'Cloudflare Email Forwarding & Routing',
+    'SPF, DKIM, and DMARC Compliance Auditing',
+    'Google Workspace for Education User & OU Lifecycle Management',
+    'Google Drive Institutional Storage Pool Monitoring',
+    'Google Alert Center Security Event Ingestion',
+    'Batch CSV User Ingestion',
+    'Multi-Tenant Zero-Trust Isolation',
+  ],
+};
+
+// FAQPage schema — optimizes indexing for Google Search Generative Experience (SGE) & AI Answer Engines (Perplexity, ChatGPT, Claude)
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    {
+      '@type': 'Question',
+      name: 'What is Revlet?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Revlet is an open-source, multi-tenant Enterprise IT Management Control Plane designed for educational institutions and distributed organizations. It unifies Cloudflare DNS, Email Routing, and Google Workspace for Education administration into a single pane of glass.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'How does Revlet manage Google Workspace for Education?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Revlet integrates with the Google Workspace Admin SDK using a Google Cloud Service Account configured with Domain-Wide Delegation (DWD). It enables administrators to provision users, manage Organizational Units (OUs), monitor Google Drive storage quotas, and ingest security alerts directly without logging into the Google Admin Console.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'How does Revlet interact with Cloudflare DNS and Email Routing?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Revlet uses Cloudflare API v4 with organization-scoped bearer tokens to execute atomic CRUD operations on DNS records (A, AAAA, CNAME, MX, TXT, SRV), toggle CDN proxying, purge edge caches, configure SSL/TLS encryption, and manage custom email forwarding aliases.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Is Revlet secure for multi-tenant organizations?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Yes. Revlet enforces a Defense-in-Depth security model featuring Server Actions tenancy verification (verifyUserOrgAccess) to prevent Insecure Direct Object References (IDOR), granular Firestore and Firebase Storage security rules, and strict Content Security Policy (CSP) and HSTS headers.',
+      },
+    },
   ],
 };
 
@@ -202,6 +298,7 @@ export default function RootLayout({
         <JsonLd data={webApplicationSchema} />
         <JsonLd data={webSiteSchema} />
         <JsonLd data={breadcrumbSchema} />
+        <JsonLd data={faqSchema} />
       </head>
       <body className="font-body antialiased">
         <DevToolsGuard />

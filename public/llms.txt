@@ -1,0 +1,32 @@
+# Revlet
+
+> Enterprise Multi-Tenant IT Management & Cloud Infrastructure Control Plane
+
+Revlet is an open-source, multi-tenant cloud control plane engineered for educational institutions, academies, and distributed organizations. It unifies Cloudflare API v4, Google Workspace Directory & Admin SDK, and Firebase Zero-Trust Security Infrastructure into a high-assurance single pane of glass.
+
+## Core Capabilities
+
+- **Cloudflare DNS Management**: Full lifecycle management of authoritative DNS records (A, AAAA, CNAME, MX, TXT, SRV) directly via Cloudflare API v4 with real-time Anycast edge deployment and proxy toggling.
+- **Custom Email Routing & Domain Security**: Instant alias creation forwarding domain mail to verified destination inboxes; automated audit of SPF, DKIM, and DMARC protocol parameters.
+- **Edge Infrastructure Security**: One-click Cloudflare edge cache purging (everything or targeted URLs), SSL/TLS encryption mode configuration (Flexible, Full, Strict), and DDoS protection sensitivity adjustment.
+- **Google Workspace for Education Administration**: Centralized directory management using Domain-Wide Delegation (DWD); provision, suspend, restore, and delete user accounts; organize users into Organizational Units (OUs); batch CSV import; monitor aggregate Google Drive storage pools and Google Alert Center security events.
+- **Multi-Tenant Zero-Trust Tenancy**: Cryptographic session verification via Firebase ID tokens; Server Action authorization guard (`verifyUserOrgAccess`) preventing Insecure Direct Object References (IDOR) and cross-tenant zone tampering.
+
+## Architecture & Technology Stack
+
+- **Framework**: Next.js 15 (App Router, Turbopack, React 19)
+- **Language**: TypeScript (Strict Mode)
+- **Styling**: Tailwind CSS + Radix UI accessible primitives
+- **Network & DNS**: Cloudflare API v4
+- **Directory SDK**: Google Workspace Admin SDK (`googleapis`) via Domain-Wide Delegation
+- **Database & Authentication**: Firebase Authentication, Cloud Firestore, Firebase Storage
+- **License**: Apache-2.0
+
+## Key URLs & Resources
+
+- Web Application: https://app.revlet.me
+- Documentation & Source Code: https://github.com/codexshivam/revlet
+- Issue Tracker: https://github.com/codexshivam/revlet/issues
+- Security Policy: https://github.com/codexshivam/revlet/blob/main/SECURITY.md
+- Contributing Guide: https://github.com/codexshivam/revlet/blob/main/CONTRIBUTING.md
+- Code of Conduct: https://github.com/codexshivam/revlet/blob/main/CODE_OF_CONDUCT.md

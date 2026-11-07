@@ -8,7 +8,6 @@ import {
   Users, 
   Settings, 
   LayoutDashboard,
-  CreditCard,
   Database,
   Mail,
   GraduationCap,
@@ -32,9 +31,8 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
 
   const isWorkspaceActive = activeOrg?.workspaceStatus === 'active'
 
-  const navItems: NavItem[] = [
+  const mainNavItems: NavItem[] = [
     { title: "Account Home", icon: LayoutDashboard, href: "/account/home" },
-    { title: "Manage Payments", icon: CreditCard, href: "/account/billing" },
     { title: "DNS Management", icon: Globe, href: "/services/dns" },
     { title: "Website Management", icon: Database, href: "/services/website" },
     { title: "Email Service", icon: Mail, href: "/services/email" },
@@ -47,6 +45,9 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
       { title: "Deactivated Users", icon: UserMinus, href: "/services/workspace/deactivated" },
       { title: "Alumni Manager", icon: GraduationCap, href: "/services/workspace/alumni" },
     ] : []),
+  ]
+
+  const bottomNavItems: NavItem[] = [
     { title: "Team Management", icon: Users, href: "/management/team" },
     { title: "Settings", icon: Settings, href: "/management/settings" },
   ]
@@ -64,8 +65,8 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3.5 custom-scrollbar pb-6 space-y-1">
-        {navItems.map((item, idx) => {
+      <nav className="flex-1 overflow-y-auto px-3.5 custom-scrollbar pb-3 space-y-1">
+        {mainNavItems.map((item, idx) => {
           const isActive = pathname === item.href
           
           return (
@@ -89,6 +90,33 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
           )
         })}
       </nav>
+
+      {/* Bottom Pinned Items: Team Management & Settings */}
+      <div className="p-3.5 pt-3 border-t border-slate-200/80 space-y-1 bg-slate-50 shrink-0">
+        {bottomNavItems.map((item, idx) => {
+          const isActive = pathname === item.href
+          
+          return (
+            <Link
+              key={idx}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-md text-xs font-semibold tracking-wide transition-all group relative",
+                isActive 
+                  ? "bg-white text-[#191C1E] shadow-sm border border-slate-200/80" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-[#191C1E]"
+              )}
+            >
+              <item.icon className={cn(
+                "w-3.5 h-3.5 transition-colors shrink-0",
+                isActive ? "text-[#191C1E]" : "text-slate-400 group-hover:text-slate-600"
+              )} />
+              <span className="truncate">{item.title}</span>
+              {item.badge}
+            </Link>
+          )
+        })}
+      </div>
     </aside>
   )
 }

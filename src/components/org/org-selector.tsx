@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Check, ChevronsUpDown, School, Loader2, GraduationCap, Plus } from "lucide-react"
+import { Check, ChevronsUpDown, Building2, Loader2, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -53,10 +53,8 @@ export function OrgSelector({
           <div className="flex items-center gap-2 truncate">
             {loading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
-            ) : selected?.isEducation ? (
-              <GraduationCap className="h-3.5 w-3.5 text-blue-600 shrink-0 animate-in fade-in zoom-in duration-300" />
             ) : (
-              <School className="h-3.5 w-3.5 text-slate-500 shrink-0 animate-in fade-in zoom-in duration-300" />
+              <Building2 className="h-3.5 w-3.5 text-slate-600 shrink-0" />
             )}
             <span className="truncate text-slate-800">
               {selected ? selected.name : (loading ? "Syncing..." : "Select Organization")}
@@ -91,20 +89,25 @@ export function OrgSelector({
                         : "text-slate-700 hover:bg-slate-50 hover:text-slate-900 data-[selected=true]:bg-slate-50 data-[selected=true]:text-slate-900"
                     )}
                   >
-                    <Check
+                    <Building2
                       className={cn(
                         "mr-2 h-3.5 w-3.5 shrink-0",
-                        isSelected ? "text-white opacity-100" : "text-primary opacity-0"
+                        isSelected ? "text-white" : "text-slate-400"
                       )}
                     />
-                    <div className="flex flex-col truncate">
+                    <div className="flex flex-col truncate flex-1">
                       <span className={cn("font-bold truncate", isSelected ? "text-white" : "text-slate-800")}>
                         {inst.name}
                       </span>
-                      <span className={cn("text-[10px] truncate", isSelected ? "text-blue-100/90" : "text-slate-400")}>
-                        {inst.domain}
-                      </span>
+                      {inst.domain && (
+                        <span className={cn("text-[10px] truncate", isSelected ? "text-blue-100/90" : "text-slate-400")}>
+                          {inst.domain}
+                        </span>
+                      )}
                     </div>
+                    {isSelected && (
+                      <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-white" />
+                    )}
                   </CommandItem>
                 )
               })}

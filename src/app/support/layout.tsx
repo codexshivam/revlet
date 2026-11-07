@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Priority Support Desk',
+  title: 'Help & Support',
 };
 
 export default function SupportLayout({ children }: { children: React.ReactNode }) {

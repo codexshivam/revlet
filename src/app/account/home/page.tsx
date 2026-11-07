@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -146,6 +147,8 @@ export default function AccountHomePage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditNameOpen, setIsEditNameOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isSignOutOpen, setIsSignOutOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
   const [deleteConfirmName, setDeleteConfirmName] = useState("")
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -420,11 +423,17 @@ export default function AccountHomePage() {
   }
 
   const handleLogout = async () => {
+    setIsLoggingOut(true)
     try {
       await signOut(auth)
+      toast({
+        title: "Signed Out",
+        description: "You have been signed out of your account."
+      })
       router.push("/login")
     } catch {
       toast({ variant: "destructive", title: "Sign Out Failed", description: "Please try again." })
+      setIsLoggingOut(false)
     }
   }
 
@@ -461,7 +470,7 @@ export default function AccountHomePage() {
                     <span className="text-xs">Update account name</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="gap-2 py-2.5 text-destructive cursor-pointer">
+                  <DropdownMenuItem onClick={() => setIsSignOutOpen(true)} className="gap-2 py-2.5 text-destructive cursor-pointer">
                     <LogOut className="w-4 h-4" />
                     <span className="text-xs">Logout session</span>
                   </DropdownMenuItem>
@@ -880,6 +889,33 @@ export default function AccountHomePage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {/* Sign Out Confirmation Dialog */}
+          <AlertDialog open={isSignOutOpen} onOpenChange={setIsSignOutOpen}>
+            <AlertDialogContent className="bg-white border-slate-200 max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-lg font-bold text-slate-900">
+                  Sign out of Revlet?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-sm text-slate-500 leading-relaxed">
+                  Are you sure you want to sign out? You will need to log back in with your credentials to access your organizations and services.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="gap-2 sm:gap-2 pt-2">
+                <AlertDialogCancel disabled={isLoggingOut} className="border-slate-200 text-slate-700 hover:bg-slate-50">
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="bg-red-600 hover:bg-red-700 text-white font-medium gap-2"
+                >
+                  {isLoggingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                  <span>Sign Out</span>
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {/* Deletion Confirmation Dialog */}
           <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

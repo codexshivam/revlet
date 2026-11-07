@@ -4,13 +4,9 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
-  ShieldCheck,
   Check,
   Loader2,
   RefreshCw,
-  Copy,
-  CheckCheck,
-  Code2,
   AlertTriangle,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
@@ -30,10 +26,6 @@ export function DdosProtectionTab({ zoneId, domain, orgId, getIdToken }: DdosPro
   const [loading, setLoading] = useState(false)
   const [securityLevel, setSecurityLevel] = useState<string>("medium")
   const [isUpdatingSecurity, setIsUpdatingSecurity] = useState(false)
-
-  // Turnstile code snippets copy state
-  const [activeSnippetTab, setActiveSnippetTab] = useState<"react" | "html" | "backend">("react")
-  const [copiedSnippet, setCopiedSnippet] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!zoneId || !orgId) return
@@ -91,78 +83,6 @@ export function DdosProtectionTab({ zoneId, domain, orgId, getIdToken }: DdosPro
     }
   }
 
-  const reactSnippet = `// Install: npm install @marsidev/react-turnstile
-import { Turnstile } from '@marsidev/react-turnstile'
-
-export function SignupForm() {
-  const handleVerify = (token: string) => {
-    // Send token with form submission to your backend API
-    console.log("Turnstile Token:", token)
-  }
-
-  return (
-    <form action="/api/signup" method="POST">
-      <input name="email" type="email" placeholder="you@domain.com" required />
-      <Turnstile
-        siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-        onSuccess={handleVerify}
-        options={{ theme: 'light', size: 'flexible' }}
-      />
-      <button type="submit">Sign Up</button>
-    </form>
-  )
-}`
-
-  const htmlSnippet = `<!-- Add Turnstile API script in your <head> or before </body> -->
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-
-<!-- Add Turnstile widget container to your form -->
-<form action="/login" method="POST">
-  <input type="text" name="username" required />
-  <input type="password" name="password" required />
-  
-  <div class="cf-turnstile" data-sitekey="YOUR_SITE_KEY" data-theme="light"></div>
-  
-  <button type="submit">Log In</button>
-</form>`
-
-  const backendSnippet = `// app/api/verify-turnstile/route.ts
-import { NextResponse } from 'next/server'
-
-export async function POST(req: Request) {
-  const { turnstileToken } = await req.json()
-  const secretKey = process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY!
-
-  const formData = new FormData()
-  formData.append('secret', secretKey)
-  formData.append('response', turnstileToken)
-
-  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST',
-    body: formData,
-  })
-
-  const outcome = await res.json()
-  if (outcome.success) {
-    return NextResponse.json({ verified: true })
-  } else {
-    return NextResponse.json({ verified: false, errors: outcome['error-codes'] }, { status: 400 })
-  }
-}`
-
-  const copyCurrentSnippet = () => {
-    const text =
-      activeSnippetTab === "react"
-        ? reactSnippet
-        : activeSnippetTab === "html"
-        ? htmlSnippet
-        : backendSnippet
-    navigator.clipboard.writeText(text)
-    setCopiedSnippet(true)
-    toast({ title: "Copied Code Snippet", description: "Ready to paste into your codebase." })
-    setTimeout(() => setCopiedSnippet(false), 2000)
-  }
-
   return (
     <div className="space-y-6">
       {/* 1. Emergency Under Attack Shield */}
@@ -179,23 +99,23 @@ export async function POST(req: Request) {
               &quot;I&apos;m Under Attack!&quot; Emergency Shield
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Instantly deploys cryptographic JavaScript challenges to every incoming visitor across all edge points before traffic hits your server.
+              Mitigate aggressive Layer 7 HTTP floods in real time across the global edge network.
             </CardDescription>
           </div>
-
           <div className="flex items-center gap-2 shrink-0">
             <Button
-              variant={securityLevel === "under_attack" ? "destructive" : "outline"}
+              variant={securityLevel === "under_attack" ? "destructive" : "default"}
+              size="sm"
               onClick={() =>
                 handleUpdateSecurityLevel(
                   securityLevel === "under_attack" ? "medium" : "under_attack"
                 )
               }
               disabled={isUpdatingSecurity}
-              className={`font-bold text-xs h-9 px-4 rounded-lg gap-2 ${
+              className={`font-semibold text-xs h-9 px-4 rounded-lg shadow-xs transition-colors gap-1.5 ${
                 securityLevel === "under_attack"
                   ? "bg-red-600 hover:bg-red-700 text-white"
-                  : "border-red-200 text-red-700 hover:bg-red-50 hover:text-red-900"
+                  : "bg-slate-900 hover:bg-slate-800 text-white"
               }`}
             >
               {isUpdatingSecurity && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -326,71 +246,6 @@ export async function POST(req: Request) {
           </div>
         </Card>
       </div>
-
-      {/* 4. Turnstile Bot Defense In-Panel Integration */}
-      <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
-        <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900">
-              Turnstile Smart Bot Defense
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-500">
-              Replace annoying puzzle CAPTCHAs with invisible, privacy-first bot mitigation directly on your forms.
-            </CardDescription>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={copyCurrentSnippet}
-            className="border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-black text-xs h-8 gap-1.5 rounded-lg shrink-0"
-          >
-            {copiedSnippet ? (
-              <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
-            )}
-            <span>{copiedSnippet ? "Copied" : "Copy Integration Code"}</span>
-          </Button>
-        </CardHeader>
-
-        <CardContent className="p-5 sm:p-6 space-y-4">
-          {/* Subtabs for Snippets */}
-          <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-            {[
-              { id: "react", label: "Next.js / React (Client)" },
-              { id: "html", label: "Vanilla HTML / Script" },
-              { id: "backend", label: "Next.js API Route (Server Verify)" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveSnippetTab(tab.id as any)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                  activeSnippetTab === tab.id
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-black"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="relative rounded-xl overflow-hidden bg-slate-950 p-4 font-mono text-xs text-slate-200 border border-slate-800">
-            <pre className="overflow-x-auto whitespace-pre leading-relaxed text-[11px]">
-              {activeSnippetTab === "react" && reactSnippet}
-              {activeSnippetTab === "html" && htmlSnippet}
-              {activeSnippetTab === "backend" && backendSnippet}
-            </pre>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
-            <span className="font-semibold text-slate-800">Free &amp; Unlimited Verification:</span>
-            <p className="text-slate-500 text-[11px] mt-0.5">
-              Turnstile never charges for verification volume and has zero user puzzle frustration, keeping your signup conversion rate high.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

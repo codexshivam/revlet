@@ -956,21 +956,23 @@ export default function AccountHomePage() {
             <AlertDialogContent className="max-w-md">
               <AlertDialogHeader>
                 <AlertDialogTitle className="text-red-600 font-headline font-bold text-lg">Confirm Organization Deletion</AlertDialogTitle>
-                <AlertDialogDescription className="space-y-4 text-left">
-                  <p className="font-bold text-slate-900 text-sm">
-                    Are you absolutely sure? This will permanently remove &quot;{editingOrg?.name}&quot;.
-                  </p>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    All DNS records, website configurations, and team member access for this organization will be permanently decommissioned. This action cannot be undone.
-                  </p>
-                  <div className="space-y-2 pt-2">
-                    <Label className="text-xs font-semibold text-slate-700">Type &quot;{editingOrg?.name}&quot; to confirm:</Label>
-                    <Input 
-                      placeholder={editingOrg?.name || "Organization name"} 
-                      value={deleteConfirmName}
-                      onChange={(e) => setDeleteConfirmName(e.target.value)}
-                      className="border-red-200 focus-visible:ring-red-500 h-10 text-xs px-3"
-                    />
+                <AlertDialogDescription asChild>
+                  <div className="space-y-4 text-left text-sm text-muted-foreground">
+                    <p className="font-bold text-slate-900 text-sm">
+                      Are you absolutely sure? This will permanently remove &quot;{editingOrg?.name}&quot;.
+                    </p>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      All DNS records, website configurations, and team member access for this organization will be permanently decommissioned. This action cannot be undone.
+                    </p>
+                    <div className="space-y-2 pt-2">
+                      <Label className="text-xs font-semibold text-slate-700">Type &quot;{editingOrg?.name}&quot; to confirm:</Label>
+                      <Input 
+                        placeholder={editingOrg?.name || "Organization name"} 
+                        value={deleteConfirmName}
+                        onChange={(e) => setDeleteConfirmName(e.target.value)}
+                        className="border-red-200 focus-visible:ring-red-500 h-10 text-xs px-3"
+                      />
+                    </div>
                   </div>
                 </AlertDialogDescription>
               </AlertDialogHeader>

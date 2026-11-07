@@ -480,6 +480,21 @@ export async function deleteOrganization(idToken: string, orgId: string) {
   </thead>
   <tbody>
     <tr>
+      <td><strong>🛡️ Security Policy</strong></td>
+      <td>Vulnerability disclosure guidelines, multi-tenant threat model, IDOR protection, and security response SLAs.</td>
+      <td><a href="SECURITY.md"><strong>SECURITY.md</strong></a></td>
+    </tr>
+    <tr>
+      <td><strong>🤝 Contributing Guidelines</strong></td>
+      <td>Contribution workflows, coding standards, Conventional Commits specification, and local testing instructions.</td>
+      <td><a href="CONTRIBUTING.md"><strong>CONTRIBUTING.md</strong></a></td>
+    </tr>
+    <tr>
+      <td><strong>📜 Code of Conduct</strong></td>
+      <td>Community standards, pledge, and enforcement responsibilities based on Contributor Covenant 2.1.</td>
+      <td><a href="CODE_OF_CONDUCT.md"><strong>CODE_OF_CONDUCT.md</strong></a></td>
+    </tr>
+    <tr>
       <td><strong>🔒 Firestore Security Rules</strong></td>
       <td>Granular security rules governing collection access, tenant isolation, owner mutations, and role-based access control.</td>
       <td><a href="firestore.rules"><strong>firestore.rules</strong></a></td>

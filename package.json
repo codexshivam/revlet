@@ -1,7 +1,27 @@
 {
   "name": "revlet-it-manager",
   "version": "0.1.0",
-  "private": true,
+  "description": "Open-source enterprise multi-tenant IT management control plane for Cloudflare DNS, Email Routing, and Google Workspace for Education.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codexshivam/revlet.git"
+  },
+  "homepage": "https://github.com/codexshivam/revlet#readme",
+  "bugs": {
+    "url": "https://github.com/codexshivam/revlet/issues"
+  },
+  "keywords": [
+    "revlet",
+    "it-management",
+    "cloudflare-dns",
+    "email-routing",
+    "google-workspace",
+    "google-admin-sdk",
+    "multi-tenant",
+    "zero-trust",
+    "nextjs"
+  ],
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",

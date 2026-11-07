@@ -553,10 +553,6 @@ export default function EmailRoutingPage() {
             <div className="space-y-12 text-center flex flex-col items-center">
               {/* Value Proposition Banner */}
               <div className="space-y-4 flex flex-col items-center max-w-2xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-100 bg-blue-50/50 text-[10px] font-bold text-primary uppercase tracking-widest shadow-sm animate-pulse">
-                  <Sparkles className="w-3 h-3 text-primary" />
-                  The Best Domain Email Service
-                </div>
                 <h2 className="text-2xl md:text-3xl font-headline font-bold text-slate-900 leading-tight">
                   Get Professional Email for Your Domain
                 </h2>

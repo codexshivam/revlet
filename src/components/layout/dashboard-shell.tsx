@@ -46,22 +46,10 @@ export function DashboardShell({
       <div className="flex-1 flex flex-col min-w-0 bg-white h-screen overflow-hidden">
         <TopHeader />
         <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#F8FAFC]">
-          <div className={cn("p-4 md:p-8 max-w-6xl mx-auto space-y-6 md:space-y-8 min-h-[calc(100vh-3.5rem)] flex flex-col justify-between", className)}>
+          <div className={cn("p-4 md:p-8 max-w-6xl mx-auto space-y-6 md:space-y-8 min-h-[calc(100vh-3.5rem)] flex flex-col", className)}>
             <div className="space-y-6 md:space-y-8 flex-1">
               {children}
             </div>
-
-            {/* Global Brand Footer */}
-            <footer className="mt-16 pt-8 pb-6 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 select-none">
-              <div className="flex items-center gap-2 text-slate-600">
-                <span className="font-semibold text-slate-700">Revlet</span>
-                <span className="text-slate-400">|</span>
-                <span className="text-slate-500">Enterprise Infrastructure Platform</span>
-              </div>
-              <div className="text-xs text-slate-500 font-normal">
-                <span>&copy; 2026 Revlet Platforms Private Limited</span>
-              </div>
-            </footer>
           </div>
         </main>
       </div>

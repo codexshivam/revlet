@@ -22,7 +22,7 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL('https://app.revlet.me'),
   title: {
-    default: 'Revlet | Enterprise Infrastructure Platform',
+    default: 'Revlet',
     template: '%s | Revlet'
   },
   description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, teams, and billing from one unified dashboard.',

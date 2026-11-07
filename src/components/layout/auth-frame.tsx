@@ -66,7 +66,7 @@ export function AuthFrame({ children, className }: AuthFrameProps) {
 
         <div className="text-center sm:text-right">
           <span>Powered by </span>
-          <span className="font-semibold text-slate-800">Revlet Platforms Private Limited</span>
+          <span className="font-semibold text-slate-800">Revlet</span>
         </div>
       </footer>
 

@@ -537,12 +537,8 @@ export default function GoogleWorkspacePage() {
             <div className="space-y-12 text-center flex flex-col items-center">
               {/* Value Proposition Banner */}
               <div className="space-y-4 flex flex-col items-center max-w-2xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-100 bg-blue-50/50 text-[10px] font-bold text-primary uppercase tracking-widest shadow-sm animate-pulse">
-                  <Sparkles className="w-3 h-3 text-primary" />
-                  Google Workspace for Education
-                </div>
                 <h2 className="text-2xl md:text-3xl font-headline font-bold text-slate-900 leading-tight">
-                  Centralized Management for Your School Domain
+                  Centralized Google Workspace
                 </h2>
                 <p className="text-slate-500 text-xs md:text-sm leading-relaxed max-w-xl mx-auto">
                   Manage users, monitor storage, track security alerts, and control user types — all from one powerful dashboard connected to your Google Workspace for Education instance.
@@ -608,7 +604,7 @@ export default function GoogleWorkspacePage() {
                   className="font-bold px-10 h-11 shadow-md shadow-primary/10 text-xs group bg-slate-900 hover:bg-black text-white rounded-lg transition-all"
                 >
                   <GraduationCap className="w-4 h-4 mr-2 group-hover:rotate-12 transition-transform" />
-                  Apply for Google Workspace
+                  Connect Google Workspace Account
                 </Button>
               </div>
 
@@ -765,7 +761,7 @@ export default function GoogleWorkspacePage() {
                         <div className="space-y-1">
                           <h5 className="font-bold text-slate-800 font-headline">Submit Dashboard Activation</h5>
                           <p className="text-slate-500 font-medium leading-relaxed">
-                            Click the <strong className="text-slate-700">Apply for Google Workspace</strong> button above, enter your domain&apos;s <strong className="text-slate-700">Super Admin Email Address</strong> (e.g. <code className="font-mono text-slate-600">admin@yourdomain.edu</code>), and click <strong className="text-slate-700">Submit</strong>.
+                            Click the <strong className="text-slate-700">Connect Google Workspace Account</strong> button above, enter your domain&apos;s <strong className="text-slate-700">Super Admin Email Address</strong> (e.g. <code className="font-mono text-slate-600">admin@yourdomain.edu</code>), and click <strong className="text-slate-700">Submit</strong>.
                           </p>
                         </div>
                       </div>
@@ -1212,7 +1208,7 @@ export default function GoogleWorkspacePage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-headline font-bold text-slate-900">
-              Apply for Google Workspace
+              Connect Google Workspace Account
             </DialogTitle>
             <p className="text-xs text-slate-500 leading-relaxed font-medium mt-1">
               Enter the super admin email address of your Google Workspace for Education domain. We&apos;ll use this to authenticate via Domain-Wide Delegation.

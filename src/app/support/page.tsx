@@ -244,7 +244,7 @@ export default function SupportPage() {
 
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-slate-100">
                 <p className="text-[10px] text-slate-400 font-medium leading-none text-center sm:text-left">
-                  Managed by Revlet Platform Private Limited.
+                  Managed by Revlet.
                 </p>
                 <Button 
                   onClick={handleSubmitTicket} 

@@ -84,7 +84,7 @@ export const metadata: Metadata = {
     title: 'Revlet | Enterprise IT Management & Cloud Infrastructure Control Plane',
     description: 'Unified multi-tenant orchestration for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
     type: 'website',
-    url: 'https://app.revlet.me',
+    url: 'https://revlet.me',
     locale: 'en_US',
     siteName: 'Revlet',
     images: [
@@ -133,7 +133,7 @@ const organizationSchema = {
   url: 'https://revlet.me',
   logo: {
     '@type': 'ImageObject',
-    url: 'https://app.revlet.me/favicon-192x192.png',
+    url: 'https://revlet.me/favicon-192x192.png',
     width: 192,
     height: 192,
   },
@@ -145,7 +145,6 @@ const organizationSchema = {
   },
   sameAs: [
     'https://revlet.me',
-    'https://app.revlet.me',
     'https://github.com/codexshivam/revlet',
   ],
   areaServed: {
@@ -167,9 +166,9 @@ const organizationSchema = {
 const webApplicationSchema = {
   '@context': 'https://schema.org',
   '@type': 'WebApplication',
-  '@id': 'https://app.revlet.me/#application',
+  '@id': 'https://revlet.me/#application',
   name: 'Revlet Dashboard',
-  url: 'https://app.revlet.me',
+  url: 'https://revlet.me',
   description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, and teams from one unified dashboard.',
   applicationCategory: 'BusinessApplication',
   applicationSubCategory: 'NetworkInfrastructureManagement',
@@ -339,6 +338,13 @@ const webSiteSchema = {
       url: 'https://revlet.me/services/dns',
       name: 'DNS Management',
       description: 'Authoritative Cloudflare API v4 DNS records management.',
+    },
+    {
+      '@type': 'WebPage',
+      '@id': 'https://revlet.me/services/email#webpage',
+      url: 'https://revlet.me/services/email',
+      name: 'Custom Email Routing',
+      description: 'Configure custom domain forwarder aliases and inspect real-time SPF, DKIM, and DMARC parameters.',
     },
     {
       '@type': 'WebPage',

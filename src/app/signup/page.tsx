@@ -76,15 +76,6 @@ export default function SignupPage() {
     }
   }, [user, authLoading, router, step, createdUserData, db])
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
-        <div className="font-bold text-sm uppercase tracking-widest text-slate-900 font-headline animate-pulse">
-          REVLET
-        </div>
-      </div>
-    )
-  }
 
   // Handle Step 1: Create User in Firebase Auth and Firestore
   const handleUserSignup = async (e: React.FormEvent) => {

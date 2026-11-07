@@ -38,7 +38,8 @@ export default function LoginPage() {
     }
   }, [user, authLoading, router])
 
-  if (authLoading || user) {
+  // Only show the redirecting state on the client if an authenticated user is confirmed
+  if (user) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
         <div className="font-bold text-sm uppercase tracking-widest text-slate-900 font-headline animate-pulse">

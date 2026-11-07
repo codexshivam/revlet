@@ -19,6 +19,7 @@ import { toast } from "@/hooks/use-toast"
 import { errorEmitter } from '@/firebase/error-emitter'
 import { FirestorePermissionError } from '@/firebase/errors'
 import { cn } from "@/lib/utils"
+import { PublicSupportView } from "@/components/public/public-support-view"
 
 export default function SupportPage() {
   const { user, loading: authLoading } = useUser()
@@ -162,15 +163,8 @@ export default function SupportPage() {
     }
   }
 
-  if (authLoading) {
-    return (
-      <DashboardShell>
-        <div className="flex flex-col items-center justify-center h-96 gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading Support Center...</p>
-        </div>
-      </DashboardShell>
-    )
+  if (!user) {
+    return <PublicSupportView />
   }
 
   return (

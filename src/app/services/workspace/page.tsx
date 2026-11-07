@@ -22,6 +22,7 @@ import { useUser, useFirestore } from "@/firebase"
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore"
 import Link from "next/link"
 import { useActiveOrg } from "@/hooks/use-active-org"
+import { PublicServiceShowcase } from "@/components/public/public-service-showcase"
 import {
   Loader2,
   Globe,
@@ -448,6 +449,70 @@ export default function GoogleWorkspacePage() {
     Object.values(ouCounts).every((c) => c.total === 0)
 
   const workspaceStatus = selectedOrg?.workspaceStatus || "none"
+
+  // ─── Unauthenticated / Public SSR Showcase ──────────────────────────────
+
+  if (!user) {
+    return (
+      <PublicServiceShowcase
+        badge="Google Workspace for Education"
+        title="Google Workspace for Education Management Control Plane"
+        description="Centralized administration for school domains, automated user directory lifecycle provisioning, Google Drive storage pool monitoring, and security incident tracking."
+        currentPath="/services/workspace"
+        features={[
+          {
+            title: "Domain-Wide Delegation",
+            description: "Server-to-server Google Admin SDK orchestration using secure GCP service accounts with scoped permissions.",
+            icon: <ShieldAlert className="w-5 h-5" />,
+          },
+          {
+            title: "Directory Lifecycle",
+            description: "Automated student, faculty, and alumni onboarding with bulk CSV ingestion and organizational unit (OU) hierarchy.",
+            icon: <Users className="w-5 h-5" />,
+          },
+          {
+            title: "Storage Pool Monitoring",
+            description: "Track institutional pooled Google Drive storage capacity, individual quotas, and threshold alerts in real-time.",
+            icon: <HardDrive className="w-5 h-5" />,
+          },
+          {
+            title: "Alert Center Auditing",
+            description: "Real-time visibility into high-severity security notifications, phishing attacks, and suspicious device activities.",
+            icon: <Sparkles className="w-5 h-5" />,
+          },
+        ]}
+        previewComponent={
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-indigo-600" />
+                <span className="text-xs font-bold text-slate-900">Institutional Domain: school.edu</span>
+                <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200">DWD Active</Badge>
+              </div>
+              <span className="text-xs text-slate-500 font-mono">Google Admin SDK Linked</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Directory Users</span>
+                <span className="text-2xl font-bold font-headline text-slate-900 mt-1 block">1,420</span>
+                <span className="text-[11px] text-emerald-600 font-medium">Students, Faculty &amp; Staff</span>
+              </div>
+              <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pooled Drive Storage</span>
+                <span className="text-2xl font-bold font-headline text-slate-900 mt-1 block">4.2 TB <span className="text-xs font-normal text-slate-400">/ 10 TB</span></span>
+                <span className="text-[11px] text-slate-500 font-medium">42% Quota Utilized</span>
+              </div>
+              <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Security Posture</span>
+                <span className="text-2xl font-bold font-headline text-emerald-600 mt-1 block">Healthy</span>
+                <span className="text-[11px] text-slate-500 font-medium">0 Critical Alert Center Events</span>
+              </div>
+            </div>
+          </div>
+        }
+      />
+    )
+  }
 
   // ─── Loading State ──────────────────────────────────────────────────────
 

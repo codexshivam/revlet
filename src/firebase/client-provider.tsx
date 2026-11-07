@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { initializeFirebase } from './index';
 import { FirebaseProvider } from './provider';
 import { FirebaseApp } from 'firebase/app';
@@ -10,18 +9,11 @@ import { Firestore } from 'firebase/firestore';
 import { OrgProvider } from '@/hooks/use-active-org';
 
 export function FirebaseClientProvider({ children }: { children: React.ReactNode }) {
-  const [instances, setInstances] = useState<{
+  const [instances] = useState<{
     app: FirebaseApp;
     auth: Auth;
     db: Firestore;
-  } | null>(null);
-
-  useEffect(() => {
-    const { app, auth, db } = initializeFirebase();
-    setInstances({ app, auth, db });
-  }, []);
-
-  if (!instances) return null;
+  }>(() => initializeFirebase());
 
   return (
     <FirebaseProvider app={instances.app} auth={instances.auth} db={instances.db}>

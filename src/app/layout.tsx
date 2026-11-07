@@ -170,7 +170,7 @@ const webApplicationSchema = {
   '@id': 'https://app.revlet.me/#application',
   name: 'Revlet Dashboard',
   url: 'https://app.revlet.me',
-  description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, teams, and billing from one unified dashboard.',
+  description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, and teams from one unified dashboard.',
   applicationCategory: 'BusinessApplication',
   applicationSubCategory: 'NetworkInfrastructureManagement',
   operatingSystem: 'All modern web browsers (Cloud Web Application)',

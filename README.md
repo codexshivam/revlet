@@ -120,7 +120,7 @@ Revlet provides a comprehensive administrative ecosystem organized into logical 
  │ • Proxy Status (CDN) │  │ • Destination Inboxes│  │ • OU Category Trees  │  │ • Member Invitations │
  │ • TTL Adjustments    │  │ • SPF/DKIM Auditor   │  │ • Storage Tracking   │  │ • Audit Event Log    │
  │ • Edge Cache Purge   │  │ • DMARC Enforcement  │  │ • Security Alerts    │  │ • Safe Decommission │
- │ • SSL & DDoS Modes   │  │ • Catch-all Routing  │  │ • Batch CSV Ingest   │  │ • Billing & Receipts │
+ │ • SSL & DDoS Modes   │  │ • Catch-all Routing  │  │ • Batch CSV Ingest   │  │ • Access Directory   │
  └──────────────────────┘  └──────────────────────┘  └──────────────────────┘  └──────────────────────┘
 ```
 

@@ -7,6 +7,7 @@ import { FirebaseProvider } from './provider';
 import { FirebaseApp } from 'firebase/app';
 import { Auth } from 'firebase/auth';
 import { Firestore } from 'firebase/firestore';
+import { OrgProvider } from '@/hooks/use-active-org';
 
 export function FirebaseClientProvider({ children }: { children: React.ReactNode }) {
   const [instances, setInstances] = useState<{
@@ -24,7 +25,9 @@ export function FirebaseClientProvider({ children }: { children: React.ReactNode
 
   return (
     <FirebaseProvider app={instances.app} auth={instances.auth} db={instances.db}>
-      {children}
+      <OrgProvider>
+        {children}
+      </OrgProvider>
     </FirebaseProvider>
   );
 }

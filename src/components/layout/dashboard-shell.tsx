@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
-import { OrgProvider } from "@/hooks/use-active-org"
 
 export function DashboardShell({ 
   children, 
@@ -42,20 +41,18 @@ export function DashboardShell({
   }
 
   return (
-    <OrgProvider>
-      <div className="h-screen w-full flex bg-white overflow-hidden">
-        <RecursiveSidebar />
-        <div className="flex-1 flex flex-col min-w-0 bg-white h-screen overflow-hidden">
-          <TopHeader />
-          <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#F8FAFC]">
-            <div className={cn("p-4 md:p-8 max-w-6xl mx-auto space-y-6 md:space-y-8 min-h-[calc(100vh-3.5rem)] flex flex-col", className)}>
-              <div className="space-y-6 md:space-y-8 flex-1">
-                {children}
-              </div>
+    <div className="h-screen w-full flex bg-white overflow-hidden">
+      <RecursiveSidebar />
+      <div className="flex-1 flex flex-col min-w-0 bg-white h-screen overflow-hidden">
+        <TopHeader />
+        <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#F8FAFC]">
+          <div className={cn("p-4 md:p-8 max-w-6xl mx-auto space-y-6 md:space-y-8 min-h-[calc(100vh-3.5rem)] flex flex-col", className)}>
+            <div className="space-y-6 md:space-y-8 flex-1">
+              {children}
             </div>
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
-    </OrgProvider>
+    </div>
   )
 }

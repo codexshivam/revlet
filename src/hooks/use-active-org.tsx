@@ -47,7 +47,12 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   const { user } = useUser()
   const db = useFirestore()
   const [orgs, setOrgs] = useState<Organization[]>([])
-  const [activeOrgId, setActiveOrgId] = useState<string>("")
+  const [activeOrgId, setActiveOrgId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("selectedOrgId") || ""
+    }
+    return ""
+  })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -103,9 +108,30 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe()
   }, [user, db])
 
+  useEffect(() => {
+    const handleOrgChanged = () => {
+      const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
+      if (storedId && storedId !== activeOrgId) {
+        setActiveOrgId(storedId)
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("active-org-changed", handleOrgChanged)
+      window.addEventListener("storage", handleOrgChanged)
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("active-org-changed", handleOrgChanged)
+        window.removeEventListener("storage", handleOrgChanged)
+      }
+    }
+  }, [activeOrgId])
+
   const changeActiveOrg = useCallback((id: string) => {
     if (typeof window !== "undefined") {
       localStorage.setItem("selectedOrgId", id)
+      window.dispatchEvent(new Event("active-org-changed"))
     }
     setActiveOrgId(id)
   }, [])
@@ -133,9 +159,14 @@ export function useActiveOrg(): OrgContextType {
     return {
       orgs: [],
       activeOrg: undefined,
-      activeOrgId: "",
-      setActiveOrgId: () => {},
-      loading: false,
+      activeOrgId: typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") || "" : "",
+      setActiveOrgId: (id: string) => {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("selectedOrgId", id)
+          window.dispatchEvent(new Event("active-org-changed"))
+        }
+      },
+      loading: true,
     }
   }
   return context

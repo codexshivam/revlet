@@ -24,8 +24,10 @@ Revlet is an open-source, multi-tenant cloud control plane engineered for educat
 
 ## Key URLs & Resources
 
-- Web Application: https://app.revlet.me
-- Documentation & Source Code: https://github.com/codexshivam/revlet
+- Web Application: https://revlet.me
+- Console: https://revlet.me/login
+- Documentation & Support: https://revlet.me/support
+- GitHub Repository: https://github.com/codexshivam/revlet
 - Issue Tracker: https://github.com/codexshivam/revlet/issues
 - Security Policy: https://github.com/codexshivam/revlet/blob/main/SECURITY.md
 - Contributing Guide: https://github.com/codexshivam/revlet/blob/main/CONTRIBUTING.md

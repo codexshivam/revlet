@@ -1353,7 +1353,6 @@ export default function WorkspaceUsersPage() {
       <DashboardShell>
         <div className="space-y-8 animate-in fade-in duration-500">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Workspace</span>
             <h1 className="text-3xl font-headline font-bold text-slate-900">User Directory</h1>
           </div>
           <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500">
@@ -1388,7 +1387,6 @@ export default function WorkspaceUsersPage() {
       <DashboardShell>
         <div className="space-y-8 animate-in fade-in duration-500">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Workspace</span>
             <h1 className="text-3xl font-headline font-bold text-slate-900">User Directory</h1>
           </div>
           <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500">
@@ -1423,7 +1421,6 @@ export default function WorkspaceUsersPage() {
       <DashboardShell>
         <div className="space-y-8 animate-in fade-in duration-500">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Workspace</span>
             <h1 className="text-3xl font-headline font-bold text-slate-900">User Directory</h1>
           </div>
           <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500">
@@ -1458,7 +1455,6 @@ export default function WorkspaceUsersPage() {
       <div className="space-y-8 animate-in fade-in duration-500">
         {/* Page Header */}
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Workspace</span>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h1 className="text-3xl font-headline font-bold text-slate-900">User Directory</h1>
             <div className="flex flex-wrap items-center gap-2">

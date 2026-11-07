@@ -142,20 +142,73 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
+function cleanToastMessage(msg: any): any {
+  if (typeof msg !== "string") return msg
+
+  let cleaned: string = msg.trim()
+
+  // Remove technical prefixes and system/tool identifiers
+  cleaned = cleaned.replace(/^Firebase:\s*/i, "")
+  cleaned = cleaned.replace(/^FirebaseError:\s*/i, "")
+  cleaned = cleaned.replace(/^Error:\s*/i, "")
+  cleaned = cleaned.replace(/^Cloudflare API error:\s*/i, "")
+  cleaned = cleaned.replace(/^Google Workspace API error:\s*/i, "")
+  cleaned = cleaned.replace(/^gapi:\s*/i, "")
+
+  // Normalize common auth codes into human-readable messages
+  if (/auth\/email-already-in-use/i.test(cleaned)) {
+    return "This email address is already registered."
+  }
+  if (/auth\/(invalid-credential|user-not-found|wrong-password)/i.test(cleaned)) {
+    return "Invalid email or password."
+  }
+  if (/auth\/weak-password/i.test(cleaned)) {
+    return "Password must be at least 6 characters."
+  }
+  if (/auth\/too-many-requests/i.test(cleaned)) {
+    return "Too many attempts. Please try again in a few moments."
+  }
+  if (/auth\/network-request-failed/i.test(cleaned)) {
+    return "Network connection issue. Please check your connection and try again."
+  }
+  if (/auth\/invalid-email/i.test(cleaned)) {
+    return "Please enter a valid email address."
+  }
+  if (/(permission-denied|PERMISSION_DENIED)/i.test(cleaned)) {
+    return "You do not have permission to perform this action."
+  }
+
+  // Strip technical error codes formatted as (tech/code)
+  cleaned = cleaned.replace(/\s*\([a-z0-9_-]+\/[a-z0-9_-]+\)\.?/gi, ".")
+
+  return cleaned.trim()
+}
+
 function toast({ ...props }: Toast) {
   const id = genId()
+
+  const sanitizedProps: Toast = {
+    ...props,
+    title: cleanToastMessage(props.title),
+    description: cleanToastMessage(props.description)
+  }
 
   const update = (props: ToasterToast) =>
     dispatch({
       type: "UPDATE_TOAST",
-      toast: { ...props, id },
+      toast: { 
+        ...props, 
+        title: cleanToastMessage(props.title),
+        description: cleanToastMessage(props.description),
+        id 
+      },
     })
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
   dispatch({
     type: "ADD_TOAST",
     toast: {
-      ...props,
+      ...sanitizedProps,
       id,
       open: true,
       onOpenChange: (open) => {

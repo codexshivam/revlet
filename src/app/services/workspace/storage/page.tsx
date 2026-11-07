@@ -321,9 +321,6 @@ export default function StoragePage() {
     return (
       <DashboardShell>
         <div className="animate-in fade-in duration-500">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            Google Workspace
-          </span>
           <h1 className="text-3xl font-headline font-bold text-slate-900 mt-1">Storage</h1>
 
           <Card className="mt-8 border-dashed">
@@ -350,7 +347,6 @@ export default function StoragePage() {
       <DashboardShell>
         <div className="space-y-8 animate-in fade-in duration-500">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Workspace</span>
             <h1 className="text-3xl font-headline font-bold text-slate-900 mt-1">Storage</h1>
           </div>
           <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500 w-full">
@@ -384,9 +380,6 @@ export default function StoragePage() {
     return (
       <DashboardShell>
         <div className="animate-in fade-in duration-500">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            Google Workspace
-          </span>
           <h1 className="text-3xl font-headline font-bold text-slate-900 mt-1">Storage</h1>
 
           <Card className="mt-8">
@@ -415,9 +408,6 @@ export default function StoragePage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Google Workspace
-            </span>
             <h1 className="text-3xl font-headline font-bold text-slate-900 mt-1">Storage</h1>
           </div>
           <Badge className="text-[9px] font-bold px-2.5 py-1 border shadow-none bg-white text-slate-500 border-slate-200 self-start md:self-auto pointer-events-none select-none">

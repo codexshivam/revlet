@@ -283,7 +283,6 @@ export default function TeamManagementPage() {
       <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-4 sm:gap-1">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Management</span>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Team Management Panel</h1>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

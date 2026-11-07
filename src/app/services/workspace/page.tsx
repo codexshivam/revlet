@@ -469,7 +469,6 @@ export default function GoogleWorkspacePage() {
       <div className="space-y-8 animate-in fade-in duration-500">
         {/* Page Header */}
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Google Workspace</h1>
             <div className="flex items-center gap-2">

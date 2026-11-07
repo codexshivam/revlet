@@ -459,7 +459,6 @@ export default function EmailRoutingPage() {
       <div className="space-y-8 animate-in fade-in duration-500">
         {/* Page Header */}
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Email Service</h1>
             <div className="flex items-center gap-3 w-full sm:w-auto justify-end sm:justify-start">

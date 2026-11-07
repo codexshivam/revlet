@@ -24,9 +24,9 @@ export default function NotFound() {
             </Button>
           </Link>
           <Link href="/support" className="flex-1">
-            <Button variant="outline" className="w-full border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs h-10 gap-2 rounded-lg">
-              <LifeBuoy className="w-4 h-4 text-slate-400" />
-              Support Desk
+            <Button variant="outline" className="w-full border-slate-200 text-slate-700 hover:text-black hover:bg-slate-50 font-semibold text-xs h-10 gap-2 rounded-lg transition-colors group">
+              <LifeBuoy className="w-4 h-4 text-slate-400 group-hover:text-black transition-colors" />
+              Contact Support
             </Button>
           </Link>
         </div>

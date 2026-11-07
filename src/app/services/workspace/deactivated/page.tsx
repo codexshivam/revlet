@@ -767,9 +767,6 @@ export default function WorkspaceDeactivatedPage() {
     return (
       <DashboardShell>
         <div className="animate-in fade-in duration-500">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            Google Workspace
-          </span>
           <h1 className="text-3xl font-headline font-bold text-slate-900 mt-1">Deactivated Users</h1>
 
           <Card className="mt-8 border-dashed bg-slate-50">
@@ -800,7 +797,6 @@ export default function WorkspaceDeactivatedPage() {
       <DashboardShell>
         <div className="space-y-8 animate-in fade-in duration-500">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Workspace</span>
             <h1 className="text-3xl font-headline font-bold text-slate-900 mt-1">Deactivated Users</h1>
           </div>
           <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500 w-full">
@@ -835,9 +831,6 @@ export default function WorkspaceDeactivatedPage() {
       <DashboardShell>
         <div className="animate-in fade-in duration-500 space-y-8">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Google Workspace
-            </span>
             <h1 className="text-3xl font-headline font-bold text-slate-900 mt-1">Deactivated Users</h1>
           </div>
 
@@ -872,9 +865,6 @@ export default function WorkspaceDeactivatedPage() {
         {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Google Workspace
-            </span>
             <h1 className="text-3xl font-headline font-bold text-slate-900">Deactivated Users</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">

@@ -318,7 +318,6 @@ export default function BillingPage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Billing & Finance</span>
           <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Manage Payments</h1>
         </div>
         

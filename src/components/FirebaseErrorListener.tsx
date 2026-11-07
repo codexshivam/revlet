@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect } from 'react';
@@ -10,12 +9,10 @@ export function FirebaseErrorListener() {
 
   useEffect(() => {
     const handlePermissionError = (error: any) => {
-      // In development, we want to surface the rich contextual error
-      // In production, you might want to log this or show a generic message
       toast({
         variant: "destructive",
-        title: "Permission Denied",
-        description: `Security Rule Violation: Operation '${error.operation}' denied at path '${error.path}'.`,
+        title: "Permission Required",
+        description: "You do not have permission to perform this action. Please contact your organization administrator.",
       });
     };
 

@@ -180,7 +180,6 @@ export default function SupportPage() {
         {/* RESPONSIVE HEADER BLOCK */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-5">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Help Center</span>
             <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Platform Contact Center</h1>
           </div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 bg-slate-50 px-3.5 py-2 border border-slate-200 rounded-full shadow-sm shrink-0 max-w-full overflow-hidden">

@@ -295,7 +295,6 @@ export default function WebsiteManagementPage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Services</span>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Website Management</h1>
             <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 self-start sm:self-auto">

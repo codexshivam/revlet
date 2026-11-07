@@ -444,7 +444,6 @@ export default function AccountHomePage() {
       <div className="space-y-6 animate-in fade-in duration-500">
         {/* RESPONSIVE MINIMALIST HEADER */}
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Account Home</span>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h1 className="text-3xl sm:text-4xl font-headline font-bold text-slate-900 tracking-tight">
               {localDisplayName}

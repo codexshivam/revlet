@@ -369,7 +369,6 @@ export default function WorkspaceAlumniPage() {
       <DashboardShell>
         <div className="animate-in fade-in duration-500 space-y-8">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Workspace</span>
             <h1 className="text-4xl font-headline font-bold text-[#191C1E]">Alumni Manager</h1>
           </div>
           <Card className="mt-8 border-dashed bg-white border-slate-200">
@@ -398,7 +397,6 @@ export default function WorkspaceAlumniPage() {
       <DashboardShell>
         <div className="animate-in fade-in duration-500 space-y-8">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Workspace</span>
             <h1 className="text-4xl font-headline font-bold text-[#191C1E]">Alumni Manager</h1>
           </div>
           <Card className="mt-8 border-dashed bg-white border-slate-200">
@@ -428,7 +426,6 @@ export default function WorkspaceAlumniPage() {
         
         {/* Page Header */}
         <div className="flex flex-col gap-1 border-b border-slate-200 pb-6">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Workspace</span>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h1 className="text-4xl font-headline font-bold text-[#191C1E] tracking-tight">Alumni Manager</h1>
             <div className="flex items-center gap-2">

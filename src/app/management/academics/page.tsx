@@ -162,7 +162,6 @@ export default function AcademicsManagementPage() {
       <DashboardShell>
         <div className="space-y-8 animate-in fade-in duration-500">
           <div className="flex flex-col gap-1 border-b border-slate-200 pb-6">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Management</span>
             <h1 className="text-3xl font-headline font-bold text-slate-900">Academic Organization</h1>
           </div>
           <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500">
@@ -199,7 +198,6 @@ export default function AcademicsManagementPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Management</span>
             <h1 className="text-4xl font-headline font-bold text-[#191C1E] tracking-tight">Academic Organization</h1>
             <p className="text-sm text-slate-500 mt-1 max-w-2xl font-medium">
               Setup classes and sections

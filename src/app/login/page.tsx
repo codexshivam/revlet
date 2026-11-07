@@ -40,7 +40,7 @@ export default function LoginPage() {
 
   if (authLoading || user) {
     return (
-      <div className="min-h-screen bg-[#f8f9fa] bg-[radial-gradient(#d1d5db_1px,transparent_1px)] [background-size:16px_16px] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
         <div className="flex flex-col items-center space-y-3">
           <div className="font-bold text-xs uppercase tracking-wider text-slate-800 font-headline">
             REVLET

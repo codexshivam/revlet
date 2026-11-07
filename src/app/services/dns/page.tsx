@@ -223,7 +223,17 @@ export default function DNSManagementPage() {
   }, [zoneId, fetchDNSData])
 
   const handleInputChange = (field: string, value: any) => {
-    const updatedForm = { ...formData, [field]: value }
+    let finalValue: any = value
+    if (field === 'priority') {
+      if (value === "" || value === null || value === undefined) {
+        finalValue = undefined
+      } else {
+        const parsed = parseInt(String(value), 10)
+        finalValue = isNaN(parsed) ? undefined : parsed
+      }
+    }
+
+    const updatedForm = { ...formData, [field]: finalValue }
     setFormData(updatedForm)
 
     const errors = { ...formErrors }
@@ -270,9 +280,13 @@ export default function DNSManagementPage() {
     }
 
     if (field === 'priority' && updatedForm.type === 'MX') {
-      const priorityVal = parseInt(value)
-      if (isNaN(priorityVal) || priorityVal < 0 || priorityVal > 65535) {
-        errors.priority = "Priority must be an integer between 0 and 65535."
+      if (finalValue === undefined) {
+        errors.priority = "Priority is required for MX records."
+      } else {
+        const priorityVal = Number(finalValue)
+        if (isNaN(priorityVal) || !Number.isInteger(priorityVal) || priorityVal < 0 || priorityVal > 65535) {
+          errors.priority = "Priority must be an integer between 0 and 65535."
+        }
       }
     }
 
@@ -281,7 +295,8 @@ export default function DNSManagementPage() {
 
   const handleTypeChange = (value: string) => {
     const isStandardProxy = PROXY_SUPPORTED_TYPES.includes(value)
-    setFormData({ ...formData, type: value, proxied: isStandardProxy })
+    const priorityVal = value === 'MX' ? (typeof formData.priority === 'number' && !isNaN(formData.priority) ? formData.priority : 10) : formData.priority
+    setFormData({ ...formData, type: value, proxied: isStandardProxy, priority: priorityVal })
     setFormErrors({}) // Clear error states on type toggle
   }
 
@@ -331,9 +346,11 @@ export default function DNSManagementPage() {
     }
 
     if (type === "MX") {
-      const priorityVal = parseInt(String(formData.priority))
+      const priorityVal = parseInt(String(formData.priority ?? 10), 10)
       if (isNaN(priorityVal) || priorityVal < 0 || priorityVal > 65535) {
         errors.priority = "Priority must be an integer between 0 and 65535."
+      } else {
+        formData.priority = priorityVal
       }
     }
 
@@ -360,11 +377,15 @@ export default function DNSManagementPage() {
     try {
       const idToken = await user.getIdToken()
       const orgId = selectedOrg.id
+      const recordPayload = {
+        ...formData,
+        priority: formData.type === 'MX' ? parseInt(String(formData.priority ?? 10), 10) : undefined
+      }
       let res;
       if (editingRecord) {
-        res = await updateDNSRecord(idToken, orgId, zoneId, editingRecord.id, formData)
+        res = await updateDNSRecord(idToken, orgId, zoneId, editingRecord.id, recordPayload)
       } else {
-        res = await createDNSRecord(idToken, orgId, zoneId, formData)
+        res = await createDNSRecord(idToken, orgId, zoneId, recordPayload)
       }
       
       if (res.success) {
@@ -874,7 +895,10 @@ export default function DNSManagementPage() {
                                       className="h-8 w-8 text-slate-400 hover:bg-primary hover:text-white transition-all rounded-md"
                                       onClick={() => {
                                         setEditingRecord(rec)
-                                        setFormData(rec)
+                                        setFormData({
+                                          ...rec,
+                                          priority: rec.priority !== undefined ? Number(rec.priority) : 10
+                                        })
                                         setIsDialogOpen(true)
                                       }}
                                     >
@@ -981,7 +1005,10 @@ export default function DNSManagementPage() {
                                   className="h-8 w-8 p-0 text-slate-400 hover:bg-primary hover:text-white transition-all rounded-lg"
                                   onClick={() => {
                                     setEditingRecord(rec)
-                                    setFormData(rec)
+                                    setFormData({
+                                      ...rec,
+                                      priority: rec.priority !== undefined ? Number(rec.priority) : 10
+                                    })
                                     setIsDialogOpen(true)
                                   }}
                                 >
@@ -1189,12 +1216,16 @@ export default function DNSManagementPage() {
                     <div className="space-y-1">
                       <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Priority</Label>
                       <Input 
-                        type="number" 
+                        type="number"
+                        min={0}
+                        max={65535}
+                        step={1}
+                        placeholder="10"
                         className={cn(
                           "h-9 font-semibold text-xs border-slate-200 transition-all",
                           formErrors.priority && "border-red-400 focus-visible:ring-red-500 bg-red-50/20"
                         )}
-                        value={formData.priority}
+                        value={formData.priority !== undefined ? formData.priority : ""}
                         onChange={(e) => handleInputChange('priority', e.target.value)}
                       />
                       {formErrors.priority && <p className="text-[9px] text-red-500 font-bold uppercase tracking-wide">{formErrors.priority}</p>}

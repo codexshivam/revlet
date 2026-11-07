@@ -127,16 +127,24 @@ export async function createDNSRecord(idToken: string, orgId: string, zoneId: st
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
     await verifyUserOrgAccess(idToken, orgId, zoneId);
+
+    const payload: any = {
+      type: record.type,
+      name: record.name,
+      content: record.content,
+      ttl: record.ttl === 'Auto' ? 1 : parseInt(String(record.ttl), 10),
+      proxied: !!record.proxied,
+    };
+
+    // Ensure priority is an integer for MX and SRV records
+    if (record.type === 'MX' || record.type === 'SRV') {
+      const parsedPriority = parseInt(String(record.priority ?? 10), 10);
+      payload.priority = isNaN(parsedPriority) ? 10 : parsedPriority;
+    }
+
     const data = await cfFetch(`/zones/${zoneId}/dns_records`, {
       method: 'POST',
-      body: JSON.stringify({
-        type: record.type,
-        name: record.name,
-        content: record.content,
-        ttl: record.ttl === 'Auto' ? 1 : parseInt(record.ttl),
-        proxied: record.proxied,
-        priority: record.priority,
-      }),
+      body: JSON.stringify(payload),
     });
     return { success: true, data: data.result };
   } catch (error: any) {
@@ -148,16 +156,24 @@ export async function updateDNSRecord(idToken: string, orgId: string, zoneId: st
   if (!zoneId || !recordId) return { success: false, error: 'Missing Zone ID or Record ID' };
   try {
     await verifyUserOrgAccess(idToken, orgId, zoneId);
+
+    const payload: any = {
+      type: record.type,
+      name: record.name,
+      content: record.content,
+      ttl: record.ttl === 'Auto' ? 1 : parseInt(String(record.ttl), 10),
+      proxied: !!record.proxied,
+    };
+
+    // Ensure priority is an integer for MX and SRV records
+    if (record.type === 'MX' || record.type === 'SRV') {
+      const parsedPriority = parseInt(String(record.priority ?? 10), 10);
+      payload.priority = isNaN(parsedPriority) ? 10 : parsedPriority;
+    }
+
     const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {
       method: 'PATCH',
-      body: JSON.stringify({
-        type: record.type,
-        name: record.name,
-        content: record.content,
-        ttl: record.ttl === 'Auto' ? 1 : parseInt(record.ttl),
-        proxied: record.proxied,
-        priority: record.priority,
-      }),
+      body: JSON.stringify(payload),
     });
     return { success: true, data: data.result };
   } catch (error: any) {

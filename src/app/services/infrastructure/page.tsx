@@ -1,22 +1,10 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import Link from "next/link"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import {
-  Server,
-  Zap,
-  Lock,
-  ShieldCheck,
-  Cpu,
-  RefreshCw,
-  Globe,
-  ArrowRight,
-  ShieldAlert,
-} from "lucide-react"
+import { RefreshCw } from "lucide-react"
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { useAuth } from "@/firebase"
 
@@ -51,91 +39,54 @@ export default function InfrastructurePage() {
 
   return (
     <DashboardShell>
-      <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 max-w-5xl mx-auto">
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-slate-200/80">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="p-1.5 rounded-lg bg-slate-900 text-white">
-                <Server className="w-4 h-4" />
-              </span>
-              <h1 className="text-2xl sm:text-3xl font-headline font-bold text-slate-900 tracking-tight">
-                Infrastructure
-              </h1>
-              {domain && (
-                <Badge
-                  variant="outline"
-                  className="ml-2 font-mono text-[11px] font-medium bg-slate-50 border-slate-200 text-slate-700"
-                >
-                  {domain}
-                </Badge>
-              )}
-            </div>
-            <p className="text-xs sm:text-sm text-slate-500 font-normal">
-              Manage your domain&apos;s edge infrastructure: Instant cache purge, SSL/TLS encryption, DDoS emergency defense, and serverless hosting directly from Revlet.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium mr-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Edge Operational</span>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-black text-xs h-9 gap-1.5 rounded-lg transition-colors"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              <span>Refresh Edge</span>
-            </Button>
-
-            <Link href="/services/domains">
+      <div className="space-y-8 animate-in fade-in duration-500">
+        {/* Page Header (Consistent with DNS Management, Email Service, and Website Management) */}
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h1 className="text-3xl font-headline font-bold text-slate-900">
+              Infrastructure
+            </h1>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end sm:justify-start">
               <Button
                 variant="outline"
                 size="sm"
-                className="border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-black text-xs h-9 gap-1.5 rounded-lg transition-colors"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="h-10 font-bold text-xs border-slate-200 hover:bg-slate-100 hover:text-black gap-2 transition-colors"
               >
-                <Globe className="w-3.5 h-3.5 text-slate-500" />
-                <span>DNS Manager</span>
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                <span>Refresh Edge</span>
               </Button>
-            </Link>
+            </div>
           </div>
         </div>
 
-        {/* The 4 Essential Domain Tabs */}
+        {/* Essential Domain Infrastructure Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-slate-100/90 p-1 rounded-xl grid grid-cols-2 sm:grid-cols-4 w-full h-auto gap-1 border border-slate-200/60">
+          <TabsList className="bg-slate-100 p-1 rounded-xl grid grid-cols-2 sm:grid-cols-4 w-full h-auto gap-1 border border-slate-200/60">
             <TabsTrigger
               value="speed"
-              className="gap-2 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
+              className="py-2.5 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-              <span>Speed &amp; Cache</span>
+              Speed &amp; Cache
             </TabsTrigger>
             <TabsTrigger
               value="ssl"
-              className="gap-2 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
+              className="py-2.5 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              <Lock className="w-3.5 h-3.5 text-emerald-600" />
-              <span>SSL &amp; Encryption</span>
+              SSL &amp; Encryption
             </TabsTrigger>
             <TabsTrigger
               value="security"
-              className="gap-2 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
+              className="py-2.5 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-red-500" />
-              <span>DDoS &amp; Protection</span>
+              DDoS &amp; Protection
             </TabsTrigger>
             <TabsTrigger
               value="hosting"
-              className="gap-2 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
+              className="py-2.5 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              <Cpu className="w-3.5 h-3.5 text-blue-600" />
-              <span>Edge Hosting &amp; Workers</span>
+              Edge Hosting &amp; Workers
             </TabsTrigger>
           </TabsList>
 

@@ -3,10 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import {
-  Flame,
-  ShieldAlert,
   ShieldCheck,
   Check,
   Loader2,
@@ -14,8 +11,6 @@ import {
   Copy,
   CheckCheck,
   Code2,
-  Terminal,
-  Layers,
   AlertTriangle,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
@@ -180,25 +175,9 @@ export async function POST(req: Request) {
       >
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span
-                className={`p-1.5 rounded-lg ${
-                  securityLevel === "under_attack"
-                    ? "bg-red-600 text-white animate-pulse"
-                    : "bg-red-100 text-red-600"
-                }`}
-              >
-                <Flame className="w-4 h-4" />
-              </span>
-              <CardTitle className="text-base font-bold text-slate-900">
-                &quot;I&apos;m Under Attack!&quot; Emergency Shield
-              </CardTitle>
-              {securityLevel === "under_attack" && (
-                <Badge className="bg-red-600 hover:bg-red-600 text-white font-mono text-[11px] animate-pulse">
-                  SHIELD ACTIVE
-                </Badge>
-              )}
-            </div>
+            <CardTitle className="text-base font-bold text-slate-900">
+              &quot;I&apos;m Under Attack!&quot; Emergency Shield
+            </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Instantly deploys cryptographic JavaScript challenges to every incoming visitor across all edge points before traffic hits your server.
             </CardDescription>
@@ -219,11 +198,7 @@ export async function POST(req: Request) {
                   : "border-red-200 text-red-700 hover:bg-red-50 hover:text-red-900"
               }`}
             >
-              {isUpdatingSecurity ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Flame className="w-3.5 h-3.5" />
-              )}
+              {isUpdatingSecurity && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <span>
                 {securityLevel === "under_attack"
                   ? "Deactivate Emergency Shield"
@@ -268,20 +243,13 @@ export async function POST(req: Request) {
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-500" />
-              <span>Standard Edge Security Level</span>
+            <CardTitle className="text-base font-bold text-slate-900">
+              Standard Edge Security Level
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Adjust how aggressively Cloudflare reputation algorithms challenge suspicious IP addresses.
             </CardDescription>
           </div>
-          <Badge
-            variant="outline"
-            className="text-xs font-semibold uppercase bg-amber-50 border-amber-200 text-amber-800"
-          >
-            Level: {securityLevel.replace("_", " ")}
-          </Badge>
         </CardHeader>
 
         <CardContent className="p-5 sm:p-6 space-y-4">
@@ -331,11 +299,8 @@ export async function POST(req: Request) {
 
       {/* 3. Global DDoS Defense Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-4 flex items-start gap-3">
-          <span className="p-2 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-            <ShieldCheck className="w-4 h-4" />
-          </span>
-          <div className="space-y-0.5">
+        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-5">
+          <div className="space-y-1">
             <p className="text-xs font-bold text-slate-900">Layer 3 &amp; 4 DDoS Shield</p>
             <p className="text-[11px] text-slate-500 leading-normal">
               Always active. SYN floods, UDP amplification, and NTP reflection attacks are dropped at edge boundary.
@@ -343,11 +308,8 @@ export async function POST(req: Request) {
           </div>
         </Card>
 
-        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-4 flex items-start gap-3">
-          <span className="p-2 rounded-lg bg-blue-50 text-blue-600 shrink-0">
-            <Layers className="w-4 h-4" />
-          </span>
-          <div className="space-y-0.5">
+        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-5">
+          <div className="space-y-1">
             <p className="text-xs font-bold text-slate-900">Anycast 330+ Cities</p>
             <p className="text-[11px] text-slate-500 leading-normal">
               Distributed capacity absorbs 280+ Tbps of peak attack volume without degrading legitimate user traffic.
@@ -355,11 +317,8 @@ export async function POST(req: Request) {
           </div>
         </Card>
 
-        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-4 flex items-start gap-3">
-          <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600 shrink-0">
-            <Terminal className="w-4 h-4" />
-          </span>
-          <div className="space-y-0.5">
+        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-5">
+          <div className="space-y-1">
             <p className="text-xs font-bold text-slate-900">WAF Managed Rules</p>
             <p className="text-[11px] text-slate-500 leading-normal">
               Automated heuristics block SQL injection, cross-site scripting (XSS), and zero-day vulnerabilities.
@@ -372,12 +331,11 @@ export async function POST(req: Request) {
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Code2 className="w-4 h-4 text-indigo-600" />
-              <span>Turnstile Smart Bot Defense (In-App Integration)</span>
+            <CardTitle className="text-base font-bold text-slate-900">
+              Turnstile Smart Bot Defense
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Replace annoying puzzle CAPTCHAs with invisible, privacy-first bot mitigation directly on your login, signup, and checkout forms.
+              Replace annoying puzzle CAPTCHAs with invisible, privacy-first bot mitigation directly on your forms.
             </CardDescription>
           </div>
           <Button
@@ -425,16 +383,11 @@ export async function POST(req: Request) {
             </pre>
           </div>
 
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <span className="font-semibold text-slate-800">Free &amp; Unlimited Verification:</span>
-              <p className="text-slate-500 text-[11px]">
-                Turnstile never charges for verification volume and has zero user puzzle frustration, keeping your signup conversion rate high.
-              </p>
-            </div>
-            <Badge variant="outline" className="text-[11px] font-mono bg-white border-slate-300 text-slate-700 shrink-0">
-              100% Free Included
-            </Badge>
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+            <span className="font-semibold text-slate-800">Free &amp; Unlimited Verification:</span>
+            <p className="text-slate-500 text-[11px] mt-0.5">
+              Turnstile never charges for verification volume and has zero user puzzle frustration, keeping your signup conversion rate high.
+            </p>
           </div>
         </CardContent>
       </Card>

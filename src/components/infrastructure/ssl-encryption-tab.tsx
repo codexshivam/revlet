@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import {
   Select,
@@ -13,13 +12,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  Lock,
   Check,
-  ShieldCheck,
   Info,
   Loader2,
   RefreshCw,
-  KeyRound,
   Copy,
   CheckCheck,
 } from "lucide-react"
@@ -275,21 +271,14 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Lock className="w-4 h-4 text-emerald-600" />
-              <span>SSL/TLS Encryption Mode</span>
+            <CardTitle className="text-base font-bold text-slate-900">
+              SSL/TLS Encryption Mode
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Controls end-to-end cryptographic encryption between user browsers, Cloudflare edge, and your backend origin.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="text-xs font-semibold uppercase bg-emerald-50 border-emerald-200 text-emerald-700"
-            >
-              Current: {sslMode}
-            </Badge>
             <Button
               variant="outline"
               size="sm"
@@ -362,9 +351,8 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
       {/* 2. HTTPS Enforcement & Security Protocols */}
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100">
-          <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-slate-800" />
-            <span>HTTPS Enforcement &amp; Protocols</span>
+          <CardTitle className="text-base font-bold text-slate-900">
+            HTTPS Enforcement &amp; Protocols
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
             Force cryptographic transport across all endpoints and block obsolete SSL ciphers.
@@ -430,25 +418,14 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-indigo-600" />
-              <span>DNSSEC (Domain Security Extensions)</span>
+            <CardTitle className="text-base font-bold text-slate-900">
+              DNSSEC (Domain Security Extensions)
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Cryptographically signs DNS lookups to prevent DNS spoofing, hijacking, and cache poisoning.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Badge
-              variant="outline"
-              className={`text-xs font-semibold uppercase ${
-                dnssecStatus === "active"
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-slate-50 border-slate-200 text-slate-600"
-              }`}
-            >
-              Status: {dnssecStatus}
-            </Badge>
             <Button
               variant={dnssecStatus === "active" ? "outline" : "default"}
               size="sm"

@@ -3,21 +3,14 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  Cpu,
   RefreshCw,
   Plus,
   Trash2,
   Loader2,
-  Terminal,
-  Globe,
   CornerDownRight,
-  Code2,
-  Zap,
-  Activity,
   Copy,
   CheckCheck,
 } from "lucide-react"
@@ -186,21 +179,14 @@ npx wrangler deploy`
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-blue-600" />
-              <span>Serverless Edge Hosting &amp; Workers</span>
+            <CardTitle className="text-base font-bold text-slate-900">
+              Serverless Edge Hosting &amp; Workers
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Run serverless JavaScript, TypeScript, and WASM across Cloudflare edge nodes globally with 0 cold starts.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Badge
-              variant="outline"
-              className="text-xs font-semibold bg-blue-50 border-blue-200 text-blue-700 font-mono"
-            >
-              {workers.length} {workers.length === 1 ? "Script" : "Scripts"} Deployed
-            </Badge>
             <Button
               variant="outline"
               size="sm"
@@ -216,40 +202,25 @@ npx wrangler deploy`
 
         <CardContent className="p-5 sm:p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-3">
-              <span className="p-2 rounded-lg bg-white border border-slate-200 text-blue-600 shrink-0">
-                <Zap className="w-4 h-4" />
-              </span>
-              <div>
-                <p className="text-xs font-bold text-slate-900">0ms Cold Starts</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  V8 isolates boot in under 5 milliseconds worldwide, 50x faster than legacy container runtimes.
-                </p>
-              </div>
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+              <p className="text-xs font-bold text-slate-900">0ms Cold Starts</p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                V8 isolates boot in under 5 milliseconds worldwide, 50x faster than legacy container runtimes.
+              </p>
             </div>
 
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-3">
-              <span className="p-2 rounded-lg bg-white border border-slate-200 text-emerald-600 shrink-0">
-                <Globe className="w-4 h-4" />
-              </span>
-              <div>
-                <p className="text-xs font-bold text-slate-900">330+ Edge Cities</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Code deploys automatically to every major global metro within 15 seconds of running deploy.
-                </p>
-              </div>
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+              <p className="text-xs font-bold text-slate-900">330+ Edge Cities</p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Code deploys automatically to every major global metro within 15 seconds of running deploy.
+              </p>
             </div>
 
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-3">
-              <span className="p-2 rounded-lg bg-white border border-slate-200 text-indigo-600 shrink-0">
-                <Activity className="w-4 h-4" />
-              </span>
-              <div>
-                <p className="text-xs font-bold text-slate-900">Sub-10ms Latency</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Terminates TLS and executes logic within 50ms of 95% of the world&apos;s connected population.
-                </p>
-              </div>
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+              <p className="text-xs font-bold text-slate-900">Sub-10ms Latency</p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Terminates TLS and executes logic within 50ms of 95% of the world&apos;s connected population.
+              </p>
             </div>
           </div>
         </CardContent>
@@ -257,19 +228,15 @@ npx wrangler deploy`
 
       {/* 2. Domain Route Bindings Manager */}
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
-        <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100">
           <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Globe className="w-4 h-4 text-slate-800" />
-              <span>Domain Route Bindings</span>
+            <CardTitle className="text-base font-bold text-slate-900">
+              Domain Route Bindings
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Bind subdomains or URL patterns on <strong>{domain || "your domain"}</strong> directly to your serverless Workers scripts.
             </CardDescription>
           </div>
-          <Badge variant="outline" className="text-xs font-semibold bg-slate-50 border-slate-200 text-slate-700">
-            {workerRoutes.length} Active {workerRoutes.length === 1 ? "Binding" : "Bindings"}
-          </Badge>
         </CardHeader>
 
         <CardContent className="p-5 sm:p-6 space-y-5">
@@ -364,12 +331,9 @@ npx wrangler deploy`
                           {route.pattern}
                         </span>
                         <CornerDownRight className="w-3.5 h-3.5 text-slate-400" />
-                        <Badge
-                          variant="outline"
-                          className="font-mono text-[11px] bg-blue-50 border-blue-200 text-blue-700"
-                        >
+                        <span className="font-mono text-xs font-semibold text-slate-800">
                           {route.script || "worker"}
-                        </Badge>
+                        </span>
                       </div>
                       <p className="text-[11px] text-slate-400 font-mono">
                         Route ID: {route.id}
@@ -402,9 +366,8 @@ npx wrangler deploy`
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-emerald-600" />
-              <span>Deploy from your Terminal (Wrangler CLI)</span>
+            <CardTitle className="text-base font-bold text-slate-900">
+              Deploy from your Terminal (Wrangler CLI)
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Deploy code, test locally, and stream live production error logs directly from your command line.
@@ -440,14 +403,11 @@ npx wrangler deploy`
             <p className="text-purple-400">npx wrangler tail</p>
           </div>
 
-          <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-2.5">
-            <Code2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-            <div className="space-y-0.5">
-              <span className="font-semibold text-blue-950">Wrangler Configuration (wrangler.json / wrangler.toml):</span>
-              <p className="text-blue-900/90 text-[11px] leading-relaxed">
-                Add <code>routes = [{`{ pattern = "api.${domain || "yourdomain.com"}/*", zone_name = "${domain || "yourdomain.com"}" }`}]</code> directly inside your <code>wrangler.json</code> to automate binding synchronization during CI/CD.
-              </p>
-            </div>
+          <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-200 text-xs text-blue-900">
+            <span className="font-semibold text-blue-950">Wrangler Configuration (wrangler.json / wrangler.toml):</span>
+            <p className="text-blue-900/90 text-[11px] leading-relaxed mt-1">
+              Add <code>routes = [{`{ pattern = "api.${domain || "yourdomain.com"}/*", zone_name = "${domain || "yourdomain.com"}" }`}]</code> directly inside your <code>wrangler.json</code> to automate binding synchronization during CI/CD.
+            </p>
           </div>
         </CardContent>
       </Card>

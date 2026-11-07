@@ -56,10 +56,10 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
 
   return (
     <aside className={cn(
-      "bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 transition-all",
-      mobile ? "w-full pt-4 border-r-0 h-full" : "w-64 pt-6 hidden lg:flex"
+      "bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 transition-all select-none",
+      mobile ? "w-full pt-4 border-r-0 h-full max-h-full" : "w-64 pt-6 hidden lg:flex h-screen max-h-screen sticky top-0"
     )}>
-      <div className="px-5 mb-5">
+      <div className="px-5 mb-5 shrink-0">
         <Link href="/account/home" className="inline-block transition-opacity hover:opacity-80">
           <span className="font-headline font-bold text-base tracking-[0.15em] text-slate-900 uppercase">
             REVLET
@@ -67,7 +67,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3.5 custom-scrollbar pb-3 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto px-3.5 custom-scrollbar pb-3 space-y-1">
         {mainNavItems.map((item, idx) => {
           const isActive = pathname === item.href
           
@@ -94,7 +94,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
       </nav>
 
       {/* Bottom Pinned Items: Team Management & Settings */}
-      <div className="p-3.5 pt-3 border-t border-slate-200/80 space-y-1 bg-slate-50 shrink-0">
+      <div className="p-3.5 pt-3 border-t border-slate-200/80 space-y-1 bg-slate-50 shrink-0 mt-auto">
         {bottomNavItems.map((item, idx) => {
           const isActive = pathname === item.href
           

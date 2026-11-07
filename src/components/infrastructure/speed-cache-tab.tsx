@@ -3,20 +3,15 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  Zap,
   RefreshCw,
   Loader2,
-  Sparkles,
   ArrowRight,
   Plus,
   Trash2,
-  Globe,
-  CornerDownRight,
   Check,
   AlertCircle,
 } from "lucide-react"
@@ -285,9 +280,8 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-0.5">
-            <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" />
-              <span>Edge Cache Management</span>
+            <CardTitle className="text-base font-bold text-slate-900">
+              Edge Cache Management
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Invalidate static assets cached at Cloudflare edge POPs globally after releasing code updates.
@@ -333,9 +327,8 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-row items-center justify-between gap-4">
           <div className="space-y-0.5">
-            <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-blue-600" />
-              <span>Development Mode (Bypass Cache)</span>
+            <CardTitle className="text-base font-bold text-slate-900">
+              Development Mode (Bypass Cache)
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Temporarily bypass edge caching for 3 hours so edits to your origin server reflect immediately.
@@ -382,9 +375,8 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
       {/* 4. Domain Redirects & Page Rules */}
       <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
         <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100">
-          <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <CornerDownRight className="w-4 h-4 text-indigo-600" />
-            <span>Edge URL Redirects &amp; Page Rules</span>
+          <CardTitle className="text-base font-bold text-slate-900">
+            Edge URL Redirects &amp; Page Rules
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
             Execute 301/302 URL redirects directly at the edge without hitting your application server.
@@ -451,9 +443,9 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
                       <p className="text-[11px] text-slate-500 truncate flex items-center gap-1.5">
                         <span>Redirects to:</span>
                         <span className="font-mono text-slate-700">{rule.forwardUrl}</span>
-                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-slate-200 font-mono">
-                          HTTP {rule.statusCode || 301}
-                        </Badge>
+                        <span className="font-mono text-[11px] text-slate-400 font-medium">
+                          ({rule.statusCode || 301})
+                        </span>
                       </p>
                     </div>
                     <Button

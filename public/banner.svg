@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="100%" height="100%">
+  <rect width="1196" height="316" x="2" y="2" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2" rx="16" />
+  <!-- Logo Mark -->
+  <g transform="translate(330, 95) scale(0.2539)">
+    <g fill="#0F172A" transform="translate(80 103.4) scale(1.8624338624) translate(-170 -173)">
+      <path d="M200 173H293L307 184L350 234V239L310 278V282L358 336H317L247 259H321L325 255L324 249L284 206H229L200 173Z"/>
+      <rect x="170" y="237" width="35" height="35"/>
+      <rect x="170" y="294" width="35" height="35"/>
+      <rect x="225" y="294" width="35" height="35"/>
+      <path d="M199.5 268.5L204.5 263.5L230.5 289.5L225.5 294.5Z"/>
+    </g>
+  </g>
+  <!-- Brand Name Text -->
+  <text x="490" y="190" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif" font-weight="900" font-size="78" fill="#0F172A" letter-spacing="0.14em">REVLET</text>
+</svg>

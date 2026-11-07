@@ -1,11 +1,20 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Cloudflare DNS Infrastructure',
-  description: 'Authoritative Cloudflare DNS management, Anycast edge records, and proxy settings for educational institutions and enterprises.',
+  title: 'DNS Management',
+  description: 'Authoritative Cloudflare API v4 DNS records management with instant Anycast edge propagation.',
+  alternates: {
+    canonical: 'https://revlet.me/services/dns',
+  },
+  openGraph: {
+    title: 'DNS Management | Revlet IT Control Plane',
+    description: 'Authoritative Cloudflare API v4 DNS records management with instant Anycast edge propagation.',
+    url: 'https://revlet.me/services/dns',
+    images: ['/banner.svg'],
+  },
   robots: {
-    index: false,
-    follow: false,
+    index: true,
+    follow: true,
   },
 };
 

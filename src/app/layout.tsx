@@ -21,7 +21,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://app.revlet.me'),
+  metadataBase: new URL('https://revlet.me'),
   title: {
     default: 'Revlet | Enterprise IT Management & Cloud Infrastructure Control Plane',
     template: '%s | Revlet',
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
   creator: 'Revlet',
   publisher: 'Revlet',
   alternates: {
-    canonical: 'https://app.revlet.me',
+    canonical: 'https://revlet.me',
   },
   manifest: '/manifest.json',
   icons: {
@@ -238,14 +238,67 @@ const faqSchema = {
   ],
 };
 
-// WebSite schema with SearchAction — helps Google show a search box in sitelinks
+// SiteNavigationElement schema — guides Google Search algorithms to generate expanded organic Sitelinks
+const siteNavigationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  '@id': 'https://revlet.me/#sitelinks',
+  name: 'Revlet Sitelinks Navigation',
+  description: 'Primary services and administrative portals of the Revlet Control Plane.',
+  itemListElement: [
+    {
+      '@type': 'SiteNavigationElement',
+      position: 1,
+      name: 'Console',
+      description: 'Use the console to manage everything powering your domain — DNS records, email routing, and Google Workspace users.',
+      url: 'https://revlet.me/login',
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      position: 2,
+      name: 'Get Started & Organization Registration',
+      description: 'Register your educational institution or enterprise on Revlet with zero-trust multi-tenancy.',
+      url: 'https://revlet.me/signup',
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      position: 3,
+      name: 'Google Workspace for Education',
+      description: 'Centralized administration for school domains, user directory, and Google Drive storage pool monitoring.',
+      url: 'https://revlet.me/services/workspace',
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      position: 4,
+      name: 'DNS Management',
+      description: 'Authoritative Cloudflare API v4 records management with instant Anycast edge propagation.',
+      url: 'https://revlet.me/services/dns',
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      position: 5,
+      name: 'Custom Email Routing & Domain Security',
+      description: 'Configure custom domain forwarder aliases and inspect real-time SPF, DKIM, and DMARC parameters.',
+      url: 'https://revlet.me/services/email',
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      position: 6,
+      name: 'Documentation & Support',
+      description: 'Access technical documentation, troubleshooting manuals, FAQs, and submit priority support tickets.',
+      url: 'https://revlet.me/support',
+    },
+  ],
+};
+
+// WebSite schema with SearchAction & Sitelinks declaration
 const webSiteSchema = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
-  '@id': 'https://app.revlet.me/#website',
+  '@id': 'https://revlet.me/#website',
   name: 'Revlet',
-  alternateName: ['Revlet Dashboard', 'Revlet App'],
-  url: 'https://app.revlet.me',
+  alternateName: ['Revlet Dashboard', 'Revlet Control Plane', 'Revlet IT Manager'],
+  url: 'https://revlet.me',
   publisher: {
     '@type': 'Organization',
     '@id': 'https://revlet.me/#organization',
@@ -254,10 +307,47 @@ const webSiteSchema = {
     '@type': 'SearchAction',
     target: {
       '@type': 'EntryPoint',
-      urlTemplate: 'https://app.revlet.me/search?q={search_term_string}',
+      urlTemplate: 'https://revlet.me/support?q={search_term_string}',
     },
     'query-input': 'required name=search_term_string',
   },
+  hasPart: [
+    {
+      '@type': 'WebPage',
+      '@id': 'https://revlet.me/login#webpage',
+      url: 'https://revlet.me/login',
+      name: 'Console',
+      description: 'Sign in to the Revlet Console to manage DNS, email routing, and Google Workspace.',
+    },
+    {
+      '@type': 'WebPage',
+      '@id': 'https://revlet.me/signup#webpage',
+      url: 'https://revlet.me/signup',
+      name: 'Get Started',
+      description: 'Register your educational institution or enterprise on Revlet.',
+    },
+    {
+      '@type': 'WebPage',
+      '@id': 'https://revlet.me/services/workspace#webpage',
+      url: 'https://revlet.me/services/workspace',
+      name: 'Google Workspace for Education',
+      description: 'Centralized administration for school domains, user directory, and Drive storage.',
+    },
+    {
+      '@type': 'WebPage',
+      '@id': 'https://revlet.me/services/dns#webpage',
+      url: 'https://revlet.me/services/dns',
+      name: 'DNS Management',
+      description: 'Authoritative Cloudflare API v4 DNS records management.',
+    },
+    {
+      '@type': 'WebPage',
+      '@id': 'https://revlet.me/support#webpage',
+      url: 'https://revlet.me/support',
+      name: 'Documentation & Support',
+      description: 'Technical guides, FAQs, and submit priority infrastructure support tickets.',
+    },
+  ],
 };
 
 // BreadcrumbList for the root — helps Google understand page hierarchy for sitelinks
@@ -269,19 +359,25 @@ const breadcrumbSchema = {
       '@type': 'ListItem',
       position: 1,
       name: 'Home',
-      item: 'https://app.revlet.me',
+      item: 'https://revlet.me',
     },
     {
       '@type': 'ListItem',
       position: 2,
-      name: 'Login',
-      item: 'https://app.revlet.me/login',
+      name: 'Console',
+      item: 'https://revlet.me/login',
     },
     {
       '@type': 'ListItem',
       position: 3,
-      name: 'Create Account',
-      item: 'https://app.revlet.me/signup',
+      name: 'Get Started',
+      item: 'https://revlet.me/signup',
+    },
+    {
+      '@type': 'ListItem',
+      position: 4,
+      name: 'Support',
+      item: 'https://revlet.me/support',
     },
   ],
 };
@@ -297,6 +393,7 @@ export default function RootLayout({
         <JsonLd data={organizationSchema} />
         <JsonLd data={webApplicationSchema} />
         <JsonLd data={webSiteSchema} />
+        <JsonLd data={siteNavigationSchema} />
         <JsonLd data={breadcrumbSchema} />
         <JsonLd data={faqSchema} />
       </head>

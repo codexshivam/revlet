@@ -2,10 +2,10 @@ import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
 
 export const metadata: Metadata = {
-  title: 'Help, Documentation & Support Center',
-  description: 'Access Revlet official documentation, troubleshooting guides, FAQs, and submit priority support tickets for DNS, email routing, and Google Workspace integrations.',
+  title: 'Documentation & Support',
+  description: 'Access technical documentation, step-by-step onboarding guides, FAQs, and submit priority infrastructure support tickets.',
   alternates: {
-    canonical: 'https://app.revlet.me/support',
+    canonical: 'https://revlet.me/support',
   },
   keywords: [
     'Revlet support',
@@ -15,22 +15,22 @@ export const metadata: Metadata = {
     'SPF DKIM assistance',
   ],
   openGraph: {
-    title: 'Help & Support | Revlet IT Management Control Plane',
+    title: 'Documentation & Support | Revlet IT Control Plane',
     description: 'Documentation, guides, and ticket support for educational and enterprise IT teams.',
-    url: 'https://app.revlet.me/support',
+    url: 'https://revlet.me/support',
     type: 'website',
     images: [
       {
         url: '/banner.svg',
         width: 1200,
         height: 320,
-        alt: 'Revlet Help & Support',
+        alt: 'Revlet Documentation & Support',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Help & Support | Revlet IT Management Control Plane',
+    title: 'Documentation & Support | Revlet IT Control Plane',
     description: 'Documentation, guides, and ticket support for educational and enterprise IT teams.',
     images: ['/banner.svg'],
   },
@@ -49,13 +49,13 @@ export default function SupportLayout({ children }: { children: React.ReactNode 
         '@type': 'ListItem',
         position: 1,
         name: 'Revlet',
-        item: 'https://app.revlet.me',
+        item: 'https://revlet.me',
       },
       {
         '@type': 'ListItem',
         position: 2,
-        name: 'Help & Support',
-        item: 'https://app.revlet.me/support',
+        name: 'Documentation & Support',
+        item: 'https://revlet.me/support',
       },
     ],
   };
@@ -64,7 +64,7 @@ export default function SupportLayout({ children }: { children: React.ReactNode 
     '@context': 'https://schema.org',
     '@type': 'ContactPage',
     name: 'Revlet Support Center',
-    url: 'https://app.revlet.me/support',
+    url: 'https://revlet.me/support',
     description: 'Technical documentation, service status, and customer assistance for Revlet administrators.',
     mainEntity: {
       '@type': 'Organization',

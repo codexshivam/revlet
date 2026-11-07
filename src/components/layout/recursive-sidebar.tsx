@@ -13,7 +13,8 @@ import {
   GraduationCap,
   HardDrive,
   UserMinus,
-  Library
+  Library,
+  Server
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useActiveOrg } from "@/hooks/use-active-org"
@@ -33,6 +34,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
 
   const mainNavItems: NavItem[] = [
     { title: "Account Home", icon: LayoutDashboard, href: "/account/home" },
+    { title: "Infrastructure", icon: Server, href: "/services/infrastructure" },
     { title: "DNS Management", icon: Globe, href: "/services/dns" },
     { title: "Website Management", icon: Database, href: "/services/website" },
     { title: "Email Service", icon: Mail, href: "/services/email" },

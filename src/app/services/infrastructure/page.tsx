@@ -81,6 +81,7 @@ export default function InfrastructurePage() {
   // Tab State
   const [activeTab, setActiveTab] = useState("presets")
   const [loading, setLoading] = useState(false)
+  const [permissionWarning, setPermissionWarning] = useState<string | null>(null)
 
   // Cache & Speed State
   const [isPurging, setIsPurging] = useState(false)
@@ -174,6 +175,15 @@ export default function InfrastructurePage() {
       const rulesRes = await getEmailRoutingRules(token, activeOrg.id, zoneId)
       if (rulesRes.success && rulesRes.data) {
         setEmailRules(rulesRes.data)
+      }
+
+      if (
+        !sslRes.success &&
+        (sslRes.error?.includes("permission") || sslRes.error?.includes("Unauthorized") || sslRes.error?.includes("Authentication failed"))
+      ) {
+        setPermissionWarning("Your Cloudflare API token currently has DNS access only. To unlock Cache Purge, SSL/HTTPS modes, and Free Email Routing, grant 'Zone Settings', 'Cache Purge', and 'Email Routing' permissions in your Cloudflare dashboard.")
+      } else {
+        setPermissionWarning(null)
       }
     } catch {
       // Ignore background fetch error
@@ -555,6 +565,30 @@ export default function InfrastructurePage() {
             </Link>
           </div>
         </div>
+
+        {/* Token Permissions Warning Banner */}
+        {permissionWarning && (
+          <div className="flex items-start gap-3 p-4 bg-amber-50/90 rounded-xl border border-amber-200/80 text-amber-900 animate-in fade-in shadow-xs">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-amber-950">Cloudflare API Token Permissions Required</p>
+              <p className="text-xs text-amber-900/90 leading-relaxed font-normal">
+                Your token has active DNS access. To enable <strong>Speed &amp; Cache Purge</strong>, <strong>SSL/HTTPS modes</strong>, and <strong>Free Email Routing</strong>, update your token in the Cloudflare dashboard:
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1.5">
+                <Badge variant="outline" className="text-[10px] bg-white border-amber-300 font-mono text-amber-950">
+                  Zone &gt; Zone Settings &gt; Edit
+                </Badge>
+                <Badge variant="outline" className="text-[10px] bg-white border-amber-300 font-mono text-amber-950">
+                  Zone &gt; Cache Purge &gt; Purge
+                </Badge>
+                <Badge variant="outline" className="text-[10px] bg-white border-amber-300 font-mono text-amber-950">
+                  Zone &gt; Email Routing &gt; Edit
+                </Badge>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Empty State when no Domain is Configured */}
         {!domain || !zoneId ? (

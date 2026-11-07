@@ -56,8 +56,14 @@ export async function cfFetch(path: string, options: RequestInit = {}) {
     if (friendlyMessage.includes("fetch failed") || friendlyMessage.includes("ENOTFOUND")) {
       friendlyMessage = "Connection failed. Failed to reach the Cloudflare network edge. Please check your internet connection.";
     } else if (error.status === 403 || error.status === 401 || friendlyMessage.includes("Unauthorized") || friendlyMessage.toLowerCase().includes("token")) {
-      if (path.startsWith('/zones/') && path.split('/').length >= 3) {
-        friendlyMessage = `Zone Access Denied (403). The domain may have been deleted from Cloudflare.`;
+      if (path.includes('/purge_cache')) {
+        friendlyMessage = "Missing Cloudflare permission: 'Zone > Cache Purge > Purge'. Please grant this in Cloudflare API Tokens.";
+      } else if (path.includes('/settings/')) {
+        friendlyMessage = "Missing Cloudflare permission: 'Zone > Zone Settings > Edit'. Please grant this in Cloudflare API Tokens.";
+      } else if (path.includes('/email/')) {
+        friendlyMessage = "Missing Cloudflare permission: 'Zone > Email Routing > Edit'. Please grant this in Cloudflare API Tokens.";
+      } else if (path.includes('/dns_records')) {
+        friendlyMessage = "Missing Cloudflare permission: 'Zone > DNS > Edit'. Please grant this in Cloudflare API Tokens.";
       } else {
         friendlyMessage = "Authentication failed. The configured Cloudflare API token is invalid or has insufficient permissions.";
       }

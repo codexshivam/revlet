@@ -30,9 +30,8 @@ export async function verifyUserOrgAccess(
 
   const orgData = orgDoc.data();
   const userEmail = decodedToken.email?.toLowerCase().trim();
-  const isSuperAdmin = userEmail === 'shivam@revlet.me';
-  const isContactOwner = orgData?.contactEmail && orgData.contactEmail.toLowerCase().trim() === userEmail;
-  const isOwner = isSuperAdmin || isContactOwner || orgData?.ownerId === decodedToken.uid;
+  const isSuperAdmin = (decodedToken as any).admin === true || userEmail === 'shivam@revlet.me';
+  const isOwner = isSuperAdmin || orgData?.ownerId === decodedToken.uid;
 
   let isMember = isOwner;
   if (!isMember && userEmail) {

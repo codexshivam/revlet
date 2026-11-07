@@ -205,7 +205,7 @@ export default function StoragePage() {
     } finally {
       setIsLoading(false)
     }
-  }, [adminEmail, selectedOrgId, toast])
+  }, [adminEmail, selectedOrgId, selectedOrg?.id, user, toast])
 
   useEffect(() => {
     if (selectedOrg?.workspaceStatus === "active" && adminEmail) {

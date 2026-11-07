@@ -10,8 +10,31 @@ service firebase.storage {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'shivam@revlet.me')
+      );
+    }
+
+    function isOrgOwnerOrMember(orgId) {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        (
+          firestore.exists(/databases/itmanager/documents/organizations/$(orgId)) &&
+          (
+            firestore.get(/databases/itmanager/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
+            (
+              'memberEmails' in firestore.get(/databases/itmanager/documents/organizations/$(orgId)).data &&
+              request.auth.token.email != null &&
+              request.auth.token.email.lower() in firestore.get(/databases/itmanager/documents/organizations/$(orgId)).data.memberEmails
+            )
+          )
+        )
+      );
+    }
+
     // ─── User Profile Assets ──────────────────────────────────────────────────
-    // Users can read/write their own files up to 5MB (images/documents)
     match /users/{userId}/{allPaths=**} {
       allow read: if isAuthenticated();
       allow write: if isOwner(userId)
@@ -19,11 +42,18 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*|application/pdf');
     }
 
+    // ─── Payment Vouchers ─────────────────────────────────────────────────────
+    match /vouchers/{userId}/{allPaths=**} {
+      allow read: if isOwner(userId) || isSuperAdmin();
+      allow write: if isOwner(userId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|application/pdf');
+    }
+
     // ─── Organization Assets ──────────────────────────────────────────────────
-    // Authenticated org uploads (logos, vouchers) up to 10MB
     match /organizations/{orgId}/{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated()
+      allow read: if isOrgOwnerOrMember(orgId);
+      allow write: if isOrgOwnerOrMember(orgId)
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|application/pdf');
     }

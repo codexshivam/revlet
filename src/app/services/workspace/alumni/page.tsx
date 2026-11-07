@@ -222,7 +222,7 @@ export default function WorkspaceAlumniPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedOrg?.workspaceAdminEmail, isWorkspaceActive, activeOrgId])
+  }, [selectedOrg?.workspaceAdminEmail, selectedOrg?.id, isWorkspaceActive, activeOrgId, user])
 
   useEffect(() => {
     fetchAlumniData()

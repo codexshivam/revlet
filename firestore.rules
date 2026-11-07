@@ -18,14 +18,14 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.email != null && request.auth.token.email.lower() == 'shivam@revlet.me') ||
-        (request.auth.token.admin == true)
+        request.auth.token.admin == true ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'shivam@revlet.me')
       );
     }
 
     // ─── Organizations ────────────────────────────────────────────────────────
-    // Owners can fully manage their organizations.
-    // Create requires auth; only valid fields are written.
+    // Owners can manage their organization details. Sensitive infrastructure &
+    // workspace fields are protected against direct client-side escalation.
     match /organizations/{orgId} {
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
@@ -39,7 +39,13 @@ service cloud.firestore {
         'memberEmails' in resource.data && 
         request.auth.token.email.lower() in resource.data.memberEmails
       );
-      allow update: if (isResourceOwner() || isSuperAdmin()) && request.resource.data.ownerId == resource.data.ownerId;
+      allow update: if (isResourceOwner() || isSuperAdmin()) 
+        && request.resource.data.ownerId == resource.data.ownerId
+        && (
+          isSuperAdmin() ||
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'memberEmails', 'updatedAt'])
+        );
       allow delete: if false; // Deletion is handled via status flag, not hard delete
     }
 

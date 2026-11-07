@@ -429,7 +429,7 @@ export default function GoogleWorkspacePage() {
     } finally {
       setIsLoadingDashboard(false)
     }
-  }, [selectedOrg?.workspaceAdminEmail, selectedOrg?.workspaceStatus, toast])
+  }, [selectedOrg?.workspaceAdminEmail, selectedOrg?.workspaceStatus, user, selectedOrgId, selectedOrg?.id, toast])
 
   useEffect(() => {
     if (selectedOrg?.workspaceStatus === "active" && selectedOrg?.workspaceAdminEmail) {

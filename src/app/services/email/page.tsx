@@ -223,7 +223,7 @@ export default function EmailRoutingPage() {
 
       // Query live DNS records
       const dnsRes = await listDNSRecords(idToken, orgId, zoneId)
-      if (dnsRes.success) {
+      if (dnsRes.success && dnsRes.data) {
         setDnsRecords(dnsRes.data)
       } else {
         console.warn("Live DNS validation sync issue:", dnsRes.error)

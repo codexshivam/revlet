@@ -400,7 +400,7 @@ export default function WorkspaceUsersPage() {
         setIsLoadingUsers(false)
       }
     },
-    [adminEmail, toast]
+    [adminEmail, user, selectedOrgId, selectedOrg?.id, toast]
   )
 
   // ─── Tab User Counts ─────────────────────────────────────────────────────
@@ -426,7 +426,7 @@ export default function WorkspaceUsersPage() {
     } catch (error) {
       console.error("Failed to refresh user tab counts:", error)
     }
-  }, [adminEmail, customOUs])
+  }, [adminEmail, user, selectedOrgId, selectedOrg?.id, customOUs])
 
   // ─── Auto-Provision Missing OUs ─────────────────────────────────────────
 
@@ -457,7 +457,7 @@ export default function WorkspaceUsersPage() {
     } catch (err) {
       console.error("Failed to auto-create default types:", err)
     }
-  }, [adminEmail, refreshTabCounts])
+  }, [adminEmail, user, selectedOrgId, selectedOrg?.id, refreshTabCounts])
 
   // Initial and reactive loading
   useEffect(() => {
@@ -887,108 +887,116 @@ export default function WorkspaceUsersPage() {
     
     let successCount = 0
     const errs: string[] = []
+    const idToken = await user.getIdToken()
+    const activeOrgId = selectedOrgId || selectedOrg?.id || ""
 
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i]
-      const sn = snIdx !== -1 ? row[snIdx] : (i + 1).toString()
-      const firstName = row[firstNameIdx]?.trim() || ""
-      const lastName = row[lastNameIdx]?.trim() || ""
+    const CHUNK_SIZE = 5
+    for (let chunkIdx = 0; chunkIdx < dataRows.length; chunkIdx += CHUNK_SIZE) {
+      const chunk = dataRows.slice(chunkIdx, chunkIdx + CHUNK_SIZE)
       
-      if (!firstName) {
-        errs.push(`Row ${i + 2}: First name is required.`)
-        setImportProgress(i + 1)
-        continue
-      }
-
-      let email = (desiredEmailIdx !== -1 ? row[desiredEmailIdx]?.trim() : "") || ""
-      if (!email) {
-        const cleanFirst = firstName.toLowerCase().replace(/[^a-z0-9]/g, "")
-        const rand = Math.floor(100 + Math.random() * 900) // some numbers
-        email = `${cleanFirst}${rand}${sn}@${domain}`
-      }
-
-      let password = (passwordIdx !== -1 ? row[passwordIdx]?.trim() : "") || ""
-      if (!password) {
-        password = generateRandomPassword(12)
-      }
-
-      let userOUPath = importOUPath
-      
-      // Compute base OU if class/section is selected
-      if (importOUPath === "/Students" && importClassId !== "none") {
-        const cls = classes.find(c => c.id === importClassId)
-        if (cls) {
-          userOUPath = `/Students/${cls.name}`
-          if (importSectionId !== "none") {
-            const sec = cls.sections.find(s => s.id === importSectionId)
-            if (sec) userOUPath += `/${sec.name}`
+      await Promise.allSettled(
+        chunk.map(async (row, idxInChunk) => {
+          const i = chunkIdx + idxInChunk
+          const sn = snIdx !== -1 ? row[snIdx] : (i + 1).toString()
+          const firstName = row[firstNameIdx]?.trim() || ""
+          const lastName = row[lastNameIdx]?.trim() || ""
+          
+          if (!firstName) {
+            errs.push(`Row ${i + 2}: First name is required.`)
+            return
           }
-        }
-      }
 
-      const typeVal = typeIdx !== -1 ? row[typeIdx]?.trim() : ""
-      if (typeVal) {
-        const cleanType = typeVal.toLowerCase()
-        if (cleanType === "none" || cleanType === "root" || cleanType === "/") {
-          userOUPath = "/"
-        } else {
-          const matchedOU = availableOUPaths.find(
-            (o) => o.label.toLowerCase() === cleanType || o.path.toLowerCase() === `/${cleanType}`
-          )
-          if (matchedOU) {
-            userOUPath = matchedOU.path
-          } else {
-            userOUPath = typeVal.startsWith("/") ? typeVal : `/${typeVal}`
+          let email = (desiredEmailIdx !== -1 ? row[desiredEmailIdx]?.trim() : "") || ""
+          if (!email) {
+            const cleanFirst = firstName.toLowerCase().replace(/[^a-z0-9]/g, "")
+            const rand = Math.floor(100 + Math.random() * 900) // some numbers
+            email = `${cleanFirst}${rand}${sn}@${domain}`
           }
-        }
-      }
 
-      try {
-        // Search if email exists in workspace users
-        const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase())
+          let password = (passwordIdx !== -1 ? row[passwordIdx]?.trim() : "") || ""
+          if (!password) {
+            password = generateRandomPassword(12)
+          }
 
-        if (existingUser) {
-          // Update details: First name, Last name, and Type if specified
-          const updates: any = {
-            firstName: firstName,
-            lastName: lastName,
-          }
-          if (userOUPath !== existingUser.orgUnitPath) {
-            updates.orgUnitPath = userOUPath
-          }
-          const res = await updateUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", existingUser.id, updates)
-          if (res.success) {
-            // If password was explicitly provided, reset it
-            if (row[passwordIdx]?.trim()) {
-              const resetRes = await resetUserPassword(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", existingUser.id, password)
-              if (!resetRes.success) {
-                errs.push(`Row ${i + 2}: (${email}) Details updated, but password reset failed: ${resetRes.error}`)
+          let userOUPath = importOUPath
+          
+          // Compute base OU if class/section is selected
+          if (importOUPath === "/Students" && importClassId !== "none") {
+            const cls = classes.find(c => c.id === importClassId)
+            if (cls) {
+              userOUPath = `/Students/${cls.name}`
+              if (importSectionId !== "none") {
+                const sec = cls.sections.find(s => s.id === importSectionId)
+                if (sec) userOUPath += `/${sec.name}`
               }
             }
-            successCount++
-          } else {
-            errs.push(`Row ${i + 2}: (${email}) Update failed: ${res.error}`)
           }
-        } else {
-          // Create new user in the selected organizational unit path
-          const res = await createUser(await user.getIdToken(), selectedOrgId || selectedOrg?.id || "", {
-            email: email,
-            password: password,
-            firstName: firstName,
-            lastName: lastName,
-            orgUnitPath: userOUPath,
-          })
-          if (res.success) {
-            successCount++
-          } else {
-            errs.push(`Row ${i + 2}: (${email}) Creation failed: ${res.error}`)
+
+          const typeVal = typeIdx !== -1 ? row[typeIdx]?.trim() : ""
+          if (typeVal) {
+            const cleanType = typeVal.toLowerCase()
+            if (cleanType === "none" || cleanType === "root" || cleanType === "/") {
+              userOUPath = "/"
+            } else {
+              const matchedOU = availableOUPaths.find(
+                (o) => o.label.toLowerCase() === cleanType || o.path.toLowerCase() === `/${cleanType}`
+              )
+              if (matchedOU) {
+                userOUPath = matchedOU.path
+              } else {
+                userOUPath = typeVal.startsWith("/") ? typeVal : `/${typeVal}`
+              }
+            }
           }
-        }
-      } catch (err: any) {
-        errs.push(`Row ${i + 2}: Error: ${err.message || err}`)
-      }
-      
-      setImportProgress(i + 1)
+
+          try {
+            // Search if email exists in workspace users
+            const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase())
+
+            if (existingUser) {
+              // Update details: First name, Last name, and Type if specified
+              const updates: any = {
+                firstName: firstName,
+                lastName: lastName,
+              }
+              if (userOUPath !== existingUser.orgUnitPath) {
+                updates.orgUnitPath = userOUPath
+              }
+              const res = await updateUser(idToken, activeOrgId, existingUser.id, updates)
+              if (res.success) {
+                // If password was explicitly provided, reset it
+                if (row[passwordIdx]?.trim()) {
+                  const resetRes = await resetUserPassword(idToken, activeOrgId, existingUser.id, password)
+                  if (!resetRes.success) {
+                    errs.push(`Row ${i + 2}: (${email}) Details updated, but password reset failed: ${resetRes.error}`)
+                  }
+                }
+                successCount++
+              } else {
+                errs.push(`Row ${i + 2}: (${email}) Update failed: ${res.error}`)
+              }
+            } else {
+              // Create new user in the selected organizational unit path
+              const res = await createUser(idToken, activeOrgId, {
+                email: email,
+                password: password,
+                firstName: firstName,
+                lastName: lastName,
+                orgUnitPath: userOUPath,
+              })
+              if (res.success) {
+                successCount++
+              } else {
+                errs.push(`Row ${i + 2}: (${email}) Creation failed: ${res.error}`)
+              }
+            }
+          } catch (err: any) {
+            errs.push(`Row ${i + 2}: Error: ${err.message || err}`)
+          }
+        })
+      )
+
+      setImportProgress(Math.min(chunkIdx + CHUNK_SIZE, dataRows.length))
     }
 
     setImportResults({

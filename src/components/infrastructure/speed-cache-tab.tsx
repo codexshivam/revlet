@@ -126,6 +126,25 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
       formattedUrl = `https://${domain}/${formattedUrl.replace(/^\/+/, "")}`
     }
 
+    try {
+      const parsed = new URL(formattedUrl)
+      if (domain && !parsed.hostname.toLowerCase().endsWith(domain.toLowerCase())) {
+        toast({
+          variant: "destructive",
+          title: "Invalid Domain",
+          description: `The URL hostname must belong to your domain (${domain}).`,
+        })
+        return
+      }
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Malformed URL",
+        description: "Please enter a valid URL (e.g. https://yourdomain.com/style.css).",
+      })
+      return
+    }
+
     setIsPurgingSingle(true)
     try {
       const token = await getIdToken()

@@ -1,0 +1,142 @@
+"use client"
+
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react"
+import { useUser, useFirestore } from "@/firebase"
+import { collection, query, where, or, onSnapshot } from "firebase/firestore"
+
+export interface Organization {
+  id: string
+  name: string
+  domain: string
+  code: string
+  address?: string
+  phone?: string
+  currentEmail?: string
+  contactName?: string
+  contactPhone?: string
+  contactEmail?: string
+  description?: string
+  ownerId: string
+  status?: string
+  dnsRequested?: boolean
+  cloudflareZoneId?: string
+  emailServiceActive?: boolean
+  isEducation?: boolean
+  // Google Workspace fields
+  workspaceStatus?: 'none' | 'applied' | 'pending' | 'active'
+  workspaceAdminEmail?: string
+  workspaceCustomerId?: string
+  workspaceDomain?: string
+  workspaceAppliedAt?: any
+  workspaceActivatedAt?: any
+  createdAt?: any
+  updatedAt?: any
+}
+
+interface OrgContextType {
+  orgs: Organization[]
+  activeOrg: Organization | undefined
+  activeOrgId: string
+  setActiveOrgId: (id: string) => void
+  loading: boolean
+}
+
+const OrgContext = createContext<OrgContextType | null>(null)
+
+export function OrgProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useUser()
+  const db = useFirestore()
+  const [orgs, setOrgs] = useState<Organization[]>([])
+  const [activeOrgId, setActiveOrgId] = useState<string>("")
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) {
+      setOrgs([])
+      setActiveOrgId("")
+      setLoading(false)
+      return
+    }
+
+    const q = query(
+      collection(db, "organizations"),
+      or(
+        where("ownerId", "==", user.uid),
+        where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
+      )
+    )
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        const fetched = snap.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((o: any) => o.status !== "Pending Deletion") as Organization[]
+
+        setOrgs(fetched)
+
+        // Resolve active organization from localStorage or default to first
+        const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
+        const found = fetched.find((o) => o.id === storedId)
+
+        if (found) {
+          setActiveOrgId(found.id)
+        } else if (fetched.length > 0) {
+          setActiveOrgId(fetched[0].id)
+          if (typeof window !== "undefined") {
+            localStorage.setItem("selectedOrgId", fetched[0].id)
+          }
+        } else {
+          setActiveOrgId("")
+        }
+        setLoading(false)
+      },
+      (error) => {
+        console.error("Error listening to organizations:", error)
+        setLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [user, db])
+
+  const changeActiveOrg = useCallback((id: string) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("selectedOrgId", id)
+    }
+    setActiveOrgId(id)
+  }, [])
+
+  const activeOrg = useMemo(() => orgs.find((o) => o.id === activeOrgId), [orgs, activeOrgId])
+
+  const value = useMemo(
+    () => ({
+      orgs,
+      activeOrg,
+      activeOrgId,
+      setActiveOrgId: changeActiveOrg,
+      loading,
+    }),
+    [orgs, activeOrg, activeOrgId, changeActiveOrg, loading]
+  )
+
+  return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>
+}
+
+export function useActiveOrg(): OrgContextType {
+  const context = useContext(OrgContext)
+  if (!context) {
+    // Graceful fallback if called outside provider
+    return {
+      orgs: [],
+      activeOrg: undefined,
+      activeOrgId: "",
+      setActiveOrgId: () => {},
+      loading: false,
+    }
+  }
+  return context
+}

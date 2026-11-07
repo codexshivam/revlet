@@ -33,10 +33,22 @@ export async function listDNSRecords(idToken: string, orgId: string, zoneId: str
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
     await verifyUserOrgAccess(idToken, orgId, zoneId);
-    const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100`);
+    let allRecords: any[] = [];
+    let page = 1;
+    let totalPages = 1;
+
+    while (page <= totalPages && page <= 10) { // Safety cap at 1,000 records
+      const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100&page=${page}`);
+      if (Array.isArray(data.result)) {
+        allRecords.push(...data.result);
+      }
+      totalPages = data.result_info?.total_pages || 1;
+      page++;
+    }
+
     return {
       success: true,
-      data: data.result.map((r: any) => ({
+      data: allRecords.map((r: any) => ({
         id: r.id,
         type: r.type,
         name: r.name,
@@ -218,7 +230,7 @@ export async function autoConfigureEmailDNS(idToken: string, orgId: string, zone
     await verifyUserOrgAccess(idToken, orgId, zoneId);
     const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!recordsRes.success) throw new Error(recordsRes.error);
-    const records = recordsRes.data;
+    const records = recordsRes.data || [];
 
     // Delete conflicting records
     const conflictingRecords = records.filter((r: any) => {
@@ -258,7 +270,7 @@ export async function removeEmailRoutingDNS(idToken: string, orgId: string, zone
     const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!recordsRes.success) throw new Error(recordsRes.error);
     
-    const cfRecords = recordsRes.data.filter((r: any) => {
+    const cfRecords = (recordsRes.data || []).filter((r: any) => {
       const isRoot = r.name === domainName;
       if (!isRoot) return false;
       if (r.type === 'MX' && r.content.includes('.mx.cloudflare.net')) return true;

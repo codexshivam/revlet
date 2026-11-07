@@ -211,7 +211,7 @@ export default function DNSManagementPage() {
     } finally {
       setIsLoadingRecords(false)
     }
-  }, [zoneId, toast])
+  }, [zoneId, selectedOrg?.id, user, db, toast])
 
   useEffect(() => {
     if (zoneId) {

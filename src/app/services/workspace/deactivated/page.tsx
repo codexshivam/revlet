@@ -344,7 +344,7 @@ export default function WorkspaceDeactivatedPage() {
     } catch (err) {
       console.error("Failed to load OUs:", err)
     }
-  }, [adminEmail])
+  }, [adminEmail, user, selectedOrgId, selectedOrg?.id])
 
   // ─── Fetch Deleted Users from Live Google Workspace API ──────────────────
   const fetchDeletedUsers = useCallback(async () => {
@@ -388,7 +388,7 @@ export default function WorkspaceDeactivatedPage() {
     } finally {
       setIsLoadingDeleted(false)
     }
-  }, [adminEmail])
+  }, [adminEmail, user, selectedOrgId, selectedOrg?.id])
 
   useEffect(() => {
     if (isWorkspaceActive && adminEmail) {
@@ -435,7 +435,7 @@ export default function WorkspaceDeactivatedPage() {
         setIsLoadingMore(false)
       }
     },
-    [adminEmail, toast]
+    [adminEmail, user, selectedOrgId, selectedOrg?.id, toast]
   )
 
   // ─── Fetch Storage Usage for Recoverable Storage calculation ─────────────
@@ -454,7 +454,7 @@ export default function WorkspaceDeactivatedPage() {
     } catch (err) {
       console.error("Failed to load storage report for estimation:", err)
     }
-  }, [adminEmail])
+  }, [adminEmail, user, selectedOrgId, selectedOrg?.id])
 
   useEffect(() => {
     if (isWorkspaceActive && adminEmail) {

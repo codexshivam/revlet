@@ -464,3 +464,67 @@ export async function applyPlatformPreset(
     return { success: false, error: error.message || `Failed to apply ${platform} preset` };
   }
 }
+
+// --- 6. ACCOUNT RESOURCES (Compute, Storage, Databases, Tunnels) ---
+
+const DEFAULT_ACCOUNT_ID = '7f4b97a2565849ad980c9401fb2fc427';
+
+function getAccountId(): string {
+  return process.env.CLOUDFLARE_ACCOUNT_ID?.trim() || DEFAULT_ACCOUNT_ID;
+}
+
+export async function getAccountWorkers(idToken: string, orgId: string) {
+  try {
+    await verifyUserOrgAccess(idToken, orgId);
+    const accountId = getAccountId();
+    const data = await cfFetch(`/accounts/${accountId}/workers/scripts`);
+    return { success: true, data: data.result || [] };
+  } catch (error: any) {
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+export async function getAccountTunnels(idToken: string, orgId: string) {
+  try {
+    await verifyUserOrgAccess(idToken, orgId);
+    const accountId = getAccountId();
+    const data = await cfFetch(`/accounts/${accountId}/cfd_tunnel?is_deleted=false`);
+    return { success: true, data: data.result || [] };
+  } catch (error: any) {
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+export async function getAccountR2Buckets(idToken: string, orgId: string) {
+  try {
+    await verifyUserOrgAccess(idToken, orgId);
+    const accountId = getAccountId();
+    const data = await cfFetch(`/accounts/${accountId}/r2/buckets`);
+    return { success: true, data: data.result?.buckets || [] };
+  } catch (error: any) {
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+export async function getAccountD1Databases(idToken: string, orgId: string) {
+  try {
+    await verifyUserOrgAccess(idToken, orgId);
+    const accountId = getAccountId();
+    const data = await cfFetch(`/accounts/${accountId}/d1/database`);
+    return { success: true, data: data.result || [] };
+  } catch (error: any) {
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+export async function getAccountKVNamespaces(idToken: string, orgId: string) {
+  try {
+    await verifyUserOrgAccess(idToken, orgId);
+    const accountId = getAccountId();
+    const data = await cfFetch(`/accounts/${accountId}/storage/kv/namespaces`);
+    return { success: true, data: data.result || [] };
+  } catch (error: any) {
+    return { success: false, error: error.message, data: [] };
+  }
+}
+

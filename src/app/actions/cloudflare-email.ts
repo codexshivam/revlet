@@ -7,6 +7,7 @@
  */
 
 import { verifyUserOrgAccess } from './auth-helper';
+import { adminDb } from '@/firebase/admin';
 
 const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
 
@@ -298,5 +299,31 @@ export async function getDestinationAddress(idToken: string, orgId: string, addr
     };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to fetch destination address' };
+  }
+}
+
+export async function syncEmailServiceState(
+  idToken: string,
+  orgId: string,
+  enabled: boolean
+) {
+  if (!orgId) return { success: false, error: 'Missing organization ID' };
+  try {
+    const access = await verifyUserOrgAccess(idToken, orgId);
+    await adminDb.collection('organizations').doc(orgId).set({
+      emailServiceActive: enabled,
+    }, { merge: true });
+
+    await adminDb.collection('emailRoutingConfigs').doc(orgId).set({
+      organizationId: orgId,
+      domainName: access.orgData?.domain || '',
+      isServiceActive: enabled,
+      ownerId: access.orgData?.ownerId || access.uid,
+      updatedAt: new Date(),
+    }, { merge: true });
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to sync email service state' };
   }
 }

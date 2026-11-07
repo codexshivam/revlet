@@ -17,8 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
-import { useUser, useFirestore } from "@/firebase"
-import { doc, setDoc, getDoc, addDoc, collection, serverTimestamp, updateDoc } from "firebase/firestore"
+import { useUser } from "@/firebase"
 import Link from "next/link"
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -55,6 +54,7 @@ import {
   listEmailRules,
   createEmailRule,
   deleteEmailRule,
+  syncEmailServiceState,
 } from "@/app/actions/cloudflare-email"
 import { 
   listDNSRecords,
@@ -101,7 +101,6 @@ function EmailRulesSkeleton() {
 export default function EmailRoutingPage() {
   const { toast } = useToast()
   const { user } = useUser()
-  const db = useFirestore()
   const { orgs, activeOrg: selectedOrg, activeOrgId: selectedOrgId, loading: isLoadingOrgs } = useActiveOrg()
 
   const [emailServiceActive, setEmailServiceActive] = useState(false)
@@ -169,32 +168,44 @@ export default function EmailRoutingPage() {
 
   // Check email service status on mount / org change
   useEffect(() => {
+    let isMounted = true
     const checkEmailStatus = async () => {
-      if (!selectedOrg) { setIsCheckingStatus(false); return }
+      if (!selectedOrg) {
+        if (isMounted) setIsCheckingStatus(false)
+        return
+      }
       setIsCheckingStatus(true)
       try {
-        // First check org doc
+        // 1. Check org doc
         if (selectedOrg.emailServiceActive) {
-          setEmailServiceActive(true)
-        } else {
-          // Fallback: check emailRoutingConfigs collection
-          const configRef = doc(db, "emailRoutingConfigs", selectedOrg.id)
-          const configSnap = await getDoc(configRef)
-          if (configSnap.exists() && configSnap.data()?.isServiceActive) {
-            setEmailServiceActive(true)
-          } else {
-            setEmailServiceActive(false)
+          if (isMounted) setEmailServiceActive(true)
+        } else if (zoneId && user) {
+          // 2. Query live Cloudflare status without permission-sensitive Firestore lookups
+          try {
+            const idToken = await user.getIdToken()
+            const stRes = await getEmailRoutingStatus(idToken, selectedOrg.id, zoneId)
+            if (stRes.success && stRes.data?.enabled) {
+              if (isMounted) setEmailServiceActive(true)
+              await syncEmailServiceState(idToken, selectedOrg.id, true)
+            } else {
+              if (isMounted) setEmailServiceActive(false)
+            }
+          } catch {
+            if (isMounted) setEmailServiceActive(false)
           }
+        } else {
+          if (isMounted) setEmailServiceActive(false)
         }
       } catch (error) {
         console.error("Error checking email status:", error)
-        setEmailServiceActive(false)
+        if (isMounted) setEmailServiceActive(false)
       } finally {
-        setIsCheckingStatus(false)
+        if (isMounted) setIsCheckingStatus(false)
       }
     }
     checkEmailStatus()
-  }, [selectedOrg, db])
+    return () => { isMounted = false }
+  }, [selectedOrg, zoneId, user])
 
   // Fetch email rules and query DNS records for live security verification
   const fetchEmailRules = useCallback(async () => {
@@ -257,18 +268,8 @@ export default function EmailRoutingPage() {
         throw new Error(res.error)
       }
 
-      // Update Firestore org doc
-      await updateDoc(doc(db, "organizations", selectedOrg.id), { emailServiceActive: true })
-
-      // Create emailRoutingConfigs doc
-      await setDoc(doc(db, "emailRoutingConfigs", selectedOrg.id), {
-        organizationId: selectedOrg.id,
-        domainName: selectedOrg.domain,
-        isServiceActive: true,
-        dmarcPolicy: "v=DMARC1; p=none;",
-        ownerId: user.uid,
-        createdAt: serverTimestamp(),
-      })
+      // 3. Sync state reliably via server action
+      await syncEmailServiceState(idToken, orgId, true)
 
       toast({
         title: "Email Service Activated",
@@ -302,14 +303,8 @@ export default function EmailRoutingPage() {
       // 1. Disable Routing via API
       await disableEmailRouting(idToken, orgId, zoneId)
 
-      // 2. Update Firestore org doc
-      await updateDoc(doc(db, "organizations", selectedOrg.id), { emailServiceActive: false })
-
-      // Update config doc
-      await updateDoc(doc(db, "emailRoutingConfigs", selectedOrg.id), {
-        isServiceActive: false,
-        updatedAt: serverTimestamp(),
-      })
+      // 2. Sync state reliably via server action
+      await syncEmailServiceState(idToken, orgId, false)
 
       toast({
         title: "Email Service Disabled",

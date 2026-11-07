@@ -29,17 +29,24 @@ export async function verifyUserOrgAccess(
   }
 
   const orgData = orgDoc.data();
-  const isOwner = orgData?.ownerId === decodedToken.uid;
+  const userEmail = decodedToken.email?.toLowerCase().trim();
+  const isSuperAdmin = userEmail === 'shivam@revlet.me';
+  const isContactOwner = orgData?.contactEmail && orgData.contactEmail.toLowerCase().trim() === userEmail;
+  const isOwner = isSuperAdmin || isContactOwner || orgData?.ownerId === decodedToken.uid;
 
-  let isMember = false;
-  if (!isOwner && decodedToken.email) {
-    const memberQuery = await adminDb.collection('teamMembers')
-      .where('organizationId', '==', orgId)
-      .where('ownerId', '==', orgData?.ownerId)
-      .where('email', '==', decodedToken.email.toLowerCase().trim())
-      .where('status', '==', 'Active')
-      .get();
-    isMember = !memberQuery.empty;
+  let isMember = isOwner;
+  if (!isMember && userEmail) {
+    if (Array.isArray(orgData?.memberEmails) && orgData.memberEmails.map((e: string) => e.toLowerCase().trim()).includes(userEmail)) {
+      isMember = true;
+    } else {
+      const memberQuery = await adminDb.collection('teamMembers')
+        .where('organizationId', '==', orgId)
+        .where('ownerId', '==', orgData?.ownerId)
+        .where('email', '==', userEmail)
+        .where('status', '==', 'Active')
+        .get();
+      isMember = !memberQuery.empty;
+    }
   }
 
   if (!isOwner && !isMember) {

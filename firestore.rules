@@ -33,13 +33,13 @@ service cloud.firestore {
         && request.resource.data.domain is string
         && request.resource.data.contactName is string
         && request.resource.data.contactEmail is string;
-      allow read: if isResourceOwner() || (
+      allow read: if isResourceOwner() || isSuperAdmin() || (
         isAuthenticated() && 
         request.auth.token.email != null && 
         'memberEmails' in resource.data && 
         request.auth.token.email.lower() in resource.data.memberEmails
       );
-      allow update: if isResourceOwner() && request.resource.data.ownerId == resource.data.ownerId;
+      allow update: if (isResourceOwner() || isSuperAdmin()) && request.resource.data.ownerId == resource.data.ownerId;
       allow delete: if false; // Deletion is handled via status flag, not hard delete
     }
 
@@ -77,11 +77,11 @@ service cloud.firestore {
     // Owners of the associated organization can manage DNS records.
     match /dnsRecords/{recordId} {
       allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
+        && (request.resource.data.ownerId == request.auth.uid || isSuperAdmin())
         && request.resource.data.type in ['A', 'CNAME', 'MX', 'TXT']
         && request.resource.data.name is string
         && request.resource.data.content is string;
-      allow read, update, delete: if isResourceOwner();
+      allow read, update, delete: if isResourceOwner() || isSuperAdmin();
     }
 
     // ─── Site Modifications ───────────────────────────────────────────────────
@@ -112,11 +112,12 @@ service cloud.firestore {
     // Stores per-org email routing activation state and domain security parameters.
     match /emailRoutingConfigs/{configId} {
       allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
+        && (request.resource.data.ownerId == request.auth.uid || isSuperAdmin())
         && request.resource.data.organizationId is string
         && request.resource.data.domainName is string
         && request.resource.data.isServiceActive is bool;
-      allow read, update: if isResourceOwner();
+      allow read: if isAuthenticated() && (resource == null || isResourceOwner() || isSuperAdmin());
+      allow update: if isResourceOwner() || isSuperAdmin();
       allow delete: if false; // Prevent accidental service deactivation
     }
 
@@ -124,11 +125,10 @@ service cloud.firestore {
     // Email forwarding rule audit trail. Rules are immutable — delete and recreate.
     match /forwardingRules/{ruleId} {
       allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
+        && (request.resource.data.ownerId == request.auth.uid || isSuperAdmin())
         && request.resource.data.aliasPrefix is string
         && request.resource.data.destinationEmail is string;
-      allow read: if isResourceOwner();
-      allow delete: if isResourceOwner();
+      allow read, delete: if isResourceOwner() || isSuperAdmin();
       allow update: if false; // Immutable — delete and recreate
     }
 

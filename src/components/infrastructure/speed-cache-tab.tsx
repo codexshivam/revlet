@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   RefreshCw,
   Loader2,
@@ -58,9 +59,14 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
   const [newTargetUrl, setNewTargetUrl] = useState("")
   const [newRedirectStatus, setNewRedirectStatus] = useState<number>(301)
   const [isCreatingRule, setIsCreatingRule] = useState(false)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true)
 
   const loadData = useCallback(async () => {
-    if (!zoneId || !orgId) return
+    if (!zoneId || !orgId) {
+      setIsLoadingSettings(false)
+      return
+    }
+    setIsLoadingSettings(true)
     try {
       const token = await getIdToken()
 
@@ -87,6 +93,8 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
       }
     } catch {
       // Ignore background fetch error
+    } finally {
+      setIsLoadingSettings(false)
     }
   }, [zoneId, orgId, domain, getIdToken])
 
@@ -140,7 +148,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
       toast({
         variant: "destructive",
         title: "Malformed URL",
-        description: "Please enter a valid URL (e.g. https://yourdomain.com/style.css).",
+        description: `Please enter a valid URL (e.g. https://${domain || "example.com"}/style.css).`,
       })
       return
     }
@@ -290,6 +298,55 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
     } catch (err: any) {
       toast({ variant: "destructive", title: "Deletion Failed", description: err.message })
     }
+  }
+
+  if (isLoadingSettings) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-72" />
+            </div>
+            <Skeleton className="h-9 w-32 rounded-lg" />
+          </div>
+          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+            <Skeleton className="h-10 flex-1 rounded-lg" />
+            <Skeleton className="h-10 w-28 rounded-lg" />
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-60" />
+              </div>
+              <Skeleton className="h-6 w-11 rounded-full" />
+            </div>
+          </Card>
+          <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-36" />
+                <Skeleton className="h-4 w-52" />
+              </div>
+              <Skeleton className="h-6 w-11 rounded-full" />
+            </div>
+          </Card>
+        </div>
+
+        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-44" />
+            <Skeleton className="h-4 w-80" />
+          </div>
+          <Skeleton className="h-28 w-full rounded-xl" />
+        </Card>
+      </div>
+    )
   }
 
   return (

@@ -729,7 +729,7 @@ export default function AccountHomePage() {
                         </Label>
                         <Input 
                           id="org-domain" 
-                          placeholder="e.g. revlet.me" 
+                          placeholder="e.g. example.com" 
                           value={formData.domain}
                           onChange={(e) => handleInputChange("domain", e.target.value)}
                           disabled={!!editingOrg}

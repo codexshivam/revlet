@@ -33,9 +33,9 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
 
   const mainNavItems: NavItem[] = [
     { title: "Account Home", icon: LayoutDashboard, href: "/account/home" },
-    { title: "Infrastructure", icon: Server, href: "/services/infrastructure" },
     { title: "DNS Management", icon: Globe, href: "/services/dns" },
     { title: "Email Service", icon: Mail, href: "/services/email" },
+    { title: "Infrastructure", icon: Server, href: "/services/infrastructure" },
     ...(activeOrg?.isEducation && !isWorkspaceActive ? [{ title: "Google Workspace", icon: GraduationCap, href: "/services/workspace" }] : []),
     ...(isWorkspaceActive && activeOrg?.isEducation ? [
       { title: "Workspace Overview", icon: GraduationCap, href: "/services/workspace" },

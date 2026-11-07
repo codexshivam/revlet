@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Check,
   Loader2,
@@ -23,12 +24,15 @@ interface DdosProtectionTabProps {
 }
 
 export function DdosProtectionTab({ zoneId, domain, orgId, getIdToken }: DdosProtectionTabProps) {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [securityLevel, setSecurityLevel] = useState<string>("medium")
   const [isUpdatingSecurity, setIsUpdatingSecurity] = useState(false)
 
   const loadData = useCallback(async () => {
-    if (!zoneId || !orgId) return
+    if (!zoneId || !orgId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const token = await getIdToken()
@@ -81,6 +85,34 @@ export function DdosProtectionTab({ zoneId, domain, orgId, getIdToken }: DdosPro
     } finally {
       setIsUpdatingSecurity(false)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-52" />
+              <Skeleton className="h-4 w-72" />
+            </div>
+            <Skeleton className="h-10 w-36 rounded-lg" />
+          </div>
+        </Card>
+        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-44" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-28 w-full rounded-xl" />
+          </div>
+        </Card>
+      </div>
+    )
   }
 
   return (

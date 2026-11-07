@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select,
   SelectContent,
@@ -35,7 +36,7 @@ interface SslEncryptionTabProps {
 }
 
 export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncryptionTabProps) {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [sslMode, setSslMode] = useState<string>("full")
   const [isUpdatingSSL, setIsUpdatingSSL] = useState(false)
 
@@ -54,7 +55,10 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
   const [copiedDs, setCopiedDs] = useState(false)
 
   const loadData = useCallback(async () => {
-    if (!zoneId || !orgId) return
+    if (!zoneId || !orgId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const token = await getIdToken()
@@ -263,6 +267,52 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
       toast({ title: "Copied DS Record", description: "Copied to clipboard." })
       setTimeout(() => setCopiedDs(false), 2000)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-28 w-full rounded-xl" />
+          </div>
+        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-60" />
+              </div>
+              <Skeleton className="h-6 w-11 rounded-full" />
+            </div>
+          </Card>
+          <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-60" />
+              </div>
+              <Skeleton className="h-6 w-11 rounded-full" />
+            </div>
+          </Card>
+        </div>
+        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-56" />
+          </div>
+          <Skeleton className="h-24 w-full rounded-xl" />
+        </Card>
+      </div>
+    )
   }
 
   return (

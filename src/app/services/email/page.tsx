@@ -557,7 +557,7 @@ export default function EmailRoutingPage() {
                   Get Professional Email for Your Domain
                 </h2>
                 <p className="text-slate-500 text-xs md:text-sm leading-relaxed max-w-xl mx-auto">
-                  Create custom email addresses using your own domain name (like info@{selectedOrg?.domain || "yourdomain.com"}) and automatically forward messages directly to your existing personal inbox. Simple, beautiful, and completely secure.
+                  Create custom email addresses using your own domain name (like info@{selectedOrg?.domain || "example.com"}) and automatically forward messages directly to your existing personal inbox. Simple, beautiful, and completely secure.
                 </p>
               </div>
 
@@ -596,7 +596,7 @@ export default function EmailRoutingPage() {
                     </div>
                     <div className="text-left space-y-0.5 min-w-0">
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Your Custom Address</p>
-                      <p className="text-xs font-bold font-mono truncate text-emerald-400">info@{selectedOrg?.domain || "yourdomain.com"}</p>
+                      <p className="text-xs font-bold font-mono truncate text-emerald-400">info@{selectedOrg?.domain || "example.com"}</p>
                     </div>
                   </div>
                   
@@ -1001,7 +1001,7 @@ export default function EmailRoutingPage() {
                       <strong> Simply open that inbox, click the verification link inside, and this custom address will automatically activate and appear in your active list!</strong>
                     </p>
                     <p className="text-[10px] text-slate-400 font-normal leading-normal">
-                      Emails sent to <span className="font-mono">{aliasPrefix || "name"}@{selectedOrg?.domain || "yourdomain.com"}</span> will begin forwarding to your personal email as soon as it is confirmed.
+                      Emails sent to <span className="font-mono">{aliasPrefix || "name"}@{selectedOrg?.domain || "example.com"}</span> will begin forwarding to your personal email as soon as it is confirmed.
                     </p>
                   </div>
                 </div>

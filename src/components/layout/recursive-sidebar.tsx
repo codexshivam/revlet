@@ -8,7 +8,6 @@ import {
   Users, 
   Settings, 
   LayoutDashboard,
-  Database,
   Mail,
   GraduationCap,
   HardDrive,
@@ -36,7 +35,6 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
     { title: "Account Home", icon: LayoutDashboard, href: "/account/home" },
     { title: "Infrastructure", icon: Server, href: "/services/infrastructure" },
     { title: "DNS Management", icon: Globe, href: "/services/dns" },
-    { title: "Website Management", icon: Database, href: "/services/website" },
     { title: "Email Service", icon: Mail, href: "/services/email" },
     ...(activeOrg?.isEducation && !isWorkspaceActive ? [{ title: "Google Workspace", icon: GraduationCap, href: "/services/workspace" }] : []),
     ...(isWorkspaceActive && activeOrg?.isEducation ? [

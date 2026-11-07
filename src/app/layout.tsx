@@ -138,7 +138,6 @@ const webApplicationSchema = {
     'Google Workspace Administration',
     'Team & Access Control',
     'Billing & Payments',
-    'Website Management',
   ],
 };
 

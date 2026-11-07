@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Account Settings',
-  description: 'Organization and security preferences for your Revlet account.',
+  description: 'Organization settings, security preferences, and tenant configuration in Revlet.',
   robots: {
     index: false,
     follow: false,

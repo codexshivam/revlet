@@ -1,7 +1,17 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Home, LifeBuoy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AuthFrame } from "@/components/layout/auth-frame"
+
+export const metadata: Metadata = {
+  title: "Resource Not Found",
+  description: "The requested page does not exist or has been relocated.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+}
 
 export default function NotFound() {
   return (

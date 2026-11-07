@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Administrator Profile',
-  description: 'Manage your Revlet administrator credentials, security, and account preferences.',
+  description: 'Manage your Revlet administrator credentials, security preferences, and account settings.',
   robots: {
     index: false,
     follow: false,

@@ -1,4 +1,3 @@
-
 import type { Metadata } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
@@ -21,14 +20,15 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://revlet.me'),
+  metadataBase: new URL('https://app.revlet.me'),
   title: {
-    default: 'Revlet | Enterprise IT Management & Cloud Infrastructure Control Plane',
-    template: '%s | Revlet',
+    default: 'Revlet Console | Enterprise IT Management & Cloud Infrastructure',
+    template: '%s | Revlet Console',
   },
-  description: 'Open-source enterprise multi-tenant IT management control plane. Unified orchestration for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
-  applicationName: 'Revlet',
+  description: 'Official administrative console for Revlet. Unified multi-tenant control plane for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
+  applicationName: 'Revlet Console',
   keywords: [
+    'Revlet Console',
     'Revlet',
     'IT Management Platform',
     'Cloudflare DNS Management',
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
   creator: 'Revlet',
   publisher: 'Revlet',
   alternates: {
-    canonical: 'https://revlet.me',
+    canonical: 'https://app.revlet.me',
   },
   manifest: '/manifest.json',
   icons: {
@@ -81,25 +81,25 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: 'Revlet | Enterprise IT Management & Cloud Infrastructure Control Plane',
-    description: 'Unified multi-tenant orchestration for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
+    title: 'Revlet Console | Enterprise IT Management & Cloud Infrastructure',
+    description: 'Official administrative console for Revlet. Unified multi-tenant control plane for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
     type: 'website',
-    url: 'https://revlet.me',
+    url: 'https://app.revlet.me',
     locale: 'en_US',
-    siteName: 'Revlet',
+    siteName: 'Revlet Console',
     images: [
       {
         url: '/banner.svg',
         width: 1200,
         height: 320,
-        alt: 'Revlet Enterprise IT Management Control Plane',
+        alt: 'Revlet Console Enterprise IT Management Control Plane',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Revlet | Enterprise IT Management & Cloud Infrastructure Control Plane',
-    description: 'Unified multi-tenant orchestration for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
+    title: 'Revlet Console | Enterprise IT Management & Cloud Infrastructure',
+    description: 'Official administrative console for Revlet. Unified multi-tenant control plane for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
     creator: '@revlet',
     images: ['/banner.svg'],
   },
@@ -118,8 +118,8 @@ export const metadata: Metadata = {
   other: {
     'geo.region': 'Global',
     'geo.placename': 'Worldwide',
-    'DC.title': 'Revlet - Enterprise IT Management & Cloud Infrastructure Control Plane',
-    'DC.description': 'Unified control plane for Cloudflare DNS, Email Routing, and Google Workspace for Education.',
+    'DC.title': 'Revlet Console - Enterprise IT Management & Cloud Infrastructure Control Plane',
+    'DC.description': 'Official administrative console for Cloudflare DNS, Email Routing, and Google Workspace for Education.',
     'DC.subject': 'Cloudflare DNS, Google Workspace Admin SDK, Email Routing, Multi-Tenant IT Platform',
   },
 };
@@ -128,7 +128,7 @@ export const metadata: Metadata = {
 const knowledgeGraphSchema = {
   '@context': 'https://schema.org',
   '@graph': [
-    // 1. Organization Entity (Brand Knowledge Node)
+    // 1. Organization Entity (Parent Brand Knowledge Node on revlet.me)
     {
       '@type': 'Organization',
       '@id': 'https://revlet.me/#organization',
@@ -138,7 +138,7 @@ const knowledgeGraphSchema = {
       logo: {
         '@type': 'ImageObject',
         '@id': 'https://revlet.me/#logo',
-        url: 'https://revlet.me/favicon-192x192.png',
+        url: 'https://app.revlet.me/favicon-192x192.png',
         caption: 'Revlet Logo',
         width: 192,
         height: 192,
@@ -171,13 +171,13 @@ const knowledgeGraphSchema = {
         'Zero-Trust Multi-Tenancy',
       ],
     },
-    // 2. Software Application Entity (Software Specifications Node)
+    // 2. Software Application Entity (Console WebApplication Node on app.revlet.me)
     {
       '@type': ['SoftwareApplication', 'WebApplication'],
-      '@id': 'https://revlet.me/#application',
-      name: 'Revlet Control Plane',
-      alternateName: 'Revlet Dashboard',
-      url: 'https://revlet.me',
+      '@id': 'https://app.revlet.me/#application',
+      name: 'Revlet Console',
+      alternateName: ['Revlet Dashboard', 'Revlet IT Control Plane'],
+      url: 'https://app.revlet.me',
       applicationCategory: 'BusinessApplication, UtilitiesApplication',
       applicationSubCategory: 'NetworkInfrastructureManagement',
       operatingSystem: 'All modern web browsers (Cloud Web Application)',
@@ -186,7 +186,7 @@ const knowledgeGraphSchema = {
       license: 'https://www.apache.org/licenses/LICENSE-2.0',
       codeRepository: 'https://github.com/codexshivam/revlet',
       downloadUrl: 'https://github.com/codexshivam/revlet',
-      description: 'Enterprise infrastructure management platform for institutions and businesses. Manage DNS, email, Google Workspace, and teams from one unified dashboard.',
+      description: 'Official cloud console for Revlet. Manage Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity from one unified dashboard.',
       offers: {
         '@type': 'Offer',
         price: '0',
@@ -210,13 +210,13 @@ const knowledgeGraphSchema = {
         'Multi-Tenant Zero-Trust Isolation',
       ],
     },
-    // 3. WebSite Entity (SearchAction Sitelinks Searchbox)
+    // 3. WebSite Entity for the Console Domain (app.revlet.me)
     {
       '@type': 'WebSite',
-      '@id': 'https://revlet.me/#website',
-      name: 'Revlet',
-      alternateName: ['Revlet Dashboard', 'Revlet Control Plane', 'Revlet IT Manager'],
-      url: 'https://revlet.me',
+      '@id': 'https://app.revlet.me/#website',
+      name: 'Revlet Console',
+      alternateName: ['Revlet Dashboard', 'Revlet App'],
+      url: 'https://app.revlet.me',
       publisher: {
         '@id': 'https://revlet.me/#organization',
       },
@@ -224,148 +224,114 @@ const knowledgeGraphSchema = {
         '@type': 'SearchAction',
         target: {
           '@type': 'EntryPoint',
-          urlTemplate: 'https://revlet.me/support?q={search_term_string}',
+          urlTemplate: 'https://app.revlet.me/support?q={search_term_string}',
         },
         'query-input': 'required name=search_term_string',
       },
       hasPart: [
         {
           '@type': 'WebPage',
-          '@id': 'https://revlet.me/login#webpage',
-          url: 'https://revlet.me/login',
-          name: 'Console',
+          '@id': 'https://app.revlet.me/login#webpage',
+          url: 'https://app.revlet.me/login',
+          name: 'Console Sign In',
           description: 'Sign in to the Revlet Console to manage DNS, email routing, and Google Workspace.',
         },
         {
           '@type': 'WebPage',
-          '@id': 'https://revlet.me/signup#webpage',
-          url: 'https://revlet.me/signup',
-          name: 'Get Started',
+          '@id': 'https://app.revlet.me/signup#webpage',
+          url: 'https://app.revlet.me/signup',
+          name: 'Register Organization',
           description: 'Register your educational institution or enterprise on Revlet.',
         },
         {
           '@type': 'WebPage',
-          '@id': 'https://revlet.me/services/workspace#webpage',
-          url: 'https://revlet.me/services/workspace',
-          name: 'Google Workspace for Education',
-          description: 'Centralized administration for school domains, user directory, and Drive storage.',
-        },
-        {
-          '@type': 'WebPage',
-          '@id': 'https://revlet.me/services/dns#webpage',
-          url: 'https://revlet.me/services/dns',
-          name: 'DNS Management',
-          description: 'Authoritative Cloudflare API v4 DNS records management.',
-        },
-        {
-          '@type': 'WebPage',
-          '@id': 'https://revlet.me/services/email#webpage',
-          url: 'https://revlet.me/services/email',
-          name: 'Custom Email Routing',
-          description: 'Configure custom domain forwarder aliases and inspect real-time SPF, DKIM, and DMARC parameters.',
-        },
-        {
-          '@type': 'WebPage',
-          '@id': 'https://revlet.me/support#webpage',
-          url: 'https://revlet.me/support',
+          '@id': 'https://app.revlet.me/support#webpage',
+          url: 'https://app.revlet.me/support',
           name: 'Documentation & Support',
           description: 'Technical guides, FAQs, and submit priority infrastructure support tickets.',
         },
       ],
     },
-    // 4. SiteNavigationElement (Organic Sitelinks Hierarchy)
+    // 4. SiteNavigationElement (Organic Sitelinks Hierarchy for Google SERP)
     {
       '@type': 'ItemList',
-      '@id': 'https://revlet.me/#sitelinks',
-      name: 'Revlet Sitelinks Navigation',
-      description: 'Primary services and administrative portals of the Revlet Control Plane.',
+      '@id': 'https://app.revlet.me/#sitelinks',
+      name: 'Revlet Console Navigation',
+      description: 'Primary administrative entrypoints and support channels of the Revlet Console.',
       itemListElement: [
         {
           '@type': 'SiteNavigationElement',
           position: 1,
           name: 'Console',
-          description: 'Use the console to manage everything powering your domain — DNS records, email routing, and Google Workspace users.',
-          url: 'https://revlet.me/login',
+          description: 'Use the console to manage everything powering your domain — DNS records, custom email routing, and Google Workspace users.',
+          url: 'https://app.revlet.me/login',
         },
         {
           '@type': 'SiteNavigationElement',
           position: 2,
-          name: 'Get Started & Organization Registration',
+          name: 'Register Organization',
           description: 'Register your educational institution or enterprise on Revlet with zero-trust multi-tenancy.',
-          url: 'https://revlet.me/signup',
+          url: 'https://app.revlet.me/signup',
         },
         {
           '@type': 'SiteNavigationElement',
           position: 3,
-          name: 'Google Workspace for Education',
-          description: 'Centralized administration for school domains, user directory, and Google Drive storage pool monitoring.',
-          url: 'https://revlet.me/services/workspace',
-        },
-        {
-          '@type': 'SiteNavigationElement',
-          position: 4,
-          name: 'DNS Management',
-          description: 'Authoritative Cloudflare API v4 records management with instant Anycast edge propagation.',
-          url: 'https://revlet.me/services/dns',
-        },
-        {
-          '@type': 'SiteNavigationElement',
-          position: 5,
-          name: 'Custom Email Routing & Domain Security',
-          description: 'Configure custom domain forwarder aliases and inspect real-time SPF, DKIM, and DMARC parameters.',
-          url: 'https://revlet.me/services/email',
-        },
-        {
-          '@type': 'SiteNavigationElement',
-          position: 6,
           name: 'Documentation & Support',
           description: 'Access technical documentation, troubleshooting manuals, FAQs, and submit priority support tickets.',
-          url: 'https://revlet.me/support',
+          url: 'https://app.revlet.me/support',
         },
       ],
     },
-    // 5. BreadcrumbList (Hierarchical Trail)
+    // 5. BreadcrumbList (Hierarchical Trail Linking app.revlet.me to revlet.me)
     {
       '@type': 'BreadcrumbList',
-      '@id': 'https://revlet.me/#breadcrumbs',
+      '@id': 'https://app.revlet.me/#breadcrumbs',
       itemListElement: [
         {
           '@type': 'ListItem',
           position: 1,
-          name: 'Home',
+          name: 'Revlet Home',
           item: 'https://revlet.me',
         },
         {
           '@type': 'ListItem',
           position: 2,
           name: 'Console',
-          item: 'https://revlet.me/login',
+          item: 'https://app.revlet.me',
         },
         {
           '@type': 'ListItem',
           position: 3,
-          name: 'Get Started',
-          item: 'https://revlet.me/signup',
+          name: 'Sign In',
+          item: 'https://app.revlet.me/login',
         },
         {
           '@type': 'ListItem',
           position: 4,
           name: 'Support',
-          item: 'https://revlet.me/support',
+          item: 'https://app.revlet.me/support',
         },
       ],
     },
     // 6. FAQPage (SGE & Rich Answer Engine Snippets)
     {
       '@type': 'FAQPage',
-      '@id': 'https://revlet.me/#faq',
+      '@id': 'https://app.revlet.me/#faq',
       mainEntity: [
         {
           '@type': 'Question',
-          name: 'What is Revlet?',
+          name: 'What is the Revlet Console?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Revlet is an open-source, multi-tenant Enterprise IT Management Control Plane designed for educational institutions and distributed organizations. It unifies Cloudflare DNS, Email Routing, and Google Workspace for Education administration into a single pane of glass.',
+            text: 'The Revlet Console is the centralized cloud management portal located at app.revlet.me. It provides authorized administrators with unified control over Cloudflare DNS, Email Routing, and Google Workspace for Education.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'How do I access the Revlet Console?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Administrators can securely authenticate at https://app.revlet.me/login using their email and password or institutional Google Single Sign-On (SSO).',
           },
         },
         {

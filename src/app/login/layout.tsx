@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: 'Console',
   description: 'Use the console to manage everything powering your domain — DNS records, custom email routing, and Google Workspace users.',
   alternates: {
-    canonical: 'https://revlet.me/login',
+    canonical: 'https://app.revlet.me/login',
   },
   keywords: [
     'Revlet console',
@@ -17,8 +17,8 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'Console | Revlet IT Management Control Plane',
-    description: 'Access your organization\'s unified infrastructure management dashboard.',
-    url: 'https://revlet.me/login',
+    description: "Access your organization's unified infrastructure management dashboard.",
+    url: 'https://app.revlet.me/login',
     type: 'website',
     images: [
       {
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Console | Revlet IT Management Control Plane',
-    description: 'Access your organization\'s unified infrastructure management dashboard.',
+    description: "Access your organization's unified infrastructure management dashboard.",
     images: ['/banner.svg'],
   },
   robots: {
@@ -56,7 +56,7 @@ export default function LoginLayout({ children }: { children: React.ReactNode })
         '@type': 'ListItem',
         position: 2,
         name: 'Console',
-        item: 'https://revlet.me/login',
+        item: 'https://app.revlet.me/login',
       },
     ],
   };

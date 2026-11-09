@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase"
 import Link from "next/link"
 import { useActiveOrg } from "@/hooks/use-active-org"
-import { PublicServiceShowcase } from "@/components/public/public-service-showcase"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   DropdownMenu,
@@ -425,83 +424,6 @@ export default function EmailRoutingPage() {
       setIsDeleteOpen(false)
       setDeletingRuleId(null)
     }
-  }
-
-  if (!user) {
-    return (
-      <PublicServiceShowcase
-        badge="Custom Email Routing & Security"
-        title="Custom Domain Email Routing & Security Auditor"
-        description="Deploy unlimited custom domain email forwarders and continuously validate SPF, DKIM, and DMARC compliance to prevent spoofing and ensure 100% email deliverability."
-        currentPath="/services/email"
-        features={[
-          {
-            title: "Zero-Inbox Forwarding",
-            description: "Route domain emails directly to existing personal or organizational inboxes without running a mail server.",
-            icon: <Mail className="w-5 h-5" />,
-          },
-          {
-            title: "SPF Alignment Inspector",
-            description: "Continuous real-time verification of SPF DNS records to ensure authorized sending IP ranges.",
-            icon: <ShieldCheck className="w-5 h-5" />,
-          },
-          {
-            title: "DKIM 2048-bit Cryptography",
-            description: "Verify domain public key signatures to prevent identity spoofing across academic and enterprise networks.",
-            icon: <Lock className="w-5 h-5" />,
-          },
-          {
-            title: "DMARC Policy Enforcement",
-            description: "Monitor and enforce strict DMARC rejection policies to safeguard your institutional brand reputation.",
-            icon: <ShieldAlert className="w-5 h-5" />,
-          },
-        ]}
-        previewComponent={
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-amber-600" />
-                <span className="text-xs font-bold text-slate-900">Custom Domain Aliases: example.edu</span>
-                <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200">SPF/DKIM Compliant</Badge>
-              </div>
-              <span className="text-xs text-slate-500 font-mono">Routing Engine Active</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
-                    <th className="py-2.5">Custom Alias</th>
-                    <th className="py-2.5">Action</th>
-                    <th className="py-2.5">Forward Destination</th>
-                    <th className="py-2.5">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
-                  <tr>
-                    <td className="py-2.5 font-sans font-medium text-slate-900">admissions@example.edu</td>
-                    <td className="py-2.5 text-slate-500 font-sans">Forward to</td>
-                    <td className="py-2.5 text-blue-600">office-lead@gmail.com</td>
-                    <td className="py-2.5"><Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px]">Active</Badge></td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 font-sans font-medium text-slate-900">principal@example.edu</td>
-                    <td className="py-2.5 text-slate-500 font-sans">Forward to</td>
-                    <td className="py-2.5 text-blue-600">admin-personal@outlook.com</td>
-                    <td className="py-2.5"><Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px]">Active</Badge></td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 font-sans font-medium text-slate-900">support@example.edu</td>
-                    <td className="py-2.5 text-slate-500 font-sans">Forward to</td>
-                    <td className="py-2.5 text-blue-600">helpdesk@example.edu</td>
-                    <td className="py-2.5"><Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px]">Active</Badge></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        }
-      />
-    )
   }
 
   // STATE 1: Loading orgs

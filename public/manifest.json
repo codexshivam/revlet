@@ -1,7 +1,7 @@
 {
-  "name": "Revlet",
+  "name": "Revlet Console",
   "short_name": "Revlet",
-  "description": "Enterprise infrastructure management platform for institutions and businesses.",
+  "description": "Enterprise infrastructure management console for institutions and businesses.",
   "start_url": "/login",
   "display": "standalone",
   "background_color": "#09090b",

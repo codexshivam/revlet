@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: 'Get Started & Organization Registration',
   description: 'Register your school or business on Revlet with zero-trust multi-tenancy and start deploying Anycast DNS in minutes.',
   alternates: {
-    canonical: 'https://revlet.me/signup',
+    canonical: 'https://app.revlet.me/signup',
   },
   keywords: [
     'Revlet signup',
@@ -17,8 +17,8 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'Get Started | Revlet IT Management Control Plane',
-    description: 'Start managing your organization\'s IT infrastructure in minutes with zero-trust tenancy.',
-    url: 'https://revlet.me/signup',
+    description: "Start managing your organization's IT infrastructure in minutes with zero-trust tenancy.",
+    url: 'https://app.revlet.me/signup',
     type: 'website',
     images: [
       {
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Get Started | Revlet IT Management Control Plane',
-    description: 'Start managing your organization\'s IT infrastructure in minutes with zero-trust tenancy.',
+    description: "Start managing your organization's IT infrastructure in minutes with zero-trust tenancy.",
     images: ['/banner.svg'],
   },
   robots: {
@@ -56,7 +56,7 @@ export default function SignupLayout({ children }: { children: React.ReactNode }
         '@type': 'ListItem',
         position: 2,
         name: 'Get Started',
-        item: 'https://revlet.me/signup',
+        item: 'https://app.revlet.me/signup',
       },
     ],
   };

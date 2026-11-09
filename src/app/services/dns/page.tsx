@@ -44,7 +44,6 @@ import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { useUser, useFirestore } from "@/firebase"
-import { PublicServiceShowcase } from "@/components/public/public-service-showcase"
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteField } from "firebase/firestore"
 import { 
   getZoneDetails, 
@@ -549,94 +548,6 @@ export default function DNSManagementPage() {
   )
 
   const isProxyAllowed = (type: string) => PROXY_SUPPORTED_TYPES.includes(type)
-
-  if (!user) {
-    return (
-      <PublicServiceShowcase
-        badge="Authoritative Cloudflare DNS"
-        title="Authoritative Cloudflare API v4 DNS Management"
-        description="Deploy and manage authoritative Anycast DNS records with sub-second propagation, comprehensive record type coverage (A, AAAA, CNAME, MX, TXT, SRV), and enterprise edge proxying."
-        currentPath="/services/dns"
-        features={[
-          {
-            title: "Sub-Second Anycast Edge",
-            description: "Deploy DNS records globally across Cloudflare's Anycast network with instant edge synchronization.",
-            icon: <Globe className="w-5 h-5" />,
-          },
-          {
-            title: "Complete Record Suite",
-            description: "Atomic CRUD operations for A, AAAA, CNAME, MX, TXT, and SRV records with strict syntax validation.",
-            icon: <Server className="w-5 h-5" />,
-          },
-          {
-            title: "CDN Proxy & DDoS Shield",
-            description: "Toggle Cloudflare proxy status with a single click to protect web origins from volumetric DDoS attacks.",
-            icon: <ShieldCheck className="w-5 h-5" />,
-          },
-          {
-            title: "BIND Zone Import/Export",
-            description: "Seamlessly export and import RFC-standard BIND zone files to migrate domains without downtime.",
-            icon: <FileText className="w-5 h-5" />,
-          },
-        ]}
-        previewComponent={
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-blue-600" />
-                <span className="text-xs font-bold text-slate-900">Live Zone: example.edu</span>
-                <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200">Active Anycast</Badge>
-              </div>
-              <span className="text-xs text-slate-500 font-mono">Cloudflare API v4 Connected</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
-                    <th className="py-2.5">Type</th>
-                    <th className="py-2.5">Name</th>
-                    <th className="py-2.5">Content / Value</th>
-                    <th className="py-2.5">Proxy Status</th>
-                    <th className="py-2.5">TTL</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
-                  <tr>
-                    <td className="py-2.5"><Badge className="bg-blue-50 text-blue-700 hover:bg-blue-100 text-[10px]">A</Badge></td>
-                    <td className="py-2.5 font-sans font-medium text-slate-900">example.edu</td>
-                    <td className="py-2.5 text-slate-600">192.0.2.1</td>
-                    <td className="py-2.5"><span className="text-amber-600 font-sans font-semibold text-[11px]">Proxied (CDN)</span></td>
-                    <td className="py-2.5 font-sans text-slate-500">Auto</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5"><Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px]">CNAME</Badge></td>
-                    <td className="py-2.5 font-sans font-medium text-slate-900">www.example.edu</td>
-                    <td className="py-2.5 text-slate-600">example.edu</td>
-                    <td className="py-2.5"><span className="text-amber-600 font-sans font-semibold text-[11px]">Proxied (CDN)</span></td>
-                    <td className="py-2.5 font-sans text-slate-500">Auto</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5"><Badge className="bg-purple-50 text-purple-700 hover:bg-purple-100 text-[10px]">MX</Badge></td>
-                    <td className="py-2.5 font-sans font-medium text-slate-900">example.edu</td>
-                    <td className="py-2.5 text-slate-600">aspmx.l.google.com (Priority 1)</td>
-                    <td className="py-2.5"><span className="text-slate-500 font-sans text-[11px]">DNS Only</span></td>
-                    <td className="py-2.5 font-sans text-slate-500">Auto</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5"><Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 text-[10px]">TXT</Badge></td>
-                    <td className="py-2.5 font-sans font-medium text-slate-900">example.edu</td>
-                    <td className="py-2.5 text-slate-600 truncate max-w-xs">&quot;v=spf1 include:_spf.google.com ~all&quot;</td>
-                    <td className="py-2.5"><span className="text-slate-500 font-sans text-[11px]">DNS Only</span></td>
-                    <td className="py-2.5 font-sans text-slate-500">Auto</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        }
-      />
-    )
-  }
 
   if (isLoadingOrgs) {
     return (

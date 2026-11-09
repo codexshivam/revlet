@@ -1,16 +1,13 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://revlet.me';
+  const baseUrl = 'https://app.revlet.me';
 
   const publicAllowed = [
     '/',
     '/login',
     '/signup',
     '/support',
-    '/services/dns',
-    '/services/email',
-    '/services/workspace',
     '/llms.txt',
     '/llms-full.txt',
     '/sitemap.xml',
@@ -19,12 +16,9 @@ export default function robots(): MetadataRoute.Robots {
   ];
 
   const privateDisallowed = [
+    '/services/',
     '/account/',
     '/management/',
-    '/services/workspace/users',
-    '/services/workspace/storage',
-    '/services/workspace/alumni',
-    '/services/workspace/deactivated',
     '/api/',
   ];
 

@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: 'Documentation & Support',
   description: 'Access technical documentation, step-by-step onboarding guides, FAQs, and submit priority infrastructure support tickets.',
   alternates: {
-    canonical: 'https://revlet.me/support',
+    canonical: 'https://app.revlet.me/support',
   },
   keywords: [
     'Revlet support',
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Documentation & Support | Revlet IT Control Plane',
     description: 'Documentation, guides, and ticket support for educational and enterprise IT teams.',
-    url: 'https://revlet.me/support',
+    url: 'https://app.revlet.me/support',
     type: 'website',
     images: [
       {
@@ -55,7 +55,7 @@ export default function SupportLayout({ children }: { children: React.ReactNode 
         '@type': 'ListItem',
         position: 2,
         name: 'Documentation & Support',
-        item: 'https://revlet.me/support',
+        item: 'https://app.revlet.me/support',
       },
     ],
   };
@@ -64,7 +64,7 @@ export default function SupportLayout({ children }: { children: React.ReactNode 
     '@context': 'https://schema.org',
     '@type': 'ContactPage',
     name: 'Revlet Support Center',
-    url: 'https://revlet.me/support',
+    url: 'https://app.revlet.me/support',
     description: 'Technical documentation, service status, and customer assistance for Revlet administrators.',
     mainEntity: {
       '@type': 'Organization',

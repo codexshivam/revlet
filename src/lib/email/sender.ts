@@ -6,11 +6,13 @@
  */
 
 import { google } from 'googleapis'
+import { randomUUID } from 'crypto'
 
 export interface SendEmailPayload {
   to: string
   subject: string
   html: string
+  text?: string
   from?: string
   replyTo?: string
 }
@@ -35,38 +37,91 @@ function getGoogleWorkspaceCredentials() {
 }
 
 /**
+ * Strips HTML tags and creates clean plain-text fallback for anti-spam multipart compliance.
+ */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<a\s+[^>]*href=["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<hr[^>]*>/gi, '\n---\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&rarr;/g, '->')
+    .replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/**
  * Sends a transactional email through Google Workspace impersonating accounts@revlet.me
+ * Configured with enterprise deliverability headers to prevent spam classification.
  */
 export async function sendEmail(payload: SendEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    const { to, subject, html, from = 'Revlet Platform <accounts@revlet.me>', replyTo = 'accounts@revlet.me' } = payload
+    const { 
+      to, 
+      subject, 
+      html, 
+      text = htmlToPlainText(html),
+      from = 'Revlet Accounts Team <accounts@revlet.me>', 
+      replyTo = 'Revlet Accounts Team <noreply@revlet.me>' 
+    } = payload
 
     const credentials = getGoogleWorkspaceCredentials()
 
+    // Using both gmail.send and mail.google.com scopes
     const auth = new google.auth.JWT({
       email: credentials.client_email,
       key: credentials.private_key,
-      scopes: ['https://www.googleapis.com/auth/gmail.send'],
+      scopes: [
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://mail.google.com/'
+      ],
       subject: 'accounts@revlet.me',
     })
 
     const gmail = google.gmail({ version: 'v1', auth })
 
-    // Build RFC 2822 email payload
+    const boundary = `----=_Part_${randomUUID().replace(/-/g, '')}`
+    const messageId = `<${Date.now()}.${randomUUID()}@revlet.me>`
+    const currentDate = new Date().toUTCString()
     const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`
-    const messageParts = [
+
+    // RFC 2822 Multipart/Alternative Email with Anti-Spam Security Headers
+    const emailLines = [
       `From: ${from}`,
       `To: ${to}`,
       `Reply-To: ${replyTo}`,
       `Subject: ${utf8Subject}`,
+      `Date: ${currentDate}`,
+      `Message-ID: ${messageId}`,
       'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
+      'Auto-Submitted: auto-generated',
+      'X-Auto-Response-Suppress: All',
+      'Precedence: bulk',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
       '',
-      html,
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(text, 'utf-8').toString('base64'),
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(html, 'utf-8').toString('base64'),
+      '',
+      `--${boundary}--`,
     ]
 
-    const message = messageParts.join('\r\n')
-    const encodedMessage = Buffer.from(message)
+    const rawMessage = emailLines.join('\r\n')
+    const encodedMessage = Buffer.from(rawMessage)
       .toString('base64')
       .replace(/\+/g, '-')
       .replace(/\//g, '_')

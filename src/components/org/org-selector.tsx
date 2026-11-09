@@ -137,7 +137,7 @@ export function OrgSelector({
           disabled={loading}
           className={cn(
             "justify-between h-9 text-xs font-bold border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 hover:text-black transition-all shadow-sm rounded-lg text-slate-800",
-            compact ? "w-auto max-w-[340px]" : "w-[450px]"
+            compact ? "w-auto min-w-[180px] max-w-[280px]" : "w-[450px]"
           )}
         >
           <div className="flex items-center gap-2 truncate">
@@ -149,30 +149,6 @@ export function OrgSelector({
             <span className="truncate text-slate-800">
               {selected ? selected.name : (loading ? "Syncing..." : "Select Organization")}
             </span>
-            {selected && (
-              <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-1">
-                {/* DNS Type Chip */}
-                <span className={cn(
-                  "inline-flex items-center text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border pointer-events-none select-none transition-none shrink-0",
-                  selected.cloudflareZoneId 
-                    ? "border-blue-200/80 bg-blue-50 text-blue-600 hover:bg-blue-50 hover:text-blue-600" 
-                    : selected.dnsRequested 
-                      ? "border-amber-200/80 bg-amber-50 text-amber-600 hover:bg-amber-50 hover:text-amber-600"
-                      : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-50 hover:text-slate-500"
-                )}>
-                  {selected.cloudflareZoneId ? "Full DNS" : selected.dnsRequested ? "DNS Pending" : "No DNS"}
-                </span>
-                {/* Active Status Chip */}
-                <span className={cn(
-                  "inline-flex items-center text-[9px] font-bold px-1.5 py-0.2 rounded border pointer-events-none select-none transition-none shrink-0",
-                  (selected.status || "Active").toLowerCase() === "active"
-                    ? "border-emerald-200/80 bg-emerald-50 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-600"
-                    : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-50 hover:text-slate-500"
-                )}>
-                  {selected.status || "Active"}
-                </span>
-              </div>
-            )}
           </div>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-55 text-slate-500" />
         </Button>
@@ -180,7 +156,7 @@ export function OrgSelector({
       <PopoverContent 
         className={cn(
           "p-0 shadow-xl border-slate-200 bg-white overflow-hidden rounded-lg", 
-          compact ? "w-[340px] sm:w-[380px]" : "w-[450px]"
+          compact ? "w-[260px] sm:w-[280px]" : "w-[450px]"
         )}
         align="start"
       >
@@ -194,8 +170,6 @@ export function OrgSelector({
             <CommandGroup>
               {orgs.map((inst) => {
                 const isSelected = currentId === inst.id
-                const isOrgActive = (inst.status || "Active").toLowerCase() === "active"
-                const dnsLabel = inst.cloudflareZoneId ? "Full DNS" : inst.dnsRequested ? "DNS Pending" : "No DNS"
 
                 return (
                   <CommandItem
@@ -212,55 +186,26 @@ export function OrgSelector({
                         : "text-slate-700 hover:bg-slate-50 hover:text-slate-900 data-[selected=true]:bg-slate-50 data-[selected=true]:text-slate-900"
                     )}
                   >
-                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <Building2
                         className={cn(
-                          "mt-0.5 h-3.5 w-3.5 shrink-0",
+                          "h-3.5 w-3.5 shrink-0",
                           isSelected ? "text-blue-600" : "text-slate-400"
                         )}
                       />
-                      <div className="flex flex-col gap-1 min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-800 truncate text-xs">
-                            {inst.name}
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="font-bold text-slate-800 truncate text-xs">
+                          {inst.name}
+                        </span>
+                        {inst.domain && (
+                          <span className="text-[10px] text-slate-400 font-medium truncate">
+                            {inst.domain}
                           </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {inst.domain && (
-                            <span className="text-[10px] text-slate-400 font-medium truncate mr-0.5">
-                              {inst.domain}
-                            </span>
-                          )}
-                          {/* DNS Type Chip - color stays unchanged on hover */}
-                          <span 
-                            className={cn(
-                              "inline-flex items-center text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border pointer-events-none select-none transition-none shrink-0",
-                              inst.cloudflareZoneId 
-                                ? "border-blue-200/80 bg-blue-50 text-blue-600 hover:bg-blue-50 hover:text-blue-600" 
-                                : inst.dnsRequested 
-                                  ? "border-amber-200/80 bg-amber-50 text-amber-600 hover:bg-amber-50 hover:text-amber-600"
-                                  : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-50 hover:text-slate-500"
-                            )}
-                          >
-                            {dnsLabel}
-                          </span>
-
-                          {/* Active Status Chip - color stays unchanged on hover */}
-                          <span 
-                            className={cn(
-                              "inline-flex items-center text-[9px] font-bold px-1.5 py-0.2 rounded border pointer-events-none select-none transition-none shrink-0",
-                              isOrgActive
-                                ? "border-emerald-200/80 bg-emerald-50 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-600"
-                                : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-50 hover:text-slate-500"
-                            )}
-                          >
-                            {inst.status || "Active"}
-                          </span>
-                        </div>
+                        )}
                       </div>
                     </div>
                     {isSelected && (
-                      <Check className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                      <Check className="h-3.5 w-3.5 shrink-0 text-blue-600 ml-auto" />
                     )}
                   </CommandItem>
                 )

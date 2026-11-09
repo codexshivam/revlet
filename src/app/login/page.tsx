@@ -18,9 +18,8 @@ import {
 import { toast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import { useAuth, useUser } from "@/firebase"
-import { signInWithEmailAndPassword } from "firebase/auth"
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth"
 import { AuthFrame } from "@/components/layout/auth-frame"
-import { sendBrandedPasswordResetEmail } from "@/app/actions/auth-emails"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -149,31 +148,18 @@ export default function LoginPage() {
 
     setIsResetLoading(true)
     try {
-      const res = await sendBrandedPasswordResetEmail(resetEmail)
-      if (res.success) {
-        toast({
-          title: "Reset link sent",
-          description: (
-            <span className="flex items-center gap-2 text-xs">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-              <span>Please check your email for password reset instructions.</span>
-            </span>
-          ),
-        })
-        setIsResetOpen(false)
-        setResetEmail("")
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Reset Failed",
-          description: (
-            <span className="flex items-center gap-2 text-xs">
-              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-              <span>{res.error || "Unable to send reset email."}</span>
-            </span>
-          ),
-        })
-      }
+      await sendPasswordResetEmail(auth, resetEmail)
+      toast({
+        title: "Reset link sent",
+        description: (
+          <span className="flex items-center gap-2 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>Please check your email for reset instructions.</span>
+          </span>
+        ),
+      })
+      setIsResetOpen(false)
+      setResetEmail("")
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -181,7 +167,11 @@ export default function LoginPage() {
         description: (
           <span className="flex items-center gap-2 text-xs">
             <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-            <span>{error?.message || "An unexpected error occurred."}</span>
+            <span>
+              {error.code === "auth/user-not-found"
+                ? "No account found with this email address."
+                : getFriendlyErrorMessage(error.code)}
+            </span>
           </span>
         ),
       })

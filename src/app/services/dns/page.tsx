@@ -178,6 +178,9 @@ export default function DNSManagementPage() {
             return // Stop execution
           }
         }
+        if (zoneRes.error) {
+          throw new Error(zoneRes.error)
+        }
       }
       
       const dnsRes = await listDNSRecords(idToken, orgId, zoneId)

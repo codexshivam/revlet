@@ -21,8 +21,27 @@ export async function verifyUserOrgAccess(
     throw new Error("Unauthorized: Missing credentials.");
   }
 
-  const decodedToken = await adminAuth.verifyIdToken(idToken);
-  const orgDoc = await adminDb.collection('organizations').doc(orgId).get();
+  // Pre-flight check: ensure Firebase Admin has credentials in production
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY && !process.env.FIREBASE_CLIENT_EMAIL) {
+    console.error("[Auth Helper] Missing FIREBASE_SERVICE_ACCOUNT_KEY in environment variables.");
+    throw new Error("Configuration Error: FIREBASE_SERVICE_ACCOUNT_KEY is missing in your deployment environment variables.");
+  }
+
+  let decodedToken;
+  try {
+    decodedToken = await adminAuth.verifyIdToken(idToken);
+  } catch (err: any) {
+    console.error("[Auth Helper] Token verification failed:", err?.message);
+    throw new Error(`Authentication failed: ${err?.message || "Invalid or expired session token."}`);
+  }
+
+  let orgDoc;
+  try {
+    orgDoc = await adminDb.collection('organizations').doc(orgId).get();
+  } catch (err: any) {
+    console.error("[Auth Helper] Firestore organization lookup failed:", err?.message);
+    throw new Error(`Database access failed: ${err?.message || "Unable to read organization data."}`);
+  }
   
   if (!orgDoc.exists) {
     throw new Error("Organization not found.");
@@ -38,13 +57,17 @@ export async function verifyUserOrgAccess(
     if (Array.isArray(orgData?.memberEmails) && orgData.memberEmails.map((e: string) => e.toLowerCase().trim()).includes(userEmail)) {
       isMember = true;
     } else {
-      const memberQuery = await adminDb.collection('teamMembers')
-        .where('organizationId', '==', orgId)
-        .where('ownerId', '==', orgData?.ownerId)
-        .where('email', '==', userEmail)
-        .where('status', '==', 'Active')
-        .get();
-      isMember = !memberQuery.empty;
+      try {
+        const memberQuery = await adminDb.collection('teamMembers')
+          .where('organizationId', '==', orgId)
+          .where('ownerId', '==', orgData?.ownerId)
+          .where('email', '==', userEmail)
+          .where('status', '==', 'Active')
+          .get();
+        isMember = !memberQuery.empty;
+      } catch (err: any) {
+        console.warn("[Auth Helper] Team member lookup warning:", err?.message);
+      }
     }
   }
 

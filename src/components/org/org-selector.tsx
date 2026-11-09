@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { Check, ChevronsUpDown, Building2, Loader2, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -18,7 +17,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { useActiveOrg } from "@/hooks/use-active-org"
+import { useUser, useFirestore } from "@/firebase"
+import { useToast } from "@/hooks/use-toast"
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 
 export function OrgSelector({ 
   selectedId, 
@@ -29,13 +42,90 @@ export function OrgSelector({
   onSelect?: (id: string) => void,
   compact?: boolean
 }) {
-  const { orgs, activeOrg, activeOrgId, setActiveOrgId, loading } = useActiveOrg()
+  const { orgs, activeOrgId, setActiveOrgId, loading } = useActiveOrg()
+  const { user } = useUser()
+  const db = useFirestore()
+  const { toast } = useToast()
+
   const [open, setOpen] = React.useState(false)
+  const [isAddOrgOpen, setIsAddOrgOpen] = React.useState(false)
+  const [newOrgName, setNewOrgName] = React.useState("")
+  const [newOrgDomain, setNewOrgDomain] = React.useState("")
+  const [isEducation, setIsEducation] = React.useState(false)
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [formError, setFormError] = React.useState("")
 
   // Support both hook sync and explicit prop override
   const currentId = selectedId || activeOrgId
   const handleSelect = onSelect || setActiveOrgId
   const selected = orgs.find((org) => org.id === currentId)
+
+  const handleCreateOrg = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "You must be signed in to add an organization."
+      })
+      return
+    }
+
+    const cleanName = newOrgName.trim()
+    const cleanDomain = newOrgDomain
+      .toLowerCase()
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+
+    if (!cleanName) {
+      setFormError("Organization name is required.")
+      return
+    }
+
+    if (!cleanDomain || !cleanDomain.includes(".")) {
+      setFormError("A valid root domain (e.g. example.com) is required.")
+      return
+    }
+
+    setFormError("")
+    setIsSubmitting(true)
+
+    try {
+      const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase()
+      const orgCode = `${cleanName.substring(0, 3).toUpperCase()}-${uniqueSuffix}`
+
+      const orgsRef = collection(db, "organizations")
+      const newDoc = await addDoc(orgsRef, {
+        name: cleanName,
+        domain: cleanDomain,
+        isEducation: !!isEducation,
+        code: orgCode,
+        ownerId: user.uid,
+        status: "Active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      })
+
+      handleSelect(newDoc.id)
+      setIsAddOrgOpen(false)
+      setNewOrgName("")
+      setNewOrgDomain("")
+      setIsEducation(false)
+      toast({
+        title: "Organization Registered",
+        description: `${cleanName} has been created and set as the active organization.`
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: err?.message || "Failed to create organization."
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const triggerButton = (
     <Popover open={open} onOpenChange={setOpen}>
@@ -46,8 +136,8 @@ export function OrgSelector({
           aria-expanded={open}
           disabled={loading}
           className={cn(
-            "justify-between h-9 text-xs font-bold border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm rounded-lg text-slate-800",
-            compact ? "w-full" : "w-[450px]"
+            "justify-between h-9 text-xs font-bold border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 hover:text-black transition-all shadow-sm rounded-lg text-slate-800",
+            compact ? "w-auto max-w-[340px]" : "w-[450px]"
           )}
         >
           <div className="flex items-center gap-2 truncate">
@@ -59,54 +149,118 @@ export function OrgSelector({
             <span className="truncate text-slate-800">
               {selected ? selected.name : (loading ? "Syncing..." : "Select Organization")}
             </span>
+            {selected && (
+              <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-1">
+                {/* DNS Type Chip */}
+                <span className={cn(
+                  "inline-flex items-center text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border pointer-events-none select-none transition-none shrink-0",
+                  selected.cloudflareZoneId 
+                    ? "border-blue-200/80 bg-blue-50 text-blue-600 hover:bg-blue-50 hover:text-blue-600" 
+                    : selected.dnsRequested 
+                      ? "border-amber-200/80 bg-amber-50 text-amber-600 hover:bg-amber-50 hover:text-amber-600"
+                      : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-50 hover:text-slate-500"
+                )}>
+                  {selected.cloudflareZoneId ? "Full DNS" : selected.dnsRequested ? "DNS Pending" : "No DNS"}
+                </span>
+                {/* Active Status Chip */}
+                <span className={cn(
+                  "inline-flex items-center text-[9px] font-bold px-1.5 py-0.2 rounded border pointer-events-none select-none transition-none shrink-0",
+                  (selected.status || "Active").toLowerCase() === "active"
+                    ? "border-emerald-200/80 bg-emerald-50 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-600"
+                    : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-50 hover:text-slate-500"
+                )}>
+                  {selected.status || "Active"}
+                </span>
+              </div>
+            )}
           </div>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-55 text-slate-500" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className={cn("p-0 shadow-xl border-slate-200 bg-white overflow-hidden rounded-lg", compact ? "w-[224px]" : "w-[450px]")}>
+      <PopoverContent 
+        className={cn(
+          "p-0 shadow-xl border-slate-200 bg-white overflow-hidden rounded-lg", 
+          compact ? "w-[340px] sm:w-[380px]" : "w-[450px]"
+        )}
+        align="start"
+      >
         <Command className="bg-white">
           <CommandInput 
             placeholder="Search organizations..." 
             className="h-9 text-xs text-slate-800 placeholder:text-slate-400 bg-transparent outline-none focus:ring-0" 
           />
-          <CommandList className="border-t border-slate-100">
-            <CommandEmpty className="text-xs py-4 text-slate-400">No organizations found.</CommandEmpty>
+          <CommandList className="border-t border-slate-100 max-h-[300px]">
+            <CommandEmpty className="text-xs py-4 text-slate-400 text-center">No organizations found.</CommandEmpty>
             <CommandGroup>
               {orgs.map((inst) => {
                 const isSelected = currentId === inst.id
+                const isOrgActive = (inst.status || "Active").toLowerCase() === "active"
+                const dnsLabel = inst.cloudflareZoneId ? "Full DNS" : inst.dnsRequested ? "DNS Pending" : "No DNS"
+
                 return (
                   <CommandItem
                     key={inst.id}
-                    value={inst.id}
-                    onSelect={(v) => {
-                      handleSelect(v)
+                    value={`${inst.name} ${inst.domain || ''}`}
+                    onSelect={() => {
+                      handleSelect(inst.id)
                       setOpen(false)
                     }}
                     className={cn(
-                      "text-xs py-2 cursor-pointer transition-colors m-1 rounded-md",
+                      "text-xs py-2 px-2.5 cursor-pointer transition-colors m-1 rounded-md flex items-center justify-between gap-2",
                       isSelected 
-                        ? "bg-blue-600 text-white data-[selected=true]:bg-blue-600 data-[selected=true]:text-white hover:bg-blue-700 hover:text-white font-semibold"
+                        ? "bg-slate-100 text-slate-900 data-[selected=true]:bg-slate-100 font-semibold border border-slate-200/80"
                         : "text-slate-700 hover:bg-slate-50 hover:text-slate-900 data-[selected=true]:bg-slate-50 data-[selected=true]:text-slate-900"
                     )}
                   >
-                    <Building2
-                      className={cn(
-                        "mr-2 h-3.5 w-3.5 shrink-0",
-                        isSelected ? "text-white" : "text-slate-400"
-                      )}
-                    />
-                    <div className="flex flex-col truncate flex-1">
-                      <span className={cn("font-bold truncate", isSelected ? "text-white" : "text-slate-800")}>
-                        {inst.name}
-                      </span>
-                      {inst.domain && (
-                        <span className={cn("text-[10px] truncate", isSelected ? "text-blue-100/90" : "text-slate-400")}>
-                          {inst.domain}
-                        </span>
-                      )}
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      <Building2
+                        className={cn(
+                          "mt-0.5 h-3.5 w-3.5 shrink-0",
+                          isSelected ? "text-blue-600" : "text-slate-400"
+                        )}
+                      />
+                      <div className="flex flex-col gap-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800 truncate text-xs">
+                            {inst.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {inst.domain && (
+                            <span className="text-[10px] text-slate-400 font-medium truncate mr-0.5">
+                              {inst.domain}
+                            </span>
+                          )}
+                          {/* DNS Type Chip - color stays unchanged on hover */}
+                          <span 
+                            className={cn(
+                              "inline-flex items-center text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border pointer-events-none select-none transition-none shrink-0",
+                              inst.cloudflareZoneId 
+                                ? "border-blue-200/80 bg-blue-50 text-blue-600 hover:bg-blue-50 hover:text-blue-600" 
+                                : inst.dnsRequested 
+                                  ? "border-amber-200/80 bg-amber-50 text-amber-600 hover:bg-amber-50 hover:text-amber-600"
+                                  : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-50 hover:text-slate-500"
+                            )}
+                          >
+                            {dnsLabel}
+                          </span>
+
+                          {/* Active Status Chip - color stays unchanged on hover */}
+                          <span 
+                            className={cn(
+                              "inline-flex items-center text-[9px] font-bold px-1.5 py-0.2 rounded border pointer-events-none select-none transition-none shrink-0",
+                              isOrgActive
+                                ? "border-emerald-200/80 bg-emerald-50 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-600"
+                                : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-50 hover:text-slate-500"
+                            )}
+                          >
+                            {inst.status || "Active"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                     {isSelected && (
-                      <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-white" />
+                      <Check className="h-3.5 w-3.5 shrink-0 text-blue-600" />
                     )}
                   </CommandItem>
                 )
@@ -114,30 +268,141 @@ export function OrgSelector({
             </CommandGroup>
           </CommandList>
           <div className="p-1 border-t border-slate-100 bg-slate-50/50">
-            <Link 
-              href="/account/home" 
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-slate-100 rounded transition-colors"
+            <button 
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                setFormError("")
+                setIsAddOrgOpen(true)
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-slate-100 hover:text-black rounded transition-colors text-left"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Manage Organizations</span>
-            </Link>
+              <span>Add Organization</span>
+            </button>
           </div>
         </Command>
       </PopoverContent>
     </Popover>
   )
 
-  if (compact) {
-    return triggerButton
-  }
-
   return (
-    <div className="flex items-center gap-4 py-3 px-5 bg-white border border-slate-200 rounded-lg shadow-sm">
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Select Organization</span>
-        {triggerButton}
-      </div>
-    </div>
+    <>
+      {compact ? (
+        triggerButton
+      ) : (
+        <div className="flex items-center gap-4 py-3 px-5 bg-white border border-slate-200 rounded-lg shadow-sm">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Select Organization</span>
+            {triggerButton}
+          </div>
+        </div>
+      )}
+
+      {/* Add Organization Dialog */}
+      <Dialog open={isAddOrgOpen} onOpenChange={setIsAddOrgOpen}>
+        <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200 shadow-xl">
+          <DialogHeader className="border-b border-slate-100 bg-white p-5">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-primary" />
+              <DialogTitle className="font-headline font-bold text-base text-slate-900">
+                Add Organization
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              Register a new organization workspace to manage DNS, email routing, and services.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateOrg}>
+            <div className="p-5 space-y-4">
+              {formError && (
+                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600 font-medium">
+                  {formError}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="add-org-name" className="text-xs font-bold text-slate-700">
+                  Organization Legal Name *
+                </Label>
+                <Input
+                  id="add-org-name"
+                  placeholder="e.g. Stanford University or Acme Inc"
+                  value={newOrgName}
+                  onChange={(e) => {
+                    setNewOrgName(e.target.value)
+                    if (formError) setFormError("")
+                  }}
+                  className="h-9 text-xs border-slate-200 font-medium"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="add-org-domain" className="text-xs font-bold text-slate-700">
+                  Primary Root Domain *
+                </Label>
+                <Input
+                  id="add-org-domain"
+                  placeholder="e.g. example.com or example.edu"
+                  value={newOrgDomain}
+                  onChange={(e) => {
+                    setNewOrgDomain(e.target.value)
+                    if (formError) setFormError("")
+                  }}
+                  className="h-9 text-xs border-slate-200 font-medium"
+                  required
+                />
+                <p className="text-[10px] text-slate-400">
+                  Root domain used for Cloudflare DNS edge routing and Google Workspace.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/70">
+                <div className="space-y-0.5">
+                  <Label htmlFor="add-org-edu" className="text-xs font-bold text-slate-700 cursor-pointer">
+                    Educational Institution
+                  </Label>
+                  <p className="text-[10px] text-slate-400">
+                    Enable academic services and Google Workspace for Education features.
+                  </p>
+                </div>
+                <Switch
+                  id="add-org-edu"
+                  checked={isEducation}
+                  onCheckedChange={setIsEducation}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="bg-slate-50/80 p-4 border-t border-slate-100 flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddOrgOpen(false)}
+                className="h-9 text-xs font-bold rounded-lg border-slate-200 hover:text-black hover:bg-slate-100"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="h-9 px-4 text-xs font-bold rounded-lg bg-primary hover:bg-primary/95 text-white shadow-sm"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add Organization"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

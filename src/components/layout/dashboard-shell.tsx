@@ -27,8 +27,8 @@ export function DashboardShell({
   if (loading || !user) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-white">
-        <div className="font-bold text-sm uppercase tracking-widest text-slate-900 font-headline animate-pulse">
-          REVLET
+        <div className="font-headline font-semibold text-xl tracking-tight text-slate-900 select-none">
+          Revlet
         </div>
       </div>
     )

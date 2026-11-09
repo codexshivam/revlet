@@ -18,8 +18,9 @@ import {
 import { toast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import { useAuth, useUser } from "@/firebase"
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth"
+import { signInWithEmailAndPassword } from "firebase/auth"
 import { AuthFrame } from "@/components/layout/auth-frame"
+import { sendBrandedPasswordResetEmail } from "@/app/actions/auth-emails"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -31,6 +32,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState("")
   const [isResetOpen, setIsResetOpen] = useState(false)
+  const [isResetLoading, setIsResetLoading] = useState(false)
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -144,22 +146,34 @@ export default function LoginPage() {
       })
       return
     }
+
+    setIsResetLoading(true)
     try {
-      const actionCodeSettings = {
-        url: typeof window !== "undefined" ? `${window.location.origin}/login` : "https://app.revlet.me/login",
-        handleCodeInApp: true,
+      const res = await sendBrandedPasswordResetEmail(resetEmail)
+      if (res.success) {
+        toast({
+          title: "Reset link sent",
+          description: (
+            <span className="flex items-center gap-2 text-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>Please check your email for password reset instructions.</span>
+            </span>
+          ),
+        })
+        setIsResetOpen(false)
+        setResetEmail("")
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Reset Failed",
+          description: (
+            <span className="flex items-center gap-2 text-xs">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <span>{res.error || "Unable to send reset email."}</span>
+            </span>
+          ),
+        })
       }
-      await sendPasswordResetEmail(auth, resetEmail, actionCodeSettings)
-      toast({
-        title: "Reset link sent",
-        description: (
-          <span className="flex items-center gap-2 text-xs">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span>Please check your email for reset instructions.</span>
-          </span>
-        ),
-      })
-      setIsResetOpen(false)
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -167,14 +181,12 @@ export default function LoginPage() {
         description: (
           <span className="flex items-center gap-2 text-xs">
             <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-            <span>
-              {error.code === "auth/user-not-found" 
-                ? "No account found with this email address." 
-                : getFriendlyErrorMessage(error.code)}
-            </span>
+            <span>{error?.message || "An unexpected error occurred."}</span>
           </span>
         ),
       })
+    } finally {
+      setIsResetLoading(false)
     }
   }
 
@@ -255,9 +267,17 @@ export default function LoginPage() {
                     <DialogFooter className="pt-2">
                       <Button 
                         type="submit" 
-                        className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white rounded text-xs transition-all shadow-sm"
+                        disabled={isResetLoading}
+                        className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white rounded text-xs transition-all shadow-sm flex items-center justify-center gap-2"
                       >
-                        Send Reset Link
+                        {isResetLoading ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Sending link...</span>
+                          </>
+                        ) : (
+                          <span>Send Reset Link</span>
+                        )}
                       </Button>
                     </DialogFooter>
                   </form>

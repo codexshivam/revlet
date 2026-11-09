@@ -202,11 +202,15 @@ export default function DNSManagementPage() {
         throw new Error(dnsRes.error)
       }
     } catch (error: any) {
-      console.warn('Network sync issue:', error.message)
+      console.warn('Network sync issue:', error?.message)
+      const rawMsg = error?.message || ""
+      const isInternalRscError = rawMsg.includes("Server Components render") || rawMsg.includes("digest")
       toast({
         variant: "destructive",
         title: "Sync Error",
-        description: error.message || "Could not fetch data from the network edge."
+        description: isInternalRscError
+          ? "Unable to synchronize DNS records with the edge network. If a deployment was recently published, please refresh the page."
+          : (rawMsg || "Could not fetch data from the network edge.")
       })
     } finally {
       setIsLoadingRecords(false)

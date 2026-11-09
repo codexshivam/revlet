@@ -421,10 +421,14 @@ export default function GoogleWorkspacePage() {
       setMergedAlerts(merged)
     } catch (error: any) {
       console.error("Dashboard data fetch failed:", error)
+      const rawMsg = error?.message || ""
+      const isInternalRscError = rawMsg.includes("Server Components render") || rawMsg.includes("digest")
       toast({
         variant: "destructive",
         title: "Data Sync Error",
-        description: error.message || "Could not load workspace dashboard data.",
+        description: isInternalRscError
+          ? "Unable to synchronize Google Workspace directory. Please refresh the page."
+          : (rawMsg || "Could not load workspace dashboard data."),
       })
     } finally {
       setIsLoadingDashboard(false)

@@ -229,11 +229,15 @@ export default function EmailRoutingPage() {
         console.warn("Live DNS validation sync issue:", dnsRes.error)
       }
     } catch (error: any) {
-      console.warn("Email rules sync issue:", error.message)
+      console.warn("Email rules sync issue:", error?.message)
+      const rawMsg = error?.message || ""
+      const isInternalRscError = rawMsg.includes("Server Components render") || rawMsg.includes("digest")
       toast({
         variant: "destructive",
         title: "Sync Error",
-        description: error.message || "Could not fetch email service rules.",
+        description: isInternalRscError
+          ? "Unable to synchronize email service state with the edge network. Please refresh the page."
+          : (rawMsg || "Could not fetch email service rules."),
       })
     } finally {
       setIsLoadingRules(false)

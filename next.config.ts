@@ -3,6 +3,17 @@ import type { NextConfig } from 'next'
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
+  experimental: {
+    serverActions: {
+      allowedOrigins: [
+        'app.revlet.me',
+        'revlet.me',
+        '*.revlet.me',
+        'localhost:9002',
+        'localhost:3000',
+      ],
+    },
+  },
   env: {
     FIREBASE_API_KEY: process.env.FIREBASE_API_KEY,
     FIREBASE_AUTH_DOMAIN: process.env.FIREBASE_AUTH_DOMAIN,

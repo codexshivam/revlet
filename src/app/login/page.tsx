@@ -145,7 +145,11 @@ export default function LoginPage() {
       return
     }
     try {
-      await sendPasswordResetEmail(auth, resetEmail)
+      const actionCodeSettings = {
+        url: typeof window !== "undefined" ? `${window.location.origin}/login` : "https://app.revlet.me/login",
+        handleCodeInApp: true,
+      }
+      await sendPasswordResetEmail(auth, resetEmail, actionCodeSettings)
       toast({
         title: "Reset link sent",
         description: (

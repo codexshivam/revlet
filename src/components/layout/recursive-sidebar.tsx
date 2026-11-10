@@ -58,9 +58,12 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
       mobile ? "w-full pt-4 border-r-0 h-full max-h-full" : "w-64 pt-6 hidden lg:flex h-screen max-h-screen sticky top-0"
     )}>
       <div className="px-5 mb-5 shrink-0">
-        <Link href="/account/home" className="inline-block transition-opacity hover:opacity-80">
-          <span className="font-headline font-bold text-base tracking-[0.15em] text-slate-900 uppercase">
-            REVLET
+        <Link href="/account/home" className="inline-flex items-center gap-2 transition-opacity hover:opacity-80">
+          <span className="font-headline font-bold text-base tracking-tight text-slate-900">
+            Revlet
+          </span>
+          <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+            Console
           </span>
         </Link>
       </div>

@@ -196,7 +196,7 @@ export default function SupportPage() {
             <CardContent className="p-4 sm:p-8 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <Label htmlFor="subject" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Ticket Subject *</Label>
+                  <Label htmlFor="subject" className="text-xs font-medium text-slate-700 block">Ticket Subject *</Label>
                   <Input 
                     id="subject" 
                     value={subject} 
@@ -206,7 +206,7 @@ export default function SupportPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="category" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Category *</Label>
+                  <Label htmlFor="category" className="text-xs font-medium text-slate-700 block">Category *</Label>
                   <Select 
                     value={category} 
                     onValueChange={(v) => setCategory(v)}
@@ -226,7 +226,7 @@ export default function SupportPage() {
               </div>
               
               <div className="space-y-1.5">
-                <Label htmlFor="message" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Detailed Description *</Label>
+                <Label htmlFor="message" className="text-xs font-medium text-slate-700 block">Detailed Description *</Label>
                 <Textarea 
                   id="message" 
                   value={message} 
@@ -268,7 +268,7 @@ export default function SupportPage() {
             {isLoadingTickets ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading help history...</p>
+                <p className="text-xs font-medium text-slate-500">Loading help history...</p>
               </div>
             ) : tickets.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center gap-2 px-4">
@@ -283,11 +283,11 @@ export default function SupportPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50/50 border-b border-slate-200">
-                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 text-slate-400 tracking-widest">Ticket ID</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Subject</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Category</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Date Opened</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 text-slate-400 tracking-widest">Status</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 pl-8 text-slate-500">Ticket ID</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Subject</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Category</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Date opened</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -324,7 +324,7 @@ export default function SupportPage() {
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center justify-between gap-2">
-                                  <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border uppercase tracking-wider
+                                  <Badge className={`text-xs px-2 py-0.5 h-6 font-medium shadow-none rounded border
                                     ${t.status === "Resolved" || t.status === "Closed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
                                       t.status === "In Progress" ? "bg-blue-50 text-blue-600 border-blue-100" : 
                                       "bg-amber-50 text-amber-600 border-amber-100"}`}>
@@ -338,7 +338,7 @@ export default function SupportPage() {
                               <TableRow className="bg-slate-50/20 hover:bg-slate-50/20 border-b border-slate-100">
                                 <TableCell colSpan={5} className="pl-8 pr-8 py-4 bg-slate-50/20">
                                   <div className="p-5 bg-white border border-slate-200 rounded-lg shadow-sm space-y-2">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Ticket Description</p>
+                                    <p className="text-xs font-medium text-slate-500 leading-none">Ticket description</p>
                                     <p className="whitespace-pre-wrap font-medium text-slate-700 text-xs leading-relaxed">{t.description}</p>
                                   </div>
                                 </TableCell>
@@ -376,7 +376,7 @@ export default function SupportPage() {
                         {/* Top Row: Subject & Status badge */}
                         <div className="flex items-start justify-between gap-3">
                           <span className="font-headline font-bold text-slate-800 text-sm leading-snug">{t.subject}</span>
-                          <Badge className={`text-[9px] px-2 py-0.5 h-6 font-bold shadow-none rounded border uppercase tracking-wider shrink-0
+                          <Badge className={`text-xs px-2 py-0.5 h-6 font-medium shadow-none rounded border shrink-0
                             ${t.status === "Resolved" || t.status === "Closed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
                               t.status === "In Progress" ? "bg-blue-50 text-blue-600 border-blue-100" : 
                               "bg-amber-50 text-amber-600 border-amber-100"}`}>
@@ -399,7 +399,7 @@ export default function SupportPage() {
                         {/* ID Block and View detail Toggle */}
                         <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-1">
                           <div className="flex items-center gap-1 font-mono text-[10px] text-slate-400" onClick={(e) => e.stopPropagation()}>
-                            <span className="font-bold uppercase tracking-widest text-[8px] text-slate-400 mr-0.5">ID:</span>
+                            <span className="font-medium text-xs text-slate-500 mr-0.5">ID:</span>
                             <span>{t.id.substring(0, 8)}...</span>
                             <Button 
                               variant="ghost" 
@@ -421,7 +421,7 @@ export default function SupportPage() {
                         {isExpanded && (
                           <div className="pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200">
                             <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl space-y-1.5 mt-1">
-                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Ticket Description</p>
+                              <p className="text-xs font-medium text-slate-500 leading-none">Ticket description</p>
                               <p className="whitespace-pre-wrap font-medium text-slate-700 text-xs leading-relaxed">{t.description}</p>
                             </div>
                           </div>

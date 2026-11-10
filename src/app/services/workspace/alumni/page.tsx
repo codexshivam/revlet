@@ -356,7 +356,7 @@ export default function WorkspaceAlumniPage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-slate-900" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <p className="text-xs font-medium text-slate-500">
             Loading Workspace Data...
           </p>
         </div>
@@ -535,7 +535,7 @@ export default function WorkspaceAlumniPage() {
           <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
             <CardContent className="p-6 flex items-center justify-between">
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Registered Alumni</p>
+                <p className="text-xs font-medium text-slate-500">Total Registered Alumni</p>
                 <p className="text-4xl font-headline font-bold text-[#191C1E]">
                   {alumni.length}
                 </p>
@@ -550,7 +550,7 @@ export default function WorkspaceAlumniPage() {
             <CardContent className="p-6 flex items-center justify-between gap-6">
               <div className="space-y-3 flex-1">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Collective Storage Footprint</p>
+                  <p className="text-xs font-medium text-slate-500">Collective Storage Footprint</p>
                   <p className="text-sm font-bold text-[#191C1E]">{formatBytes(totalStorageUsed)}</p>
                 </div>
                 {/* Visual cap at an arbitrary 500GB for progress bar rendering, or calculate dynamic % if quota known */}
@@ -646,7 +646,7 @@ export default function WorkspaceAlumniPage() {
         {/* Alumni Directory Table */}
         <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
           <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between py-4 px-6">
-            <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <CardTitle className="text-xs font-semibold text-slate-700 flex items-center gap-2">
               <GraduationCap className="w-4 h-4" />
               Retention & Archive Directory
             </CardTitle>
@@ -659,7 +659,7 @@ export default function WorkspaceAlumniPage() {
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <Loader2 className="w-6 h-6 animate-spin text-[#191C1E]" />
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Directory...</p>
+                <p className="text-xs font-medium text-slate-500">Loading directory...</p>
               </div>
             ) : filteredAlumni.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
@@ -698,10 +698,10 @@ export default function WorkspaceAlumniPage() {
                             />
                           </TableHead>
                         )}
-                        <TableHead className={cn("text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500", !isSelectionMode && "pl-6")}>Name</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500">Account Created</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-500">Storage Footprint</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 tracking-wider text-slate-500">Account Actions</TableHead>
+                        <TableHead className={cn("text-xs font-medium py-3.5 text-slate-500", !isSelectionMode && "pl-6")}>Name</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Account created</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Storage footprint</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-right pr-6 text-slate-500">Account actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -760,7 +760,7 @@ export default function WorkspaceAlumniPage() {
                                 </Button>
                                 <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
                                   <span className={cn(
-                                    "text-[10px] font-bold uppercase tracking-wider",
+                                    "text-xs font-medium",
                                     user.suspended ? "text-red-500" : "text-emerald-500"
                                   )}>
                                     {user.suspended ? "Suspended" : "Active"}
@@ -818,13 +818,13 @@ export default function WorkspaceAlumniPage() {
                         {/* Card Body: Details */}
                         <div className="space-y-2.5 pt-2 border-t border-slate-100/60 text-left">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Account Created</span>
+                            <span className="text-slate-500 font-medium text-xs">Account created</span>
                             <span className="font-semibold text-slate-600">
                               {formatDate(user.creationTime)}
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Storage footprint</span>
+                            <span className="text-slate-500 font-medium text-xs">Storage footprint</span>
                             <span className="font-semibold font-mono text-slate-600">
                               {formatBytes(userStorage)}
                             </span>
@@ -846,7 +846,7 @@ export default function WorkspaceAlumniPage() {
 
                           <div className="flex items-center gap-2">
                             <span className={cn(
-                              "text-[10px] font-bold uppercase tracking-wider",
+                              "text-xs font-medium",
                               isSuspended ? "text-red-500" : "text-emerald-500"
                             )}>
                               {isSuspended ? "Suspended" : "Active"}

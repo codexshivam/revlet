@@ -27,8 +27,8 @@ export function TopHeader() {
 
         {/* Mobile brand mark */}
         <Link href="/account/home" className="lg:hidden flex items-center pr-1 hover:opacity-80 transition-opacity">
-          <span className="font-headline font-bold text-[13px] tracking-[0.14em] text-slate-900 uppercase">
-            REVLET
+          <span className="font-headline font-bold text-[15px] tracking-tight text-slate-900">
+            Revlet
           </span>
         </Link>
 

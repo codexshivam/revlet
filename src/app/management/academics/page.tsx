@@ -235,7 +235,7 @@ export default function AcademicsManagementPage() {
                 {/* Left Side: Add Class Form */}
                 <form onSubmit={handleCreateClass} className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">New Class</Label>
+                    <Label className="text-xs font-medium text-slate-700">New Class</Label>
                     <div className="flex gap-2">
                       <Input 
                         placeholder="e.g. Class 11, Grade 10" 
@@ -259,7 +259,7 @@ export default function AcademicsManagementPage() {
                 <form onSubmit={handleAddSection} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Target Class</Label>
+                      <Label className="text-xs font-medium text-slate-700">Target Class</Label>
                       <Select value={selectedClassId} onValueChange={setSelectedClassId} disabled={classes.length === 0 || isCreatingSection}>
                         <SelectTrigger className="h-12 bg-slate-50 border-slate-200 font-semibold text-sm">
                           <SelectValue placeholder={classes.length === 0 ? "Create a Class first" : "Select a Class"} />
@@ -273,7 +273,7 @@ export default function AcademicsManagementPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">New Section</Label>
+                      <Label className="text-xs font-medium text-slate-700">New Section</Label>
                       <div className="flex gap-2">
                         <Input 
                           placeholder="e.g. Section A, Science" 
@@ -302,7 +302,7 @@ export default function AcademicsManagementPage() {
             <CardHeader className="bg-white border-b border-slate-100 py-4 px-6 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <Library className="w-4 h-4 text-slate-400" />
-                <CardTitle className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em]">Workspace Directory</CardTitle>
+                <CardTitle className="text-xs font-semibold text-slate-700">Workspace Directory</CardTitle>
               </div>
               <Badge variant="outline" className="text-[9px] font-bold h-6 px-2.5 bg-white border-slate-200">
                 {classes.length} {classes.length === 1 ? "Class" : "Classes"}
@@ -348,9 +348,9 @@ export default function AcademicsManagementPage() {
                           <Table>
                             <TableHeader className="bg-slate-50/80">
                               <TableRow className="border-slate-100">
-                                <TableHead className="text-[9px] font-bold uppercase tracking-wider text-slate-500 py-1 h-auto">Section Name</TableHead>
-                                <TableHead className="text-[9px] font-bold uppercase tracking-wider text-slate-500 py-1 h-auto w-[320px]">Directory Path</TableHead>
-                                <TableHead className="text-[9px] font-bold uppercase tracking-wider text-slate-500 py-1 h-auto text-right w-24">Action</TableHead>
+                                <TableHead className="text-xs font-medium text-slate-500 py-1 h-auto">Section Name</TableHead>
+                                <TableHead className="text-xs font-medium text-slate-500 py-1 h-auto w-[320px]">Directory Path</TableHead>
+                                <TableHead className="text-xs font-medium text-slate-500 py-1 h-auto text-right w-24">Action</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -379,7 +379,7 @@ export default function AcademicsManagementPage() {
                         </div>
                       ) : (
                         <div className="border border-dashed border-slate-200 rounded-lg py-2.5 text-center bg-slate-50/50">
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">No sections attached</p>
+                          <p className="text-xs font-medium text-slate-400">No sections attached</p>
                         </div>
                       )}
                     </div>

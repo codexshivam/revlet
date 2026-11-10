@@ -250,9 +250,9 @@ export default function SignupPage() {
       <div className="w-full max-w-[460px] bg-white border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl p-6 sm:p-10 space-y-6 animate-in fade-in duration-300">
         
         {/* Step Indicator */}
-        <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 border-b border-slate-100 pb-3">
-          <span className="flex items-center gap-1.5 text-slate-800">
-            <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold">
+        <div className="flex items-center justify-between text-xs font-medium text-slate-500 border-b border-slate-100 pb-3">
+          <span className="flex items-center gap-1.5 text-slate-900">
+            <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-semibold">
               {step}
             </span>
             {step === 1 ? "Step 1: Your Account" : "Step 2: Organization Setup"}
@@ -276,9 +276,9 @@ export default function SignupPage() {
               <div className="space-y-1.5">
                 <Label 
                   htmlFor="name" 
-                  className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
+                  className="text-xs font-medium text-slate-700 block"
                 >
-                  Full Name
+                  Full name
                 </Label>
                 <Input 
                   id="name" 
@@ -293,9 +293,9 @@ export default function SignupPage() {
               <div className="space-y-1.5">
                 <Label 
                   htmlFor="email" 
-                  className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
+                  className="text-xs font-medium text-slate-700 block"
                 >
-                  Work Email
+                  Work email
                 </Label>
                 <Input 
                   id="email" 
@@ -311,7 +311,7 @@ export default function SignupPage() {
               <div className="space-y-1.5">
                 <Label 
                   htmlFor="password" 
-                  className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
+                  className="text-xs font-medium text-slate-700 block"
                 >
                   Password
                 </Label>
@@ -339,7 +339,7 @@ export default function SignupPage() {
 
               <Button 
                 type="submit" 
-                className="w-full font-semibold h-11 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.1)] flex items-center justify-center"
+                className="w-full font-medium h-10 bg-primary hover:bg-primary/95 !text-white text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-sm flex items-center justify-center"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -407,9 +407,9 @@ export default function SignupPage() {
               <div className="space-y-1.5">
                 <Label 
                   htmlFor="org-name" 
-                  className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block"
+                  className="text-xs font-medium text-slate-700 block"
                 >
-                  Organization Name <span className="text-red-500">*</span>
+                  Organization name <span className="text-red-500">*</span>
                 </Label>
                 <div className="relative">
                   <Input 
@@ -427,9 +427,9 @@ export default function SignupPage() {
               <div className="space-y-1.5">
                 <Label 
                   htmlFor="org-domain" 
-                  className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block"
+                  className="text-xs font-medium text-slate-700 block"
                 >
-                  Primary Domain (Optional)
+                  Primary domain (Optional)
                 </Label>
                 <div className="relative">
                   <Input 
@@ -447,7 +447,7 @@ export default function SignupPage() {
                 <div className="space-y-1.5">
                   <Label 
                     htmlFor="org-phone" 
-                    className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block"
+                    className="text-xs font-medium text-slate-700 block"
                   >
                     Phone (Optional)
                   </Label>
@@ -466,7 +466,7 @@ export default function SignupPage() {
                 <div className="space-y-1.5">
                   <Label 
                     htmlFor="org-address" 
-                    className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block"
+                    className="text-xs font-medium text-slate-700 block"
                   >
                     City / Address (Optional)
                   </Label>
@@ -485,7 +485,7 @@ export default function SignupPage() {
 
               <Button 
                 type="submit" 
-                className="w-full font-semibold h-11 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.1)] flex items-center justify-center"
+                className="w-full font-medium h-10 bg-primary hover:bg-primary/95 !text-white text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-sm flex items-center justify-center"
                 disabled={isLoading}
               >
                 {isLoading ? (

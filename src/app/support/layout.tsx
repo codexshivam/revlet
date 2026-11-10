@@ -21,9 +21,9 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/banner.svg',
+        url: '/og-image.png',
         width: 1200,
-        height: 320,
+        height: 630,
         alt: 'Revlet Documentation & Support',
       },
     ],
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Documentation & Support | Revlet IT Control Plane',
     description: 'Documentation, guides, and ticket support for educational and enterprise IT teams.',
-    images: ['/banner.svg'],
+    images: ['/og-image.png'],
   },
   robots: {
     index: true,

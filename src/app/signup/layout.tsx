@@ -22,9 +22,9 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/banner.svg',
+        url: '/og-image.png',
         width: 1200,
-        height: 320,
+        height: 630,
         alt: 'Revlet Get Started',
       },
     ],
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Get Started | Revlet IT Management Control Plane',
     description: "Start managing your organization's IT infrastructure in minutes with zero-trust tenancy.",
-    images: ['/banner.svg'],
+    images: ['/og-image.png'],
   },
   robots: {
     index: true,

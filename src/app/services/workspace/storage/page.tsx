@@ -567,7 +567,7 @@ export default function StoragePage() {
               {/* Card 1: Total Storage */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <CardTitle className="text-xs font-semibold text-slate-700 flex items-center gap-2">
                     <HardDrive className="w-3.5 h-3.5" />
                     Total Storage
                   </CardTitle>
@@ -587,7 +587,7 @@ export default function StoragePage() {
               {/* Card 2: Distribution by Type */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <CardTitle className="text-xs font-semibold text-slate-700 flex items-center gap-2">
                     <FolderTree className="w-3.5 h-3.5" />
                     Distribution by Type
                   </CardTitle>
@@ -625,7 +625,7 @@ export default function StoragePage() {
                         </ResponsiveContainer>
                         {/* Center count of OUs with data */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">OUs</span>
+                          <span className="text-xs font-medium text-slate-500">OUs</span>
                           <span className="text-sm font-extrabold text-slate-800 leading-none">{pieData.length}</span>
                         </div>
                       </div>
@@ -668,7 +668,7 @@ export default function StoragePage() {
               {/* Card 3: Top Consumers */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <CardTitle className="text-xs font-semibold text-slate-700 flex items-center gap-2">
                     <TrendingUp className="w-3.5 h-3.5" />
                     Top Consumers
                   </CardTitle>
@@ -696,7 +696,7 @@ export default function StoragePage() {
                             </div>
                             
                             {/* Avatar Initials Bubble */}
-                            <div className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs font-extrabold shrink-0 shadow-sm transition-transform duration-200 group-hover:scale-105 ${avatarClass}`}>
+                            <div className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs font-extrabold shrink-0 shadow-sm transition-transform duration-200  ${avatarClass}`}>
                               {initials}
                             </div>
 
@@ -735,7 +735,7 @@ export default function StoragePage() {
             {/* ─── Group-Level Usage Table ──────────────────────────── */}
             <Card className="animate-in slide-in-from-bottom-4 duration-500 delay-150">
               <CardHeader>
-                <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <CardTitle className="text-xs font-semibold text-slate-700 flex items-center gap-2">
                   <Users className="w-3.5 h-3.5" />
                   Group-Level Storage Usage
                 </CardTitle>
@@ -755,16 +755,16 @@ export default function StoragePage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-slate-50/80">
-                            <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            <TableHead className="text-xs font-medium text-slate-500">
                               Type Name
                             </TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-32">
+                            <TableHead className="text-xs font-semibold text-slate-700 text-center w-32">
                               Users
                             </TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest w-64">
+                            <TableHead className="text-xs font-semibold text-slate-700 w-64">
                               Total Storage Used
                             </TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest w-48">
+                            <TableHead className="text-xs font-semibold text-slate-700 w-48">
                               Current Avg Usage
                             </TableHead>
                           </TableRow>
@@ -843,7 +843,7 @@ export default function StoragePage() {
                                   <p className="text-[10px] text-slate-400 font-mono truncate">{formatType(agg.ouPath)}</p>
                                 </div>
                               </div>
-                              <Badge variant="outline" className="text-[9px] font-bold bg-slate-50 border-slate-200 text-slate-500 rounded-md px-2 py-0.5 shadow-none shrink-0 uppercase tracking-wider">
+                              <Badge variant="outline" className="text-xs font-medium bg-slate-50 border-slate-200 text-slate-500 rounded-md px-2 py-0.5 shadow-none shrink-0">
                                 {agg.userCount} Users
                               </Badge>
                             </div>
@@ -851,7 +851,7 @@ export default function StoragePage() {
                             {/* Progress bar */}
                             <div className="space-y-1.5">
                               <div className="flex items-center justify-between text-xs">
-                                <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Total Used</span>
+                                <span className="text-slate-500 font-medium text-xs">Total used</span>
                                 <span className="font-bold text-slate-800">{formatBytes(agg.totalUsedBytes)}</span>
                               </div>
                               <Progress value={pct} className="h-2 bg-slate-100" />
@@ -859,7 +859,7 @@ export default function StoragePage() {
 
                             {/* Average usage info */}
                             <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-100/60">
-                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Average Usage</span>
+                              <span className="text-slate-500 font-medium text-xs">Average usage</span>
                               <span className="font-semibold text-slate-700 bg-slate-50 border border-slate-100 rounded-md px-2 py-0.5">
                                 {formatBytes(agg.averageUsedBytes)} / user
                               </span>

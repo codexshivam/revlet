@@ -753,7 +753,7 @@ export default function WorkspaceDeactivatedPage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <p className="text-xs font-medium text-slate-500">
             Synchronizing Infrastructure...
           </p>
         </div>
@@ -977,11 +977,11 @@ export default function WorkspaceDeactivatedPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Card 1: Total Suspended */}
           <Card className="bg-white border-slate-200 shadow-sm relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform duration-300">
+            <div className="absolute top-0 right-0 p-6 opacity-5  transition-transform duration-300">
               <UserMinus className="w-24 h-24 text-slate-900" />
             </div>
             <CardHeader className="pb-2">
-              <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <CardTitle className="text-xs font-semibold text-slate-700 flex items-center gap-2">
                 <UserMinus className="w-4 h-4 text-red-500" />
                 Suspended Accounts
               </CardTitle>
@@ -1007,11 +1007,11 @@ export default function WorkspaceDeactivatedPage() {
 
           {/* Card 2: Recoverable Storage */}
           <Card className="bg-white border-slate-200 shadow-sm relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform duration-300">
+            <div className="absolute top-0 right-0 p-6 opacity-5  transition-transform duration-300">
               <HardDrive className="w-24 h-24 text-slate-900" />
             </div>
             <CardHeader className="pb-2">
-              <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <CardTitle className="text-xs font-semibold text-slate-700 flex items-center gap-2">
                 <HardDrive className="w-4 h-4 text-blue-500" />
                 Recoverable Pool Space
               </CardTitle>
@@ -1245,7 +1245,7 @@ export default function WorkspaceDeactivatedPage() {
               isLoadingList ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Accounts...</p>
+                  <p className="text-xs font-medium text-slate-500">Loading accounts...</p>
                 </div>
               ) : filteredSuspendedUsers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
@@ -1280,22 +1280,22 @@ export default function WorkspaceDeactivatedPage() {
                               />
                             </TableHead>
                           )}
-                          <TableHead className={cn("text-[10px] font-bold text-slate-400 uppercase tracking-widest", !isSelectionMode && "pl-6")}>
+                          <TableHead className={cn("text-xs font-medium text-slate-500", !isSelectionMode && "pl-6")}>
                             User Profile
                           </TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          <TableHead className="text-xs font-medium text-slate-500">
                             Original Type
                           </TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          <TableHead className="text-xs font-medium text-slate-500">
                             Suspended On
                           </TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          <TableHead className="text-xs font-medium text-slate-500">
                             Created Date
                           </TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          <TableHead className="text-xs font-medium text-slate-500">
                             Storage Held
                           </TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-32">
+                          <TableHead className="text-xs font-medium text-slate-500 text-right pr-6 w-32">
                             Actions
                           </TableHead>
                         </TableRow>
@@ -1425,25 +1425,25 @@ export default function WorkspaceDeactivatedPage() {
                           {/* Card Body: Details */}
                           <div className="space-y-2.5 pt-2 border-t border-slate-100/60 text-left">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Original Type</span>
+                              <span className="text-slate-500 font-medium text-xs">Original type</span>
                               <span className="font-semibold font-mono text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/50">
                                 {formatType(u.orgUnitPath)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Suspended On</span>
+                              <span className="text-slate-500 font-medium text-xs">Suspended on</span>
                               <span className="font-semibold text-slate-600">
                                 {u.lastLoginTime ? formatDate(u.lastLoginTime) : "Never Logged In"}
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Created Date</span>
+                              <span className="text-slate-500 font-medium text-xs">Created date</span>
                               <span className="font-semibold text-slate-600">
                                 {formatDate(u.creationTime)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Storage Held</span>
+                              <span className="text-slate-500 font-medium text-xs">Storage held</span>
                               <span className="font-bold text-slate-700">
                                 {formatBytes(heldBytes)}
                               </span>
@@ -1485,7 +1485,7 @@ export default function WorkspaceDeactivatedPage() {
               isLoadingDeleted ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Logs...</p>
+                  <p className="text-xs font-medium text-slate-500">Loading logs...</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1535,16 +1535,16 @@ export default function WorkspaceDeactivatedPage() {
                                   />
                                 </TableHead>
                               )}
-                              <TableHead className={cn("text-[10px] font-bold text-slate-400 uppercase tracking-widest", !isSelectionMode && "pl-6")}>
+                              <TableHead className={cn("text-xs font-medium text-slate-500", !isSelectionMode && "pl-6")}>
                                 Deleted Account
                               </TableHead>
-                              <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              <TableHead className="text-xs font-medium text-slate-500">
                                 Original Type
                               </TableHead>
-                              <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              <TableHead className="text-xs font-medium text-slate-500">
                                 Date Deleted
                               </TableHead>
-                              <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-44">
+                              <TableHead className="text-xs font-medium text-slate-500 text-right pr-6 w-44">
                                 Actions
                               </TableHead>
                             </TableRow>
@@ -1665,13 +1665,13 @@ export default function WorkspaceDeactivatedPage() {
                               {/* Card Body: Details */}
                               <div className="space-y-2.5 pt-2 border-t border-slate-100/60 text-left">
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Original Type</span>
+                                  <span className="text-slate-500 font-medium text-xs">Original type</span>
                                   <span className="font-semibold font-mono text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/50">
                                     {formatType(log.userOrgPath)}
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Date Deleted</span>
+                                  <span className="text-slate-500 font-medium text-xs">Date deleted</span>
                                   <span className="font-semibold text-slate-600">
                                     {log.timestamp ? formatDate(log.timestamp) : "—"}
                                   </span>
@@ -1680,7 +1680,7 @@ export default function WorkspaceDeactivatedPage() {
 
                               {/* Card Footer: Recover Actions */}
                               <div className="flex items-center justify-between pt-3 border-t border-slate-100/60">
-                                <span className="inline-flex items-center text-[9px] font-bold text-red-700 bg-red-50 border border-red-100 rounded px-2 py-0.5 uppercase tracking-wider" title="Google holds deleted users for 20 days in a restorable state.">
+                                <span className="inline-flex items-center text-xs font-medium text-red-700 bg-red-50 border border-red-100 rounded px-2 py-0.5" title="Google holds deleted users for 20 days in a restorable state.">
                                   Deleted
                                 </span>
                                 <Button
@@ -1780,7 +1780,7 @@ export default function WorkspaceDeactivatedPage() {
 
           <div className="space-y-3.5 py-3">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <label className="text-xs font-medium text-slate-500">
                 Select Type (Organizational Unit) to Recover into:
               </label>
               <Select value={recoveryOUPath} onValueChange={setRecoveryOUPath}>
@@ -1839,7 +1839,7 @@ export default function WorkspaceDeactivatedPage() {
 
           {/* Typing confirmation */}
           <div className="space-y-1.5 px-1 py-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            <label className="text-xs font-medium text-slate-500">
               Type user email to confirm deletion:
             </label>
             <Input
@@ -1920,7 +1920,7 @@ export default function WorkspaceDeactivatedPage() {
 
           {/* Typing confirmation */}
           <div className="space-y-1.5 px-1 py-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            <label className="text-xs font-medium text-slate-500">
               Type DELETE to confirm batch deletion:
             </label>
             <Input
@@ -1966,7 +1966,7 @@ export default function WorkspaceDeactivatedPage() {
 
           <div className="space-y-3.5 py-3">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <label className="text-xs font-medium text-slate-500">
                 Select Type (Organizational Unit) to Recover into:
               </label>
               <Select value={batchRecoveryOUPath} onValueChange={setBatchRecoveryOUPath}>

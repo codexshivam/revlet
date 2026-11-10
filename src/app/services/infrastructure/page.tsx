@@ -69,7 +69,7 @@ export default function InfrastructurePage() {
                 </p>
               </div>
               <Link href="/account/home">
-                <Button className="font-bold gap-2 h-11 px-6 bg-slate-900 hover:bg-black text-white transition-all shadow-md">
+                <Button className="font-medium gap-2 h-10 px-5 bg-slate-900 hover:bg-black !text-white text-white transition-all shadow-sm rounded-lg text-xs">
                   Go to Account Home
                 </Button>
               </Link>
@@ -97,7 +97,7 @@ export default function InfrastructurePage() {
                 </p>
               </div>
               <Link href="/services/dns">
-                <Button className="font-bold gap-2 h-11 px-6 bg-slate-900 hover:bg-black text-white transition-all shadow-md">
+                <Button className="font-medium gap-2 h-10 px-5 bg-slate-900 hover:bg-black !text-white text-white transition-all shadow-sm rounded-lg text-xs">
                   Go to DNS Management
                 </Button>
               </Link>

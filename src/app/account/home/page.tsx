@@ -477,7 +477,7 @@ export default function AccountHomePage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center h-96 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Initialising Secure Session...</p>
+          <p className="text-xs font-medium text-slate-500">Initializing secure session...</p>
         </div>
       </DashboardShell>
     )
@@ -512,7 +512,7 @@ export default function AccountHomePage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/95 text-white font-bold h-10 px-6 shadow-md shadow-primary/10 rounded-lg text-xs">
+              <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 shadow-sm rounded-lg text-xs">
                 <Plus className="w-4 h-4 mr-2" />
                 Register Organization
               </Button>
@@ -546,9 +546,9 @@ export default function AccountHomePage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200">
-                        <TableHead className="text-[10px] font-bold uppercase py-5 pl-8 text-slate-400 tracking-widest">Organization</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-5 text-slate-400 tracking-widest">Managed Domain</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-5 text-right pr-8 text-slate-400 tracking-widest">Actions</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 pl-8 text-slate-500">Organization</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Managed domain</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-right pr-8 text-slate-500">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -571,9 +571,9 @@ export default function AccountHomePage() {
                               <div className="flex flex-col gap-1">
                                 <span className="font-bold text-slate-800 text-sm">{org.name}</span>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-mono text-[10px] text-slate-400 uppercase tracking-tighter">{org.code}</span>
+                                  <span className="font-mono text-[10px] text-slate-400">{org.code}</span>
                                   {org.isEducation && (
-                                    <Badge className="text-[8px] h-4 font-bold px-1.5 uppercase bg-blue-50 border border-blue-100 text-blue-600 hover:bg-blue-50">
+                                    <Badge className="text-[10px] h-4 font-medium px-1.5 bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-50">
                                       Education
                                     </Badge>
                                   )}
@@ -640,7 +640,7 @@ export default function AccountHomePage() {
                           </div>
                           <div className="flex flex-col gap-0.5 truncate">
                             <span className="font-headline font-bold text-slate-800 text-sm leading-snug truncate max-w-[180px]">{org.name}</span>
-                            <span className="font-mono text-[10px] text-slate-400 uppercase tracking-tighter">{org.code}</span>
+                            <span className="font-mono text-[10px] text-slate-400">{org.code}</span>
                           </div>
                         </div>
                         
@@ -654,7 +654,7 @@ export default function AccountHomePage() {
                             <Settings className="w-4 h-4" />
                           </Button>
                         ) : (
-                          <Badge variant="outline" className="text-[9px] px-2 py-0.5 font-bold shadow-none rounded border bg-slate-50 text-slate-500 border-slate-200 shrink-0 hover:bg-slate-50 hover:text-slate-500">
+                          <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-medium shadow-none rounded border bg-slate-50 text-slate-500 border-slate-200 shrink-0 hover:bg-slate-50 hover:text-slate-500">
                             Staff
                           </Badge>
                         )}
@@ -662,7 +662,7 @@ export default function AccountHomePage() {
 
                       <div className="flex flex-wrap gap-2 pl-0.5">
                         {org.isEducation && (
-                          <Badge className="text-[9px] h-5 font-bold px-2 uppercase bg-blue-50 border border-blue-100 text-blue-600 hover:bg-blue-50">
+                          <Badge className="text-[10px] h-5 font-medium px-2 bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-50">
                             Education
                           </Badge>
                         )}
@@ -690,7 +690,7 @@ export default function AccountHomePage() {
               </DialogHeader>
               <div className="p-6 space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="acc-name" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Display Name</Label>
+                  <Label htmlFor="acc-name" className="text-xs font-medium text-slate-700 block">Display Name</Label>
                   <Input 
                     id="acc-name" 
                     value={accountName} 
@@ -701,8 +701,8 @@ export default function AccountHomePage() {
                 </div>
               </div>
               <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setIsEditNameOpen(false)} className="rounded text-xs font-bold h-9">Cancel</Button>
-                <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount} className="bg-primary hover:bg-primary/95 text-white font-bold h-9 px-4 rounded text-xs">
+                <Button variant="ghost" onClick={() => setIsEditNameOpen(false)} className="rounded text-xs font-medium h-9">Cancel</Button>
+                <Button onClick={handleUpdateAccountName} disabled={isUpdatingAccount} className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded text-xs">
                   {isUpdatingAccount ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
                 </Button>
               </DialogFooter>
@@ -724,13 +724,13 @@ export default function AccountHomePage() {
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-primary">
                       <Building2 className="w-4 h-4" />
-                      <h3 className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Organization Core Details</h3>
+                      <h3 className="text-xs font-medium text-slate-700">Organization Core Details</h3>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <Label 
                           htmlFor="org-name" 
-                          className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.name ? "text-red-500" : "text-slate-500")}
+                          className={cn("text-xs font-medium text-slate-700 block", errors.name && "text-red-500")}
                         >
                           Organization Legal Name *
                         </Label>
@@ -746,7 +746,7 @@ export default function AccountHomePage() {
                       <div className="space-y-1.5">
                         <Label 
                           htmlFor="org-domain" 
-                          className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.domain ? "text-red-500" : "text-slate-500")}
+                          className={cn("text-xs font-medium text-slate-700 block", errors.domain && "text-red-500")}
                         >
                           Managed Domain * {editingOrg && <span className="normal-case text-slate-400">(immutable)</span>}
                         </Label>
@@ -766,7 +766,7 @@ export default function AccountHomePage() {
                       <div className="space-y-1.5">
                         <Label 
                           htmlFor="org-email" 
-                          className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.currentEmail ? "text-red-500" : "text-slate-500")}
+                          className={cn("text-xs font-medium text-slate-700 block", errors.currentEmail && "text-red-500")}
                         >
                           General Contact Email
                         </Label>
@@ -781,7 +781,7 @@ export default function AccountHomePage() {
                         {errors.currentEmail && <span className="text-[10px] text-red-500 font-semibold block pt-0.5">{errors.currentEmail}</span>}
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="org-address" className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block">Physical Address</Label>
+                        <Label htmlFor="org-address" className="text-xs font-medium text-slate-700 block">Physical Address</Label>
                         <Input 
                           id="org-address" 
                           placeholder="Street, City, Country" 
@@ -795,8 +795,8 @@ export default function AccountHomePage() {
                     {/* Educational Institution Checkbox */}
                     <div className="flex items-center justify-between p-4 border border-slate-200/80 rounded-lg bg-slate-50/40 shadow-sm transition-all hover:bg-slate-50">
                       <div className="space-y-0.5 pr-4">
-                        <Label htmlFor="org-is-edu" className="text-xs font-bold text-slate-800 cursor-pointer">Educational Institution</Label>
-                        <span className="text-[10px] text-slate-400 block leading-normal">Toggle on if this organization represents a school, college, university, or academic body.</span>
+                        <Label htmlFor="org-is-edu" className="text-xs font-medium text-slate-800 cursor-pointer">Educational Institution</Label>
+                        <span className="text-xs text-slate-500 block leading-normal">Toggle on if this organization represents a school, college, university, or academic body.</span>
                       </div>
                       <Switch
                         id="org-is-edu"
@@ -810,10 +810,10 @@ export default function AccountHomePage() {
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-primary">
                       <Info className="w-4 h-4" />
-                      <h3 className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Authorized Representative</h3>
+                      <h3 className="text-xs font-medium text-slate-700">Authorized Representative</h3>
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="org-desc" className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block">Brief Description</Label>
+                      <Label htmlFor="org-desc" className="text-xs font-medium text-slate-700 block">Brief Description</Label>
                       <Textarea 
                         id="org-desc" 
                         placeholder="Briefly describe the organization's business operations..." 
@@ -825,7 +825,7 @@ export default function AccountHomePage() {
                     <div className="space-y-1.5">
                       <Label 
                         htmlFor="contact-name" 
-                        className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.contactName ? "text-red-500" : "text-slate-500")}
+                        className={cn("text-xs font-medium text-slate-700 block", errors.contactName && "text-red-500")}
                       >
                         Representative Full Name *
                       </Label>
@@ -842,7 +842,7 @@ export default function AccountHomePage() {
                       <div className="space-y-1.5">
                         <Label 
                           htmlFor="contact-phone" 
-                          className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.contactPhone ? "text-red-500" : "text-slate-500")}
+                          className={cn("text-xs font-medium text-slate-700 block", errors.contactPhone && "text-red-500")}
                         >
                           Contact Mobile
                         </Label>
@@ -858,7 +858,7 @@ export default function AccountHomePage() {
                       <div className="space-y-1.5">
                         <Label 
                           htmlFor="contact-email" 
-                          className={cn("text-[10px] font-semibold uppercase tracking-wider block", errors.contactEmail ? "text-red-500" : "text-slate-500")}
+                          className={cn("text-xs font-medium text-slate-700 block", errors.contactEmail && "text-red-500")}
                         >
                           Direct Email *
                         </Label>
@@ -881,7 +881,7 @@ export default function AccountHomePage() {
                       <Separator />
                       <div className="flex items-center gap-2 text-destructive">
                         <AlertTriangle className="w-4 h-4" />
-                        <h3 className="text-[10px] font-bold uppercase tracking-wider">Danger Zone</h3>
+                        <h3 className="text-xs font-semibold text-red-700">Danger Zone</h3>
                       </div>
                       <div className="p-4 bg-red-50 border border-red-100 rounded-lg flex flex-col gap-4">
                         <div className="space-y-1">
@@ -893,7 +893,7 @@ export default function AccountHomePage() {
                         <Button 
                           variant="destructive" 
                           size="sm" 
-                          className="w-fit font-bold gap-2"
+                          className="w-fit font-medium gap-2"
                           onClick={() => {
                             setIsDialogOpen(false)
                             setIsDeleteDialogOpen(true)
@@ -909,7 +909,7 @@ export default function AccountHomePage() {
               </ScrollArea>
  
               <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
-                <Button onClick={handleSaveOrg} disabled={isSubmitting} className="px-8 font-bold h-11 bg-primary hover:bg-primary/95 text-white shadow-sm rounded text-xs">
+                <Button onClick={handleSaveOrg} disabled={isSubmitting} className="px-6 font-medium h-10 bg-primary hover:bg-primary/95 !text-white text-white shadow-sm rounded text-xs">
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : editingOrg ? "Save Changes" : "Confirm Registration"}
                 </Button>
               </DialogFooter>

@@ -238,7 +238,7 @@ export function OrgSelector({
       ) : (
         <div className="flex items-center gap-4 py-3 px-5 bg-white border border-slate-200 rounded-lg shadow-sm">
           <div className="flex flex-col gap-1.5">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Select Organization</span>
+            <span className="text-[11px] font-medium text-slate-500">Organization</span>
             {triggerButton}
           </div>
         </div>

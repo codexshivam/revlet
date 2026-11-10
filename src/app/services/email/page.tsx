@@ -73,7 +73,7 @@ type EmailRule = {
 
 function EmailRulesSkeleton() {
   return (
-    <div className="w-full divide-y divide-slate-100 animate-pulse bg-white">
+    <div className="w-full divide-y divide-slate-100  bg-white">
       {[1, 2, 3, 4].map((i) => (
         <div key={i} className="flex items-center gap-6 py-5 px-6">
           {/* Email Mail Icon skeleton */}
@@ -504,7 +504,7 @@ export default function EmailRoutingPage() {
             <Card className="bg-slate-50 border-slate-200 border-dashed shadow-sm">
               <CardContent className="p-16 flex flex-col items-center text-center gap-6">
                 <div className="p-4 bg-white rounded-full border border-slate-100 shadow-sm shrink-0">
-                  <Globe className="w-10 h-10 text-slate-300 animate-pulse" />
+                  <Globe className="w-10 h-10 text-slate-300 " />
                 </div>
                 <div className="space-y-2">
                   <h3 className="text-xl font-headline font-bold text-slate-900">No Registered Organizations</h3>
@@ -527,7 +527,7 @@ export default function EmailRoutingPage() {
             <Card className="bg-slate-50 border-slate-200 border-dashed shadow-sm">
               <CardContent className="p-16 flex flex-col items-center text-center gap-6">
                 <div className="p-4 bg-white rounded-full border border-slate-100 shadow-sm shrink-0">
-                  <Globe className="w-10 h-10 text-slate-300 animate-pulse" />
+                  <Globe className="w-10 h-10 text-slate-300 " />
                 </div>
                 <div className="space-y-2">
                   <h3 className="text-xl font-headline font-bold text-slate-900">DNS Management Required</h3>
@@ -547,7 +547,7 @@ export default function EmailRoutingPage() {
         /* STATE 4: Pre-activation + STATE 5: Active workspace */
         ) : selectedOrg && zoneId && isCheckingStatus ? (
           <div className="flex flex-col items-center justify-center py-32 gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
+            <Loader2 className="w-8 h-8  text-slate-200" />
             <p className="text-[10px] font-bold text-slate-400 uppercase">Checking Service Status...</p>
           </div>
 
@@ -566,29 +566,25 @@ export default function EmailRoutingPage() {
               </div>
 
               {/* How it Works Flow Visualization */}
-              <div className="max-w-5xl w-full p-6 md:p-8 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50/20 to-white shadow-lg shadow-slate-100/50 relative overflow-hidden text-left transition-all hover:shadow-xl duration-300">
-                <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none" />
+              <div className="max-w-5xl w-full p-6 md:p-8 rounded-xl border border-slate-200 bg-white shadow-sm relative overflow-hidden text-left">
                 
-                <h4 className="text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center mb-8">
-                  How it works
-                </h4>
+                <h4 className="text-xs font-semibold text-slate-700 text-center mb-6">How it works</h4>
                 
                 <div className="flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-4 relative z-10 w-full px-2">
                   {/* Sender Card */}
                   <div className="flex-1 w-full lg:max-w-[270px] p-4 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center gap-3.5 transition-all hover:border-slate-200">
                     <div className="p-2 bg-slate-50 border border-slate-100 rounded-lg shrink-0">
-                      <MailOpen className="w-5 h-5 text-slate-500 animate-pulse" />
+                      <MailOpen className="w-5 h-5 text-slate-500 " />
                     </div>
                     <div className="text-left space-y-0.5 min-w-0">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Email from anyone</p>
+                      <p className="text-xs font-medium text-slate-500">Email from anyone</p>
                       <p className="text-xs font-bold text-slate-800 truncate">customer@gmail.com</p>
                     </div>
                   </div>
                   
                   {/* Flow Arrow 1 */}
                   <div className="flex lg:flex-col items-center gap-1.5 text-primary shrink-0">
-                    <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
+                    <div className="w-2 h-2 rounded-full bg-primary " />
                     <div className="h-0.5 w-8 lg:w-0.5 lg:h-8 bg-gradient-to-r lg:bg-gradient-to-b from-primary to-blue-400 hidden md:block" />
                     <ArrowRight className="w-4 h-4 lg:rotate-0 rotate-90" />
                   </div>
@@ -596,17 +592,17 @@ export default function EmailRoutingPage() {
                   {/* Custom Domain Gateway */}
                   <div className="flex-1 w-full lg:max-w-[300px] p-5 rounded-xl bg-slate-900 text-white shadow-lg shadow-slate-900/10 flex items-center gap-3.5 relative border border-slate-800 transition-all hover:bg-black">
                     <div className="p-2 bg-white/10 rounded-lg shrink-0">
-                      <Globe className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '15s' }} />
+                      <Globe className="w-5 h-5 text-white " style={{ animationDuration: '15s' }} />
                     </div>
                     <div className="text-left space-y-0.5 min-w-0">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Your Custom Address</p>
+                      <p className="text-xs font-medium text-slate-400">Your custom address</p>
                       <p className="text-xs font-bold font-mono truncate text-emerald-400">info@{selectedOrg?.domain || "example.com"}</p>
                     </div>
                   </div>
                   
                   {/* Flow Arrow 2 */}
                   <div className="flex lg:flex-col items-center gap-1.5 text-emerald-500 shrink-0">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 " />
                     <div className="h-0.5 w-8 lg:w-0.5 lg:h-8 bg-gradient-to-r lg:bg-gradient-to-b from-emerald-500 to-teal-400 hidden md:block" />
                     <ArrowRight className="w-4 h-4 lg:rotate-0 rotate-90" />
                   </div>
@@ -614,10 +610,10 @@ export default function EmailRoutingPage() {
                   {/* Destination Card */}
                   <div className="flex-1 w-full lg:max-w-[270px] p-4 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center gap-3.5 transition-all hover:border-slate-200">
                     <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg shrink-0">
-                      <Send className="w-5 h-5 text-emerald-600 animate-bounce" style={{ animationDuration: '4s' }} />
+                      <Send className="w-5 h-5 text-emerald-600 " style={{ animationDuration: '4s' }} />
                     </div>
                     <div className="text-left space-y-0.5 min-w-0">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Your Personal Inbox</p>
+                      <p className="text-xs font-medium text-slate-500">Your personal inbox</p>
                       <p className="text-xs font-bold text-slate-800 truncate">you@gmail.com</p>
                     </div>
                   </div>
@@ -679,7 +675,7 @@ export default function EmailRoutingPage() {
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-4 sm:px-6">
                 <div className="flex items-center gap-2">
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Custom Emails</CardTitle>
+                  <CardTitle className="text-xs font-semibold text-slate-700">Active Custom Emails</CardTitle>
                   <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white border-slate-200">{verifiedRules.length}</Badge>
                 </div>
               </CardHeader>
@@ -720,7 +716,7 @@ export default function EmailRoutingPage() {
                           Clear Search
                         </Button>
                       )}
-                      <div className="ml-auto text-[10px] text-slate-400 font-bold uppercase tracking-wider hidden sm:block">
+                      <div className="ml-auto text-xs text-slate-500 font-medium hidden sm:block">
                         Showing {paginatedRules.length} of {filteredRules.length} matches
                       </div>
                     </div>
@@ -738,9 +734,9 @@ export default function EmailRoutingPage() {
                           <Table>
                             <TableHeader className="bg-slate-50/50">
                               <TableRow className="border-b border-slate-100">
-                                <TableHead className="text-[10px] font-bold uppercase py-4 pl-6">Professional Custom Email</TableHead>
-                                <TableHead className="text-[10px] font-bold uppercase py-4">Forwards Messages To</TableHead>
-                                <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6 w-24">Remove</TableHead>
+                                <TableHead className="text-xs font-medium py-3.5 pl-6 text-slate-500">Custom email</TableHead>
+                                <TableHead className="text-xs font-medium py-3.5 text-slate-500">Forwards to</TableHead>
+                                <TableHead className="text-xs font-medium py-3.5 text-right pr-6 w-24 text-slate-500">Action</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -779,13 +775,13 @@ export default function EmailRoutingPage() {
 
                               {/* Top Row: Alias Email Address */}
                               <div className="space-y-1">
-                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Professional Custom Email</p>
+                                <p className="text-xs font-medium text-slate-500 leading-none">Custom email</p>
                                 <p className="font-bold text-slate-800 text-sm break-all leading-snug">{rule.alias}</p>
                               </div>
 
                               {/* Middle Row: Destination Forward Target */}
                               <div className="space-y-1">
-                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Forwards Messages To</p>
+                                <p className="text-xs font-medium text-slate-500 leading-none">Forwards to</p>
                                 <p className="font-mono text-xs text-slate-500 break-all leading-relaxed">{rule.destination}</p>
                               </div>
 
@@ -793,7 +789,7 @@ export default function EmailRoutingPage() {
                               <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-1">
                                 <span className="flex items-center gap-1.5 text-emerald-500 bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-0.5 h-6">
                                   <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                                  <span className="text-[8px] font-bold uppercase tracking-wider">Active</span>
+                                  <span className="text-xs font-medium">Active</span>
                                 </span>
                                 <Button
                                   variant="ghost"
@@ -849,7 +845,7 @@ export default function EmailRoutingPage() {
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-4 sm:px-6">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-slate-400" />
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Domain Security Parameters</CardTitle>
+                  <CardTitle className="text-xs font-semibold text-slate-700">Domain Security Parameters</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="p-4 sm:p-6">
@@ -857,7 +853,7 @@ export default function EmailRoutingPage() {
                   {/* SPF Card */}
                   <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">SPF Protocol</span>
+                      <span className="text-xs font-medium text-slate-600">SPF protocol</span>
                       <Badge className={cn(
                         "text-[9px] font-bold border shadow-none",
                         isSpfValid 
@@ -878,7 +874,7 @@ export default function EmailRoutingPage() {
                   {/* DKIM Card */}
                   <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">DKIM Verification</span>
+                      <span className="text-xs font-medium text-slate-600">DKIM verification</span>
                       <Badge className={cn(
                         "text-[9px] font-bold border shadow-none",
                         emailServiceActive 
@@ -894,7 +890,7 @@ export default function EmailRoutingPage() {
                   {/* DMARC Card */}
                   <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">DMARC Protection</span>
+                      <span className="text-xs font-medium text-slate-600">DMARC protection</span>
                       <Badge className={cn(
                         "text-[9px] font-bold border shadow-none",
                         isDmarcValid 
@@ -935,7 +931,7 @@ export default function EmailRoutingPage() {
             <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
               <Button variant="ghost" onClick={() => setIsActivateDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleActivate} disabled={isActivating}>
-                {isActivating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {isActivating ? <Loader2 className="w-4 h-4  mr-2" /> : null}
                 Activate Service
               </Button>
             </DialogFooter>
@@ -952,12 +948,12 @@ export default function EmailRoutingPage() {
               <DialogTitle className="font-headline font-bold text-base text-slate-900">
                 Create Custom Email Address
               </DialogTitle>
-              <p className="text-slate-400 text-[10px] mt-0.5 uppercase font-bold tracking-wider">Domain: {selectedOrg?.domain}</p>
+              <p className="text-slate-500 text-xs mt-0.5 font-normal">Domain: {selectedOrg?.domain}</p>
             </DialogHeader>
             <div className="px-5 py-4 space-y-3.5">
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Choose Your Custom Email Name</Label>
+                  <Label className="text-xs font-medium text-slate-700">Custom email name</Label>
                   <div className="flex items-center gap-0">
                     <Input
                       placeholder="e.g. hello, support, info"
@@ -975,11 +971,11 @@ export default function EmailRoutingPage() {
                       <span className="text-xs font-bold text-slate-500">@{selectedOrg?.domain}</span>
                     </div>
                   </div>
-                  {formErrors.alias && <p className="text-[9px] text-red-500 font-bold uppercase tracking-wide">{formErrors.alias}</p>}
+                  {formErrors.alias && <p className="text-xs text-red-500 font-medium">{formErrors.alias}</p>}
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Forward Messages To</Label>
+                  <Label className="text-xs font-medium text-slate-700">Forward messages to</Label>
                   <Input
                     type="email"
                     placeholder="Your personal email (e.g. you@gmail.com)"
@@ -993,11 +989,11 @@ export default function EmailRoutingPage() {
                       setFormErrors((prev) => ({ ...prev, destination: undefined }))
                     }}
                   />
-                  {formErrors.destination && <p className="text-[9px] text-red-500 font-bold uppercase tracking-wide">{formErrors.destination}</p>}
+                  {formErrors.destination && <p className="text-xs text-red-500 font-medium">{formErrors.destination}</p>}
                 </div>
 
                 <div className="p-4 bg-blue-50/30 border border-blue-100 rounded-xl flex gap-3.5 text-left shadow-sm">
-                  <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5 animate-pulse" />
+                  <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5 " />
                   <div className="space-y-1.5">
                     <p className="text-xs font-bold text-slate-900">One-Time Inbox Verification Required</p>
                     <p className="text-[11px] text-slate-600 leading-relaxed font-medium text-slate-700">
@@ -1012,9 +1008,9 @@ export default function EmailRoutingPage() {
               </div>
             </div>
             <DialogFooter className="bg-white border-t border-slate-100/60 px-5 py-3 flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setIsCreateDialogOpen(false)} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 h-9">Cancel</Button>
-              <Button onClick={handleCreateRule} disabled={isSubmitting} className="h-9 px-6 bg-slate-900 hover:bg-black text-white font-bold text-xs shadow-md rounded-lg">
-                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : "Create Custom Email"}
+              <Button variant="ghost" onClick={() => setIsCreateDialogOpen(false)} className="text-xs font-medium text-slate-600 h-9">Cancel</Button>
+              <Button onClick={handleCreateRule} disabled={isSubmitting} className="h-9 px-5 bg-slate-900 hover:bg-black !text-white text-white font-medium text-xs shadow-sm rounded-lg">
+                {isSubmitting ? <Loader2 className="w-3.5 h-3.5  mr-2" /> : "Create Custom Email"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1031,7 +1027,7 @@ export default function EmailRoutingPage() {
                 <DialogTitle className="font-headline font-bold text-base text-slate-900">
                   Delete Custom Email
                 </DialogTitle>
-                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">This action is permanent</p>
+                <p className="text-slate-500 text-xs font-normal">This action is permanent</p>
               </div>
             </DialogHeader>
             <div className="px-5 py-5 text-left">
@@ -1040,10 +1036,10 @@ export default function EmailRoutingPage() {
               </p>
             </div>
             <DialogFooter className="bg-slate-50 border-t border-slate-100/60 px-5 py-3 flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 h-9">Cancel</Button>
+              <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} className="text-xs font-medium text-slate-600 h-9">Cancel</Button>
               <Button
                 onClick={handleDeleteRule}
-                className="h-9 px-6 bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md rounded-lg"
+                className="h-9 px-5 bg-red-600 hover:bg-red-700 !text-white text-white font-medium text-xs shadow-sm rounded-lg"
               >
                 Delete Email Address
               </Button>
@@ -1069,7 +1065,7 @@ export default function EmailRoutingPage() {
             <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
               <Button variant="ghost" onClick={() => setIsDisableDialogOpen(false)} className="text-slate-700 hover:bg-blue-600 hover:text-white focus:bg-blue-600 focus:text-white active:bg-blue-700 active:text-white">Cancel</Button>
               <Button onClick={handleDisable} disabled={isDisabling} variant="destructive">
-                {isDisabling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {isDisabling ? <Loader2 className="w-4 h-4  mr-2" /> : null}
                 Disable Service
               </Button>
             </DialogFooter>

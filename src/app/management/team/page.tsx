@@ -272,7 +272,7 @@ export default function TeamManagementPage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center h-96 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Securing Member Protocol...</p>
+          <p className="text-xs font-medium text-slate-500">Securing member protocol...</p>
         </div>
       </DashboardShell>
     )
@@ -299,7 +299,7 @@ export default function TeamManagementPage() {
                   </DialogHeader>
                   <div className="p-6 space-y-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="member-email" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Staff Work Email</Label>
+                      <Label htmlFor="member-email" className="text-xs font-medium text-slate-700 block">Staff Work Email</Label>
                       <Input 
                         id="member-email" 
                         type="email" 
@@ -310,7 +310,7 @@ export default function TeamManagementPage() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="member-org" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Assign to Organization</Label>
+                      <Label htmlFor="member-org" className="text-xs font-medium text-slate-700 block">Assign to Organization</Label>
                       <Select 
                         value={formData.organizationId} 
                         onValueChange={(v) => setFormData({ ...formData, organizationId: v })}
@@ -340,7 +340,7 @@ export default function TeamManagementPage() {
 
         <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-lg">
           <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between py-4 px-4 sm:px-8">
-            <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Access Directory</CardTitle>
+            <CardTitle className="text-xs font-semibold text-slate-700">Active Access Directory</CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-[9px] font-bold h-5 px-2 bg-white rounded">
                 {members.length} Members
@@ -367,10 +367,10 @@ export default function TeamManagementPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50/30 border-b border-slate-200">
-                        <TableHead className="text-[10px] font-bold uppercase py-4 pl-8 tracking-wider text-slate-400">Team Member</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-400">Associated Organization</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 tracking-wider text-slate-400">Status</TableHead>
-                        <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-8 tracking-wider text-slate-400">Actions</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 pl-8 text-slate-500">Team Member</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Associated Organization</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Status</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-right pr-8 text-slate-500">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -447,7 +447,7 @@ export default function TeamManagementPage() {
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Access</span>
+                            <span className="text-xs text-slate-500 font-medium">Access</span>
                             <Switch 
                               checked={member.status === "Active"} 
                               onCheckedChange={() => toggleStatus(member)}

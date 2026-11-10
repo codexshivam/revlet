@@ -67,21 +67,21 @@ export function RevletLogo({
   if (variant === "vertical") {
     return (
       <div className={cn("flex flex-col items-center text-center select-none group", className)}>
-        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-lg shadow-slate-900/10 border border-slate-800 transition-transform group-hover:scale-105 duration-200">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-900 text-white flex items-center justify-center border border-slate-800 shadow-sm transition-colors duration-150">
           <RevletLogoMark className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
         </div>
         <div className="mt-3 flex items-center justify-center gap-1.5">
-          <span className="text-2xl sm:text-3xl font-headline font-bold tracking-[0.16em] text-[#191C1E] uppercase leading-none ml-[0.16em]">
-            REVLET
+          <span className="text-2xl sm:text-3xl font-headline font-bold text-slate-900 tracking-tight leading-none">
+            Revlet
           </span>
           {showBadge && (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/80">
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/80">
               {badgeText}
             </span>
           )}
         </div>
         {subtitle && (
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.2em] mt-1.5">
+          <p className="text-xs font-medium text-slate-500 mt-1">
             {subtitle}
           </p>
         )}
@@ -98,10 +98,10 @@ export function RevletLogo({
         <div className="w-4 h-4 rounded-md bg-slate-900 text-white flex items-center justify-center">
           <RevletLogoMark className="w-2.5 h-2.5 text-white" />
         </div>
-        <span className="text-xs font-headline font-bold tracking-wider text-slate-900">
-          REVLET
+        <span className="text-xs font-headline font-bold text-slate-900 tracking-tight">
+          Revlet
         </span>
-        <span className="text-[10px] text-slate-400 font-medium tracking-wide">
+        <span className="text-[10px] text-slate-500 font-medium">
           {subtitle}
         </span>
       </div>
@@ -124,33 +124,33 @@ export function RevletLogo({
   }[size]
 
   const titleSize = {
-    sm: "text-[15px] tracking-[0.12em]",
-    md: "text-[17px] tracking-[0.14em]",
-    lg: "text-[22px] tracking-[0.16em]",
-    xl: "text-[28px] tracking-[0.18em]",
+    sm: "text-[15px]",
+    md: "text-[17px]",
+    lg: "text-[22px]",
+    xl: "text-[28px]",
   }[size]
 
   return (
     <div className={cn("inline-flex items-center gap-3 select-none group", className)}>
       <div className={cn(
         markBoxSize,
-        "bg-slate-900 text-white flex items-center justify-center shadow-md shadow-slate-900/10 border border-slate-800 transition-all duration-200 group-hover:bg-black group-hover:shadow-lg"
+        "bg-slate-900 text-white flex items-center justify-center border border-slate-800 shadow-sm transition-colors duration-150"
       )}>
-        <RevletLogoMark className={cn(markIconSize, "text-white transition-transform group-hover:scale-105")} />
+        <RevletLogoMark className={cn(markIconSize, "text-white")} />
       </div>
       <div className="flex flex-col">
         <div className="flex items-center gap-1.5">
-          <span className={cn("font-headline font-extrabold text-[#191C1E] leading-none ml-[0.05em]", titleSize)}>
-            REVLET
+          <span className={cn("font-headline font-bold text-slate-900 leading-none tracking-tight", titleSize)}>
+            Revlet
           </span>
           {showBadge && (
-            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/80 leading-none">
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/80 leading-none">
               {badgeText}
             </span>
           )}
         </div>
         {subtitle && (
-          <span className="text-[9px] font-bold tracking-[0.2em] text-slate-400 uppercase mt-1 leading-none">
+          <span className="text-[11px] font-medium text-slate-500 mt-0.5 leading-none">
             {subtitle}
           </span>
         )}

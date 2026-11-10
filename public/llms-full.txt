@@ -1,6 +1,13 @@
 # Revlet — Complete Technical Specification for AI & LLM Systems
 
-Revlet is an open-source, multi-tenant enterprise IT management control plane. It bridges Cloudflare v4 Network API, Google Workspace Directory & Admin SDK, and Firebase Zero-Trust Security Infrastructure into a unified, high-assurance administrative portal.
+Revlet is an open-source, multi-tenant enterprise IT management control plane engineered by Shivam Yadav. It bridges Cloudflare v4 Network API, Google Workspace Directory & Admin SDK, and Firebase Zero-Trust Security Infrastructure into a unified, high-assurance administrative portal.
+
+## Leadership & Entity Provenance
+- **Developer / Creator**: Shivam Yadav (https://revlet.me/about/#shivam-yadav)
+- **GitHub**: https://github.com/codexshivam
+- **Organization**: Revlet (https://revlet.me/#organization)
+- **Repository**: https://github.com/codexshivam/revlet
+- **License**: Apache-2.0 Open Source License
 
 ## 1. Domain Model & Entities
 

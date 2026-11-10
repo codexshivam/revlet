@@ -44,8 +44,11 @@ export const metadata: Metadata = {
     'EdTech Infrastructure',
     'School Domain Management',
   ],
-  authors: [{ name: 'Revlet', url: 'https://revlet.me' }],
-  creator: 'Revlet',
+  authors: [
+    { name: 'Shivam Yadav', url: 'https://revlet.me/about/' },
+    { name: 'Revlet', url: 'https://revlet.me' },
+  ],
+  creator: 'Shivam Yadav',
   publisher: 'Revlet',
   alternates: {
     canonical: 'https://app.revlet.me',
@@ -89,9 +92,9 @@ export const metadata: Metadata = {
     siteName: 'Revlet Console',
     images: [
       {
-        url: '/banner.svg',
+        url: '/og-image.png',
         width: 1200,
-        height: 320,
+        height: 630,
         alt: 'Revlet Console Enterprise IT Management Control Plane',
       },
     ],
@@ -101,7 +104,7 @@ export const metadata: Metadata = {
     title: 'Revlet Console | Enterprise IT Management & Cloud Infrastructure',
     description: 'Official administrative console for Revlet. Unified multi-tenant control plane for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
     creator: '@revlet',
-    images: ['/banner.svg'],
+    images: ['/og-image.png'],
   },
   robots: {
     index: true,
@@ -147,6 +150,11 @@ const knowledgeGraphSchema = {
         '@id': 'https://revlet.me/#logo',
       },
       description: 'Open-source enterprise multi-tenant IT management control plane for Cloudflare DNS, Email Routing, and Google Workspace for Education.',
+      foundingDate: '2024',
+      founder: {
+        '@type': 'Person',
+        '@id': 'https://revlet.me/about/#shivam-yadav',
+      },
       contactPoint: {
         '@type': 'ContactPoint',
         email: 'hello@revlet.me',
@@ -156,6 +164,7 @@ const knowledgeGraphSchema = {
       sameAs: [
         'https://revlet.me',
         'https://github.com/codexshivam/revlet',
+        'https://github.com/codexshivam',
       ],
       areaServed: {
         '@type': 'Place',
@@ -169,9 +178,77 @@ const knowledgeGraphSchema = {
         'Email Routing Protocols',
         'SPF, DKIM, and DMARC Verification',
         'Zero-Trust Multi-Tenancy',
+        {
+          '@type': 'DefinedTerm',
+          name: 'Cloud Computing',
+          sameAs: 'https://www.wikidata.org/wiki/Q483639',
+        },
+        {
+          '@type': 'DefinedTerm',
+          name: 'Domain Name System',
+          sameAs: 'https://www.wikidata.org/wiki/Q8767',
+        },
+        {
+          '@type': 'DefinedTerm',
+          name: 'TypeScript',
+          sameAs: 'https://www.wikidata.org/wiki/Q982476',
+        },
+        {
+          '@type': 'DefinedTerm',
+          name: 'Next.js',
+          sameAs: 'https://www.wikidata.org/wiki/Q105085340',
+        },
       ],
     },
-    // 2. Software Application Entity (Console WebApplication Node on app.revlet.me)
+    // 2. Person Entity (Shivam Yadav — Founder & Principal Developer)
+    {
+      '@type': 'Person',
+      '@id': 'https://revlet.me/about/#shivam-yadav',
+      name: 'Shivam Yadav',
+      alternateName: ['codexshivam', 'Shivam'],
+      jobTitle: 'Founder & Principal Software Engineer',
+      description: 'Shivam Yadav is an enterprise software engineer, systems architect, and the creator and lead developer of Revlet.',
+      url: 'https://revlet.me/about/#shivam-yadav',
+      image: 'https://revlet.me/favicon-192x192.png',
+      worksFor: {
+        '@id': 'https://revlet.me/#organization',
+      },
+      founder: {
+        '@id': 'https://revlet.me/#organization',
+      },
+      sameAs: [
+        'https://github.com/codexshivam',
+        'https://github.com/codexshivam/revlet',
+      ],
+      knowsAbout: [
+        'Cloudflare DNS & Edge Infrastructure',
+        'Google Workspace for Education',
+        'Google Admin SDK',
+        'Next.js & TypeScript Architecture',
+        'Zero-Trust Multi-Tenancy',
+        {
+          '@type': 'DefinedTerm',
+          name: 'Cloud Computing',
+          sameAs: 'https://www.wikidata.org/wiki/Q483639',
+        },
+        {
+          '@type': 'DefinedTerm',
+          name: 'Domain Name System',
+          sameAs: 'https://www.wikidata.org/wiki/Q8767',
+        },
+        {
+          '@type': 'DefinedTerm',
+          name: 'TypeScript',
+          sameAs: 'https://www.wikidata.org/wiki/Q982476',
+        },
+        {
+          '@type': 'DefinedTerm',
+          name: 'Computer Security',
+          sameAs: 'https://www.wikidata.org/wiki/Q3510521',
+        },
+      ],
+    },
+    // 3. Software Application Entity (Console WebApplication Node on app.revlet.me)
     {
       '@type': ['SoftwareApplication', 'WebApplication'],
       '@id': 'https://app.revlet.me/#application',
@@ -182,10 +259,15 @@ const knowledgeGraphSchema = {
       applicationSubCategory: 'NetworkInfrastructureManagement',
       operatingSystem: 'All modern web browsers (Cloud Web Application)',
       browserRequirements: 'Requires a modern web browser with JavaScript enabled',
-      softwareVersion: '0.1.0',
+      softwareVersion: '1.1.0',
+      datePublished: '2024-05-30',
+      inLanguage: 'en',
+      programmingLanguage: ['TypeScript', 'JavaScript'],
       license: 'https://www.apache.org/licenses/LICENSE-2.0',
       codeRepository: 'https://github.com/codexshivam/revlet',
       downloadUrl: 'https://github.com/codexshivam/revlet',
+      screenshot: 'https://app.revlet.me/og-image.png',
+      isAccessibleForFree: true,
       description: 'Official cloud console for Revlet. Manage Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity from one unified dashboard.',
       offers: {
         '@type': 'Offer',
@@ -193,8 +275,14 @@ const knowledgeGraphSchema = {
         priceCurrency: 'USD',
         description: 'Open-source software licensed under Apache-2.0',
       },
+      author: {
+        '@id': 'https://revlet.me/about/#shivam-yadav',
+      },
       creator: {
-        '@id': 'https://revlet.me/#organization',
+        '@id': 'https://revlet.me/about/#shivam-yadav',
+      },
+      maintainer: {
+        '@id': 'https://revlet.me/about/#shivam-yadav',
       },
       publisher: {
         '@id': 'https://revlet.me/#organization',

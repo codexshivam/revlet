@@ -43,8 +43,8 @@ export default function LoginPage() {
   if (user) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
-        <div className="font-bold text-sm uppercase tracking-widest text-slate-900 font-headline animate-pulse">
-          REVLET
+        <div className="font-semibold text-sm text-slate-900 font-headline animate-pulse">
+          Revlet
         </div>
       </div>
     )
@@ -197,9 +197,9 @@ export default function LoginPage() {
           <div className="space-y-1.5">
             <Label 
               htmlFor="email" 
-              className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
+              className="text-xs font-medium text-slate-700 block"
             >
-              Work Email
+              Work email
             </Label>
             <Input 
               id="email" 
@@ -216,16 +216,16 @@ export default function LoginPage() {
             <div className="flex items-center justify-between">
               <Label 
                 htmlFor="password" 
-                className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block"
+                className="text-xs font-medium text-slate-700 block"
               >
-                Security Password
+                Password
               </Label>
               
               <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
                 <DialogTrigger asChild>
                   <button 
                     type="button" 
-                    className="text-[10px] text-slate-500 hover:text-[#191c1e] transition-colors font-bold uppercase tracking-wider"
+                    className="text-xs text-slate-500 hover:text-slate-900 transition-colors font-medium"
                   >
                     Forgot password?
                   </button>
@@ -241,8 +241,8 @@ export default function LoginPage() {
                   </DialogHeader>
                   <form onSubmit={handleForgotPassword} className="space-y-4 pt-2">
                     <div className="space-y-2">
-                      <Label htmlFor="reset-email" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                        Work Email
+                      <Label htmlFor="reset-email" className="text-xs font-medium text-slate-700 block">
+                        Work email
                       </Label>
                       <Input 
                         id="reset-email" 
@@ -258,7 +258,7 @@ export default function LoginPage() {
                       <Button 
                         type="submit" 
                         disabled={isResetLoading}
-                        className="w-full font-semibold h-10 bg-primary hover:bg-primary/95 text-white rounded text-xs transition-all shadow-sm flex items-center justify-center gap-2"
+                        className="w-full font-medium h-10 bg-primary hover:bg-primary/95 !text-white text-white rounded text-xs transition-all shadow-sm flex items-center justify-center gap-2"
                       >
                         {isResetLoading ? (
                           <>
@@ -266,7 +266,7 @@ export default function LoginPage() {
                             <span>Sending link...</span>
                           </>
                         ) : (
-                          <span>Send Reset Link</span>
+                          <span>Send reset link</span>
                         )}
                       </Button>
                     </DialogFooter>
@@ -303,7 +303,7 @@ export default function LoginPage() {
           {/* SUBMIT BUTTON */}
           <Button 
             type="submit" 
-            className="w-full font-semibold h-11 bg-primary hover:bg-primary/95 text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-[0px_4px_12px_rgba(37,99,235,0.1)] flex items-center justify-center"
+            className="w-full font-medium h-10 bg-primary hover:bg-primary/95 !text-white text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-sm flex items-center justify-center"
             disabled={isLoading}
           >
             {isLoading ? (
@@ -311,7 +311,7 @@ export default function LoginPage() {
             ) : (
               <>
                 Access Dashboard
-                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                <ArrowRight className="w-4 h-4" />
               </>
             )}
           </Button>

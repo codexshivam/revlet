@@ -460,7 +460,7 @@ export default function GoogleWorkspacePage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synchronizing Infrastructure...</p>
+          <p className="text-xs font-semibold text-slate-700">Synchronizing Infrastructure...</p>
         </div>
       </DashboardShell>
     )
@@ -621,7 +621,7 @@ export default function GoogleWorkspacePage() {
                 >
                   <div className="flex items-center gap-2 text-left">
                     <Info className="w-4 h-4 text-slate-500" />
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-slate-800">
                       Setup & Authorization Instructions (Required before activation)
                     </span>
                   </div>
@@ -699,9 +699,9 @@ export default function GoogleWorkspacePage() {
                           
                           {/* Client ID field */}
                           <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Client ID</span>
+                            <span className="text-xs font-medium text-slate-700 block">Client ID</span>
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 max-w-md w-full">
-                              <code className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded font-mono text-[10px] font-bold text-slate-700 select-all tracking-wide text-left block truncate">
+                              <code className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded font-mono text-xs font-medium text-slate-700 select-all text-left block truncate">
                                 105450959878009279492
                               </code>
                               <Button
@@ -729,7 +729,7 @@ export default function GoogleWorkspacePage() {
                           {/* OAuth Scopes field */}
                           <div className="space-y-1 w-full">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">OAuth Scopes</span>
+                              <span className="text-xs font-medium text-slate-700 block">OAuth Scopes</span>
                               <Button
                                 type="button"
                                 size="sm"
@@ -784,7 +784,7 @@ export default function GoogleWorkspacePage() {
               {/* Status Timeline */}
               <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6">
-                  <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <CardTitle className="text-xs font-semibold text-slate-700">
                     Enrollment Status
                   </CardTitle>
                 </CardHeader>
@@ -796,7 +796,7 @@ export default function GoogleWorkspacePage() {
                         <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                       </div>
                       <div className="flex flex-col md:items-center text-left md:text-center">
-                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Applied</span>
+                        <span className="text-xs font-medium text-emerald-700">Applied</span>
                         <span className="text-[9px] text-slate-400 md:hidden font-medium">Domain details submitted successfully</span>
                       </div>
                     </div>
@@ -813,7 +813,7 @@ export default function GoogleWorkspacePage() {
                         </span>
                       </div>
                       <div className="flex flex-col md:items-center text-left md:text-center">
-                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Verification</span>
+                        <span className="text-xs font-medium text-blue-700">Verification</span>
                         <span className="text-[9px] text-slate-400 md:hidden font-medium">Authorizing Domain-Wide Delegation</span>
                       </div>
                     </div>
@@ -827,7 +827,7 @@ export default function GoogleWorkspacePage() {
                         <CheckCircle2 className="w-5 h-5 text-slate-300" />
                       </div>
                       <div className="flex flex-col md:items-center text-left md:text-center">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active</span>
+                        <span className="text-xs font-medium text-slate-500">Active</span>
                         <span className="text-[9px] text-slate-400 md:hidden font-medium">Workspace services activated</span>
                       </div>
                     </div>
@@ -867,7 +867,7 @@ export default function GoogleWorkspacePage() {
                   {isVerifying ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
-                    <CheckCircle2 className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                    <CheckCircle2 className="w-4 h-4 mr-2  transition-transform" />
                   )}
                   Verify & Activate
                 </Button>
@@ -880,7 +880,7 @@ export default function GoogleWorkspacePage() {
           isLoadingDashboard ? (
             <div className="flex flex-col items-center justify-center py-32 gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading Workspace Dashboard...</p>
+              <p className="text-xs font-semibold text-slate-700">Loading Workspace Dashboard...</p>
             </div>
           ) : (
             <div className="space-y-6 animate-in fade-in duration-700">
@@ -892,7 +892,7 @@ export default function GoogleWorkspacePage() {
                   <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6 flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2">
                       <HardDrive className="w-4 h-4 text-slate-400" />
-                      <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      <CardTitle className="text-xs font-semibold text-slate-700">
                         Storage
                       </CardTitle>
                     </div>
@@ -937,7 +937,7 @@ export default function GoogleWorkspacePage() {
 
                       {/* Storage per OU */}
                       <div className="pt-3 border-t border-slate-100 space-y-2">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Storage by User Type</p>
+                        <p className="text-xs font-medium text-slate-500">Storage by User Type</p>
                         <div className="space-y-2">
                           {OU_CONFIG.map((ou) => {
                             const usedBytes = storageByOU[ou.path] || 0
@@ -976,7 +976,7 @@ export default function GoogleWorkspacePage() {
                   <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6">
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4 text-slate-400" />
-                      <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      <CardTitle className="text-xs font-semibold text-slate-700">
                         Users
                       </CardTitle>
                     </div>
@@ -988,9 +988,9 @@ export default function GoogleWorkspacePage() {
                         <Table className="text-xs">
                           <TableHeader className="bg-slate-50/50">
                             <TableRow>
-                              <TableHead className="text-[9px] font-bold text-slate-400 uppercase tracking-widest pl-4 h-8 py-1.5">User Type</TableHead>
-                              <TableHead className="text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right h-8 py-1.5">Active</TableHead>
-                              <TableHead className="text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right pr-4 h-8 py-1.5">Total</TableHead>
+                              <TableHead className="text-xs font-medium text-slate-500 pl-4 h-8 py-1.5">User Type</TableHead>
+                              <TableHead className="text-xs font-medium text-slate-500 text-right h-8 py-1.5">Active</TableHead>
+                              <TableHead className="text-xs font-medium text-slate-500 text-right pr-4 h-8 py-1.5">Total</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1031,7 +1031,7 @@ export default function GoogleWorkspacePage() {
                                 <span className="text-[11px] font-bold text-slate-700 truncate">{ou.label}</span>
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider leading-none">Total Users</p>
+                                <p className="text-xs font-medium text-slate-500 leading-none">Total Users</p>
                                 <div className="flex items-baseline justify-between gap-1">
                                   <p className="text-lg font-headline font-bold text-slate-900 leading-none">{data.total}</p>
                                   <span className="text-[8px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded px-1 py-0.5 leading-none shrink-0">
@@ -1111,7 +1111,7 @@ export default function GoogleWorkspacePage() {
                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 px-6 flex flex-row items-center justify-between h-14">
                   <div className="flex items-center gap-2">
                     <ShieldAlert className="w-4 h-4 text-slate-400" />
-                    <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <CardTitle className="text-xs font-semibold text-slate-700 flex items-center gap-2">
                       Alert Center
                       {mergedAlerts.length > 0 && (
                         <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 bg-white border-slate-200 text-slate-500 shadow-none scale-90">
@@ -1167,7 +1167,7 @@ export default function GoogleWorkspacePage() {
                             <div className="flex items-start gap-3 min-w-0 flex-1">
                               <Badge
                                 className={cn(
-                                  "text-[8px] font-extrabold px-2 py-0.5 border shadow-none shrink-0 mt-0.5 uppercase tracking-wider rounded-md",
+                                  "text-xs font-medium px-2 py-0.5 border shadow-none shrink-0 mt-0.5 rounded-md",
                                   isCritical
                                     ? "bg-red-50 text-red-700 border-red-100"
                                     : isWarning
@@ -1191,7 +1191,7 @@ export default function GoogleWorkspacePage() {
                             </div>
                             
                             <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                              <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border border-slate-100 rounded px-2.5 py-1 shadow-sm uppercase tracking-wide">
+                              <span className="text-xs text-slate-500 font-medium bg-slate-50 border border-slate-100 rounded px-2.5 py-1 shadow-sm">
                                 {formatTimestamp(entry.time)}
                               </span>
                             </div>

@@ -1348,7 +1348,7 @@ export default function WorkspaceUsersPage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synchronizing Infrastructure...</p>
+          <p className="text-xs font-medium text-slate-500">Synchronizing infrastructure...</p>
         </div>
       </DashboardShell>
     )
@@ -1641,7 +1641,7 @@ export default function WorkspaceUsersPage() {
             {isLoadingUsers ? (
               <div className="flex flex-col items-center justify-center py-32 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Loading users...</p>
+                <p className="text-xs font-medium text-slate-500">Loading users...</p>
               </div>
             ) : users.length === 0 && !searchTerm ? (
               <div className="p-24 text-center space-y-3">
@@ -1702,7 +1702,7 @@ export default function WorkspaceUsersPage() {
                       Clear Search
                     </Button>
                   )}
-                  <div className="ml-auto text-[10px] text-slate-400 font-bold uppercase tracking-wider hidden sm:block">
+                  <div className="ml-auto text-xs text-slate-500 font-medium hidden sm:block">
                     Showing {filteredUsers.length > 0 ? (currentPage - 1) * 50 + 1 : 0}–{(currentPage - 1) * 50 + displayedUsers.length} of {filteredUsers.length} users
                   </div>
                 </div>
@@ -1729,10 +1729,10 @@ export default function WorkspaceUsersPage() {
                                 />
                               </TableHead>
                             )}
-                            <TableHead className={cn("text-[10px] font-bold uppercase py-4", !isSelectionMode && "pl-6")}>Name</TableHead>
-                            <TableHead className="text-[10px] font-bold uppercase py-4">Email</TableHead>
-                            <TableHead className="text-[10px] font-bold uppercase py-4">Type</TableHead>
-                            <TableHead className="text-[10px] font-bold uppercase py-4 text-right pr-6">Actions</TableHead>
+                            <TableHead className={cn("text-xs font-medium py-3.5 text-slate-500", !isSelectionMode && "pl-6")}>Name</TableHead>
+                            <TableHead className="text-xs font-medium py-3.5 text-slate-500">Email</TableHead>
+                            <TableHead className="text-xs font-medium py-3.5 text-slate-500">Type</TableHead>
+                            <TableHead className="text-xs font-medium py-3.5 text-right pr-6 text-slate-500">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1857,12 +1857,12 @@ export default function WorkspaceUsersPage() {
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <h4 className="text-sm font-bold text-slate-800 truncate leading-none">{u.fullName}</h4>
                                     {u.suspended && (
-                                      <Badge variant="outline" className="text-[8px] font-extrabold px-1.5 py-0 bg-red-50 text-red-600 border-red-200 uppercase tracking-wider scale-90 shrink-0 leading-none">
+                                      <Badge variant="outline" className="text-[10px] font-medium px-1.5 py-0 bg-red-50 text-red-700 border-red-200 shrink-0 leading-none">
                                         Suspended
                                       </Badge>
                                     )}
                                     {u.isAdmin && (
-                                      <Badge variant="outline" className="text-[8px] font-extrabold px-1.5 py-0 bg-amber-50 text-amber-600 border-amber-200 uppercase tracking-wider scale-90 shrink-0 leading-none">
+                                      <Badge variant="outline" className="text-[10px] font-medium px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200 shrink-0 leading-none">
                                         Admin
                                       </Badge>
                                     )}
@@ -1883,7 +1883,7 @@ export default function WorkspaceUsersPage() {
 
                             {/* Card Body: Type / OU assignment */}
                             <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100/60">
-                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Type</span>
+                              <span className="text-slate-500 font-medium text-xs">Type</span>
                               <span className="font-semibold text-slate-700 bg-slate-50 border border-slate-100 rounded-md px-2 py-0.5">
                                 {formatType(u.orgUnitPath)}
                               </span>
@@ -2025,7 +2025,7 @@ export default function WorkspaceUsersPage() {
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">First Name</Label>
+                <Label className="text-xs font-medium text-slate-700">First Name</Label>
                 <Input
                   placeholder="John"
                   value={createFirstName}
@@ -2034,7 +2034,7 @@ export default function WorkspaceUsersPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Last Name</Label>
+                <Label className="text-xs font-medium text-slate-700">Last Name</Label>
                 <Input
                   placeholder="Doe"
                   value={createLastName}
@@ -2045,7 +2045,7 @@ export default function WorkspaceUsersPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Email Address</Label>
+              <Label className="text-xs font-medium text-slate-700">Email Address</Label>
               <div className="flex items-center gap-0">
                 <Input
                   placeholder="john.doe"
@@ -2060,7 +2060,7 @@ export default function WorkspaceUsersPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Temporary Password</Label>
+              <Label className="text-xs font-medium text-slate-700">Temporary Password</Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="text"
@@ -2086,7 +2086,7 @@ export default function WorkspaceUsersPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Type</Label>
+              <Label className="text-xs font-medium text-slate-700">Type</Label>
               <Select value={createOUPath} onValueChange={setCreateOUPath}>
                 <SelectTrigger className="h-9 text-xs font-semibold border-slate-200">
                   <SelectValue placeholder="Select Type" />
@@ -2104,7 +2104,7 @@ export default function WorkspaceUsersPage() {
             {createOUPath === "/Students" && classes.length > 0 && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Class</Label>
+                  <Label className="text-xs font-medium text-slate-700">Class</Label>
                   <Select value={createClassId} onValueChange={setCreateClassId}>
                     <SelectTrigger className="h-9 text-xs font-semibold border-slate-200">
                       <SelectValue placeholder="Select Class" />
@@ -2119,7 +2119,7 @@ export default function WorkspaceUsersPage() {
                 </div>
                 {createClassId !== "none" && (
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Section</Label>
+                    <Label className="text-xs font-medium text-slate-700">Section</Label>
                     <Select value={createSectionId} onValueChange={setCreateSectionId}>
                       <SelectTrigger className="h-9 text-xs font-semibold border-slate-200">
                         <SelectValue placeholder="Select Section" />
@@ -2174,7 +2174,7 @@ export default function WorkspaceUsersPage() {
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">First Name</Label>
+                <Label className="text-xs font-medium text-slate-700">First Name</Label>
                 <Input
                   value={editFirstName}
                   onChange={(e) => setEditFirstName(e.target.value)}
@@ -2182,7 +2182,7 @@ export default function WorkspaceUsersPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Last Name</Label>
+                <Label className="text-xs font-medium text-slate-700">Last Name</Label>
                 <Input
                   value={editLastName}
                   onChange={(e) => setEditLastName(e.target.value)}
@@ -2192,7 +2192,7 @@ export default function WorkspaceUsersPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Email Address</Label>
+              <Label className="text-xs font-medium text-slate-700">Email Address</Label>
               <div className="flex items-center gap-0">
                 <Input
                   value={editEmailPrefix}
@@ -2214,7 +2214,7 @@ export default function WorkspaceUsersPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Type</Label>
+              <Label className="text-xs font-medium text-slate-700">Type</Label>
               <Select value={editOUPath} onValueChange={setEditOUPath}>
                 <SelectTrigger className="h-9 text-xs font-semibold border-slate-200">
                   <SelectValue placeholder="Select Type" />
@@ -2232,7 +2232,7 @@ export default function WorkspaceUsersPage() {
             {editOUPath === "/Students" && classes.length > 0 && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Class</Label>
+                  <Label className="text-xs font-medium text-slate-700">Class</Label>
                   <Select value={editClassId} onValueChange={setEditClassId}>
                     <SelectTrigger className="h-9 text-xs font-semibold border-slate-200">
                       <SelectValue placeholder="Select Class" />
@@ -2247,7 +2247,7 @@ export default function WorkspaceUsersPage() {
                 </div>
                 {editClassId !== "none" && (
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Section</Label>
+                    <Label className="text-xs font-medium text-slate-700">Section</Label>
                     <Select value={editSectionId} onValueChange={setEditSectionId}>
                       <SelectTrigger className="h-9 text-xs font-semibold border-slate-200">
                         <SelectValue placeholder="Select Section" />
@@ -2301,12 +2301,12 @@ export default function WorkspaceUsersPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">User Account</p>
+              <p className="text-xs font-medium text-slate-500">User Account</p>
               <p className="text-xs font-bold text-slate-700 mt-0.5">{selectedUser?.fullName} ({selectedUser?.email})</p>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">New Password</Label>
+              <Label className="text-xs font-medium text-slate-700">New Password</Label>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Input
@@ -2478,11 +2478,11 @@ export default function WorkspaceUsersPage() {
 
           <div className="space-y-3 py-2">
             <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
-              <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Account to Delete</p>
+              <p className="text-xs font-medium text-red-600">Account to Delete</p>
               <p className="text-xs font-bold text-red-700 mt-0.5">{selectedUser?.email}</p>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <Label className="text-xs font-medium text-slate-700">
                 Type the email address to confirm
               </Label>
               <Input
@@ -2569,7 +2569,7 @@ export default function WorkspaceUsersPage() {
           </AlertDialogHeader>
 
           <div className="space-y-1.5 py-2">
-            <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <Label className="text-xs font-medium text-slate-700">
               Type <span className="font-bold text-red-600">DELETE</span> to confirm
             </Label>
             <Input
@@ -2616,7 +2616,7 @@ export default function WorkspaceUsersPage() {
           <div className="space-y-4 py-2">
             {/* Counter */}
             <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Custom Types Used</span>
+              <span className="text-xs font-medium text-slate-700">Custom Types Used</span>
               <Badge
                 variant="outline"
                 className={cn(
@@ -2667,7 +2667,7 @@ export default function WorkspaceUsersPage() {
             {/* Add New OU */}
             {customOUs.length < MAX_CUSTOM_OUS && (
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Add New Type</Label>
+                <Label className="text-xs font-medium text-slate-700">Add New Type</Label>
                 <div className="flex items-center gap-2">
                   <Input
                     placeholder="e.g. Alumni, Volunteers..."
@@ -2768,7 +2768,7 @@ export default function WorkspaceUsersPage() {
 
               {importResults.errors.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Error Migration Logs ({importResults.errors.length})</p>
+                  <p className="text-xs font-medium text-slate-700">Error Migration Logs ({importResults.errors.length})</p>
                   <div className="max-h-[150px] overflow-y-auto border border-red-100 bg-red-50/10 rounded-lg p-3 space-y-1 text-[10px] text-red-600 font-semibold font-mono custom-scrollbar">
                     {importResults.errors.map((err, idx) => (
                       <p key={idx}>{err}</p>

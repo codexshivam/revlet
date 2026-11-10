@@ -14,10 +14,9 @@ export function AuthFrame({ children, className }: AuthFrameProps) {
       <header className="w-full bg-white border-b border-[#eceef0] px-4 sm:px-8 lg:px-12 py-3.5 sm:py-4 flex items-center justify-between shrink-0">
         <Link 
           href="https://revlet.me" 
-          className="font-headline font-bold text-sm tracking-tight text-slate-900 hover:text-primary transition-colors flex items-center gap-2"
+          className="font-headline font-bold text-sm tracking-tight text-slate-900 hover:text-primary transition-colors flex items-center"
         >
           <span>Revlet</span>
-          <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 font-normal">Console</span>
         </Link>
 
         <nav className="flex items-center gap-3.5 sm:gap-6 text-[11px] sm:text-xs">

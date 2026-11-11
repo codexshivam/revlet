@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, ArrowRight, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,12 +39,11 @@ export default function LoginPage() {
     }
   }, [user, authLoading, router])
 
-  // Only show the redirecting state on the client if an authenticated user is confirmed
   if (user) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4">
-        <div className="font-semibold text-sm text-slate-900 font-headline animate-pulse">
-          Revlet
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="text-xs font-medium text-slate-400">
+          Redirecting to console...
         </div>
       </div>
     )
@@ -53,7 +52,7 @@ export default function LoginPage() {
   const getFriendlyErrorMessage = (errorCode: string) => {
     switch (errorCode) {
       case "auth/invalid-email":
-        return "The email address provided is not valid."
+        return "The email address is not valid."
       case "auth/user-disabled":
         return "This account has been disabled by an administrator."
       case "auth/user-not-found":
@@ -61,9 +60,9 @@ export default function LoginPage() {
       case "auth/invalid-credential":
         return "Invalid email or password. Please try again."
       case "auth/too-many-requests":
-        return "Too many failed login attempts. Please try again later or reset your password."
+        return "Too many failed attempts. Please try again later or reset your password."
       case "auth/network-request-failed":
-        return "A network error occurred. Please check your internet connection."
+        return "Network connection issue. Please check your internet connection."
       default:
         return "An unexpected error occurred during authentication."
     }
@@ -71,33 +70,28 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       toast({
         variant: "destructive",
         title: "Missing credentials",
-        description: (
-          <span className="flex items-center gap-2 text-xs">
-            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-            <span>Please enter both email and password.</span>
-          </span>
-        ),
+        description: "Please enter both email and password.",
       })
       return
     }
 
     setIsLoading(true)
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password)
+
       // Reactive Sync: Keep user profile index up to date
       try {
         const { getFirestore } = await import("firebase/firestore")
         const db = getFirestore(auth.app, "itmanager")
         const { syncUserOrganizations } = await import("@/firebase")
         await syncUserOrganizations(
-          db, 
-          userCredential.user.uid, 
-          userCredential.user.email || "", 
+          db,
+          userCredential.user.uid,
+          userCredential.user.email || "",
           userCredential.user.displayName || ""
         )
       } catch (e) {
@@ -105,25 +99,15 @@ export default function LoginPage() {
       }
 
       toast({
-        title: "Login Successful",
-        description: (
-          <span className="flex items-center gap-2 text-xs">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span>Welcome back! Redirecting to your dashboard...</span>
-          </span>
-        ),
+        title: "Signed in",
+        description: "Redirecting to your dashboard...",
       })
       router.push("/account/home")
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Authentication Failed",
-        description: (
-          <span className="flex items-center gap-2 text-xs">
-            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-            <span>{getFriendlyErrorMessage(error.code)}</span>
-          </span>
-        ),
+        title: "Authentication failed",
+        description: getFriendlyErrorMessage(error.code),
       })
     } finally {
       setIsLoading(false)
@@ -132,48 +116,32 @@ export default function LoginPage() {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!resetEmail) {
+    if (!resetEmail.trim()) {
       toast({
         variant: "destructive",
         title: "Email required",
-        description: (
-          <span className="flex items-center gap-2 text-xs">
-            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-            <span>Please enter your work email to reset.</span>
-          </span>
-        ),
+        description: "Please enter your work email to receive reset instructions.",
       })
       return
     }
 
     setIsResetLoading(true)
     try {
-      await sendPasswordResetEmail(auth, resetEmail)
+      await sendPasswordResetEmail(auth, resetEmail.trim())
       toast({
         title: "Reset link sent",
-        description: (
-          <span className="flex items-center gap-2 text-xs">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span>Please check your email for reset instructions.</span>
-          </span>
-        ),
+        description: "Check your email for password reset instructions.",
       })
       setIsResetOpen(false)
       setResetEmail("")
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Reset Failed",
-        description: (
-          <span className="flex items-center gap-2 text-xs">
-            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-            <span>
-              {error.code === "auth/user-not-found"
-                ? "No account found with this email address."
-                : getFriendlyErrorMessage(error.code)}
-            </span>
-          </span>
-        ),
+        title: "Reset failed",
+        description:
+          error.code === "auth/user-not-found"
+            ? "No account found with this email address."
+            : getFriendlyErrorMessage(error.code),
       })
     } finally {
       setIsResetLoading(false)
@@ -182,92 +150,79 @@ export default function LoginPage() {
 
   return (
     <AuthFrame>
-      <div className="w-full max-w-[460px] bg-white border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl p-6 sm:p-10 space-y-6 animate-in fade-in duration-300">
-        <div className="text-center space-y-1.5">
-          <h1 className="text-2xl sm:text-3xl font-headline font-bold text-[#191c1e] tracking-tight">
-            Welcome back
+      <div className="w-full max-w-[400px] bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6 shadow-sm animate-in fade-in duration-300">
+        <div className="space-y-1 text-center sm:text-left">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
+            Sign in to Revlet
           </h1>
-          <p className="text-xs sm:text-sm text-[#45464d] font-normal leading-normal">
-            Enter your credentials to access the administrative dashboard.
+          <p className="text-xs text-slate-500">
+            Enter your credentials to access the management console.
           </p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
-          {/* WORK EMAIL */}
           <div className="space-y-1.5">
-            <Label 
-              htmlFor="email" 
-              className="text-xs font-medium text-slate-700 block"
-            >
+            <Label htmlFor="email" className="text-xs font-medium text-slate-700">
               Work email
             </Label>
-            <Input 
-              id="email" 
-              type="email" 
-              placeholder="hello@world.com" 
-              className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal px-3 placeholder-slate-400"
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="admin@institution.edu"
+              className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
 
-          {/* SECURITY PASSWORD */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label 
-                htmlFor="password" 
-                className="text-xs font-medium text-slate-700 block"
-              >
+              <Label htmlFor="password" className="text-xs font-medium text-slate-700">
                 Password
               </Label>
-              
+
               <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
                 <DialogTrigger asChild>
-                  <button 
-                    type="button" 
-                    className="text-xs text-slate-500 hover:text-slate-900 transition-colors font-medium"
+                  <button
+                    type="button"
+                    className="text-xs text-slate-500 hover:text-slate-900 transition-colors"
                   >
                     Forgot password?
                   </button>
                 </DialogTrigger>
-                <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] border border-slate-100 shadow-[0_12px_32px_rgba(0,0,0,0.04)] rounded-xl p-6 bg-white animate-in zoom-in duration-300">
-                  <DialogHeader className="space-y-2 text-left">
-                    <DialogTitle className="font-headline font-semibold text-lg text-[#191c1e]">
+                <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] border border-slate-200 rounded-xl p-6 bg-white">
+                  <DialogHeader className="space-y-1.5 text-left">
+                    <DialogTitle className="text-base font-semibold text-slate-900">
                       Reset your password
                     </DialogTitle>
-                    <DialogDescription className="text-xs text-[#45464d] leading-relaxed font-normal">
-                      Enter your work email and we will dispatch a secure reset link.
+                    <DialogDescription className="text-xs text-slate-500">
+                      Enter your work email and we will send you a secure password reset link.
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleForgotPassword} className="space-y-4 pt-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="reset-email" className="text-xs font-medium text-slate-700 block">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="reset-email" className="text-xs font-medium text-slate-700">
                         Work email
                       </Label>
-                      <Input 
-                        id="reset-email" 
-                        type="email" 
-                        placeholder="hello@world.com" 
-                        required 
-                        className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white text-xs sm:text-sm font-normal rounded px-3"
+                      <Input
+                        id="reset-email"
+                        type="email"
+                        placeholder="admin@institution.edu"
+                        required
+                        className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
                         value={resetEmail}
                         onChange={(e) => setResetEmail(e.target.value)}
                       />
                     </div>
                     <DialogFooter className="pt-2">
-                      <Button 
-                        type="submit" 
+                      <Button
+                        type="submit"
                         disabled={isResetLoading}
-                        className="w-full font-medium h-10 bg-primary hover:bg-primary/95 !text-white text-white rounded text-xs transition-all shadow-sm flex items-center justify-center gap-2"
+                        className="w-full h-9 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
                       >
-                        {isResetLoading ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Sending link...</span>
-                          </>
-                        ) : (
-                          <span>Send reset link</span>
-                        )}
+                        {isResetLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {isResetLoading ? "Sending link..." : "Send reset link"}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -275,13 +230,13 @@ export default function LoginPage() {
               </Dialog>
             </div>
 
-            {/* PASSWORD INPUT & EYE TOGGLE */}
             <div className="relative">
-              <Input 
-                id="password" 
-                type={showPassword ? "text" : "password"} 
-                placeholder="••••••••••" 
-                className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal pl-3 pr-10 placeholder-slate-300"
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="••••••••••••"
+                className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg pr-10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -300,37 +255,24 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* SUBMIT BUTTON */}
-          <Button 
-            type="submit" 
-            className="w-full font-medium h-10 bg-primary hover:bg-primary/95 !text-white text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-sm flex items-center justify-center"
+          <Button
+            type="submit"
+            className="w-full h-10 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg mt-2 shadow-none flex items-center justify-center gap-2"
             disabled={isLoading}
           >
-            {isLoading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <>
-                Access Dashboard
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
+            {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {isLoading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
 
-        {/* DIVIDER */}
-        <div className="border-t border-[#eceef0] my-5 sm:my-6"></div>
-
-        {/* LINK TO SIGNUP */}
-        <div className="text-center">
-          <p className="text-xs sm:text-sm text-[#45464d] font-normal">
-            New user?{" "}
-            <Link 
-              href="/signup" 
-              className="text-[#191c1e] font-bold hover:underline transition-colors"
-            >
-              Create an account
-            </Link>
-          </p>
+        <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-500">
+          New to Revlet?{" "}
+          <Link
+            href="/signup"
+            className="text-slate-900 font-medium hover:underline transition-colors"
+          >
+            Create an account
+          </Link>
         </div>
       </div>
     </AuthFrame>

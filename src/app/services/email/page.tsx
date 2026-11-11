@@ -304,18 +304,18 @@ export default function EmailServiceAdminPage() {
 
       if (res.data?.dnsProvisionedAutomatically) {
         toast({
-          title: "Email service activated",
+          title: "Email Service activated",
           description: `Required DNS records were automatically added to ${selectedOrg?.domain}.`,
         })
       } else if (res.data?.dnsWarning) {
         toast({
-          title: "Email service activated",
+          title: "Email Service activated",
           description: `Review required DNS records in Settings (${res.data.dnsWarning}).`,
         })
       } else {
         toast({
-          title: "Email service activated",
-          description: `Email service is now active for ${selectedOrg?.domain}.`,
+          title: "Email Service activated",
+          description: `Email Service is now active for ${selectedOrg?.domain}.`,
         })
       }
 
@@ -324,7 +324,7 @@ export default function EmailServiceAdminPage() {
       toast({
         variant: "destructive",
         title: "Activation failed",
-        description: err.message || "Could not activate email service.",
+        description: err.message || "Could not activate Email Service.",
       })
     } finally {
       setIsActivating(false)
@@ -342,14 +342,14 @@ export default function EmailServiceAdminPage() {
       setServiceActive(false)
       setIsDeactivateConfirmOpen(false)
       toast({
-        title: "Email service deactivated",
-        description: "Email service has been paused for this organization.",
+        title: "Email Service deactivated",
+        description: "Email Service has been paused for this organization.",
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Deactivation failed",
-        description: err.message || "Could not deactivate email service.",
+        description: err.message || "Could not deactivate Email Service.",
       })
     } finally {
       setIsDeactivating(false)
@@ -959,7 +959,7 @@ export default function EmailServiceAdminPage() {
       <DashboardShell>
         <div className="flex flex-col items-center justify-center h-96 gap-3">
           <Loader2 className="w-6 h-6 animate-spin text-slate-400" strokeWidth={1.5} />
-          <p className="text-xs text-slate-500">Loading email service</p>
+          <p className="text-xs text-slate-500">Loading Email Service</p>
         </div>
       </DashboardShell>
     )
@@ -989,15 +989,9 @@ export default function EmailServiceAdminPage() {
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-slate-200/80 pb-5">
             <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
-                  Email service
-                </h1>
-                <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500">
-                  <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-                  {selectedOrg.domain}
-                </span>
-              </div>
+              <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
+                Email Service
+              </h1>
               <p className="text-xs text-slate-500">
                 Custom domain mailboxes, send-as aliases, organizational units, and group routing
               </p>
@@ -1009,18 +1003,6 @@ export default function EmailServiceAdminPage() {
               {/* Left column: plain statement and activation action */}
               <div className="lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between gap-8">
                 <div className="space-y-4">
-                  <div className="inline-flex items-center gap-2 text-xs font-mono text-slate-500">
-                    <span
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full",
-                        dnsServiceActive ? "bg-emerald-600" : "bg-amber-500"
-                      )}
-                    />
-                    {dnsServiceActive
-                      ? "DNS management active — records provision automatically"
-                      : "Manual registrar DNS configuration"}
-                  </div>
-
                   <h2 className="text-xl font-headline font-semibold text-slate-900 leading-snug">
                     Domain mail and directory for {selectedOrg.domain}
                   </h2>
@@ -1046,10 +1028,10 @@ export default function EmailServiceAdminPage() {
                     {isActivating ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
-                        Activating email service
+                        Activating Email Service
                       </>
                     ) : (
-                      "Activate email service"
+                      "Activate Email Service"
                     )}
                   </Button>
                 </div>
@@ -1087,7 +1069,7 @@ export default function EmailServiceAdminPage() {
 
                 <p className="text-xs text-slate-500 leading-relaxed">
                   {dnsServiceActive
-                    ? `Activating email service snapshots your zone and writes these ${requiredDnsRecords.length} records to ${selectedOrg.domain} immediately.`
+                    ? `Activating Email Service snapshots your zone and writes these ${requiredDnsRecords.length} records to ${selectedOrg.domain} immediately.`
                     : `After activation, copy these records from Settings into your domain registrar for ${selectedOrg.domain}.`}
                 </p>
               </div>
@@ -1105,15 +1087,9 @@ export default function EmailServiceAdminPage() {
         {/* Page header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
-                Email service
-              </h1>
-              <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                {selectedOrg.domain}
-              </span>
-            </div>
+            <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
+              Email Service
+            </h1>
             <p className="text-xs text-slate-500">
               Directory, aliases, organizational units, distribution groups, and domain routing
             </p>
@@ -2160,10 +2136,10 @@ export default function EmailServiceAdminPage() {
             <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
                 <h3 className="text-sm font-headline font-semibold text-slate-900">
-                  Deactivate email service
+                  Deactivate Email Service
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Pause email service for {selectedOrg.domain}. Accounts, aliases, and groups remain saved in your directory.
+                  Pause Email Service for {selectedOrg.domain}. Accounts, aliases, and groups remain saved in your directory.
                 </p>
               </div>
               <Button
@@ -3124,10 +3100,10 @@ export default function EmailServiceAdminPage() {
           <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Deactivate email service
+                Deactivate Email Service
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
-                Deactivate email service for{" "}
+                Deactivate Email Service for{" "}
                 <span className="font-mono text-slate-800">{selectedOrg.domain}</span>? Existing
                 directory records will remain saved.
               </AlertDialogDescription>

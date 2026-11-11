@@ -25,7 +25,15 @@ import {
   X,
   ArrowRight,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ExternalLink,
+  Lock,
+  Shield,
+  History,
+  RotateCcw,
+  Eye,
+  EyeOff,
+  AlertTriangle
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -51,7 +59,12 @@ import {
   createDNSRecord, 
   updateDNSRecord, 
   deleteDNSRecord,
-  createZone
+  createZone,
+  verifyAndConnectCloudflareToken,
+  disconnectCloudflareToken,
+  createZoneSnapshot,
+  listZoneSnapshots,
+  rollbackZoneSnapshot
 } from "@/app/actions/cloudflare-dns"
 import Link from "next/link"
 import {
@@ -147,6 +160,23 @@ export default function DNSManagementPage() {
   // Import state
   const [importFile, setImportFile] = useState<File | null>(null)
   const [proxyAllImported, setProxyAllImported] = useState(true)
+
+  // BYOT Token state
+  const [apiTokenInput, setApiTokenInput] = useState("")
+  const [showTokenSecret, setShowTokenSecret] = useState(false)
+  const [isConnectingToken, setIsConnectingToken] = useState(false)
+  const [isDisconnectDialogOpen, setIsDisconnectDialogOpen] = useState(false)
+  const [isDisconnectingToken, setIsDisconnectingToken] = useState(false)
+
+  // Snapshots & Safe-Mode Rollback state
+  const [isSnapshotsOpen, setIsSnapshotsOpen] = useState(false)
+  const [snapshots, setSnapshots] = useState<Array<{ id: string; createdAt: string; reason: string; recordCount: number }>>([])
+  const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false)
+  const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false)
+  const [snapshotReason, setSnapshotReason] = useState("")
+  const [selectedSnapshotForRollback, setSelectedSnapshotForRollback] = useState<{ id: string; createdAt: string; reason: string; recordCount: number } | null>(null)
+  const [isRollbackConfirmOpen, setIsRollbackConfirmOpen] = useState(false)
+  const [isRollingBack, setIsRollingBack] = useState(false)
 
   const zoneId = selectedOrg?.cloudflareZoneId
 
@@ -468,6 +498,143 @@ export default function DNSManagementPage() {
     }
   }
 
+  const handleConnectToken = async () => {
+    if (!apiTokenInput.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Token Required",
+        description: "Please enter your scoped Cloudflare API Token."
+      })
+      return
+    }
+    if (!user || !selectedOrg?.id) return
+
+    setIsConnectingToken(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await verifyAndConnectCloudflareToken(idToken, selectedOrg.id, apiTokenInput.trim())
+      if (res.success && res.data) {
+        toast({
+          title: "Token Verified & Connected",
+          description: `Zone "${res.data.zoneName}" connected with verified security scope.`
+        })
+        setApiTokenInput("")
+        setShowTokenSecret(false)
+        fetchDNSData()
+      } else {
+        throw new Error(res.error || "Failed to verify Cloudflare token.")
+      }
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Verification Failed",
+        description: err.message || "Could not verify your token. Ensure permissions are Zone:DNS:Edit and Zone:Zone:Read."
+      })
+    } finally {
+      setIsConnectingToken(false)
+    }
+  }
+
+  const handleDisconnectToken = async () => {
+    if (!user || !selectedOrg?.id) return
+    setIsDisconnectingToken(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await disconnectCloudflareToken(idToken, selectedOrg.id)
+      if (res.success) {
+        toast({
+          title: "Cloudflare Token Disconnected",
+          description: "Domain credentials and zone connection removed from Revlet."
+        })
+        setIsDisconnectDialogOpen(false)
+        setRecords([])
+        setZoneDetails(null)
+      } else {
+        throw new Error(res.error)
+      }
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Disconnect Failed",
+        description: err.message || "Could not disconnect token."
+      })
+    } finally {
+      setIsDisconnectingToken(false)
+    }
+  }
+
+  const loadSnapshots = async () => {
+    if (!user || !selectedOrg?.id) return
+    setIsLoadingSnapshots(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await listZoneSnapshots(idToken, selectedOrg.id)
+      if (res.success && res.data) {
+        setSnapshots(res.data)
+      }
+    } catch (err: any) {
+      console.warn("Failed to load snapshots:", err)
+    } finally {
+      setIsLoadingSnapshots(false)
+    }
+  }
+
+  const handleCreateSnapshot = async () => {
+    if (!user || !selectedOrg?.id || !zoneId) return
+    setIsCreatingSnapshot(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await createZoneSnapshot(idToken, selectedOrg.id, zoneId, snapshotReason.trim() || "Manual backup snapshot")
+      if (res.success && res.data) {
+        toast({
+          title: "Snapshot Created",
+          description: `Safely preserved ${res.data.recordCount} zone records.`
+        })
+        setSnapshotReason("")
+        loadSnapshots()
+      } else {
+        throw new Error(res.error)
+      }
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Snapshot Failed",
+        description: err.message || "Could not take snapshot."
+      })
+    } finally {
+      setIsCreatingSnapshot(false)
+    }
+  }
+
+  const handleExecuteRollback = async () => {
+    if (!user || !selectedOrg?.id || !zoneId || !selectedSnapshotForRollback) return
+    setIsRollingBack(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await rollbackZoneSnapshot(idToken, selectedOrg.id, zoneId, selectedSnapshotForRollback.id)
+      if (res.success && res.data) {
+        toast({
+          title: "Zone Restored Successfully",
+          description: `Restored ${res.data.restoredCount} records (${res.data.deletedCount} extra records cleaned).`
+        })
+        setIsRollbackConfirmOpen(false)
+        setSelectedSnapshotForRollback(null)
+        setIsSnapshotsOpen(false)
+        fetchDNSData()
+      } else {
+        throw new Error(res.error)
+      }
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Rollback Failed",
+        description: err.message || "Failed to rollback zone."
+      })
+    } finally {
+      setIsRollingBack(false)
+    }
+  }
+
   const handleCopyText = (text: string) => {
     navigator.clipboard.writeText(text)
     toast({ title: "Copied to Clipboard", description: `"${text.substring(0, 30)}${text.length > 30 ? '...' : ''}" copied.` })
@@ -608,6 +775,17 @@ export default function DNSManagementPage() {
             <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 shrink-0">
                {zoneId && (
                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                   <Button 
+                     variant="outline" 
+                     onClick={() => {
+                       setIsSnapshotsOpen(true)
+                       loadSnapshots()
+                     }} 
+                     className="h-10 font-bold text-xs border-slate-200"
+                   >
+                     <History className="w-4 h-4 mr-2" />
+                     Snapshots
+                   </Button>
                    <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="h-10 font-bold text-xs border-slate-200">
                      <Upload className="w-4 h-4 mr-2" />
                      Import
@@ -652,51 +830,225 @@ export default function DNSManagementPage() {
             </Card>
           </div>
         ) : selectedOrg && !zoneId ? (
-          <div className="max-w-5xl mx-auto py-12 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="space-y-12 text-center">
-              <div className="space-y-4">
-                <h2 className="text-4xl font-headline font-bold text-slate-900 leading-tight">
-                  Premium Domain Infrastructure
-                </h2>
-                <p className="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto">
-                  Unlock advanced security, ultra-fast propagation, and centralized management by activating your organization&apos;s global network context.
+          <div className="max-w-4xl mx-auto py-6 space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center space-y-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
+                <Shield className="w-3.5 h-3.5" /> Bring Your Own Cloudflare Token (BYOT)
+              </div>
+              <h2 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">
+                Connect Your Domain with Zero Handover
+              </h2>
+              <p className="text-slate-600 text-sm max-w-2xl mx-auto leading-relaxed">
+                Retain 100% ownership of your domain nameservers in your own Cloudflare account. Revlet acts as your specialized, high-speed control plane with zero billing access and least-privilege scoping.
+              </p>
+            </div>
+
+            {/* 3-Step Guided Token Generation */}
+            <Card className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden">
+              <CardHeader className="bg-slate-50/70 border-b border-slate-100 py-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-sm font-bold text-slate-900">Step-by-Step Scoped Authorization</CardTitle>
+                  <p className="text-xs text-slate-500 font-medium">Domain: <strong className="text-slate-800">{selectedOrg.domain}</strong></p>
+                </div>
+                <a
+                  href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22dns%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&name=Revlet+DNS+Manager"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button className="h-9 px-4 bg-slate-900 hover:bg-black !text-white text-white font-medium text-xs shadow-sm rounded-lg flex items-center gap-2">
+                    <span>Generate Scoped Token on Cloudflare</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
+                </a>
+              </CardHeader>
+              
+              <CardContent className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5">
+                    <div className="text-xs font-mono font-bold text-blue-600">01. 1-Click Template</div>
+                    <h4 className="text-xs font-bold text-slate-900">Pre-Configured Scope</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                      Click the button above. Cloudflare opens with <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: DNS (Edit)</code> and <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: Zone (Read)</code> already pre-selected.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5">
+                    <div className="text-xs font-mono font-bold text-blue-600">02. Restrict to Domain</div>
+                    <h4 className="text-xs font-bold text-slate-900">Specific Zone Isolation</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                      Under <strong>Zone Resources</strong>, select <span className="font-semibold text-slate-800">Include → Specific zone → {selectedOrg.domain}</span> so the token physically cannot touch any other domain in your account.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5">
+                    <div className="text-xs font-mono font-bold text-blue-600">03. Verify & Connect</div>
+                    <h4 className="text-xs font-bold text-slate-900">Envelope Encryption</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                      Click <strong>Create Token</strong>, copy the secret string, and paste it below. Revlet verifies least privilege live and secures it with AES-256-GCM.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Token Input Box */}
+                <div className="space-y-3 pt-2">
+                  <Label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                    <span>Cloudflare Scoped API Token</span>
+                    <span className="text-[11px] font-normal text-slate-400">Never share Global API Keys</span>
+                  </Label>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <Input
+                        type={showTokenSecret ? "text" : "password"}
+                        placeholder="Paste your scoped API token"
+                        value={apiTokenInput}
+                        onChange={(e) => setApiTokenInput(e.target.value)}
+                        className="h-11 font-mono text-xs pr-10 border-slate-200 bg-white focus-visible:ring-1 focus-visible:ring-slate-900"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTokenSecret(!showTokenSecret)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                        title={showTokenSecret ? "Hide secret" : "Reveal secret"}
+                      >
+                        {showTokenSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <Button
+                      onClick={handleConnectToken}
+                      disabled={isConnectingToken || !apiTokenInput.trim()}
+                      className="h-11 px-6 bg-slate-900 hover:bg-black !text-white text-white font-medium text-xs shadow-sm rounded-lg shrink-0"
+                    >
+                      {isConnectingToken ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                          Verifying Scope...
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-4 h-4 mr-2" />
+                          Verify & Connect Domain
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Enterprise Security Architecture Highlights */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-5 rounded-xl border border-slate-200 bg-white space-y-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-900">Zero Billing & Account Access</h4>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                  Revlet requires least-privilege tokens strictly scoped to DNS editing. We physically cannot view invoices, manage payment methods, or read other zones in your account.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
-                {[
-                  { title: "Advanced Security", desc: "Enterprise-grade DDoS protection and managed edge firewall rules.", icon: ShieldCheck, color: "bg-blue-50 text-blue-600 border-blue-100" },
-                  { title: "Ultra-Fast DNS", desc: "Global Anycast network ensures sub-second propagation and resolution.", icon: Globe, color: "bg-emerald-50 text-emerald-600 border-emerald-100" },
-                  { title: "Edge Control", desc: "Manage MX, CNAME, and TXT records directly from your administrative dashboard.", icon: Server, color: "bg-purple-50 text-purple-600 border-purple-100" },
-                  { title: "High Availability", desc: "Redundant global nameservers with a 99.9% uptime guarantee for all services.", icon: CheckCircle2, color: "bg-amber-50 text-amber-600 border-amber-100" }
-                ].map((feature) => (
-                  <div key={feature.title} className={cn("p-6 rounded-2xl border flex items-start gap-5 transition-all shadow-sm hover:shadow-md", feature.color)}>
-                    <div className="p-3 bg-white rounded-xl shadow-sm shrink-0">
-                      <feature.icon className="w-6 h-6" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-base font-bold">{feature.title}</h4>
-                      <p className="text-xs opacity-80 leading-relaxed font-medium">{feature.desc}</p>
-                    </div>
+              <div className="p-5 rounded-xl border border-slate-200 bg-white space-y-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-blue-50 text-blue-700">
+                    <ShieldCheck className="w-4 h-4" />
                   </div>
-                ))}
+                  <h4 className="text-xs font-bold text-slate-900">AES-256-GCM Envelope Encryption</h4>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                  Tokens are encrypted with AES-256-GCM authenticated cipher before storage. Tokens are write-only and never exposed in plaintext back to the client interface.
+                </p>
               </div>
 
-              <div className="pt-8 flex flex-col items-center">
-                <Button 
-                  onClick={handleRequestDNS} 
-                  size="lg" 
-                  disabled={isRequesting}
-                  className="font-bold px-12 h-14 shadow-xl shadow-primary/20 text-lg group w-full sm:w-auto"
-                >
-                  {isRequesting ? <Loader2 className="w-5 h-5 animate-spin mr-3" /> : <Globe className="w-5 h-5 mr-3 group-hover:rotate-12 transition-transform" />}
-                  Activate Global Network
-                </Button>
+              <div className="p-5 rounded-xl border border-slate-200 bg-white space-y-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-purple-50 text-purple-700">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-900">100% Root Domain Ownership</h4>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                  No nameserver transfer needed. Your registrar continues pointing to your own Cloudflare infrastructure, eliminating downtime and root hijacking risks.
+                </p>
               </div>
+
+              <div className="p-5 rounded-xl border border-slate-200 bg-white space-y-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-amber-50 text-amber-700">
+                    <History className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-900">Safe-Mode Rollback Guardrails</h4>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                  Automatic point-in-time zone snapshots before batch changes or email routing activations. Roll back to any historical snapshot with a single click.
+                </p>
+              </div>
+            </div>
+
+            {/* Fallback managed provision option */}
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={handleRequestDNS}
+                disabled={isRequesting}
+                className="text-xs font-medium text-slate-400 hover:text-slate-600 underline underline-offset-4 transition-colors"
+              >
+                {isRequesting ? "Provisioning managed nameservers..." : "Don't have a Cloudflare account? Provision Revlet Managed Nameservers"}
+              </button>
             </div>
           </div>
         ) : selectedOrg && zoneId && (
           <div className="space-y-8 animate-in fade-in duration-700">
+            {/* Verified Security Scope Badge Banner */}
+            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0 mt-0.5 sm:mt-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-xs sm:text-sm text-slate-900">Verified Security Scope:</span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                      Token Active • Scoped strictly to 1 Zone ({selectedOrg.domain}) • Zero Billing Access
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    Token: <span className="font-semibold text-slate-700">{selectedOrg.cloudflareTokenMasked || 'Scoped Token Active'}</span>
+                    {selectedOrg.cloudflareTokenVerifiedAt && (
+                      <span className="ml-3 font-sans">• Verified {new Date(selectedOrg.cloudflareTokenVerifiedAt).toLocaleDateString()}</span>
+                    )}
+                    {selectedOrg.cloudflareTokenExpiresOn && (
+                      <span className="ml-3 font-sans">• Expires {new Date(selectedOrg.cloudflareTokenExpiresOn).toLocaleDateString()}</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsSnapshotsOpen(true)
+                    loadSnapshots()
+                  }}
+                  className="h-8 text-xs font-medium border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-800"
+                >
+                  <History className="w-3.5 h-3.5 mr-1.5" />
+                  Snapshots & Rollback
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsDisconnectDialogOpen(true)}
+                  className="h-8 text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50"
+                >
+                  Disconnect
+                </Button>
+              </div>
+            </div>
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
               <CardHeader 
                 className={cn(
@@ -1400,6 +1752,171 @@ export default function DNSManagementPage() {
                 className="px-5 bg-red-600 hover:bg-red-700 !text-white text-white font-medium h-9 shadow-sm rounded-lg"
               >
                 Confirm Removal
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Snapshots & Safe-Mode Rollback Dialog */}
+        <Dialog open={isSnapshotsOpen} onOpenChange={setIsSnapshotsOpen}>
+          <DialogContent className="max-w-2xl p-0 overflow-hidden border border-slate-200 shadow-xl bg-white rounded-xl">
+            <DialogHeader className="bg-white px-6 py-5 border-b border-slate-100">
+              <DialogTitle className="font-headline font-bold text-lg text-slate-900 flex items-center gap-2">
+                <History className="w-5 h-5 text-slate-700" />
+                Zone Snapshots &amp; Safe-Mode Rollback
+              </DialogTitle>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Point-in-time DNS state backups for <strong className="text-slate-800">{selectedOrg?.domain}</strong>
+              </p>
+            </DialogHeader>
+
+            <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+              {/* Create Snapshot Box */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-slate-800">Create Instant Zone Snapshot</Label>
+                  <span className="text-[10px] text-slate-400 font-medium">Captures all {records.length} active records</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Snapshot label (e.g. Pre-migration backup)"
+                    value={snapshotReason}
+                    onChange={(e) => setSnapshotReason(e.target.value)}
+                    className="h-9 text-xs bg-white border-slate-200"
+                  />
+                  <Button
+                    onClick={handleCreateSnapshot}
+                    disabled={isCreatingSnapshot}
+                    className="h-9 px-4 bg-slate-900 hover:bg-black !text-white text-white font-medium text-xs rounded-lg shrink-0"
+                  >
+                    {isCreatingSnapshot ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Plus className="w-3.5 h-3.5 mr-1.5" />}
+                    Take Snapshot
+                  </Button>
+                </div>
+              </div>
+
+              {/* Snapshots History */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Historical Snapshots</h4>
+                {isLoadingSnapshots ? (
+                  <div className="py-8 text-center space-y-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto" />
+                    <p className="text-xs text-slate-400 font-medium">Loading zone snapshots...</p>
+                  </div>
+                ) : snapshots.length === 0 ? (
+                  <div className="py-8 text-center rounded-lg border border-dashed border-slate-200 p-6 space-y-1">
+                    <History className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-700">No snapshots recorded yet</p>
+                    <p className="text-[11px] text-slate-400">Take an instant snapshot before making major record alterations.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    {snapshots.map((snap) => (
+                      <div key={snap.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-slate-900 truncate">{snap.reason}</span>
+                            <Badge variant="outline" className="text-[10px] font-medium h-4 px-1.5 bg-slate-50 border-slate-200 shrink-0">
+                              {snap.recordCount} records
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-slate-400 font-mono">
+                            {snap.createdAt ? new Date(snap.createdAt).toLocaleString() : "Snapshot recorded"}
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedSnapshotForRollback(snap)
+                            setIsRollbackConfirmOpen(true)
+                          }}
+                          className="h-8 px-3 text-xs font-medium border-slate-200 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 text-slate-700 shrink-0"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                          Rollback
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                Safe-mode reconciles missing, outdated, and surplus records automatically.
+              </div>
+              <Button variant="ghost" onClick={() => setIsSnapshotsOpen(false)} className="text-xs font-medium text-slate-600 h-9">
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rollback Confirmation Dialog */}
+        <Dialog open={isRollbackConfirmOpen} onOpenChange={setIsRollbackConfirmOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
+            <DialogHeader className="bg-amber-500 text-white p-6">
+              <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-white" />
+                Confirm Zone Rollback
+              </DialogTitle>
+              <p className="text-amber-100 text-xs mt-1">This operation restores live DNS records to match the selected snapshot.</p>
+            </DialogHeader>
+            <div className="p-6 space-y-3">
+              <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                Are you sure you want to rollback to snapshot &ldquo;<strong className="text-slate-900">{selectedSnapshotForRollback?.reason}</strong>&rdquo; taken on {selectedSnapshotForRollback?.createdAt ? new Date(selectedSnapshotForRollback.createdAt).toLocaleString() : "selected date"}?
+              </p>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Revlet will restore the <strong>{selectedSnapshotForRollback?.recordCount} records</strong> in this snapshot. Any records created since will be removed, and modified records will be restored.
+              </p>
+            </div>
+            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100 flex gap-2 justify-end">
+              <Button variant="ghost" onClick={() => setIsRollbackConfirmOpen(false)} className="text-xs font-medium text-slate-600">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleExecuteRollback}
+                disabled={isRollingBack}
+                className="px-5 bg-amber-600 hover:bg-amber-700 !text-white text-white font-medium h-9 shadow-sm rounded-lg"
+              >
+                {isRollingBack ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <RotateCcw className="w-3.5 h-3.5 mr-2" />}
+                Confirm Rollback
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Disconnect Cloudflare Token Dialog */}
+        <Dialog open={isDisconnectDialogOpen} onOpenChange={setIsDisconnectDialogOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
+            <DialogHeader className="bg-slate-900 text-white p-6">
+              <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
+                <Lock className="w-5 h-5 text-white" />
+                Disconnect Cloudflare Token
+              </DialogTitle>
+              <p className="text-slate-300 text-xs mt-1">Remove scoped credentials from Revlet.</p>
+            </DialogHeader>
+            <div className="p-6 space-y-3">
+              <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                Are you sure you want to disconnect your Cloudflare API token for <strong className="text-slate-900">{selectedOrg?.domain}</strong>?
+              </p>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Revlet will securely delete your encrypted token. Your domain, records, and nameservers in your own Cloudflare account will remain completely untouched.
+              </p>
+            </div>
+            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100 flex gap-2 justify-end">
+              <Button variant="ghost" onClick={() => setIsDisconnectDialogOpen(false)} className="text-xs font-medium text-slate-600">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDisconnectToken}
+                disabled={isDisconnectingToken}
+                className="px-5 bg-red-600 hover:bg-red-700 !text-white text-white font-medium h-9 shadow-sm rounded-lg"
+              >
+                {isDisconnectingToken ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : "Disconnect Token"}
               </Button>
             </DialogFooter>
           </DialogContent>

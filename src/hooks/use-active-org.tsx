@@ -20,6 +20,11 @@ export interface Organization {
   status?: string
   dnsRequested?: boolean
   cloudflareZoneId?: string
+  cloudflareZoneName?: string
+  cloudflareTokenMasked?: string
+  cloudflareTokenVerifiedAt?: string
+  cloudflareTokenExpiresOn?: string | null
+  cloudflareTokenScopedZone?: string
   emailServiceActive?: boolean
   isEducation?: boolean
   // Google Workspace fields

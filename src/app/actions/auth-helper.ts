@@ -1,4 +1,5 @@
 import { adminAuth, adminDb } from '@/firebase/admin';
+import { decryptToken } from '@/lib/security/encryption';
 
 export type VerifiedUserOrg = {
   uid: string;
@@ -6,6 +7,7 @@ export type VerifiedUserOrg = {
   isOwner: boolean;
   isMember: boolean;
   orgData: any;
+  cfToken?: string;
 };
 
 /**
@@ -79,11 +81,21 @@ export async function verifyUserOrgAccess(
     throw new Error("Unauthorized: Target zone does not match organization.");
   }
 
+  let cfToken: string | undefined = undefined;
+  if (orgData?.cloudflareTokenEncrypted?.ciphertext) {
+    try {
+      cfToken = decryptToken(orgData.cloudflareTokenEncrypted);
+    } catch (e: any) {
+      console.error("[Auth Helper] Failed to decrypt organization Cloudflare token:", e?.message);
+    }
+  }
+
   return {
     uid: decodedToken.uid,
     email: decodedToken.email,
     isOwner,
     isMember,
     orgData,
+    cfToken,
   };
 }

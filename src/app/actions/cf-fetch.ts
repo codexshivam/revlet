@@ -1,7 +1,7 @@
 const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
 
-export async function cfFetch(path: string, options: RequestInit = {}) {
-  const dnsToken = process.env.CLOUDFLARE_DNS_TOKEN;
+export async function cfFetch(path: string, options: RequestInit = {}, customToken?: string) {
+  const dnsToken = customToken || process.env.CLOUDFLARE_DNS_TOKEN;
 
   const resolvedHeaders: Record<string, string> = {};
 
@@ -15,8 +15,8 @@ export async function cfFetch(path: string, options: RequestInit = {}) {
   if (cleanToken) {
     resolvedHeaders['Authorization'] = `Bearer ${cleanToken}`;
   } else {
-    console.error(`[Infrastructure Action] Missing CLOUDFLARE_DNS_TOKEN in environment variables.`);
-    throw new Error("Authentication failed. Please configure CLOUDFLARE_DNS_TOKEN in your environment variables.");
+    console.error(`[Infrastructure Action] Missing Cloudflare API Token for request: ${path}`);
+    throw new Error("Authentication failed. No active Cloudflare API Token found for this organization.");
   }
 
   try {

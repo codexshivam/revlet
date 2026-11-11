@@ -11,15 +11,50 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Mail, MessageSquare, Send, Loader2, Copy, Check, Clock, ChevronRight } from "lucide-react"
+import { Mail, Loader2, Copy, Check, ChevronRight } from "lucide-react"
 import { useUser, useFirestore } from "@/firebase"
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore"
 import { stripScripts, containsMaliciousScript } from "@/lib/security/sanitize"
 import { toast } from "@/hooks/use-toast"
-import { errorEmitter } from '@/firebase/error-emitter'
-import { FirestorePermissionError } from '@/firebase/errors'
+import { errorEmitter } from "@/firebase/error-emitter"
+import { FirestorePermissionError } from "@/firebase/errors"
 import { cn } from "@/lib/utils"
 import { PublicSupportView } from "@/components/public/public-support-view"
+
+interface SupportTicket {
+  id: string
+  subject: string
+  category: string
+  description: string
+  ownerId: string
+  userEmail?: string
+  userDisplayName?: string
+  submittedAt?: { seconds: number; toDate?: () => Date }
+  status?: string
+}
+
+function getStatusBadge(status?: string) {
+  const norm = (status || "Open").toLowerCase()
+  if (norm === "resolved" || norm === "closed") {
+    return {
+      dot: "bg-emerald-500",
+      pill: "bg-emerald-50 text-emerald-700 border-emerald-200/60",
+      label: status || "Resolved",
+    }
+  }
+  if (norm === "in progress") {
+    return {
+      dot: "bg-blue-500",
+      pill: "bg-blue-50 text-blue-700 border-blue-200/60",
+      label: "In progress",
+    }
+  }
+  return {
+    dot: "bg-amber-500",
+    pill: "bg-amber-50 text-amber-700 border-amber-200/60",
+    label: status || "Open",
+  }
+}
 
 export default function SupportPage() {
   const { user, loading: authLoading } = useUser()
@@ -29,8 +64,8 @@ export default function SupportPage() {
   const [category, setCategory] = useState("Technical Support")
   const [message, setMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
-  const [tickets, setTickets] = useState<any[]>([])
+
+  const [tickets, setTickets] = useState<SupportTicket[]>([])
   const [isLoadingTickets, setIsLoadingTickets] = useState(true)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null)
@@ -45,26 +80,27 @@ export default function SupportPage() {
 
     const fetchTickets = async () => {
       try {
-        const snap = await getDocs(q);
-        const fetched = snap.docs.map((doc) => ({
+        const snap = await getDocs(q)
+        const fetched: SupportTicket[] = snap.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data(),
-        }));
-        // Sort descending by submission timestamp (fallback to seconds)
-        fetched.sort((a: any, b: any) => {
-          const tA = a.submittedAt?.seconds || 0;
-          const tB = b.submittedAt?.seconds || 0;
-          return tB - tA;
-        });
-        setTickets(fetched);
-        setIsLoadingTickets(false);
-      } catch (error) {
-        console.error("Error loading support tickets:", error);
-        setIsLoadingTickets(false);
-      }
-    };
+          ...(doc.data() as Omit<SupportTicket, "id">),
+        }))
 
-    fetchTickets();
+        fetched.sort((a, b) => {
+          const tA = a.submittedAt?.seconds || 0
+          const tB = b.submittedAt?.seconds || 0
+          return tB - tA
+        })
+
+        setTickets(fetched)
+      } catch (error) {
+        console.error("Error loading support tickets:", error)
+      } finally {
+        setIsLoadingTickets(false)
+      }
+    }
+
+    fetchTickets()
   }, [user, authLoading, db])
 
   const handleCopyId = (id: string) => {
@@ -78,8 +114,8 @@ export default function SupportPage() {
     if (!user) {
       toast({
         variant: "destructive",
-        title: "Session Required",
-        description: "You must be logged in to submit a support ticket."
+        title: "Session required",
+        description: "You must be signed in to submit a support ticket.",
       })
       return
     }
@@ -87,8 +123,8 @@ export default function SupportPage() {
     if (!subject.trim() || !category.trim() || !message.trim()) {
       toast({
         variant: "destructive",
-        title: "Validation Failed",
-        description: "Please fill out all support ticket fields."
+        title: "Missing information",
+        description: "Please fill out all support ticket fields.",
       })
       return
     }
@@ -96,8 +132,8 @@ export default function SupportPage() {
     if (containsMaliciousScript(subject) || containsMaliciousScript(message)) {
       toast({
         variant: "destructive",
-        title: "Disallowed Content",
-        description: "Executable scripts and HTML tags are strictly blocked in support requests."
+        title: "Disallowed content",
+        description: "Executable scripts and HTML tags are blocked in support requests.",
       })
       return
     }
@@ -109,7 +145,7 @@ export default function SupportPage() {
     try {
       const ticketsRef = collection(db, "supportTickets")
       const userEmail = user.email || ""
-      const userDisplayName = user.displayName || user.email?.split('@')[0] || "User"
+      const userDisplayName = user.displayName || user.email?.split("@")[0] || "User"
       const docRef = await addDoc(ticketsRef, {
         subject: cleanSubject,
         category: category.trim(),
@@ -118,45 +154,43 @@ export default function SupportPage() {
         userEmail,
         userDisplayName,
         submittedAt: serverTimestamp(),
-        status: "Open"
+        status: "Open",
       })
 
-      setTickets(prev => [
-        {
-          id: docRef.id,
-          subject: cleanSubject,
-          category: category.trim(),
-          description: cleanMessage,
-          ownerId: user.uid,
-          userEmail,
-          userDisplayName,
-          submittedAt: { seconds: Math.floor(Date.now() / 1000) },
-          status: "Open"
-        },
-        ...prev
-      ])
+      const newTicket: SupportTicket = {
+        id: docRef.id,
+        subject: cleanSubject,
+        category: category.trim(),
+        description: cleanMessage,
+        ownerId: user.uid,
+        userEmail,
+        userDisplayName,
+        submittedAt: { seconds: Math.floor(Date.now() / 1000) },
+        status: "Open",
+      }
+
+      setTickets((prev) => [newTicket, ...prev])
 
       toast({
-        title: "Ticket Created",
-        description: "Your support request has been registered securely. Our team will review it shortly."
+        title: "Ticket created",
+        description: "Your support request has been registered. Our team will review it shortly.",
       })
 
-      // Reset form fields
       setSubject("")
       setMessage("")
       setCategory("Technical Support")
     } catch (error: any) {
       const permissionError = new FirestorePermissionError({
-        path: 'supportTickets',
-        operation: 'create',
-        requestResourceData: { subject, category, message }
-      });
-      errorEmitter.emit('permission-error', permissionError);
-      
+        path: "supportTickets",
+        operation: "create",
+        requestResourceData: { subject, category, message },
+      })
+      errorEmitter.emit("permission-error", permissionError)
+
       toast({
         variant: "destructive",
-        title: "Submission Failed",
-        description: error.message || "Failed to submit your support ticket."
+        title: "Submission failed",
+        description: error.message || "Failed to submit your support ticket.",
       })
     } finally {
       setIsSubmitting(false)
@@ -169,177 +203,257 @@ export default function SupportPage() {
 
   return (
     <DashboardShell>
-      <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500">
-        
-        {/* RESPONSIVE HEADER BLOCK */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-5">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Contact Support</h1>
+      <div className="space-y-8 animate-in fade-in duration-300">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200 pb-5">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
+              Support
+            </h1>
+            <p className="text-sm text-slate-500">
+              Submit inquiries to Network Operations and review existing tickets.
+            </p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 bg-slate-50 px-3.5 py-2 border border-slate-200 rounded-full shadow-sm shrink-0 max-w-full overflow-hidden">
-            <Mail className="w-3.5 h-3.5 text-primary shrink-0" />
-            <span className="truncate">direct support email:</span>
-            <a href="mailto:hello@revlet.me" className="text-primary hover:underline font-bold truncate">hello@revlet.me</a>
+          <div className="flex items-center gap-2 text-xs text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shrink-0">
+            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="text-slate-500">Direct inquiries:</span>
+            <a
+              href="mailto:hello@revlet.me"
+              className="font-medium text-slate-900 hover:text-primary transition-colors"
+            >
+              hello@revlet.me
+            </a>
           </div>
         </div>
 
-        <div className="space-y-6">
-          {/* Ticket Submission Card */}
-          <Card className="w-full bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden">
-            <CardHeader className="border-b border-slate-100 px-4 sm:px-8 py-5">
-              <div className="flex items-center gap-2 text-primary">
-                <MessageSquare className="w-5 h-5" />
-                <CardTitle className="text-base font-headline font-semibold text-slate-900">Open a Support Ticket</CardTitle>
-              </div>
-              <CardDescription className="text-xs">Describe your issue in detail and our team will get back to you promptly.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-8 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                  <Label htmlFor="subject" className="text-xs font-medium text-slate-700 block">Ticket Subject *</Label>
-                  <Input 
-                    id="subject" 
-                    value={subject} 
-                    onChange={(e) => setSubject(e.target.value)} 
-                    placeholder="e.g. DNS Propagation Issue" 
-                    className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded-lg text-xs font-normal px-3"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="category" className="text-xs font-medium text-slate-700 block">Category *</Label>
-                  <Select 
-                    value={category} 
-                    onValueChange={(v) => setCategory(v)}
-                  >
-                    <SelectTrigger className="h-10 text-xs font-semibold border-[#c6c6cd] bg-white rounded-lg">
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Technical Support" className="text-xs">Technical Support</SelectItem>
-                      <SelectItem value="Billing & Payments" className="text-xs">Billing & Payments</SelectItem>
-                      <SelectItem value="DNS & Network" className="text-xs">DNS & Network</SelectItem>
-                      <SelectItem value="Bug Report" className="text-xs">Bug Report</SelectItem>
-                      <SelectItem value="General Inquiry" className="text-xs">General Inquiry</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              <div className="space-y-1.5">
-                <Label htmlFor="message" className="text-xs font-medium text-slate-700 block">Detailed Description *</Label>
-                <Textarea 
-                  id="message" 
-                  value={message} 
-                  onChange={(e) => setMessage(e.target.value)} 
-                  placeholder="Please provide specific details, including domain names and steps to reproduce any errors..." 
-                  className="min-h-[150px] border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded-lg text-xs font-normal p-3"
+        {/* Ticket Submission Card */}
+        <Card className="bg-white border-slate-200 shadow-none rounded-xl">
+          <CardHeader className="border-b border-slate-100 px-6 py-5">
+            <CardTitle className="text-base font-semibold text-slate-900">
+              Open a support ticket
+            </CardTitle>
+            <CardDescription className="text-xs text-slate-500">
+              Describe your issue in detail. Our team typically responds within 24 hours.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="subject" className="text-xs font-medium text-slate-700">
+                  Ticket subject
+                </Label>
+                <Input
+                  id="subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="e.g. DNS propagation delay"
+                  className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
                 />
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-slate-100">
-                <p className="text-[10px] text-slate-400 font-medium leading-none text-center sm:text-left">
-                  Managed by Revlet.
-                </p>
-                <Button 
-                  onClick={handleSubmitTicket} 
-                  disabled={isSubmitting} 
-                  className="bg-primary hover:bg-primary/95 text-white font-bold h-10 w-full sm:w-auto px-8 rounded-lg shadow-sm flex items-center justify-center gap-2 text-xs"
-                >
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Submit Ticket
-                </Button>
+              <div className="space-y-2">
+                <Label htmlFor="category" className="text-xs font-medium text-slate-700">
+                  Category
+                </Label>
+                <Select value={category} onValueChange={(v) => setCategory(v)}>
+                  <SelectTrigger className="h-10 text-sm font-normal border-slate-200 bg-white rounded-lg">
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-lg">
+                    <SelectItem value="Technical Support" className="text-xs">
+                      Technical support
+                    </SelectItem>
+                    <SelectItem value="Billing & Payments" className="text-xs">
+                      Billing & payments
+                    </SelectItem>
+                    <SelectItem value="DNS & Network" className="text-xs">
+                      DNS & network
+                    </SelectItem>
+                    <SelectItem value="Bug Report" className="text-xs">
+                      Bug report
+                    </SelectItem>
+                    <SelectItem value="General Inquiry" className="text-xs">
+                      General inquiry
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Support Tickets Associated with the Account */}
-        <Card className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden mt-8">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-200 px-4 sm:px-8 py-4 flex flex-row items-center justify-between gap-2">
-            <div className="space-y-0.5">
-              <CardTitle className="text-lg font-headline font-bold text-slate-900">Your Support Tickets</CardTitle>
-              <CardDescription className="text-xs">History and status of your help requests.</CardDescription>
             </div>
-            <Badge variant="outline" className="text-[10px] font-bold text-slate-400 bg-white px-2.5 py-0.5 h-5 rounded shrink-0">
-              {tickets.length} Tickets
+
+            <div className="space-y-2">
+              <Label htmlFor="message" className="text-xs font-medium text-slate-700">
+                Detailed description
+              </Label>
+              <Textarea
+                id="message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Include affected domain names, relevant record types, and steps to reproduce..."
+                className="min-h-[140px] text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg p-3 resize-y"
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-slate-100">
+              <p className="text-xs text-slate-400">
+                Response priority is based on account tier and ticket category.
+              </p>
+              <Button
+                onClick={handleSubmitTicket}
+                disabled={isSubmitting}
+                className="h-9 px-5 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+              >
+                {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {isSubmitting ? "Submitting..." : "Submit ticket"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tickets History Card */}
+        <Card className="bg-white border-slate-200 shadow-none rounded-xl">
+          <CardHeader className="border-b border-slate-100 px-6 py-4 flex flex-row items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <CardTitle className="text-base font-semibold text-slate-900">
+                Support tickets
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-500">
+                History and status of your submitted inquiries.
+              </CardDescription>
+            </div>
+            <Badge
+              variant="outline"
+              className="text-xs font-normal tabular-nums text-slate-600 bg-slate-50 border-slate-200 px-2 py-0.5 rounded"
+            >
+              {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"}
             </Badge>
           </CardHeader>
           <CardContent className="p-0 min-h-[180px]">
             {isLoadingTickets ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                <p className="text-xs font-medium text-slate-500">Loading help history...</p>
+                <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                <p className="text-xs text-slate-500">Loading support history...</p>
               </div>
             ) : tickets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center gap-2 px-4">
-                <MessageSquare className="w-10 h-10 text-slate-200" />
-                <p className="text-sm font-bold text-slate-400">No support tickets found.</p>
-                <p className="text-[10px] text-slate-400 max-w-xs leading-normal">Submit a ticket using the form above to reach our Network Ops desk.</p>
+              <div className="flex flex-col items-center justify-center py-16 text-center gap-1.5 px-4">
+                <p className="text-sm font-medium text-slate-700">No support tickets found</p>
+                <p className="text-xs text-slate-400 max-w-sm">
+                  Use the form above to reach the Revlet engineering and operations desk.
+                </p>
               </div>
             ) : (
               <>
-                {/* DESKTOP TABLE VIEW */}
+                {/* Desktop Table View */}
                 <div className="hidden md:block">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-slate-50/50 border-b border-slate-200">
-                        <TableHead className="text-xs font-medium py-3.5 pl-8 text-slate-500">Ticket ID</TableHead>
-                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Subject</TableHead>
-                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Category</TableHead>
-                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Date opened</TableHead>
-                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Status</TableHead>
+                      <TableRow className="border-b border-slate-100 bg-slate-50/50 hover:bg-slate-50/50">
+                        <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500 w-[160px]">
+                          Ticket ID
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-slate-500">
+                          Subject
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-slate-500 w-[180px]">
+                          Category
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-slate-500 w-[130px]">
+                          Date opened
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-slate-500 w-[140px]">
+                          Status
+                        </TableHead>
+                        <TableHead className="w-[40px] pr-6" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {tickets.map((t) => {
                         const isExpanded = expandedTicketId === t.id
+                        const statusConfig = getStatusBadge(t.status)
+                        const formattedDate =
+                          t.submittedAt?.toDate?.()?.toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          }) ||
+                          (t.submittedAt?.seconds
+                            ? new Date(t.submittedAt.seconds * 1000).toLocaleDateString(undefined, {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })
+                            : "—")
+
                         return (
                           <React.Fragment key={t.id}>
-                            <TableRow 
+                            <TableRow
                               className={cn(
-                                "hover:bg-[#F8FAFC] cursor-pointer transition-colors border-b border-slate-100 last:border-0",
-                                isExpanded && "bg-slate-50/50"
+                                "cursor-pointer transition-colors border-b border-slate-100 last:border-0 hover:bg-slate-50/80",
+                                isExpanded && "bg-slate-50/60"
                               )}
                               onClick={() => setExpandedTicketId(isExpanded ? null : t.id)}
                             >
-                              <TableCell className="font-bold text-slate-700 py-5 pl-8">
-                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                  <span className="text-xs font-mono">{t.id.substring(0, 8)}...</span>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-6 w-6 text-slate-300 hover:text-primary transition-colors"
+                              <TableCell className="py-3.5 pl-6 font-mono text-xs text-slate-600">
+                                <div
+                                  className="flex items-center gap-1.5"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <span>#{t.id.slice(0, 8)}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-slate-400 hover:text-slate-900 transition-colors"
                                     onClick={() => handleCopyId(t.id)}
+                                    title="Copy full ticket ID"
                                   >
-                                    {copiedId === t.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                    {copiedId === t.id ? (
+                                      <Check className="w-3 h-3 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
                                   </Button>
                                 </div>
                               </TableCell>
-                              <TableCell className="text-slate-900 text-xs font-semibold max-w-[250px] truncate">
-                                <span className="truncate">{t.subject}</span>
+                              <TableCell className="text-xs font-medium text-slate-900 max-w-[280px]">
+                                <span className="truncate block">{t.subject}</span>
                               </TableCell>
-                              <TableCell className="text-slate-600 text-xs font-semibold">{t.category}</TableCell>
-                              <TableCell className="text-slate-400 text-xs font-medium">
-                                {t.submittedAt?.toDate?.().toLocaleDateString() || 'N/A'}
+                              <TableCell className="text-xs text-slate-600">
+                                {t.category}
+                              </TableCell>
+                              <TableCell className="text-xs text-slate-500 tabular-nums">
+                                {formattedDate}
                               </TableCell>
                               <TableCell>
-                                <div className="flex items-center justify-between gap-2">
-                                  <Badge className={`text-xs px-2 py-0.5 h-6 font-medium shadow-none rounded border
-                                    ${t.status === "Resolved" || t.status === "Closed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
-                                      t.status === "In Progress" ? "bg-blue-50 text-blue-600 border-blue-100" : 
-                                      "bg-amber-50 text-amber-600 border-amber-100"}`}>
-                                    {t.status || "Open"}
-                                  </Badge>
-                                  <ChevronRight className={cn("w-3.5 h-3.5 text-slate-300 transition-transform duration-200", isExpanded && "rotate-90 text-primary")} />
-                                </div>
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border",
+                                    statusConfig.pill
+                                  )}
+                                >
+                                  <span
+                                    className={cn("w-1.5 h-1.5 rounded-full", statusConfig.dot)}
+                                  />
+                                  {statusConfig.label}
+                                </span>
+                              </TableCell>
+                              <TableCell className="pr-6 text-right">
+                                <ChevronRight
+                                  className={cn(
+                                    "w-4 h-4 text-slate-400 transition-transform duration-150 inline-block",
+                                    isExpanded && "rotate-90 text-slate-700"
+                                  )}
+                                />
                               </TableCell>
                             </TableRow>
                             {isExpanded && (
-                              <TableRow className="bg-slate-50/20 hover:bg-slate-50/20 border-b border-slate-100">
-                                <TableCell colSpan={5} className="pl-8 pr-8 py-4 bg-slate-50/20">
-                                  <div className="p-5 bg-white border border-slate-200 rounded-lg shadow-sm space-y-2">
-                                    <p className="text-xs font-medium text-slate-500 leading-none">Ticket description</p>
-                                    <p className="whitespace-pre-wrap font-medium text-slate-700 text-xs leading-relaxed">{t.description}</p>
+                              <TableRow className="border-b border-slate-100 bg-slate-50/40 hover:bg-slate-50/40">
+                                <TableCell colSpan={6} className="px-6 py-4">
+                                  <div className="p-4 bg-white border border-slate-200 rounded-lg space-y-1.5">
+                                    <p className="text-xs font-medium text-slate-500">
+                                      Ticket description
+                                    </p>
+                                    <p className="whitespace-pre-wrap text-xs text-slate-700 leading-relaxed">
+                                      {t.description}
+                                    </p>
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -351,79 +465,94 @@ export default function SupportPage() {
                   </Table>
                 </div>
 
-                {/* MOBILE RESPONSIVE CARD LIST VIEW */}
-                <div className="block md:hidden space-y-6 py-6 px-4">
+                {/* Mobile Card List View */}
+                <div className="block md:hidden divide-y divide-slate-100">
                   {tickets.map((t) => {
                     const isExpanded = expandedTicketId === t.id
+                    const statusConfig = getStatusBadge(t.status)
+                    const formattedDate =
+                      t.submittedAt?.toDate?.()?.toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      }) ||
+                      (t.submittedAt?.seconds
+                        ? new Date(t.submittedAt.seconds * 1000).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : "—")
+
                     return (
-                      <div 
+                      <div
                         key={t.id}
                         className={cn(
-                          "bg-white border rounded-xl p-6 relative overflow-hidden transition-all shadow-sm flex flex-col gap-4 cursor-pointer hover:border-slate-300",
-                          isExpanded ? "border-primary ring-2 ring-primary/5 shadow-primary/5" : "border-slate-200"
+                          "p-4 transition-colors cursor-pointer space-y-3",
+                          isExpanded ? "bg-slate-50/60" : "hover:bg-slate-50/40"
                         )}
                         onClick={() => setExpandedTicketId(isExpanded ? null : t.id)}
                       >
-                        {/* Left visual strip status color indicator */}
-                        <div 
-                          className={cn(
-                            "absolute left-0 top-0 bottom-0 w-[5px]",
-                            t.status === "Resolved" || t.status === "Closed" ? "bg-emerald-500" :
-                            t.status === "In Progress" ? "bg-blue-500" : "bg-amber-500"
-                          )}
-                        />
-
-                        {/* Top Row: Subject & Status badge */}
                         <div className="flex items-start justify-between gap-3">
-                          <span className="font-headline font-bold text-slate-800 text-sm leading-snug">{t.subject}</span>
-                          <Badge className={`text-xs px-2 py-0.5 h-6 font-medium shadow-none rounded border shrink-0
-                            ${t.status === "Resolved" || t.status === "Closed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
-                              t.status === "In Progress" ? "bg-blue-50 text-blue-600 border-blue-100" : 
-                              "bg-amber-50 text-amber-600 border-amber-100"}`}>
-                            {t.status || "Open"}
-                          </Badge>
+                          <h4 className="text-sm font-medium text-slate-900 leading-snug">
+                            {t.subject}
+                          </h4>
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border shrink-0",
+                              statusConfig.pill
+                            )}
+                          >
+                            <span
+                              className={cn("w-1.5 h-1.5 rounded-full", statusConfig.dot)}
+                            />
+                            {statusConfig.label}
+                          </span>
                         </div>
 
-                        {/* Middle metadata: Category & Date */}
-                        <div className="grid grid-cols-2 gap-3 text-slate-500 text-xs">
-                          <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                            <MessageSquare className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span className="truncate">{t.category}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 justify-end text-slate-400 font-medium">
-                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>{t.submittedAt?.toDate?.().toLocaleDateString() || 'N/A'}</span>
-                          </div>
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span>{t.category}</span>
+                          <span className="tabular-nums">{formattedDate}</span>
                         </div>
 
-                        {/* ID Block and View detail Toggle */}
-                        <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-1">
-                          <div className="flex items-center gap-1 font-mono text-[10px] text-slate-400" onClick={(e) => e.stopPropagation()}>
-                            <span className="font-medium text-xs text-slate-500 mr-0.5">ID:</span>
-                            <span>{t.id.substring(0, 8)}...</span>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 text-slate-350 hover:text-primary transition-colors shrink-0"
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                          <div
+                            className="flex items-center gap-1 font-mono text-slate-600"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span>#{t.id.slice(0, 8)}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-slate-400 hover:text-slate-900"
                               onClick={() => handleCopyId(t.id)}
                             >
-                              {copiedId === t.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === t.id ? (
+                                <Check className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
                             </Button>
                           </div>
-                          
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-primary">
-                            <span>{isExpanded ? "Hide details" : "View details"}</span>
-                            <ChevronRight className={cn("w-3.5 h-3.5 text-primary transition-transform duration-200 shrink-0", isExpanded && "rotate-90")} />
-                          </div>
+                          <span className="text-slate-500 flex items-center gap-1">
+                            {isExpanded ? "Hide details" : "View details"}
+                            <ChevronRight
+                              className={cn(
+                                "w-3.5 h-3.5 text-slate-400 transition-transform duration-150",
+                                isExpanded && "rotate-90 text-slate-700"
+                              )}
+                            />
+                          </span>
                         </div>
 
-                        {/* Collapsible ticket description overlay */}
                         {isExpanded && (
-                          <div className="pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200">
-                            <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl space-y-1.5 mt-1">
-                              <p className="text-xs font-medium text-slate-500 leading-none">Ticket description</p>
-                              <p className="whitespace-pre-wrap font-medium text-slate-700 text-xs leading-relaxed">{t.description}</p>
-                            </div>
+                          <div className="p-3 bg-white border border-slate-200 rounded-lg space-y-1 mt-2">
+                            <p className="text-xs font-medium text-slate-500">
+                              Ticket description
+                            </p>
+                            <p className="whitespace-pre-wrap text-xs text-slate-700 leading-relaxed">
+                              {t.description}
+                            </p>
                           </div>
                         )}
                       </div>

@@ -1,14 +1,12 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { UserPlus, MoreHorizontal, Building2, Loader2, Users as UsersIcon, Search, Trash2 } from "lucide-react"
+import { UserPlus, Building2, Loader2, Users, Trash2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -32,20 +30,19 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/hooks/use-toast"
 import { useUser, useFirestore, syncUserOrganizations } from "@/firebase"
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  addDoc, 
+import {
+  collection,
+  query,
+  where,
+  addDoc,
   updateDoc,
   deleteDoc,
   doc,
   serverTimestamp,
-  onSnapshot
+  onSnapshot,
 } from "firebase/firestore"
-import { errorEmitter } from '@/firebase/error-emitter'
-import { FirestorePermissionError } from '@/firebase/errors'
+import { errorEmitter } from "@/firebase/error-emitter"
+import { FirestorePermissionError } from "@/firebase/errors"
 
 interface Organization {
   id: string
@@ -64,22 +61,13 @@ function TeamTableSkeleton() {
   return (
     <div className="w-full divide-y divide-slate-100 animate-pulse bg-white">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="p-4 sm:p-6 md:py-5 md:px-8 space-y-3 md:space-y-0 md:flex md:items-center md:justify-between">
-          <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-slate-100 rounded-full" />
-              <div className="h-4 w-48 bg-slate-200 rounded" />
-            </div>
-            <div className="h-5 w-16 bg-slate-100 rounded md:hidden" />
+        <div key={i} className="py-4 px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-3.5 w-48 bg-slate-200 rounded" />
           </div>
-          <div className="flex items-center justify-between md:contents w-full md:w-auto pt-1 md:pt-0">
-            <div className="h-4 w-28 bg-slate-150 rounded hidden md:block" />
-            <div className="h-5 w-16 bg-slate-100 rounded hidden md:block" />
-            <div className="flex items-center gap-2 md:block">
-              <div className="h-3 w-12 bg-slate-100 rounded md:hidden" />
-              <div className="h-5 w-10 bg-slate-100 rounded-full" />
-            </div>
-          </div>
+          <div className="h-3.5 w-28 bg-slate-100 rounded hidden md:block" />
+          <div className="h-4 w-12 bg-slate-100 rounded hidden md:block" />
+          <div className="h-5 w-10 bg-slate-100 rounded-full" />
         </div>
       ))}
     </div>
@@ -96,44 +84,54 @@ export default function TeamManagementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null)
-  
-  // Form State
+
+  // Form state
   const [formData, setFormData] = useState({
     email: "",
-    organizationId: ""
+    organizationId: "",
   })
 
   useEffect(() => {
     if (authLoading || !user) return
 
-    // Fetch User Organizations for the selector (real-time)
     const orgsRef = collection(db, "organizations")
     const qOrgs = query(orgsRef, where("ownerId", "==", user.uid))
-    
-    const unsubscribeOrgs = onSnapshot(qOrgs, (orgsSnap) => {
-      setOrgs(orgsSnap.docs.map(doc => ({ id: doc.id, name: doc.data().name })) as Organization[])
-    }, (error) => {
-      console.error("Error listening to organizations:", error)
-    })
-    
-    // Fetch Team Members (real-time)
+
+    const unsubscribeOrgs = onSnapshot(
+      qOrgs,
+      (orgsSnap) => {
+        setOrgs(
+          orgsSnap.docs.map((d) => ({ id: d.id, name: d.data().name })) as Organization[]
+        )
+      },
+      (error) => {
+        console.error("Error listening to organizations:", error)
+      }
+    )
+
     const membersRef = collection(db, "teamMembers")
     const qMembers = query(membersRef, where("ownerId", "==", user.uid))
 
-    const unsubscribeMembers = onSnapshot(qMembers, (membersSnap) => {
-      setMembers(membersSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as TeamMember[])
-      setIsLoading(false)
-    }, (error) => {
-      const permissionError = new FirestorePermissionError({
-        path: 'teamMembers',
-        operation: 'list',
-      })
-      errorEmitter.emit('permission-error', permissionError)
-      setIsLoading(false)
-    })
+    const unsubscribeMembers = onSnapshot(
+      qMembers,
+      (membersSnap) => {
+        setMembers(
+          membersSnap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+          })) as TeamMember[]
+        )
+        setIsLoading(false)
+      },
+      () => {
+        const permissionError = new FirestorePermissionError({
+          path: "teamMembers",
+          operation: "list",
+        })
+        errorEmitter.emit("permission-error", permissionError)
+        setIsLoading(false)
+      }
+    )
 
     return () => {
       unsubscribeOrgs()
@@ -146,49 +144,47 @@ export default function TeamManagementPage() {
     if (!formData.email || !formData.organizationId) {
       toast({
         variant: "destructive",
-        title: "Missing Fields",
-        description: "All invitation fields are mandatory.",
+        title: "Missing information",
+        description: "Please enter a staff email and select an organization.",
       })
       return
     }
 
     setIsSubmitting(true)
     const membersRef = collection(db, "teamMembers")
-    const targetOrg = orgs.find(o => o.id === formData.organizationId)
-    
-    const targetOrgId = formData.organizationId;
-    const targetEmail = formData.email.toLowerCase().trim();
+    const targetOrgId = formData.organizationId
+    const targetEmail = formData.email.toLowerCase().trim()
 
-    addDoc(membersRef, {
-      email: targetEmail,
-      organizationId: formData.organizationId,
-      ownerId: user.uid,
-      status: "Active",
-      invitedAt: serverTimestamp()
-    }).then(async () => {
-      // Add email to organization memberEmails array
+    try {
+      await addDoc(membersRef, {
+        email: targetEmail,
+        organizationId: targetOrgId,
+        ownerId: user.uid,
+        status: "Active",
+        invitedAt: serverTimestamp(),
+      })
+
       try {
-        const { updateDoc, doc, arrayUnion } = await import("firebase/firestore")
-        const orgRef = doc(db, "organizations", targetOrgId)
-        await updateDoc(orgRef, {
-          memberEmails: arrayUnion(targetEmail)
+        const { updateDoc: updateDocSdk, doc: docSdk, arrayUnion } = await import("firebase/firestore")
+        const orgRef = docSdk(db, "organizations", targetOrgId)
+        await updateDocSdk(orgRef, {
+          memberEmails: arrayUnion(targetEmail),
         })
       } catch (e) {
         console.error("Error updating organization memberEmails on invite:", e)
       }
 
       toast({
-        title: "Invitation Sent",
-        description: `A secure access invite has been sent to ${targetEmail}.`,
+        title: "Invitation sent",
+        description: `Access invitation sent to ${targetEmail}.`,
       })
       setIsSubmitting(false)
       setIsDialogOpen(false)
 
-      // Reactive Sync: If the invited user has already registered, sync their user document instantly
       try {
-        const { getDocs, query, collection, where } = await import("firebase/firestore")
-        const usersRef = collection(db, "users")
-        const qUser = query(usersRef, where("email", "==", targetEmail))
+        const { getDocs, query: qQuery, collection: colRef, where: wWhere } = await import("firebase/firestore")
+        const usersRef = colRef(db, "users")
+        const qUser = qQuery(usersRef, wWhere("email", "==", targetEmail))
         const userSnap = await getDocs(qUser)
         if (!userSnap.empty) {
           const invitedUserDoc = userSnap.docs[0].data()
@@ -200,40 +196,39 @@ export default function TeamManagementPage() {
       }
 
       setFormData({ email: "", organizationId: "" })
-    }).catch(async (error) => {
+    } catch {
       const permissionError = new FirestorePermissionError({
-        path: 'teamMembers',
-        operation: 'create',
-        requestResourceData: formData
-      });
-      errorEmitter.emit('permission-error', permissionError);
+        path: "teamMembers",
+        operation: "create",
+        requestResourceData: formData,
+      })
+      errorEmitter.emit("permission-error", permissionError)
       setIsSubmitting(false)
-    })
+    }
   }
 
   const toggleStatus = async (member: TeamMember) => {
     const memberRef = doc(db, "teamMembers", member.id)
     const newStatus = member.status === "Active" ? "Inactive" : "Active"
-    
+
     try {
-      // Update team member status
       await updateDoc(memberRef, { status: newStatus })
 
-      // Update organization memberEmails array
       const { arrayUnion, arrayRemove } = await import("firebase/firestore")
       const orgRef = doc(db, "organizations", member.organizationId)
       await updateDoc(orgRef, {
-        memberEmails: newStatus === "Active"
-          ? arrayUnion(member.email.toLowerCase().trim())
-          : arrayRemove(member.email.toLowerCase().trim())
+        memberEmails:
+          newStatus === "Active"
+            ? arrayUnion(member.email.toLowerCase().trim())
+            : arrayRemove(member.email.toLowerCase().trim()),
       })
-    } catch (error: any) {
+    } catch {
       const permissionError = new FirestorePermissionError({
         path: memberRef.path,
-        operation: 'update',
-        requestResourceData: { status: newStatus }
-      });
-      errorEmitter.emit('permission-error', permissionError);
+        operation: "update",
+        requestResourceData: { status: newStatus },
+      })
+      errorEmitter.emit("permission-error", permissionError)
     }
   }
 
@@ -242,26 +237,24 @@ export default function TeamManagementPage() {
       const memberRef = doc(db, "teamMembers", member.id)
       await deleteDoc(memberRef)
 
-      // Remove email from organization memberEmails array
       const { arrayRemove } = await import("firebase/firestore")
       const orgRef = doc(db, "organizations", member.organizationId)
       await updateDoc(orgRef, {
-        memberEmails: arrayRemove(member.email.toLowerCase().trim())
+        memberEmails: arrayRemove(member.email.toLowerCase().trim()),
       })
 
-      // Update local state
-      setMembers(prev => prev.filter(m => m.id !== member.id))
+      setMembers((prev) => prev.filter((m) => m.id !== member.id))
 
       toast({
-        title: "Access Revoked",
+        title: "Access revoked",
         description: `${member.email} has been removed from the team.`,
       })
-    } catch (error: any) {
+    } catch {
       const permissionError = new FirestorePermissionError({
         path: `teamMembers/${member.id}`,
-        operation: 'delete'
-      });
-      errorEmitter.emit('permission-error', permissionError);
+        operation: "delete",
+      })
+      errorEmitter.emit("permission-error", permissionError)
     } finally {
       setMemberToDelete(null)
     }
@@ -270,9 +263,9 @@ export default function TeamManagementPage() {
   if (authLoading) {
     return (
       <DashboardShell>
-        <div className="flex flex-col items-center justify-center h-96 gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-xs font-medium text-slate-500">Securing member protocol...</p>
+        <div className="flex flex-col items-center justify-center h-96 gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-slate-400" strokeWidth={1.5} />
+          <p className="text-xs text-slate-500">Loading team members</p>
         </div>
       </DashboardShell>
     )
@@ -280,84 +273,113 @@ export default function TeamManagementPage() {
 
   return (
     <DashboardShell>
-      <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500">
-        <div className="flex flex-col gap-4 sm:gap-1">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">Team Management</h1>
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="w-full sm:w-auto font-bold gap-2 bg-primary hover:bg-primary/95 text-white px-6 rounded-lg h-10 shadow-md shadow-primary/10">
-                    <UserPlus className="w-4 h-4" />
-                    Invite Member
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md bg-white p-0 overflow-hidden border border-slate-200 rounded-lg">
-                  <DialogHeader className="border-b border-slate-100 bg-white p-6">
-                    <DialogTitle className="font-headline font-semibold text-lg text-slate-900">Invite Team Member</DialogTitle>
-                    <p className="text-slate-400 text-xs mt-1">Authorize administrative access for your staff.</p>
-                  </DialogHeader>
-                  <div className="p-6 space-y-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="member-email" className="text-xs font-medium text-slate-700 block">Staff Work Email</Label>
-                      <Input 
-                        id="member-email" 
-                        type="email" 
-                        placeholder="staff@organization.com" 
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs font-normal px-3"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="member-org" className="text-xs font-medium text-slate-700 block">Assign to Organization</Label>
-                      <Select 
-                        value={formData.organizationId} 
-                        onValueChange={(v) => setFormData({ ...formData, organizationId: v })}
-                      >
-                        <SelectTrigger id="member-org" className="h-10 text-xs font-semibold border-slate-200 bg-white rounded">
-                          <SelectValue placeholder="Select organization" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {orgs.map(org => (
-                            <SelectItem key={org.id} value={org.id} className="text-xs">{org.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-2">
-                    <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto rounded text-xs font-bold h-9">Cancel</Button>
-                    <Button onClick={handleInvite} disabled={isSubmitting} className="w-full sm:w-auto bg-primary hover:bg-primary/95 text-white font-bold h-9 px-6 rounded text-xs">
-                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Send Invitation"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
+      <div className="space-y-6 animate-in fade-in duration-300">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
+              Team management
+            </h1>
+            <p className="text-xs text-slate-500">
+              Authorize staff members to manage your registered organizations
+            </p>
           </div>
+
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs transition-colors shrink-0 shadow-none">
+                <UserPlus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
+                Invite member
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md bg-white p-0 overflow-hidden border border-slate-200 rounded-xl">
+              <DialogHeader className="border-b border-slate-100 p-6">
+                <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                  Invite team member
+                </DialogTitle>
+                <p className="text-slate-500 text-xs mt-1">
+                  Authorize administrative access for a staff member
+                </p>
+              </DialogHeader>
+              <div className="p-6 space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="member-email" className="text-xs font-medium text-slate-700">
+                    Work email address
+                  </Label>
+                  <Input
+                    id="member-email"
+                    type="email"
+                    placeholder="staff@example.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="h-9 text-xs border-slate-200 bg-white rounded-lg"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="member-org" className="text-xs font-medium text-slate-700">
+                    Assign to organization
+                  </Label>
+                  <Select
+                    value={formData.organizationId}
+                    onValueChange={(v) => setFormData({ ...formData, organizationId: v })}
+                  >
+                    <SelectTrigger
+                      id="member-org"
+                      className="h-9 text-xs border-slate-200 bg-white rounded-lg"
+                    >
+                      <SelectValue placeholder="Select organization" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200">
+                      {orgs.map((org) => (
+                        <SelectItem key={org.id} value={org.id} className="text-xs">
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
+                  className="rounded-lg text-xs font-medium h-9 px-4"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleInvite}
+                  disabled={isSubmitting || !formData.email || !formData.organizationId}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                  ) : (
+                    "Send invitation"
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-lg">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-200 flex flex-row items-center justify-between py-4 px-4 sm:px-8">
-            <CardTitle className="text-xs font-semibold text-slate-700">Active Access Directory</CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[9px] font-bold h-5 px-2 bg-white rounded">
-                {members.length} Members
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0 min-h-[300px]">
+        {/* Directory table container */}
+        <Card className="bg-white border border-slate-200/80 shadow-none overflow-hidden rounded-xl">
+          <CardContent className="p-0">
             {isLoading ? (
               <TeamTableSkeleton />
             ) : members.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-32 text-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center">
-                  <UsersIcon className="w-8 h-8 text-slate-100" />
+              <div className="py-20 text-center space-y-3 px-4 max-w-sm mx-auto">
+                <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center mx-auto text-slate-400">
+                  <Users className="w-5 h-5" strokeWidth={1.5} />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-sm font-bold text-slate-900">No team members invited</h3>
-                  <p className="text-xs text-slate-500 max-w-[200px]">Add staff members to help manage your organizations.</p>
+                  <h3 className="text-sm font-headline font-semibold text-slate-900">
+                    No team members invited
+                  </h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Invite staff members to help manage your registered organizations.
+                  </p>
                 </div>
               </div>
             ) : (
@@ -366,52 +388,68 @@ export default function TeamManagementPage() {
                 <div className="hidden md:block">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-slate-50/30 border-b border-slate-200">
-                        <TableHead className="text-xs font-medium py-3.5 pl-8 text-slate-500">Team Member</TableHead>
-                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Associated Organization</TableHead>
-                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Status</TableHead>
-                        <TableHead className="text-xs font-medium py-3.5 text-right pr-8 text-slate-500">Actions</TableHead>
+                      <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200/80">
+                        <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                          Team member
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-slate-500">
+                          Assigned organization
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-slate-500">
+                          Status
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                          Actions
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {members.map((member) => (
-                        <TableRow key={member.id} className="group hover:bg-[#F8FAFC] transition-colors border-b border-slate-100 last:border-0">
-                          <TableCell className="pl-8 py-5">
-                            <div className="flex items-center gap-4">
-                              <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center group-hover:bg-primary/5 transition-all font-headline font-bold text-xs text-slate-400 group-hover:text-primary">
-                                {member.email.substring(0, 1).toUpperCase()}
-                              </div>
-                              <span className="font-bold text-slate-800 text-sm">{member.email}</span>
-                            </div>
+                        <TableRow
+                          key={member.id}
+                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
+                        >
+                          <TableCell className="pl-6 py-3.5">
+                            <span className="text-xs font-mono text-slate-800">
+                              {member.email}
+                            </span>
                           </TableCell>
-                          <TableCell>
+
+                          <TableCell className="py-3.5">
                             <div className="flex items-center gap-2">
-                              <Building2 className="w-3.5 h-3.5 text-slate-300" />
-                              <span className="text-xs font-bold text-slate-600">
-                                {orgs.find(o => o.id === member.organizationId)?.name || "Unknown Institution"}
+                              <Building2 className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.5} />
+                              <span className="text-xs font-medium text-slate-700">
+                                {orgs.find((o) => o.id === member.organizationId)?.name ||
+                                  "Unknown institution"}
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <Badge className={`text-[9px] px-2 py-0.5 h-5 font-bold shadow-none rounded border transition-colors
-                              ${member.status === "Active" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-100"}`}>
+
+                          <TableCell className="py-3.5">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-600">
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  member.status === "Active" ? "bg-emerald-600" : "bg-slate-300"
+                                }`}
+                              />
                               {member.status}
-                            </Badge>
+                            </span>
                           </TableCell>
-                          <TableCell className="text-right pr-8">
-                            <div className="flex items-center justify-end gap-4">
-                              <Switch 
-                                checked={member.status === "Active"} 
+
+                          <TableCell className="text-right pr-6 py-3.5">
+                            <div className="flex items-center justify-end gap-3">
+                              <Switch
+                                checked={member.status === "Active"}
                                 onCheckedChange={() => toggleStatus(member)}
-                                className="scale-90" 
+                                className="scale-90"
                               />
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => setMemberToDelete(member)}
-                                className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg transition-colors"
                               >
-                                <Trash2 className="w-4.5 h-4.5" />
+                                <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                               </Button>
                             </div>
                           </TableCell>
@@ -424,43 +462,42 @@ export default function TeamManagementPage() {
                 {/* Mobile View */}
                 <div className="block md:hidden divide-y divide-slate-100">
                   {members.map((member) => (
-                    <div key={member.id} className="p-4 space-y-4 hover:bg-[#F8FAFC]/50 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-headline font-bold text-xs text-slate-500">
-                            {member.email.substring(0, 1).toUpperCase()}
-                          </div>
-                          <span className="font-bold text-slate-800 text-sm">{member.email}</span>
-                        </div>
-                        <Badge className={`text-[9px] px-2 py-0.5 h-5 font-bold shadow-none rounded border transition-colors
-                          ${member.status === "Active" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-100"}`}>
+                    <div key={member.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-xs font-mono text-slate-800 truncate">
+                          {member.email}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-600 shrink-0">
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              member.status === "Active" ? "bg-emerald-600" : "bg-slate-300"
+                            }`}
+                          />
                           {member.status}
-                        </Badge>
+                        </span>
                       </div>
 
-                      <div className="flex items-center justify-between pt-1">
-                        <div className="flex items-center gap-1.5 text-slate-600">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="text-xs font-semibold">
-                            {orgs.find(o => o.id === member.organizationId)?.name || "Unknown Institution"}
+                      <div className="flex items-center justify-between text-xs text-slate-600 pt-1">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" strokeWidth={1.5} />
+                          <span className="truncate">
+                            {orgs.find((o) => o.id === member.organizationId)?.name ||
+                              "Unknown institution"}
                           </span>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-slate-500 font-medium">Access</span>
-                            <Switch 
-                              checked={member.status === "Active"} 
-                              onCheckedChange={() => toggleStatus(member)}
-                              className="scale-90" 
-                            />
-                          </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <Switch
+                            checked={member.status === "Active"}
+                            onCheckedChange={() => toggleStatus(member)}
+                            className="scale-90"
+                          />
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => setMemberToDelete(member)}
-                            className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                           </Button>
                         </div>
                       </div>
@@ -472,21 +509,35 @@ export default function TeamManagementPage() {
           </CardContent>
         </Card>
 
-        <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
-          <AlertDialogContent className="bg-white border border-slate-200 rounded-lg p-6 max-w-md">
+        {/* Revoke confirmation dialog */}
+        <AlertDialog
+          open={!!memberToDelete}
+          onOpenChange={(open) => !open && setMemberToDelete(null)}
+        >
+          <AlertDialogContent className="bg-white border border-slate-200 rounded-xl p-6 max-w-md">
             <AlertDialogHeader className="space-y-2 text-left">
-              <AlertDialogTitle className="font-headline font-semibold text-lg text-[#191c1e]">Remove Team Member</AlertDialogTitle>
-              <AlertDialogDescription className="text-slate-500 text-xs leading-normal">
-                Are you sure you want to remove <strong>{memberToDelete?.email}</strong>? This will permanently revoke their access to the organization <strong>{orgs.find(o => o.id === memberToDelete?.organizationId)?.name || "Unknown Institution"}</strong>.
+              <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Revoke team member access
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-500 text-xs leading-relaxed">
+                Revoke administrative access for{" "}
+                <span className="font-mono text-slate-800">{memberToDelete?.email}</span> on{" "}
+                <span className="font-medium text-slate-800">
+                  {orgs.find((o) => o.id === memberToDelete?.organizationId)?.name ||
+                    "Unknown institution"}
+                </span>
+                ? They will immediately lose access to this organization.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter className="bg-slate-50 -mx-6 -mb-6 p-4 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-2 mt-6">
-              <AlertDialogCancel className="w-full sm:w-auto rounded text-xs font-bold h-9">Cancel</AlertDialogCancel>
-              <AlertDialogAction 
+            <AlertDialogFooter className="gap-2 pt-4">
+              <AlertDialogCancel className="h-9 px-4 text-xs font-medium rounded-lg">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
                 onClick={() => memberToDelete && handleDeleteMember(memberToDelete)}
-                className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold h-9 px-6 rounded text-xs"
+                className="h-9 px-4 text-xs font-medium bg-destructive hover:bg-destructive/90 text-white rounded-lg"
               >
-                Remove Member
+                Revoke access
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

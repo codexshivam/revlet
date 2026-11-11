@@ -440,7 +440,7 @@ async function callAwsSesV2Api(
 ): Promise<{ ok: boolean; status: number; data: any }> {
   const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || '').trim();
   const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || '').trim();
-  const region = (process.env.AWS_REGION || 'us-east-1').trim();
+  const region = (process.env.AWS_REGION || 'ap-southeast-2').trim();
 
   if (!accessKeyId || !secretAccessKey) {
     return { ok: false, status: 0, data: null };

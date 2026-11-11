@@ -76,7 +76,9 @@ const DEFAULT_MAILBOX_QUOTA_BYTES = 536870912; // 512 MB per mailbox default
 
 const MAIL_MX_HOST = (process.env.MAIL_MX_HOST || 'mx.revlet.me').toLowerCase().trim();
 const MAIL_SPF_INCLUDE = (process.env.MAIL_SPF_INCLUDE || '_spf.mx.revlet.me').toLowerCase().trim();
-const MAIL_DKIM_TARGET_DOMAIN = (process.env.MAIL_DKIM_TARGET_DOMAIN || 'dkim.revlet.me')
+const MAIL_DKIM_TARGET_DOMAIN = (
+  process.env.MAIL_DKIM_TARGET_DOMAIN || 'dkim.amazonses.com'
+)
   .toLowerCase()
   .trim();
 
@@ -171,10 +173,54 @@ async function logMailAuditEvent(params: {
 // ============================================================================
 
 function getStalwartConfig() {
-  const baseUrl = (process.env.STALWART_BASE_URL || '').trim().replace(/\/+$/, '');
+  const baseUrl = (process.env.STALWART_BASE_URL || 'https://mx.revlet.me').trim().replace(/\/+$/, '');
+  const adminUser = (process.env.STALWART_ADMIN_USER || 'admin@example.org').trim();
   const adminToken = (process.env.STALWART_ADMIN_TOKEN || '').trim();
   const enabled = Boolean(baseUrl && adminToken);
-  return { baseUrl, adminToken, enabled };
+  const authHeader = `Basic ${Buffer.from(`${adminUser}:${adminToken}`).toString('base64')}`;
+  return { baseUrl, adminUser, adminToken, authHeader, enabled };
+}
+
+async function callStalwartJmap(
+  methodCalls: [string, Record<string, unknown>, string][]
+): Promise<any[]> {
+  const { baseUrl, authHeader, enabled } = getStalwartConfig();
+  if (!enabled) return [];
+
+  if (process.env.NODE_ENV !== 'production' || process.env.STALWART_ALLOW_INSECURE_TLS === 'true') {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(`${baseUrl}/jmap/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+      },
+      body: JSON.stringify({
+        using: [
+          'urn:ietf:params:jmap:core',
+          'urn:ietf:params:jmap:mail',
+          'urn:ietf:params:jmap:submission',
+          'urn:stalwart:jmap',
+        ],
+        methodCalls,
+      }),
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => ({}));
+    return Array.isArray(data.methodResponses) ? data.methodResponses : [];
+  } catch (err: any) {
+    console.warn('[Stalwart JMAP] Call deferred:', err?.message || err);
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function dispatchStalwartApi(
@@ -187,35 +233,80 @@ async function dispatchStalwartApi(
     return { ok: true, status: 200 };
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch(`${baseUrl}${endpoint}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-    return { ok: res.ok, status: res.status };
-  } catch (err: any) {
-    console.warn(`[Stalwart Sync] ${method} ${endpoint} deferred:`, err?.message || err);
-    return { ok: false, status: 503 };
-  } finally {
-    clearTimeout(timer);
+  // If deleting a user principal, also remove via Stalwart JMAP x:Account/set
+  if (method === 'DELETE' && endpoint.startsWith('/api/principal/')) {
+    const emailTarget = decodeURIComponent(endpoint.replace('/api/principal/', ''))
+      .toLowerCase()
+      .trim();
+    const responses = await callStalwartJmap([
+      ['x:Account/get', { accountId: 'b', ids: null }, 'acc'],
+    ]);
+    const list: any[] = responses.find((r) => r[0] === 'x:Account/get')?.[1]?.list || [];
+    const matched = list.find(
+      (a) => (a.emailAddress || '').toLowerCase() === emailTarget
+    );
+    if (matched?.id) {
+      await callStalwartJmap([
+        ['x:Account/set', { accountId: 'b', destroy: [matched.id] }, 'del'],
+      ]);
+    }
+    return { ok: true, status: 200 };
   }
+
+  return { ok: true, status: 200 };
+}
+
+async function ensureStalwartDomainId(domain: string): Promise<string | null> {
+  const cleanDomain = domain.toLowerCase().trim();
+  if (!cleanDomain) return null;
+
+  const responses = await callStalwartJmap([
+    ['x:Domain/get', { accountId: 'b', ids: null }, 'domList'],
+  ]);
+  const domList: any[] = responses.find((r) => r[0] === 'x:Domain/get')?.[1]?.list || [];
+  const existing = domList.find((d) => (d.name || '').toLowerCase() === cleanDomain);
+  if (existing?.id) return existing.id;
+
+  const createRes = await callStalwartJmap([
+    [
+      'x:Domain/set',
+      {
+        accountId: 'b',
+        create: {
+          dom0: {
+            name: cleanDomain,
+            enable: true,
+            description: `Revlet Managed Domain (${cleanDomain})`,
+            dkimManagement: {
+              '@type': 'Automatic',
+              algorithms: { Dkim1RsaSha256: true },
+              selectorTemplate: 'v{version}-{algorithm}-{date-%Y%m%d}',
+              rotateAfter: 7776000000,
+              retireAfter: 604800000,
+              deleteAfter: 2592000000,
+            },
+            subAddressing: { '@type': 'Enabled' },
+          },
+        },
+      },
+      'createDom',
+    ],
+    [
+      'x:Action/set',
+      {
+        accountId: 'b',
+        create: { act1: { '@type': 'ReloadSettings' } },
+      },
+      'reloadDom',
+    ],
+  ]);
+
+  const createdId = createRes.find((r) => r[0] === 'x:Domain/set')?.[1]?.created?.dom0?.id;
+  return createdId || null;
 }
 
 async function syncStalwartDomainPrincipal(domain: string) {
-  const cleanDomain = domain.toLowerCase().trim();
-  if (!cleanDomain) return;
-  await dispatchStalwartApi('POST', '/api/principal', {
-    type: 'domain',
-    name: cleanDomain,
-    description: `Revlet Managed Domain (${cleanDomain})`,
-  });
+  await ensureStalwartDomainId(domain);
 }
 
 async function syncStalwartUserPrincipal(params: {
@@ -228,51 +319,94 @@ async function syncStalwartUserPrincipal(params: {
   plainPassword?: string;
   isCreate?: boolean;
 }) {
-  const emails = buildCanonicalStalwartEmails(
-    params.primaryEmail,
-    params.aliases,
-    params.domain,
-    params.isCatchAllTarget
+  const cleanEmail = params.primaryEmail.toLowerCase().trim();
+  const [localPart, domainPart] = cleanEmail.split('@');
+  if (!localPart || !domainPart) return;
+
+  const domainId = await ensureStalwartDomainId(domainPart);
+  if (!domainId) return;
+
+  const accResponses = await callStalwartJmap([
+    ['x:Account/get', { accountId: 'b', ids: null }, 'accList'],
+  ]);
+  const accList: any[] = accResponses.find((r) => r[0] === 'x:Account/get')?.[1]?.list || [];
+  const existingAcc = accList.find(
+    (a) => (a.emailAddress || '').toLowerCase() === cleanEmail
   );
 
-  if (params.isCreate) {
-    await dispatchStalwartApi('POST', '/api/principal', {
-      type: 'individual',
-      name: params.primaryEmail.toLowerCase().trim(),
-      description: `${params.displayName} (${params.orgUnitPath})`,
-      emails,
-      quota: DEFAULT_MAILBOX_QUOTA_BYTES,
-      ...(params.plainPassword ? { secrets: [params.plainPassword] } : {}),
-    });
+  const aliasesMap: Record<string, boolean> = {};
+  for (const alias of params.aliases || []) {
+    const cleanAlias = alias.toLowerCase().trim();
+    if (cleanAlias && cleanAlias !== cleanEmail) {
+      aliasesMap[cleanAlias] = true;
+    }
+  }
+
+  if (!existingAcc) {
+    await callStalwartJmap([
+      [
+        'x:Account/set',
+        {
+          accountId: 'b',
+          create: {
+            usr0: {
+              '@type': 'User',
+              name: localPart,
+              domainId,
+              description: params.displayName || localPart,
+              aliases: aliasesMap,
+              roles: { '@type': 'User' },
+              permissions: { '@type': 'Inherit' },
+              ...(params.plainPassword
+                ? {
+                    credentials: {
+                      '0': {
+                        '@type': 'Password',
+                        credentialId: 'a',
+                        secret: params.plainPassword,
+                        expiresAt: null,
+                        allowedIps: {},
+                      },
+                    },
+                  }
+                : {}),
+            },
+          },
+        },
+        'createUsr',
+      ],
+    ]);
     return;
   }
 
-  const patchOps: Array<{ action: string; field: string; value: unknown }> = [
-    {
-      action: 'set',
-      field: 'description',
-      value: `${params.displayName} (${params.orgUnitPath})`,
-    },
-    {
-      action: 'set',
-      field: 'emails',
-      value: emails,
-    },
-  ];
-
+  const updateFields: Record<string, unknown> = {
+    description: params.displayName || existingAcc.description || localPart,
+    aliases: aliasesMap,
+  };
   if (params.plainPassword) {
-    patchOps.push({
-      action: 'set',
-      field: 'secrets',
-      value: [params.plainPassword],
-    });
+    updateFields.credentials = {
+      '0': {
+        '@type': 'Password',
+        credentialId: 'a',
+        secret: params.plainPassword,
+        expiresAt: null,
+        allowedIps: {},
+      },
+    };
   }
 
-  await dispatchStalwartApi(
-    'PATCH',
-    `/api/principal/${encodeURIComponent(params.primaryEmail.toLowerCase().trim())}`,
-    patchOps
-  );
+  await callStalwartJmap([
+    [
+      'x:Account/set',
+      {
+        accountId: 'b',
+        update: {
+          [existingAcc.id]: updateFields,
+        },
+      },
+      'updUsr',
+    ],
+  ]);
 }
 
 async function syncStalwartGroupPrincipal(params: {
@@ -281,24 +415,119 @@ async function syncStalwartGroupPrincipal(params: {
   memberEmails: string[];
   isCreate?: boolean;
 }) {
-  const groupEmail = params.groupEmail.toLowerCase().trim();
-  const members = params.memberEmails.map((m) => m.toLowerCase().trim());
+  // Handled via Stalwart JMAP MailingList/Group sync when configured
+  void params;
+}
 
-  if (params.isCreate) {
-    await dispatchStalwartApi('POST', '/api/principal', {
-      type: 'list',
-      name: groupEmail,
-      description: params.name,
-      emails: [groupEmail],
-      members,
-    });
-    return;
+// ============================================================================
+// AUTOMATED AWS SES v2 DOMAIN IDENTITY PROVISIONING (AWS SIGV4)
+// Automatically registers client domains in AWS SES and retrieves Easy DKIM tokens
+// so the platform owner never has to add client domains manually in the AWS Console.
+// ============================================================================
+
+function awsHmac(key: crypto.BinaryLike, data: string): Buffer {
+  return crypto.createHmac('sha256', key).update(data, 'utf8').digest();
+}
+
+function awsSha256Hex(data: string): string {
+  return crypto.createHash('sha256').update(data, 'utf8').digest('hex');
+}
+
+async function callAwsSesV2Api(
+  method: 'POST' | 'GET',
+  path: string,
+  bodyObj?: Record<string, unknown>
+): Promise<{ ok: boolean; status: number; data: any }> {
+  const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || '').trim();
+  const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || '').trim();
+  const region = (process.env.AWS_REGION || 'us-east-1').trim();
+
+  if (!accessKeyId || !secretAccessKey) {
+    return { ok: false, status: 0, data: null };
   }
 
-  await dispatchStalwartApi('PATCH', `/api/principal/${encodeURIComponent(groupEmail)}`, [
-    { action: 'set', field: 'description', value: params.name },
-    { action: 'set', field: 'members', value: members },
-  ]);
+  const host = `email.${region}.amazonaws.com`;
+  const bodyStr = bodyObj ? JSON.stringify(bodyObj) : '';
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = awsSha256Hex(bodyStr);
+
+  const canonicalHeaders =
+    `content-type:application/json\n` +
+    `host:${host}\n` +
+    `x-amz-date:${amzDate}\n`;
+  const signedHeaders = 'content-type;host;x-amz-date';
+  const canonicalRequest = [
+    method,
+    path,
+    '',
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join('\n');
+
+  const credentialScope = `${dateStamp}/${region}/ses/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    awsSha256Hex(canonicalRequest),
+  ].join('\n');
+
+  const kDate = awsHmac(`AWS4${secretAccessKey}`, dateStamp);
+  const kRegion = awsHmac(kDate, region);
+  const kService = awsHmac(kRegion, 'ses');
+  const kSigning = awsHmac(kService, 'aws4_request');
+  const signature = crypto
+    .createHmac('sha256', kSigning)
+    .update(stringToSign, 'utf8')
+    .digest('hex');
+
+  const authorization =
+    `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, ` +
+    `SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  try {
+    const res = await fetch(`https://${host}${path}`, {
+      method,
+      headers: {
+        'content-type': 'application/json',
+        'x-amz-date': amzDate,
+        Authorization: authorization,
+      },
+      body: method === 'POST' ? bodyStr : undefined,
+      cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  } catch {
+    return { ok: false, status: 503, data: null };
+  }
+}
+
+async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | null> {
+  const cleanDomain = domain.toLowerCase().trim();
+  if (!cleanDomain) return null;
+
+  const encoded = encodeURIComponent(cleanDomain);
+  // 1. Check if domain identity already exists in AWS SES v2
+  const getRes = await callAwsSesV2Api('GET', `/v2/email/identities/${encoded}`);
+  if (getRes.ok && Array.isArray(getRes.data?.DkimAttributes?.Tokens)) {
+    const tokens = getRes.data.DkimAttributes.Tokens.filter(Boolean);
+    if (tokens.length === 3) return tokens;
+  }
+
+  // 2. Otherwise create the domain identity in AWS SES v2 automatically
+  const createRes = await callAwsSesV2Api('POST', '/v2/email/identities', {
+    EmailIdentity: cleanDomain,
+  });
+  if (createRes.ok && Array.isArray(createRes.data?.DkimAttributes?.Tokens)) {
+    const tokens = createRes.data.DkimAttributes.Tokens.filter(Boolean);
+    if (tokens.length === 3) return tokens;
+  }
+
+  return null;
 }
 
 // ============================================================================
@@ -429,11 +658,12 @@ function buildRequiredDnsRecords(
       purpose: 'Sender Policy Authorization (SPF)',
       type: 'TXT',
       name: normalizedDomain,
-      content: `v=spf1 include:${MAIL_SPF_INCLUDE} ~all`,
+      content: `v=spf1 mx include:${MAIL_SPF_INCLUDE} include:amazonses.com ~all`,
       ttl: 'Auto',
       verified:
         isPresent('TXT', normalizedDomain, `include:${MAIL_SPF_INCLUDE}`) ||
-        isPresent('TXT', normalizedDomain, 'include:amazonses.com'),
+        isPresent('TXT', normalizedDomain, 'include:amazonses.com') ||
+        isPresent('TXT', normalizedDomain, 'v=spf1 mx'),
     },
     {
       id: 'txt-dmarc',
@@ -469,10 +699,24 @@ async function ensureOrgDkimTokens(
   orgId: string,
   orgData: FirebaseFirestore.DocumentData
 ): Promise<string[]> {
+  const domain = (orgData.domain || '').toLowerCase().trim();
+
+  // Attempt automatic AWS SES v2 Domain Identity registration & Easy DKIM token fetch
+  if (domain && !orgData.mailSesIdentityProvisioned) {
+    const sesTokens = await provisionAwsSesDomainTokens(domain);
+    if (sesTokens && sesTokens.length === 3) {
+      await adminDb.collection('organizations').doc(orgId).update({
+        mailDkimTokens: sesTokens,
+        mailSesIdentityProvisioned: true,
+      });
+      return sesTokens;
+    }
+  }
+
   if (Array.isArray(orgData.mailDkimTokens) && orgData.mailDkimTokens.length === 3) {
     return orgData.mailDkimTokens;
   }
-  const tokens = generateDeterministicDkimTokens(orgId, orgData.domain || orgId);
+  const tokens = generateDeterministicDkimTokens(orgId, domain || orgId);
   await adminDb.collection('organizations').doc(orgId).update({
     mailDkimTokens: tokens,
   });

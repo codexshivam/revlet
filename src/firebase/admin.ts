@@ -61,3 +61,8 @@ if (!apps.length) {
 
 export const adminAuth = getAuth(app);
 export const adminDb = getFirestore(app, "itmanager");
+try {
+  adminDb.settings({ ignoreUndefinedProperties: true });
+} catch {
+  // Settings already frozen or initialized
+}

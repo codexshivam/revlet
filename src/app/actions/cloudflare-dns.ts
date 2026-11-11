@@ -52,15 +52,20 @@ export async function listDNSRecords(idToken: string, orgId: string, zoneId: str
 
     return {
       success: true,
-      data: allRecords.map((r: any) => ({
-        id: r.id,
-        type: r.type,
-        name: r.name,
-        content: r.content,
-        ttl: r.ttl === 1 ? 'Auto' : r.ttl.toString(),
-        proxied: r.proxied,
-        priority: r.priority,
-      }))
+      data: allRecords.map((r: any) => {
+        const item: any = {
+          id: r.id,
+          type: r.type,
+          name: r.name,
+          content: r.content,
+          ttl: r.ttl === 1 ? 'Auto' : r.ttl.toString(),
+          proxied: Boolean(r.proxied),
+        };
+        if (typeof r.priority === 'number' && !isNaN(r.priority)) {
+          item.priority = r.priority;
+        }
+        return item;
+      })
     };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to list domain settings' };
@@ -268,15 +273,7 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
     // Step 5: Automatically create an initial baseline snapshot
     try {
       const recordsRes = await cfFetch(`/zones/${matchedZone.id}/dns_records?per_page=100`, {}, cleanToken);
-      const initialRecords = (recordsRes.result || []).map((r: any) => ({
-        id: r.id,
-        type: r.type,
-        name: r.name,
-        content: r.content,
-        ttl: r.ttl === 1 ? 'Auto' : r.ttl.toString(),
-        proxied: r.proxied,
-        priority: r.priority
-      }));
+      const initialRecords = sanitizeDNSRecordsForFirestore(recordsRes.result || []);
 
       await orgRef.collection('dns_snapshots').add({
         createdAt: new Date().toISOString(),
@@ -371,6 +368,27 @@ export async function getCloudflareTokenAudit(idToken: string, orgId: string) {
 // =========================================================================
 
 /**
+ * Strips undefined properties and normalizes record types so Firestore never throws.
+ */
+function sanitizeDNSRecordsForFirestore(records: any[]) {
+  if (!Array.isArray(records)) return [];
+  return records.map((r: any) => {
+    const item: any = {
+      id: String(r.id || ''),
+      type: String(r.type || 'A'),
+      name: String(r.name || ''),
+      content: String(r.content || ''),
+      ttl: r.ttl === 1 ? 'Auto' : String(r.ttl ?? 'Auto'),
+      proxied: Boolean(r.proxied),
+    };
+    if (typeof r.priority === 'number' && !isNaN(r.priority)) {
+      item.priority = r.priority;
+    }
+    return item;
+  });
+}
+
+/**
  * Creates an exportable JSON snapshot of the current zone records.
  */
 export async function createZoneSnapshot(idToken: string, orgId: string, zoneId: string, reason: string = 'Manual snapshot') {
@@ -380,7 +398,7 @@ export async function createZoneSnapshot(idToken: string, orgId: string, zoneId:
     const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!recordsRes.success || !recordsRes.data) throw new Error(recordsRes.error || 'Failed to fetch DNS records');
 
-    const records = recordsRes.data;
+    const records = sanitizeDNSRecordsForFirestore(recordsRes.data);
     const createdAt = new Date().toISOString();
     const snapshotDoc = await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots').add({
       createdAt,
@@ -445,11 +463,12 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
     const currentRecords: any[] = currentRes.data || [];
 
     // 3. Pre-rollback safety backup of current state
+    const cleanCurrentRecords = sanitizeDNSRecordsForFirestore(currentRecords);
     await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots').add({
       createdAt: new Date().toISOString(),
       reason: `Pre-rollback backup before restoring snapshot (${snapData?.reason || snapshotId.slice(0, 6)})`,
-      recordCount: currentRecords.length,
-      records: currentRecords,
+      recordCount: cleanCurrentRecords.length,
+      records: cleanCurrentRecords,
       createdById: verified.uid
     });
 

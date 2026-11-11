@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, ArrowRight, Loader2, CheckCircle2, Building2, Globe, Phone, MapPin } from "lucide-react"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,7 +27,7 @@ export default function SignupPage() {
   const [userFormData, setUserFormData] = useState({
     name: "",
     email: "",
-    password: ""
+    password: "",
   })
 
   // Stored state for created auth credentials across steps
@@ -42,13 +42,12 @@ export default function SignupPage() {
     name: "",
     domain: "",
     phone: "",
-    address: ""
+    address: "",
   })
 
   // If user is already authenticated and visits /signup:
   useEffect(() => {
     if (!authLoading && user && step === 1 && !createdUserData) {
-      // Check if user already has an organization
       const checkExistingOrgs = async () => {
         try {
           if (!db) return
@@ -60,15 +59,14 @@ export default function SignupPage() {
           if (!snap.empty) {
             router.push("/account/home")
           } else {
-            // User exists but has no organization - guide them directly to Step 2
             setCreatedUserData({
               uid: user.uid,
               email: user.email || "",
-              displayName: user.displayName || ""
+              displayName: user.displayName || "",
             })
             setStep(2)
           }
-        } catch (e) {
+        } catch {
           router.push("/account/home")
         }
       }
@@ -76,15 +74,14 @@ export default function SignupPage() {
     }
   }, [user, authLoading, router, step, createdUserData, db])
 
-
   // Handle Step 1: Create User in Firebase Auth and Firestore
   const handleUserSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userFormData.name.trim() || !userFormData.email.trim() || !userFormData.password) {
       toast({
         variant: "destructive",
-        title: "Missing Information",
-        description: "Please complete all profile details to continue."
+        title: "Missing information",
+        description: "Please complete all profile fields to continue.",
       })
       return
     }
@@ -92,8 +89,8 @@ export default function SignupPage() {
     if (userFormData.password.length < 6) {
       toast({
         variant: "destructive",
-        title: "Weak Password",
-        description: "Password must be at least 6 characters long."
+        title: "Password too short",
+        description: "Password must be at least 6 characters long.",
       })
       return
     }
@@ -101,45 +98,47 @@ export default function SignupPage() {
     setIsLoading(true)
     try {
       const userCredential = await createUserWithEmailAndPassword(
-        auth, 
-        userFormData.email.trim(), 
+        auth,
+        userFormData.email.trim(),
         userFormData.password
       )
 
       await updateProfile(userCredential.user, {
-        displayName: userFormData.name.trim()
+        displayName: userFormData.name.trim(),
       })
 
-      // Create user document in Firestore /users/{userId}
       if (db) {
         const userRef = doc(db, "users", userCredential.user.uid)
-        await setDoc(userRef, {
-          uid: userCredential.user.uid,
-          email: userCredential.user.email || userFormData.email.trim(),
-          displayName: userFormData.name.trim(),
-          numOrganizations: 0,
-          organizations: [],
-          createdAt: serverTimestamp()
-        }, { merge: true })
+        await setDoc(
+          userRef,
+          {
+            uid: userCredential.user.uid,
+            email: userCredential.user.email || userFormData.email.trim(),
+            displayName: userFormData.name.trim(),
+            numOrganizations: 0,
+            organizations: [],
+            createdAt: serverTimestamp(),
+          },
+          { merge: true }
+        )
       }
 
       setCreatedUserData({
         uid: userCredential.user.uid,
         email: userCredential.user.email || userFormData.email.trim(),
-        displayName: userFormData.name.trim()
+        displayName: userFormData.name.trim(),
       })
 
       toast({
-        title: "Account Created",
-        description: "Your user profile is ready. Now let's set up your primary organization."
+        title: "Account created",
+        description: "Now let's configure your primary organization.",
       })
 
-      // Move to Step 2
       setStep(2)
     } catch (error: any) {
       let friendlyError = "Unable to register your account. Please try again."
       if (error.code === "auth/email-already-in-use") {
-        friendlyError = "This email address is already registered. Try signing in instead."
+        friendlyError = "This email is already registered. Try signing in instead."
       } else if (error.code === "auth/invalid-email") {
         friendlyError = "Please enter a valid email address."
       } else if (error.code === "auth/weak-password") {
@@ -148,8 +147,8 @@ export default function SignupPage() {
 
       toast({
         variant: "destructive",
-        title: "Registration Failed",
-        description: friendlyError
+        title: "Registration failed",
+        description: friendlyError,
       })
     } finally {
       setIsLoading(false)
@@ -160,17 +159,21 @@ export default function SignupPage() {
   const handleOrgCreation = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const activeUser = createdUserData || (user ? {
-      uid: user.uid,
-      email: user.email || "",
-      displayName: user.displayName || ""
-    } : null)
+    const activeUser =
+      createdUserData ||
+      (user
+        ? {
+            uid: user.uid,
+            email: user.email || "",
+            displayName: user.displayName || "",
+          }
+        : null)
 
     if (!activeUser) {
       toast({
         variant: "destructive",
-        title: "Session Expired",
-        description: "Please sign in again to complete organization setup."
+        title: "Session expired",
+        description: "Please sign in again to complete organization setup.",
       })
       router.push("/login")
       return
@@ -179,8 +182,8 @@ export default function SignupPage() {
     if (!orgFormData.name.trim()) {
       toast({
         variant: "destructive",
-        title: "Organization Name Required",
-        description: "Please enter your organization's legal or registered name."
+        title: "Organization name required",
+        description: "Please enter your organization's name.",
       })
       return
     }
@@ -190,12 +193,18 @@ export default function SignupPage() {
       if (!db) throw new Error("Database connection unavailable")
 
       const cleanName = orgFormData.name.trim()
-      const rawDomain = orgFormData.domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")
-      const codePrefix = cleanName.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, "REV")
+      const rawDomain = orgFormData.domain
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\//, "")
+        .replace(/\/.*$/, "")
+      const codePrefix = cleanName
+        .substring(0, 3)
+        .toUpperCase()
+        .replace(/[^A-Z]/g, "REV")
       const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase()
       const orgCode = `${codePrefix}-${uniqueSuffix}`
 
-      // Create organization in Firestore
       const orgsRef = collection(db, "organizations")
       const newOrgDoc = await addDoc(orgsRef, {
         name: cleanName,
@@ -212,33 +221,31 @@ export default function SignupPage() {
         ownerId: activeUser.uid,
         status: "Active",
         memberEmails: [activeUser.email.toLowerCase().trim()],
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
       })
 
-      // Sync user organizations document
       await syncUserOrganizations(
-        db, 
-        activeUser.uid, 
-        activeUser.email, 
+        db,
+        activeUser.uid,
+        activeUser.email,
         activeUser.displayName
       )
 
-      // Set active organization in browser local storage
       if (typeof window !== "undefined") {
         localStorage.setItem("revlet_active_org_id", newOrgDoc.id)
       }
 
       toast({
-        title: "Setup Complete",
-        description: `Welcome to Revlet! ${cleanName} is ready for management.`
+        title: "Organization ready",
+        description: `Welcome to Revlet. ${cleanName} is ready for management.`,
       })
 
       router.push("/account/home")
-    } catch (error: any) {
+    } catch {
       toast({
         variant: "destructive",
-        title: "Setup Failed",
-        description: "We could not register your organization. Please verify the information and try again."
+        title: "Setup failed",
+        description: "We could not register your organization. Please check details and try again.",
       })
     } finally {
       setIsLoading(false)
@@ -247,82 +254,71 @@ export default function SignupPage() {
 
   return (
     <AuthFrame>
-      <div className="w-full max-w-[460px] bg-white border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl p-6 sm:p-10 space-y-6 animate-in fade-in duration-300">
-        
+      <div className="w-full max-w-[400px] bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6 shadow-sm animate-in fade-in duration-300">
         {/* Step Indicator */}
-        <div className="flex items-center justify-between text-xs font-medium text-slate-500 border-b border-slate-100 pb-3">
-          <span className="flex items-center gap-1.5 text-slate-900">
-            <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-semibold">
-              {step}
-            </span>
-            {step === 1 ? "Step 1: Your Account" : "Step 2: Organization Setup"}
+        <div className="flex items-center justify-between text-xs text-slate-500 border-b border-slate-100 pb-3">
+          <span className="font-medium text-slate-900">
+            {step === 1 ? "1. Your account" : "2. Organization setup"}
           </span>
-          <span>Step {step} of 2</span>
+          <span className="tabular-nums">Step {step} of 2</span>
         </div>
 
         {/* STEP 1: USER ACCOUNT REGISTRATION */}
         {step === 1 && (
           <>
-            <div className="text-center space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-headline font-bold text-[#191c1e] tracking-tight">
-                Create Account
+            <div className="space-y-1 text-center sm:text-left">
+              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
+                Create an account
               </h1>
-              <p className="text-xs sm:text-sm text-[#45464d] font-normal leading-normal max-w-[320px] mx-auto">
-                Join our network of managed organizations.
+              <p className="text-xs text-slate-500">
+                Register as an administrator to manage your infrastructure.
               </p>
             </div>
 
             <form onSubmit={handleUserSignup} className="space-y-4">
               <div className="space-y-1.5">
-                <Label 
-                  htmlFor="name" 
-                  className="text-xs font-medium text-slate-700 block"
-                >
+                <Label htmlFor="name" className="text-xs font-medium text-slate-700">
                   Full name
                 </Label>
-                <Input 
-                  id="name" 
-                  placeholder="Alex Morgan" 
+                <Input
+                  id="name"
+                  placeholder="Alex Morgan"
                   required
-                  className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal px-3 placeholder-slate-400"
+                  autoComplete="name"
+                  className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
                   value={userFormData.name}
                   onChange={(e) => setUserFormData({ ...userFormData, name: e.target.value })}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label 
-                  htmlFor="email" 
-                  className="text-xs font-medium text-slate-700 block"
-                >
+                <Label htmlFor="email" className="text-xs font-medium text-slate-700">
                   Work email
                 </Label>
-                <Input 
-                  id="email" 
-                  type="email" 
-                  placeholder="admin@organization.com" 
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="admin@institution.edu"
                   required
-                  className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal px-3 placeholder-slate-400"
+                  autoComplete="email"
+                  className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
                   value={userFormData.email}
                   onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label 
-                  htmlFor="password" 
-                  className="text-xs font-medium text-slate-700 block"
-                >
+                <Label htmlFor="password" className="text-xs font-medium text-slate-700">
                   Password
                 </Label>
-                
                 <div className="relative">
-                  <Input 
-                    id="password" 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="••••••••••" 
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••••••"
                     required
-                    className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal pl-3 pr-10 placeholder-slate-300"
+                    autoComplete="new-password"
+                    className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg pr-10"
                     value={userFormData.password}
                     onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
                   />
@@ -337,56 +333,46 @@ export default function SignupPage() {
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full font-medium h-10 bg-primary hover:bg-primary/95 !text-white text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-sm flex items-center justify-center"
+              <Button
+                type="submit"
+                className="w-full h-10 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg mt-2 shadow-none flex items-center justify-center gap-2"
                 disabled={isLoading}
               >
-                {isLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <>
-                    Continue to Organization Setup
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+                {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {isLoading ? "Creating account..." : "Continue to organization setup"}
               </Button>
             </form>
 
-            <p className="text-[10px] text-[#45464d] text-center font-normal leading-normal px-2 tracking-wide pt-1">
-              By clicking &quot;Continue&quot;, you agree to our{" "}
-              <a 
-                href="https://revlet.me/terms/" 
-                target="_blank" 
+            <p className="text-xs text-slate-400 text-center leading-relaxed pt-1">
+              By continuing, you agree to our{" "}
+              <a
+                href="https://revlet.me/terms"
+                target="_blank"
                 rel="noopener noreferrer"
-                className="underline font-bold hover:text-[#191c1e] transition-colors"
+                className="text-slate-700 hover:underline"
               >
-                Terms of Service
+                terms of service
               </a>{" "}
               and{" "}
-              <a 
-                href="https://revlet.me/privacy/" 
-                target="_blank" 
+              <a
+                href="https://revlet.me/privacy"
+                target="_blank"
                 rel="noopener noreferrer"
-                className="underline font-bold hover:text-[#191c1e] transition-colors"
+                className="text-slate-700 hover:underline"
               >
-                Privacy Policy
+                privacy policy
               </a>
               .
             </p>
 
-            <div className="border-t border-[#eceef0] my-5 sm:my-6"></div>
-
-            <div className="text-center">
-              <p className="text-xs sm:text-sm text-[#45464d] font-normal">
-                Already have an account?{" "}
-                <Link 
-                  href="/login" 
-                  className="text-[#191c1e] font-bold hover:underline transition-colors"
-                >
-                  Sign in
-                </Link>
-              </p>
+            <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-500">
+              Already have an account?{" "}
+              <Link
+                href="/login"
+                className="text-slate-900 font-medium hover:underline transition-colors"
+              >
+                Sign in
+              </Link>
             </div>
           </>
         )}
@@ -394,113 +380,82 @@ export default function SignupPage() {
         {/* STEP 2: FIRST ORGANIZATION SETUP */}
         {step === 2 && (
           <>
-            <div className="text-center space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-headline font-bold text-[#191c1e] tracking-tight">
-                Create Organization
+            <div className="space-y-1 text-center sm:text-left">
+              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
+                Create organization
               </h1>
-              <p className="text-xs sm:text-sm text-[#45464d] font-normal leading-normal max-w-[340px] mx-auto">
+              <p className="text-xs text-slate-500">
                 Set up your primary organization to activate management tools and domain services.
               </p>
             </div>
 
             <form onSubmit={handleOrgCreation} className="space-y-4">
               <div className="space-y-1.5">
-                <Label 
-                  htmlFor="org-name" 
-                  className="text-xs font-medium text-slate-700 block"
-                >
+                <Label htmlFor="org-name" className="text-xs font-medium text-slate-700">
                   Organization name <span className="text-red-500">*</span>
                 </Label>
-                <div className="relative">
-                  <Input 
-                    id="org-name" 
-                    placeholder="Acme Corporation or Apex Academy" 
-                    required
-                    className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal pl-9 pr-3 placeholder-slate-400"
-                    value={orgFormData.name}
-                    onChange={(e) => setOrgFormData({ ...orgFormData, name: e.target.value })}
-                  />
-                  <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                </div>
+                <Input
+                  id="org-name"
+                  placeholder="Acme Academy or Apex Labs"
+                  required
+                  className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
+                  value={orgFormData.name}
+                  onChange={(e) => setOrgFormData({ ...orgFormData, name: e.target.value })}
+                />
               </div>
 
               <div className="space-y-1.5">
-                <Label 
-                  htmlFor="org-domain" 
-                  className="text-xs font-medium text-slate-700 block"
-                >
-                  Primary domain (Optional)
+                <Label htmlFor="org-domain" className="text-xs font-medium text-slate-700">
+                  Primary domain (optional)
                 </Label>
-                <div className="relative">
-                  <Input 
-                    id="org-domain" 
-                    placeholder="acme.com" 
-                    className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal pl-9 pr-3 placeholder-slate-400"
-                    value={orgFormData.domain}
-                    onChange={(e) => setOrgFormData({ ...orgFormData, domain: e.target.value })}
-                  />
-                  <Globe className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                </div>
+                <Input
+                  id="org-domain"
+                  placeholder="institution.edu"
+                  className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg font-mono"
+                  value={orgFormData.domain}
+                  onChange={(e) => setOrgFormData({ ...orgFormData, domain: e.target.value })}
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label 
-                    htmlFor="org-phone" 
-                    className="text-xs font-medium text-slate-700 block"
-                  >
-                    Phone (Optional)
+                  <Label htmlFor="org-phone" className="text-xs font-medium text-slate-700">
+                    Phone (optional)
                   </Label>
-                  <div className="relative">
-                    <Input 
-                      id="org-phone" 
-                      placeholder="+977 1 234567" 
-                      className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal pl-9 pr-3 placeholder-slate-400"
-                      value={orgFormData.phone}
-                      onChange={(e) => setOrgFormData({ ...orgFormData, phone: e.target.value })}
-                    />
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  </div>
+                  <Input
+                    id="org-phone"
+                    placeholder="+1 555 0100"
+                    className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
+                    value={orgFormData.phone}
+                    onChange={(e) => setOrgFormData({ ...orgFormData, phone: e.target.value })}
+                  />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label 
-                    htmlFor="org-address" 
-                    className="text-xs font-medium text-slate-700 block"
-                  >
-                    City / Address (Optional)
+                  <Label htmlFor="org-address" className="text-xs font-medium text-slate-700">
+                    City / address (optional)
                   </Label>
-                  <div className="relative">
-                    <Input 
-                      id="org-address" 
-                      placeholder="Kathmandu" 
-                      className="h-10 border-[#c6c6cd] focus-visible:ring-primary/20 bg-white rounded text-xs sm:text-sm font-normal pl-9 pr-3 placeholder-slate-400"
-                      value={orgFormData.address}
-                      onChange={(e) => setOrgFormData({ ...orgFormData, address: e.target.value })}
-                    />
-                    <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  </div>
+                  <Input
+                    id="org-address"
+                    placeholder="San Francisco, CA"
+                    className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
+                    value={orgFormData.address}
+                    onChange={(e) => setOrgFormData({ ...orgFormData, address: e.target.value })}
+                  />
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full font-medium h-10 bg-primary hover:bg-primary/95 !text-white text-white text-xs gap-2 rounded-lg mt-6 transition-all shadow-sm flex items-center justify-center"
+              <Button
+                type="submit"
+                className="w-full h-10 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg mt-2 shadow-none flex items-center justify-center gap-2"
                 disabled={isLoading}
               >
-                {isLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <>
-                    Complete Signup & Enter Dashboard
-                    <CheckCircle2 className="w-4 h-4" />
-                  </>
-                )}
+                {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {isLoading ? "Creating organization..." : "Complete setup"}
               </Button>
             </form>
           </>
         )}
-
       </div>
     </AuthFrame>
   )

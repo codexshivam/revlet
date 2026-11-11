@@ -1,14 +1,14 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Custom Email Routing',
-  description: 'Custom domain email forwarders and SPF, DKIM, DMARC security inspection.',
+  title: 'Email Service Admin Center',
+  description: 'Manage custom domain email accounts, aliases, organizational units, groups, and domain routing.',
   robots: {
     index: false,
     follow: false,
   },
 };
 
-export default function EmailLayout({ children }: { children: React.ReactNode }) {
+export default function EmailServiceLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

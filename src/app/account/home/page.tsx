@@ -32,6 +32,7 @@ import {
   ChevronRight,
   Star,
   Database,
+  Mail,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -102,6 +103,11 @@ interface Organization {
   ownerId: string
   status?: string
   isEducation?: boolean
+  mailServiceActive?: boolean
+  mailMonthlyLimit?: number
+  mailDailyLimit?: number
+  mailMonthlySent?: number
+  mailDailySent?: number
   workspaceStatus?: 'none' | 'applied' | 'pending' | 'active'
   createdAt: any
 }
@@ -548,6 +554,7 @@ export default function AccountHomePage() {
                       <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200">
                         <TableHead className="text-xs font-medium py-3.5 pl-8 text-slate-500">Organization</TableHead>
                         <TableHead className="text-xs font-medium py-3.5 text-slate-500">Managed domain</TableHead>
+                        <TableHead className="text-xs font-medium py-3.5 text-slate-500">Email quota</TableHead>
                         <TableHead className="text-xs font-medium py-3.5 text-right pr-8 text-slate-500">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -586,6 +593,23 @@ export default function AccountHomePage() {
                               <Globe className="w-3.5 h-3.5 text-slate-300" />
                               <span className="text-xs font-semibold text-slate-600">{org.domain}</span>
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {org.mailServiceActive ? (
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Mail className="w-3.5 h-3.5 text-primary shrink-0" />
+                                  <span className="text-xs font-semibold text-slate-700">
+                                    {(org.mailMonthlySent ?? 0).toLocaleString()} / {(org.mailMonthlyLimit ?? 1000).toLocaleString()} emails/mo
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-slate-500 pl-5">
+                                  {(org.mailDailySent ?? 0).toLocaleString()} / {(org.mailDailyLimit ?? 100).toLocaleString()} emails/day
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right pr-8">
                             {org.ownerId === user?.uid ? (
@@ -672,6 +696,23 @@ export default function AccountHomePage() {
                         <Globe className="w-4 h-4 text-slate-400 shrink-0" />
                         <span className="font-semibold truncate">{org.domain}</span>
                       </div>
+
+                      {org.mailServiceActive && (
+                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                          <div className="flex items-center gap-2 text-slate-700 font-semibold">
+                            <Mail className="w-4 h-4 text-primary shrink-0" />
+                            <span>Email Quota</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-semibold text-slate-700">
+                              {(org.mailMonthlySent ?? 0).toLocaleString()} / {(org.mailMonthlyLimit ?? 1000).toLocaleString()} mo
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              {(org.mailDailySent ?? 0).toLocaleString()} / {(org.mailDailyLimit ?? 100).toLocaleString()} day
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

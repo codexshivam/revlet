@@ -26,6 +26,13 @@ export interface Organization {
   cloudflareTokenExpiresOn?: string | null
   cloudflareTokenScopedZone?: string
   emailServiceActive?: boolean
+  mailServiceActive?: boolean
+  mailMonthlyLimit?: number
+  mailDailyLimit?: number
+  mailMonthlySent?: number
+  mailDailySent?: number
+  mailCatchAllUserId?: string | null
+  mailCatchAllEmail?: string | null
   isEducation?: boolean
   // Google Workspace fields
   workspaceStatus?: 'none' | 'applied' | 'pending' | 'active'

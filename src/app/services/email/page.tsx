@@ -1,26 +1,32 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
-import { useUser } from "@/firebase"
-import Link from "next/link"
-import { useActiveOrg } from "@/hooks/use-active-org"
-import { Skeleton } from "@/components/ui/skeleton"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,423 +35,1096 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  Plus,
-  Trash2,
-  ShieldCheck,
-  Loader2,
-  Globe,
-  AlertCircle,
-  CheckCircle2,
-  Lock,
-  ArrowRightLeft,
-  ShieldAlert,
-  Mail,
-  Send,
-  ArrowRight,
-  Sparkles,
-  MailOpen,
-  Zap,
-  Search,
-  MoreVertical,
-} from "lucide-react"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
-  getEmailRoutingStatus,
-  activateEmailRouting,
-  listEmailRules,
-  createEmailRule,
-  deleteEmailRule,
-  syncEmailServiceState,
-} from "@/app/actions/cloudflare-email"
-import { 
-  listDNSRecords,
-  autoConfigureEmailDNS,
-  disableEmailRouting,
-  removeEmailRoutingDNS
-} from "@/app/actions/cloudflare-dns"
+  Mail,
+  Users,
+  FolderTree,
+  ShieldAlert,
+  Settings,
+  Plus,
+  MoreVertical,
+  Search,
+  KeyRound,
+  UserPen,
+  AtSign,
+  Ban,
+  Trash2,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  Copy,
+  Check,
+  Building2,
+  UserPlus,
+  UsersRound,
+  Sparkles,
+  Clock,
+  X,
+  Edit2,
+} from "lucide-react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { toast } from "@/hooks/use-toast"
+import { useUser } from "@/firebase"
+import { useActiveOrg } from "@/hooks/use-active-org"
+import { cn } from "@/lib/utils"
+import {
+  getMailServiceState,
+  activateMailService,
+  deactivateMailService,
+  syncMailDnsRecords,
+  updateMailCatchAll,
+  listMailOrgUnits,
+  createMailOrgUnit,
+  deleteMailOrgUnit,
+  listMailUsers,
+  createMailUser,
+  updateMailUserAccount,
+  resetMailUserPassword,
+  manageMailUserAlias,
+  toggleMailUserSuspend,
+  deleteMailUserAccount,
+  recoverMailUserAccount,
+  listMailGroups,
+  createMailGroup,
+  updateMailGroup,
+  deleteMailGroup,
+  type MailRequiredDnsRecord,
+  type MailOrgUnit,
+  type MailUserRecord,
+  type MailGroupRecord,
+} from "@/app/actions/revlet-mail"
 
-type EmailRule = {
-  id: string
-  alias: string
-  destination: string
-  verified: boolean
-  enabled: boolean
+function getDaysRemaining(recoverableUntil: string | null): number {
+  if (!recoverableUntil) return 14
+  const diff = new Date(recoverableUntil).getTime() - Date.now()
+  return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)))
 }
 
-function EmailRulesSkeleton() {
-  return (
-    <div className="w-full divide-y divide-slate-100  bg-white">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex items-center gap-6 py-5 px-6">
-          {/* Email Mail Icon skeleton */}
-          <div className="h-5 w-5 rounded bg-slate-100 shrink-0" />
-          
-          {/* Professional Custom Email skeleton */}
-          <div className="h-4 w-48 bg-slate-200 rounded shrink-0" />
-          
-          {/* Flow Arrow skeleton */}
-          <div className="h-4 w-8 bg-slate-100 rounded hidden md:block shrink-0" />
-          
-          {/* Destination Email Target skeleton */}
-          <div className="flex-1 min-w-0">
-            <div className="h-4 w-[50%] bg-slate-150 rounded" />
-          </div>
-          
-          {/* Actions skeleton */}
-          <div className="h-8 w-8 bg-slate-100 rounded-md shrink-0" />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export default function EmailRoutingPage() {
-  const { toast } = useToast()
-  const { user } = useUser()
+export default function EmailServiceAdminPage() {
+  const { user, loading: authLoading } = useUser()
   const { orgs, activeOrg: selectedOrg, activeOrgId: selectedOrgId, loading: isLoadingOrgs } = useActiveOrg()
 
-  const [emailServiceActive, setEmailServiceActive] = useState(false)
-  const [isCheckingStatus, setIsCheckingStatus] = useState(true)
-  const [rules, setRules] = useState<EmailRule[]>([])
-  const [isLoadingRules, setIsLoadingRules] = useState(false)
+  // Core service state
+  const [isLoadingState, setIsLoadingState] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [isActivating, setIsActivating] = useState(false)
-  const [isActivateDialogOpen, setIsActivateDialogOpen] = useState(false)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
-  const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [aliasPrefix, setAliasPrefix] = useState("")
-  const [destinationEmail, setDestinationEmail] = useState("")
-  const [formErrors, setFormErrors] = useState<{ alias?: string; destination?: string }>({})
+  const [isDeactivating, setIsDeactivating] = useState(false)
+  const [isSyncingDns, setIsSyncingDns] = useState(false)
 
-  const [searchTerm, setSearchTerm] = useState("")
-  const [currentPage, setCurrentPage] = useState(1)
-  const [dnsRecords, setDnsRecords] = useState<any[]>([])
+  const [serviceActive, setServiceActive] = useState(false)
+  const [dnsServiceActive, setDnsServiceActive] = useState(false)
+  const [monthlyOutboundLimit, setMonthlyOutboundLimit] = useState(1000)
+  const [dailyOutboundLimit, setDailyOutboundLimit] = useState(100)
+  const [monthlySentCount, setMonthlySentCount] = useState(0)
+  const [dailySentCount, setDailySentCount] = useState(0)
+  const [catchAllUserId, setCatchAllUserId] = useState<string | null>(null)
+  const [catchAllEmail, setCatchAllEmail] = useState<string | null>(null)
+  const [requiredDnsRecords, setRequiredDnsRecords] = useState<MailRequiredDnsRecord[]>([])
 
-  const zoneId = selectedOrg?.cloudflareZoneId
-  const verifiedRules = rules.filter(r => r.verified)
+  // Directory collections
+  const [orgUnits, setOrgUnits] = useState<MailOrgUnit[]>([])
+  const [users, setUsers] = useState<MailUserRecord[]>([])
+  const [groups, setGroups] = useState<MailGroupRecord[]>([])
 
-  const filteredRules = verifiedRules.filter(
-    (rule) =>
-      rule.alias.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.destination.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Active tab & filters
+  const [activeTab, setActiveTab] = useState("users")
+  const [selectedUserOu, setSelectedUserOu] = useState<string>("ALL")
+  const [userSearchQuery, setUserSearchQuery] = useState("")
+  const [selectedGroupOu, setSelectedGroupOu] = useState<string>("ALL")
+  const [groupSearchQuery, setGroupSearchQuery] = useState("")
+  const [suspendedSearchQuery, setSuspendedSearchQuery] = useState("")
 
-  const itemsPerPage = 10
-  const totalPages = Math.ceil(filteredRules.length / itemsPerPage)
-  const activePage = Math.min(currentPage, Math.max(1, totalPages))
-  const paginatedRules = filteredRules.slice(
-    (activePage - 1) * itemsPerPage,
-    activePage * itemsPerPage
-  )
+  // Copy helper state
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
-  // Dynamic live validation of SPF record
-  const spfRecord = dnsRecords.find(
-    (r) =>
-      r.type === "TXT" &&
-      (r.name === selectedOrg?.domain || r.name === "@" || r.name === "") &&
-      r.content.includes("v=spf1") &&
-      r.content.includes("include:_spf.mx.cloudflare.net")
-  )
-  const isSpfValid = !!spfRecord
+  // --- DIALOG STATES ---
+  // 1. Organizational Units Modal
+  const [isOuModalOpen, setIsOuModalOpen] = useState(false)
+  const [newOuName, setNewOuName] = useState("")
+  const [newOuDescription, setNewOuDescription] = useState("")
+  const [isSavingOu, setIsSavingOu] = useState(false)
 
-  // Dynamic live validation of DMARC record
-  const dmarcRecord = dnsRecords.find(
-    (r) =>
-      r.type === "TXT" &&
-      (r.name === `_dmarc.${selectedOrg?.domain}` || r.name === "_dmarc" || r.name.startsWith("_dmarc")) &&
-      r.content.includes("v=DMARC1")
-  )
-  const isDmarcValid = !!dmarcRecord
+  // 2. Create User Modal
+  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false)
+  const [createUserForm, setCreateUserForm] = useState({
+    firstName: "",
+    lastName: "",
+    emailPrefix: "",
+    password: "",
+    orgUnitPath: "/",
+  })
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
 
-  // Dynamic live validation of MX Routing records
-  const mxRecords = dnsRecords.filter(
-    (r) =>
-      r.type === "MX" &&
-      (r.name === selectedOrg?.domain || r.name === "@" || r.name === "") &&
-      r.content.includes("mx.cloudflare.net")
-  )
-  const isMxValid = mxRecords.length > 0
+  // 3. Update User Account Name / OU Modal
+  const [editingUser, setEditingUser] = useState<MailUserRecord | null>(null)
+  const [editUserForm, setEditUserForm] = useState({
+    firstName: "",
+    lastName: "",
+    orgUnitPath: "/",
+  })
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false)
 
-  // Check email service status on mount / org change
+  // 4. Reset Password Modal
+  const [passwordTargetUser, setPasswordTargetUser] = useState<MailUserRecord | null>(null)
+  const [newPasswordValue, setNewPasswordValue] = useState("")
+  const [isResettingPassword, setIsResettingPassword] = useState(false)
+
+  // 5. Manage User Aliases Modal (Add / Update / Remove)
+  const [aliasTargetUser, setAliasTargetUser] = useState<MailUserRecord | null>(null)
+  const [newAliasPrefix, setNewAliasPrefix] = useState("")
+  const [editingAliasOriginal, setEditingAliasOriginal] = useState<string | null>(null)
+  const [editingAliasPrefix, setEditingAliasPrefix] = useState("")
+  const [isMutatingAlias, setIsMutatingAlias] = useState(false)
+
+  // 6. Confirm Delete User Modal (14-day recovery)
+  const [deletingUser, setDeletingUser] = useState<MailUserRecord | null>(null)
+  const [isDeletingUser, setIsDeletingUser] = useState(false)
+
+  // 7. Create Group Modal
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false)
+  const [createGroupForm, setCreateGroupForm] = useState({
+    name: "",
+    emailPrefix: "",
+    orgUnitPath: "/",
+    memberEmails: [] as string[],
+  })
+  const [newGroupMemberInput, setNewGroupMemberInput] = useState("")
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false)
+
+  // 8. Update Group Name / OU Modal
+  const [editingGroup, setEditingGroup] = useState<MailGroupRecord | null>(null)
+  const [editGroupForm, setEditGroupForm] = useState({
+    name: "",
+    orgUnitPath: "/",
+  })
+  const [isUpdatingGroup, setIsUpdatingGroup] = useState(false)
+
+  // 9. Manage Group Members Modal
+  const [membersTargetGroup, setMembersTargetGroup] = useState<MailGroupRecord | null>(null)
+  const [groupMemberInput, setGroupMemberInput] = useState("")
+  const [isUpdatingGroupMembers, setIsUpdatingGroupMembers] = useState(false)
+
+  // 10. Confirm Delete Group Modal
+  const [deletingGroup, setDeletingGroup] = useState<MailGroupRecord | null>(null)
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false)
+
+  // 11. Catch-All Saving state
+  const [isUpdatingCatchAll, setIsUpdatingCatchAll] = useState(false)
+
+  // 12. Confirm Deactivate Service Modal
+  const [isDeactivateConfirmOpen, setIsDeactivateConfirmOpen] = useState(false)
+
+  // Ensure body pointer-events is never stuck after closing dropdowns + dialogs
   useEffect(() => {
-    let isMounted = true
-    const checkEmailStatus = async () => {
-      if (!selectedOrg) {
-        if (isMounted) setIsCheckingStatus(false)
+    const anyOpen =
+      isOuModalOpen ||
+      isCreateUserOpen ||
+      Boolean(editingUser) ||
+      Boolean(passwordTargetUser) ||
+      Boolean(aliasTargetUser) ||
+      Boolean(deletingUser) ||
+      isCreateGroupOpen ||
+      Boolean(editingGroup) ||
+      Boolean(membersTargetGroup) ||
+      Boolean(deletingGroup) ||
+      isDeactivateConfirmOpen
+    if (!anyOpen && typeof document !== "undefined") {
+      document.body.style.pointerEvents = ""
+    }
+  }, [
+    isOuModalOpen,
+    isCreateUserOpen,
+    editingUser,
+    passwordTargetUser,
+    aliasTargetUser,
+    deletingUser,
+    isCreateGroupOpen,
+    editingGroup,
+    membersTargetGroup,
+    deletingGroup,
+    isDeactivateConfirmOpen,
+  ])
+
+  const loadAllMailData = useCallback(
+    async (silent = false) => {
+      if (!user || !selectedOrgId) {
+        setIsLoadingState(false)
         return
       }
-      setIsCheckingStatus(true)
+      if (!silent) setIsLoadingState(true)
+      else setIsRefreshing(true)
+
       try {
-        // 1. Check org doc
-        if (selectedOrg.emailServiceActive) {
-          if (isMounted) setEmailServiceActive(true)
-        } else if (zoneId && user) {
-          // 2. Query live Cloudflare status without permission-sensitive Firestore lookups
-          try {
-            const idToken = await user.getIdToken()
-            const stRes = await getEmailRoutingStatus(idToken, selectedOrg.id, zoneId)
-            if (stRes.success && stRes.data?.enabled) {
-              if (isMounted) setEmailServiceActive(true)
-              await syncEmailServiceState(idToken, selectedOrg.id, true)
-            } else {
-              if (isMounted) setEmailServiceActive(false)
-            }
-          } catch {
-            if (isMounted) setEmailServiceActive(false)
-          }
-        } else {
-          if (isMounted) setEmailServiceActive(false)
+        const idToken = await user.getIdToken()
+        const [stateRes, ousRes, usersRes, groupsRes] = await Promise.all([
+          getMailServiceState(idToken, selectedOrgId),
+          listMailOrgUnits(idToken, selectedOrgId),
+          listMailUsers(idToken, selectedOrgId),
+          listMailGroups(idToken, selectedOrgId),
+        ])
+
+        if (stateRes.success && stateRes.data) {
+          setServiceActive(stateRes.data.mailServiceActive)
+          setDnsServiceActive(stateRes.data.dnsServiceActive)
+          setMonthlyOutboundLimit(stateRes.data.monthlyOutboundLimit)
+          setDailyOutboundLimit(stateRes.data.dailyOutboundLimit)
+          setMonthlySentCount(stateRes.data.monthlySentCount)
+          setDailySentCount(stateRes.data.dailySentCount)
+          setCatchAllUserId(stateRes.data.catchAllUserId)
+          setCatchAllEmail(stateRes.data.catchAllEmail)
+          setRequiredDnsRecords(stateRes.data.requiredDnsRecords)
         }
-      } catch (error) {
-        console.error("Error checking email status:", error)
-        if (isMounted) setEmailServiceActive(false)
+
+        if (ousRes.success && ousRes.data) {
+          setOrgUnits(ousRes.data)
+        }
+        if (usersRes.success && usersRes.data) {
+          setUsers(usersRes.data)
+        }
+        if (groupsRes.success && groupsRes.data) {
+          setGroups(groupsRes.data)
+        }
+      } catch (err: any) {
+        toast({
+          variant: "destructive",
+          title: "Failed to load Email Service",
+          description: err.message || "Could not retrieve organization mail configuration.",
+        })
       } finally {
-        if (isMounted) setIsCheckingStatus(false)
+        setIsLoadingState(false)
+        setIsRefreshing(false)
       }
-    }
-    checkEmailStatus()
-    return () => { isMounted = false }
-  }, [selectedOrg, zoneId, user])
-
-  // Fetch email rules and query DNS records for live security verification
-  const fetchEmailRules = useCallback(async () => {
-    if (!zoneId || !selectedOrg?.id || !user) return
-    setIsLoadingRules(true)
-    try {
-      const idToken = await user.getIdToken()
-      const orgId = selectedOrg.id
-      const res = await listEmailRules(idToken, orgId, zoneId)
-      if (res.success) {
-        setRules(res.data)
-      } else {
-        throw new Error(res.error)
-      }
-
-      // Query live DNS records
-      const dnsRes = await listDNSRecords(idToken, orgId, zoneId)
-      if (dnsRes.success && dnsRes.data) {
-        setDnsRecords(dnsRes.data)
-      } else {
-        console.warn("Live DNS validation sync issue:", dnsRes.error)
-      }
-    } catch (error: any) {
-      console.warn("Email rules sync issue:", error?.message)
-      const rawMsg = error?.message || ""
-      const isInternalRscError = rawMsg.includes("Server Components render") || rawMsg.includes("digest")
-      toast({
-        variant: "destructive",
-        title: "Sync Error",
-        description: isInternalRscError
-          ? "Unable to synchronize email service state with the edge network. Please refresh the page."
-          : (rawMsg || "Could not fetch email service rules."),
-      })
-    } finally {
-      setIsLoadingRules(false)
-    }
-  }, [zoneId, selectedOrg?.id, user, toast])
+    },
+    [user, selectedOrgId]
+  )
 
   useEffect(() => {
-    if (emailServiceActive && zoneId) {
-      fetchEmailRules()
-    } else {
-      setRules([])
-      setDnsRecords([])
+    if (!authLoading && !isLoadingOrgs) {
+      loadAllMailData()
     }
-  }, [emailServiceActive, zoneId, fetchEmailRules])
+  }, [authLoading, isLoadingOrgs, loadAllMailData])
 
-  // Handle activation
-  const handleActivate = async () => {
-    if (!zoneId || !selectedOrg || !user) return
+  const copyToClipboard = (value: string, key: string) => {
+    navigator.clipboard.writeText(value)
+    setCopiedKey(key)
+    setTimeout(() => setCopiedKey(null), 1800)
+  }
+
+  // --- SERVICE ACTIVATION / DEACTIVATION / DNS SYNC ---
+
+  const handleActivateService = async () => {
+    if (!user || !selectedOrgId) return
     setIsActivating(true)
     try {
       const idToken = await user.getIdToken()
-      const orgId = selectedOrg.id
-      // 1. Auto-configure DNS records (MX, SPF)
-      const dnsRes = await autoConfigureEmailDNS(idToken, orgId, zoneId, selectedOrg.domain)
-      if (!dnsRes.success) {
-        throw new Error("Failed to configure DNS records: " + dnsRes.error)
-      }
-
-      // 2. Activate Routing via API
-      const res = await activateEmailRouting(idToken, orgId, zoneId)
+      const res = await activateMailService(idToken, selectedOrgId)
       if (!res.success) {
         throw new Error(res.error)
       }
 
-      // 3. Sync state reliably via server action
-      await syncEmailServiceState(idToken, orgId, true)
+      if (res.data?.dnsProvisionedAutomatically) {
+        toast({
+          title: "Email Service Activated",
+          description: `Email Service is now active and required DNS records were automatically added to ${selectedOrg?.domain}.`,
+        })
+      } else if (res.data?.dnsWarning) {
+        toast({
+          title: "Email Service Activated",
+          description: `Email Service is active. Please review required DNS records in the Settings tab (${res.data.dnsWarning}).`,
+        })
+      } else {
+        toast({
+          title: "Email Service Activated",
+          description: `Email Service is now active for ${selectedOrg?.domain}. Review the required DNS records in Settings.`,
+        })
+      }
 
-      toast({
-        title: "Email Service Activated",
-        description: "Mail infrastructure has been provisioned and security records deployed.",
-      })
-
-      setEmailServiceActive(true)
-      setIsActivateDialogOpen(false)
-      fetchEmailRules()
-    } catch (error: any) {
+      await loadAllMailData(true)
+    } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Activation Failed",
-        description: error.message || "Could not activate email service.",
+        description: err.message || "Could not activate Email Service.",
       })
     } finally {
       setIsActivating(false)
     }
   }
 
-  // Handle deactivation
-  const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false)
-  const [isDisabling, setIsDisabling] = useState(false)
-
-  const handleDisable = async () => {
-    if (!zoneId || !selectedOrg || !user) return
-    setIsDisabling(true)
+  const handleDeactivateService = async () => {
+    if (!user || !selectedOrgId) return
+    setIsDeactivating(true)
     try {
       const idToken = await user.getIdToken()
-      const orgId = selectedOrg.id
-      // 1. Disable Routing via API
-      await disableEmailRouting(idToken, orgId, zoneId)
+      const res = await deactivateMailService(idToken, selectedOrgId)
+      if (!res.success) throw new Error(res.error)
 
-      // 2. Sync state reliably via server action
-      await syncEmailServiceState(idToken, orgId, false)
-
+      setServiceActive(false)
+      setIsDeactivateConfirmOpen(false)
       toast({
         title: "Email Service Disabled",
-        description: "Email routing has been deactivated and records removed.",
+        description: "Email Service has been deactivated for this organization.",
       })
-
-      setEmailServiceActive(false)
-      setIsDisableDialogOpen(false)
-      setRules([])
-    } catch (error: any) {
+    } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Deactivation Failed",
-        description: error.message || "Could not disable email service.",
+        description: err.message || "Could not disable Email Service.",
       })
     } finally {
-      setIsDisabling(false)
+      setIsDeactivating(false)
     }
   }
 
-  // Handle create rule
-  const handleCreateRule = async () => {
-    if (!zoneId || !selectedOrg || !user) return
+  const handleSyncDnsRecords = async () => {
+    if (!user || !selectedOrgId) return
+    setIsSyncingDns(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await syncMailDnsRecords(idToken, selectedOrgId)
+      if (!res.success) throw new Error(res.error)
 
-    // Validate
-    const errors: { alias?: string; destination?: string } = {}
-    const cleanAlias = aliasPrefix.trim()
-    const cleanDest = destinationEmail.trim()
-
-    if (!cleanAlias) {
-      errors.alias = "Alias prefix is required."
-    } else if (!/^[a-zA-Z0-9._-]+$/.test(cleanAlias)) {
-      errors.alias = "Only alphanumeric characters, dots, hyphens, and underscores allowed."
-    }
-
-    if (!cleanDest) {
-      errors.destination = "Destination email is required."
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanDest)) {
-      errors.destination = "Must be a valid email address."
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
+      toast({
+        title: "DNS Records Synchronized",
+        description:
+          res.data?.addedCount && res.data.addedCount > 0
+            ? `Added ${res.data.addedCount} missing DNS record(s) to ${selectedOrg?.domain}.`
+            : `All required DNS records are already configured on ${selectedOrg?.domain}.`,
+      })
+      await loadAllMailData(true)
+    } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Validation Failed",
-        description: "Please resolve form input errors before submitting.",
+        title: "DNS Sync Failed",
+        description: err.message || "Could not synchronize DNS records.",
+      })
+    } finally {
+      setIsSyncingDns(false)
+    }
+  }
+
+  // --- CATCH-ALL HANDLERS ---
+
+  const handleCatchAllToggle = async (enabled: boolean) => {
+    if (!user || !selectedOrgId) return
+    const activeUsersList = users.filter((u) => u.status === "active")
+    if (enabled && activeUsersList.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Active Email Accounts",
+        description: "Create at least one active email user before enabling Domain Catch-All Routing.",
       })
       return
     }
 
-    setIsSubmitting(true)
-    try {
-      const idToken = await user.getIdToken()
-      const orgId = selectedOrg.id
-      const aliasEmail = `${cleanAlias}@${selectedOrg.domain}`
-      const res = await createEmailRule(idToken, orgId, zoneId, aliasEmail, cleanDest)
-
-      if (!res.success) {
-        throw new Error(res.error)
-      }
-
-      toast({
-        title: "Forwarding Rule Created",
-        description: `Your custom address ${aliasEmail} is now active.`,
-      })
-
-      setIsCreateDialogOpen(false)
-      setAliasPrefix("")
-      setDestinationEmail("")
-      setFormErrors({})
-      fetchEmailRules()
-    } catch (error: any) {
-      const errMsg = error.message || "";
-      const isVerificationError = errMsg.toLowerCase().includes("verified") || 
-                            errMsg.toLowerCase().includes("destination") || 
-                            errMsg.toLowerCase().includes("active");
-      
-      if (isVerificationError) {
-        toast({
-          title: "Verification Email Sent!",
-          description: `A secure confirmation link has been sent to ${cleanDest}. Please check your inbox, click the verification link inside, and then add this address again!`,
-          duration: 8000,
-        })
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Creation Failed",
-          description: error.message || "Could not create the forwarding rule.",
-        })
-      }
-    } finally {
-      setIsSubmitting(false)
-    }
+    const targetId = enabled ? activeUsersList[0].id : null
+    await handleCatchAllTargetChange(targetId)
   }
 
-  // Handle delete rule
-  const handleDeleteRule = async () => {
-    if (!zoneId || !deletingRuleId || !selectedOrg?.id || !user) return
+  const handleCatchAllTargetChange = async (nextUserId: string | null) => {
+    if (!user || !selectedOrgId) return
+    setIsUpdatingCatchAll(true)
     try {
       const idToken = await user.getIdToken()
-      const orgId = selectedOrg.id
-      const res = await deleteEmailRule(idToken, orgId, zoneId, deletingRuleId)
-      if (res.success) {
-        toast({ title: "Rule Removed", description: "The forwarding rule has been deleted." })
-        fetchEmailRules()
-      } else {
-        throw new Error(res.error)
-      }
-    } catch (error: any) {
+      const res = await updateMailCatchAll(idToken, selectedOrgId, nextUserId)
+      if (!res.success) throw new Error(res.error)
+
+      setCatchAllUserId(res.data?.catchAllUserId ?? null)
+      setCatchAllEmail(res.data?.catchAllEmail ?? null)
+      toast({
+        title: nextUserId ? "Catch-All Routing Updated" : "Catch-All Routing Disabled",
+        description: nextUserId
+          ? `Unmatched emails to @${selectedOrg?.domain} will route to ${res.data?.catchAllEmail}.`
+          : `Unmatched emails to @${selectedOrg?.domain} will be rejected.`,
+      })
+    } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Delete Failed",
-        description: error.message || "Could not remove the forwarding rule.",
+        title: "Failed to Update Catch-All",
+        description: err.message || "Could not update catch-all routing.",
       })
     } finally {
-      setIsDeleteOpen(false)
-      setDeletingRuleId(null)
+      setIsUpdatingCatchAll(false)
     }
   }
 
-  // STATE 1: Loading orgs
-  if (isLoadingOrgs) {
+  // --- ORGANIZATIONAL UNIT HANDLERS ---
+
+  const handleCreateOu = async () => {
+    if (!user || !selectedOrgId || !newOuName.trim()) return
+    setIsSavingOu(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await createMailOrgUnit(idToken, selectedOrgId, {
+        name: newOuName,
+        description: newOuDescription,
+      })
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      setOrgUnits((prev) => [...prev, res.data!].sort((a, b) => a.name.localeCompare(b.name)))
+      setNewOuName("")
+      setNewOuDescription("")
+      toast({
+        title: "Organizational Unit Created",
+        description: `"${res.data.path}" is now available in Users and Groups.`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Could Not Create Organizational Unit",
+        description: err.message || "Failed to create Organizational Unit.",
+      })
+    } finally {
+      setIsSavingOu(false)
+    }
+  }
+
+  const handleDeleteOu = async (ou: MailOrgUnit) => {
+    if (!user || !selectedOrgId) return
+    setIsSavingOu(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await deleteMailOrgUnit(idToken, selectedOrgId, ou.id)
+      if (!res.success) throw new Error(res.error)
+
+      setOrgUnits((prev) => prev.filter((item) => item.id !== ou.id))
+      setUsers((prev) =>
+        prev.map((u) => (u.orgUnitPath === ou.path ? { ...u, orgUnitPath: "/" } : u))
+      )
+      setGroups((prev) =>
+        prev.map((g) => (g.orgUnitPath === ou.path ? { ...g, orgUnitPath: "/" } : g))
+      )
+      if (selectedUserOu === ou.path) setSelectedUserOu("ALL")
+      if (selectedGroupOu === ou.path) setSelectedGroupOu("ALL")
+
+      toast({
+        title: "Organizational Unit Removed",
+        description: `"${ou.path}" was deleted and assigned members were moved to "/".`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Remove Organizational Unit",
+        description: err.message || "Could not delete Organizational Unit.",
+      })
+    } finally {
+      setIsSavingOu(false)
+    }
+  }
+
+  // --- USER DIRECTORY HANDLERS ---
+
+  const handleCreateUser = async () => {
+    if (!user || !selectedOrgId) return
+    setIsCreatingUser(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await createMailUser(idToken, selectedOrgId, createUserForm)
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      setUsers((prev) =>
+        [...prev, res.data!].sort((a, b) => a.displayName.localeCompare(b.displayName))
+      )
+      setIsCreateUserOpen(false)
+      setCreateUserForm({
+        firstName: "",
+        lastName: "",
+        emailPrefix: "",
+        password: "",
+        orgUnitPath: "/",
+      })
+      toast({
+        title: "Email Account Created",
+        description: `${res.data.primaryEmail} is ready for signing in to Revlet Mail.`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Could Not Create Email Account",
+        description: err.message || "Failed to create user account.",
+      })
+    } finally {
+      setIsCreatingUser(false)
+    }
+  }
+
+  const handleUpdateUserAccount = async () => {
+    if (!user || !selectedOrgId || !editingUser) return
+    setIsUpdatingUser(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await updateMailUserAccount(
+        idToken,
+        selectedOrgId,
+        editingUser.id,
+        editUserForm
+      )
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      setUsers((prev) =>
+        prev
+          .map((u) =>
+            u.id === editingUser.id
+              ? {
+                  ...u,
+                  firstName: res.data!.firstName,
+                  lastName: res.data!.lastName,
+                  displayName: res.data!.displayName,
+                  orgUnitPath: res.data!.orgUnitPath,
+                  updatedAt: res.data!.updatedAt,
+                }
+              : u
+          )
+          .sort((a, b) => a.displayName.localeCompare(b.displayName))
+      )
+      setEditingUser(null)
+      toast({
+        title: "Account Updated",
+        description: "Account name and organizational unit have been updated.",
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: err.message || "Could not update user account.",
+      })
+    } finally {
+      setIsUpdatingUser(false)
+    }
+  }
+
+  const handleResetUserPassword = async () => {
+    if (!user || !selectedOrgId || !passwordTargetUser) return
+    setIsResettingPassword(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await resetMailUserPassword(
+        idToken,
+        selectedOrgId,
+        passwordTargetUser.id,
+        newPasswordValue
+      )
+      if (!res.success) throw new Error(res.error)
+
+      toast({
+        title: "Password Reset",
+        description: `Sign-in password for ${passwordTargetUser.primaryEmail} has been updated.`,
+      })
+      setPasswordTargetUser(null)
+      setNewPasswordValue("")
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Password Reset Failed",
+        description: err.message || "Could not reset password.",
+      })
+    } finally {
+      setIsResettingPassword(false)
+    }
+  }
+
+  const handleAliasAction = async (
+    action: "add" | "update" | "remove",
+    payload: { aliasPrefix?: string; targetAlias?: string; updatedAliasPrefix?: string }
+  ) => {
+    if (!user || !selectedOrgId || !aliasTargetUser) return
+    setIsMutatingAlias(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await manageMailUserAlias(
+        idToken,
+        selectedOrgId,
+        aliasTargetUser.id,
+        action,
+        payload
+      )
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      const updatedAliases = res.data.aliases
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === aliasTargetUser.id
+            ? { ...u, aliases: updatedAliases, updatedAt: res.data!.updatedAt }
+            : u
+        )
+      )
+      setAliasTargetUser((prev) => (prev ? { ...prev, aliases: updatedAliases } : null))
+      setNewAliasPrefix("")
+      setEditingAliasOriginal(null)
+      setEditingAliasPrefix("")
+
+      toast({
+        title:
+          action === "add"
+            ? "Email Alias Added"
+            : action === "update"
+            ? "Email Alias Updated"
+            : "Email Alias Removed",
+        description: `Aliases updated for ${aliasTargetUser.primaryEmail}.`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Alias Operation Failed",
+        description: err.message || "Could not update email alias.",
+      })
+    } finally {
+      setIsMutatingAlias(false)
+    }
+  }
+
+  const handleSuspendOrReactivateUser = async (targetUser: MailUserRecord, suspend: boolean) => {
+    if (!user || !selectedOrgId) return
+    try {
+      const idToken = await user.getIdToken()
+      const res = await toggleMailUserSuspend(idToken, selectedOrgId, targetUser.id, suspend)
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === targetUser.id
+            ? { ...u, status: res.data!.status as MailUserRecord["status"], updatedAt: res.data!.updatedAt }
+            : u
+        )
+      )
+      if (suspend && catchAllUserId === targetUser.id) {
+        setCatchAllUserId(null)
+        setCatchAllEmail(null)
+      }
+
+      toast({
+        title: suspend ? "Account Suspended" : "Account Reactivated",
+        description: suspend
+          ? `${targetUser.primaryEmail} has been suspended and moved to the Suspended Accounts tab.`
+          : `${targetUser.primaryEmail} is now active again.`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Action Failed",
+        description: err.message || "Could not update account status.",
+      })
+    }
+  }
+
+  const handleConfirmDeleteUser = async () => {
+    if (!user || !selectedOrgId || !deletingUser) return
+    setIsDeletingUser(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await deleteMailUserAccount(idToken, selectedOrgId, deletingUser.id)
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === deletingUser.id
+            ? {
+                ...u,
+                status: "deleted",
+                deletedAt: res.data!.deletedAt,
+                recoverableUntil: res.data!.recoverableUntil,
+              }
+            : u
+        )
+      )
+      if (catchAllUserId === deletingUser.id) {
+        setCatchAllUserId(null)
+        setCatchAllEmail(null)
+      }
+
+      toast({
+        title: "Email Account Deleted (14-Day Recovery)",
+        description: `${deletingUser.primaryEmail} can be recovered from the Suspended Accounts tab for the next 14 days.`,
+      })
+      setDeletingUser(null)
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: err.message || "Could not delete email account.",
+      })
+    } finally {
+      setIsDeletingUser(false)
+    }
+  }
+
+  const handleRecoverDeletedUser = async (targetUser: MailUserRecord) => {
+    if (!user || !selectedOrgId) return
+    try {
+      const idToken = await user.getIdToken()
+      const res = await recoverMailUserAccount(idToken, selectedOrgId, targetUser.id)
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === targetUser.id
+            ? {
+                ...u,
+                status: "active",
+                deletedAt: null,
+                recoverableUntil: null,
+                updatedAt: res.data!.updatedAt,
+              }
+            : u
+        )
+      )
+
+      toast({
+        title: "Email Account Recovered",
+        description: `${targetUser.primaryEmail} has been restored to active status.`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Recovery Failed",
+        description: err.message || "Could not recover email account.",
+      })
+    }
+  }
+
+  // --- GROUPS HANDLERS ---
+
+  const handleCreateGroup = async () => {
+    if (!user || !selectedOrgId) return
+    setIsCreatingGroup(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await createMailGroup(idToken, selectedOrgId, createGroupForm)
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      setGroups((prev) => [...prev, res.data!].sort((a, b) => a.name.localeCompare(b.name)))
+      setIsCreateGroupOpen(false)
+      setCreateGroupForm({
+        name: "",
+        emailPrefix: "",
+        orgUnitPath: "/",
+        memberEmails: [],
+      })
+      setNewGroupMemberInput("")
+      toast({
+        title: "Group Created",
+        description: `${res.data.groupEmail} is now active.`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Could Not Create Group",
+        description: err.message || "Failed to create group.",
+      })
+    } finally {
+      setIsCreatingGroup(false)
+    }
+  }
+
+  const handleUpdateGroupDetails = async () => {
+    if (!user || !selectedOrgId || !editingGroup) return
+    setIsUpdatingGroup(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await updateMailGroup(idToken, selectedOrgId, editingGroup.id, {
+        name: editGroupForm.name,
+        orgUnitPath: editGroupForm.orgUnitPath,
+      })
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      setGroups((prev) =>
+        prev
+          .map((g) =>
+            g.id === editingGroup.id
+              ? {
+                  ...g,
+                  name: res.data!.name,
+                  orgUnitPath: res.data!.orgUnitPath,
+                  updatedAt: res.data!.updatedAt,
+                }
+              : g
+          )
+          .sort((a, b) => a.name.localeCompare(b.name))
+      )
+      setEditingGroup(null)
+      toast({
+        title: "Group Updated",
+        description: "Group name and organizational unit have been saved.",
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: err.message || "Could not update group.",
+      })
+    } finally {
+      setIsUpdatingGroup(false)
+    }
+  }
+
+  const handleUpdateGroupMembersList = async (nextMembers: string[]) => {
+    if (!user || !selectedOrgId || !membersTargetGroup) return
+    setIsUpdatingGroupMembers(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await updateMailGroup(idToken, selectedOrgId, membersTargetGroup.id, {
+        memberEmails: nextMembers,
+      })
+      if (!res.success || !res.data) throw new Error(res.error)
+
+      const updatedList = res.data.memberEmails
+      setGroups((prev) =>
+        prev.map((g) =>
+          g.id === membersTargetGroup.id
+            ? { ...g, memberEmails: updatedList, updatedAt: res.data!.updatedAt }
+            : g
+        )
+      )
+      setMembersTargetGroup((prev) => (prev ? { ...prev, memberEmails: updatedList } : null))
+      setGroupMemberInput("")
+      toast({
+        title: "Group Members Updated",
+        description: `Updated recipient list for ${membersTargetGroup.groupEmail}.`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Update Group Members",
+        description: err.message || "Could not update members.",
+      })
+    } finally {
+      setIsUpdatingGroupMembers(false)
+    }
+  }
+
+  const handleConfirmDeleteGroup = async () => {
+    if (!user || !selectedOrgId || !deletingGroup) return
+    setIsDeletingGroup(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await deleteMailGroup(idToken, selectedOrgId, deletingGroup.id)
+      if (!res.success) throw new Error(res.error)
+
+      setGroups((prev) => prev.filter((g) => g.id !== deletingGroup.id))
+      toast({
+        title: "Group Deleted",
+        description: `${deletingGroup.groupEmail} has been permanently removed.`,
+      })
+      setDeletingGroup(null)
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Delete Group",
+        description: err.message || "Could not delete group.",
+      })
+    } finally {
+      setIsDeletingGroup(false)
+    }
+  }
+
+  // --- FILTERED VIEWS ---
+
+  const activeUsers = useMemo(() => users.filter((u) => u.status === "active"), [users])
+  const suspendedUsers = useMemo(() => users.filter((u) => u.status === "suspended"), [users])
+  const deletedUsers = useMemo(() => users.filter((u) => u.status === "deleted"), [users])
+
+  const filteredActiveUsers = useMemo(() => {
+    return activeUsers.filter((u) => {
+      if (selectedUserOu !== "ALL" && u.orgUnitPath !== selectedUserOu) return false
+      if (!userSearchQuery.trim()) return true
+      const q = userSearchQuery.toLowerCase().trim()
+      return (
+        u.displayName.toLowerCase().includes(q) ||
+        u.primaryEmail.toLowerCase().includes(q) ||
+        u.orgUnitPath.toLowerCase().includes(q) ||
+        u.aliases.some((a) => a.toLowerCase().includes(q))
+      )
+    })
+  }, [activeUsers, selectedUserOu, userSearchQuery])
+
+  const filteredGroups = useMemo(() => {
+    return groups.filter((g) => {
+      if (selectedGroupOu !== "ALL" && g.orgUnitPath !== selectedGroupOu) return false
+      if (!groupSearchQuery.trim()) return true
+      const q = groupSearchQuery.toLowerCase().trim()
+      return (
+        g.name.toLowerCase().includes(q) ||
+        g.groupEmail.toLowerCase().includes(q) ||
+        g.orgUnitPath.toLowerCase().includes(q) ||
+        g.memberEmails.some((m) => m.toLowerCase().includes(q))
+      )
+    })
+  }, [groups, selectedGroupOu, groupSearchQuery])
+
+  const filteredSuspendedUsers = useMemo(() => {
+    if (!suspendedSearchQuery.trim()) return suspendedUsers
+    const q = suspendedSearchQuery.toLowerCase().trim()
+    return suspendedUsers.filter(
+      (u) =>
+        u.displayName.toLowerCase().includes(q) ||
+        u.primaryEmail.toLowerCase().includes(q) ||
+        u.orgUnitPath.toLowerCase().includes(q)
+    )
+  }, [suspendedUsers, suspendedSearchQuery])
+
+  const filteredDeletedUsers = useMemo(() => {
+    if (!suspendedSearchQuery.trim()) return deletedUsers
+    const q = suspendedSearchQuery.toLowerCase().trim()
+    return deletedUsers.filter(
+      (u) =>
+        u.displayName.toLowerCase().includes(q) ||
+        u.primaryEmail.toLowerCase().includes(q) ||
+        u.orgUnitPath.toLowerCase().includes(q)
+    )
+  }, [deletedUsers, suspendedSearchQuery])
+
+  const allOuOptions = useMemo(() => {
+    const paths = new Set<string>(["/"])
+    orgUnits.forEach((ou) => paths.add(ou.path))
+    return Array.from(paths)
+  }, [orgUnits])
+
+  // --- RENDER LOADING / NO ORG ---
+
+  if (authLoading || isLoadingOrgs || isLoadingState) {
     return (
-      <DashboardShell className="max-w-7xl">
-        <div className="space-y-8 animate-in fade-in duration-500">
-          <div className="flex flex-col gap-1">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-9 w-64 mt-1" />
+      <DashboardShell>
+        <div className="flex flex-col items-center justify-center h-96 gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-xs font-medium text-slate-500">Loading Email Service Admin Center...</p>
+        </div>
+      </DashboardShell>
+    )
+  }
+
+  if (orgs.length === 0 || !selectedOrg) {
+    return (
+      <DashboardShell>
+        <div className="flex flex-col items-center justify-center h-96 text-center max-w-sm mx-auto gap-4">
+          <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center">
+            <Building2 className="w-8 h-8 text-slate-300" />
           </div>
-          
-          <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-4 sm:px-6">
-              <Skeleton className="h-4 w-48" />
-            </CardHeader>
-            <CardContent className="p-0">
-              <EmailRulesSkeleton />
+          <div className="space-y-1">
+            <h2 className="text-lg font-headline font-bold text-slate-900">No Organization Selected</h2>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Register or select an organization first to manage custom domain email accounts and routing.
+            </p>
+          </div>
+        </div>
+      </DashboardShell>
+    )
+  }
+
+  // --- RENDER PRE-ACTIVATION OPT-IN STATE ---
+
+  if (!serviceActive) {
+    return (
+      <DashboardShell>
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">
+                  Email Service
+                </h1>
+                <Badge className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-semibold px-2.5 py-0.5 shadow-none hover:bg-slate-100">
+                  Not Activated
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                Custom domain mailboxes, aliases, groups, and organizational directory for{" "}
+                <span className="font-semibold text-slate-700">{selectedOrg.domain}</span>
+              </p>
+            </div>
+          </div>
+
+          <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden max-w-3xl">
+            <div className="h-1.5 w-full bg-primary" />
+            <CardContent className="p-8 space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="p-3.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                  <Mail className="w-6 h-6" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-headline font-bold text-slate-900">
+                    Activate Revlet Mail Service for {selectedOrg.domain}
+                  </h2>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Provision full email accounts with sign-in credentials for Revlet Mail, manage send-as email aliases, organize accounts by Organizational Units, configure distribution groups, and control domain-wide catch-all routing.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                  <div className="text-xs font-bold text-slate-800">User & Alias Directory</div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Create email accounts, reset passwords, and attach multiple send-as aliases per user.
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                  <div className="text-xs font-bold text-slate-800">Organizational Units & Groups</div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Structure users and mailing groups into clean organizational units with 14-day account recovery.
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                  <div className="text-xs font-bold text-slate-800">Included Sending Quota</div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Includes 1,000 outbound emails per month and 100 outbound emails per day for your organization.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className={cn(
+                  "p-4 rounded-xl border flex items-start gap-3",
+                  dnsServiceActive
+                    ? "bg-emerald-50/60 border-emerald-200 text-emerald-900"
+                    : "bg-amber-50/60 border-amber-200 text-amber-900"
+                )}
+              >
+                {dnsServiceActive ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                )}
+                <div className="text-xs space-y-0.5">
+                  <div className="font-bold">
+                    {dnsServiceActive
+                      ? "Automatic DNS Configuration Ready"
+                      : "Manual DNS Setup Available"}
+                  </div>
+                  <p className="text-[11px] opacity-90 leading-relaxed">
+                    {dnsServiceActive
+                      ? `DNS Management is active on ${selectedOrg.domain}. All required MX, SPF, DKIM, and DMARC records will be added to your domain automatically the moment you activate Email Service.`
+                      : `DNS Management is not currently linked to ${selectedOrg.domain}. You can still activate Email Service now and view the required DNS records in the Settings tab.`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end pt-2">
+                <Button
+                  onClick={handleActivateService}
+                  disabled={isActivating}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-10 px-6 rounded-lg text-xs shadow-sm"
+                >
+                  {isActivating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Activating Email Service...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Activate Email Service
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -453,624 +1132,2092 @@ export default function EmailRoutingPage() {
     )
   }
 
-  return (
-    <DashboardShell className="max-w-7xl">
-      <div className="space-y-8 animate-in fade-in duration-500">
-        {/* Page Header */}
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h1 className="text-3xl font-headline font-bold text-slate-900">Email Service</h1>
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-end sm:justify-start">
-              {zoneId && emailServiceActive && (
-                <>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200 hover:bg-slate-50 transition-colors shrink-0">
-                        <MoreVertical className="w-4 h-4 text-slate-600" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem 
-                        onClick={() => setIsDisableDialogOpen(true)} 
-                        className="gap-2 text-destructive focus:text-destructive focus:bg-red-50 cursor-pointer"
-                      >
-                        <ShieldAlert className="w-4 h-4" />
-                        <span>Disable Service</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+  // --- RENDER ACTIVE EMAIL SERVICE ADMIN CENTER ---
 
-                  <Button
-                    onClick={() => {
-                      setAliasPrefix("")
-                      setDestinationEmail("")
-                      setFormErrors({})
-                      setIsCreateDialogOpen(true)
-                    }}
-                    className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200 text-xs w-full sm:w-auto"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Custom Email
-                  </Button>
-                </>
-              )}
+  const verifiedDnsCount = requiredDnsRecords.filter((r) => r.verified).length
+
+  return (
+    <DashboardShell>
+      <div className="space-y-6 animate-in fade-in duration-500">
+        {/* PAGE HEADER */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">
+                Email Service
+              </h1>
+              <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold px-2.5 py-0.5 shadow-none hover:bg-emerald-50">
+                Active · {selectedOrg.domain}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="text-[10px] font-medium px-2.5 py-0.5 border-slate-200 text-slate-600 bg-white"
+              >
+                Quota: {monthlySentCount.toLocaleString()} / {monthlyOutboundLimit.toLocaleString()} mo ·{" "}
+                {dailySentCount.toLocaleString()} / {dailyOutboundLimit.toLocaleString()} day
+              </Badge>
             </div>
+            <p className="text-xs text-slate-500 font-medium">
+              Administer user accounts, email aliases, organizational units, distribution groups, and domain settings.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadAllMailData(true)}
+              disabled={isRefreshing}
+              className="h-9 px-3.5 text-xs font-semibold border-slate-200 bg-white hover:bg-slate-50 rounded-lg"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOuModalOpen(true)}
+              className="h-9 px-3.5 text-xs font-semibold border-slate-200 bg-white hover:bg-slate-50 rounded-lg"
+            >
+              <FolderTree className="w-3.5 h-3.5 mr-1.5 text-slate-600" />
+              Organizational Units ({orgUnits.length + 1})
+            </Button>
           </div>
         </div>
 
-        {/* STATE 2: No orgs */}
-        {orgs.length === 0 ? (
-          <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500">
-            <Card className="bg-slate-50 border-slate-200 border-dashed shadow-sm">
-              <CardContent className="p-16 flex flex-col items-center text-center gap-6">
-                <div className="p-4 bg-white rounded-full border border-slate-100 shadow-sm shrink-0">
-                  <Globe className="w-10 h-10 text-slate-300 " />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-xl font-headline font-bold text-slate-900">No Registered Organizations</h3>
-                  <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed font-medium">
-                    To manage email service configurations, you must first register your organization on the Account Home screen.
-                  </p>
-                </div>
-                <Link href="/account/home">
-                  <Button className="font-bold gap-2 h-11 px-6 bg-slate-900 hover:bg-black text-white transition-all shadow-md">
-                    Go to Account Home
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </div>
+        {/* NAVIGATION TABS */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="bg-slate-100/80 border border-slate-200/80 p-1 rounded-xl h-auto flex flex-wrap gap-1 w-fit">
+            <TabsTrigger
+              value="users"
+              className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+            >
+              <Users className="w-3.5 h-3.5 mr-2" />
+              Users Directory
+              <span className="ml-2 text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                {activeUsers.length}
+              </span>
+            </TabsTrigger>
 
-        /* STATE 3: DNS dependency guard */
-        ) : selectedOrg && !selectedOrg.cloudflareZoneId ? (
-          <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500">
-            <Card className="bg-slate-50 border-slate-200 border-dashed shadow-sm">
-              <CardContent className="p-16 flex flex-col items-center text-center gap-6">
-                <div className="p-4 bg-white rounded-full border border-slate-100 shadow-sm shrink-0">
-                  <Globe className="w-10 h-10 text-slate-300 " />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-xl font-headline font-bold text-slate-900">DNS Management Required</h3>
-                  <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed font-medium">
-                    Email services require an active domain configuration. Please activate DNS management for your organization first.
-                  </p>
-                </div>
-                <Link href="/services/dns">
-                  <Button className="font-bold gap-2 h-11 px-6 bg-slate-900 hover:bg-black text-white transition-all shadow-md">
-                    Go to DNS Management
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </div>
+            <TabsTrigger
+              value="groups"
+              className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+            >
+              <UsersRound className="w-3.5 h-3.5 mr-2" />
+              Groups
+              <span className="ml-2 text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                {groups.length}
+              </span>
+            </TabsTrigger>
 
-        /* STATE 4: Pre-activation + STATE 5: Active workspace */
-        ) : selectedOrg && zoneId && isCheckingStatus ? (
-          <div className="flex flex-col items-center justify-center py-32 gap-4">
-            <Loader2 className="w-8 h-8  text-slate-200" />
-            <p className="text-[10px] font-bold text-slate-400 uppercase">Checking Service Status...</p>
-          </div>
+            <TabsTrigger
+              value="suspended"
+              className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 mr-2" />
+              Suspended Accounts
+              <span className="ml-2 text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                {suspendedUsers.length + deletedUsers.length}
+              </span>
+            </TabsTrigger>
 
-        ) : selectedOrg && zoneId && !emailServiceActive ? (
-          /* STATE 4: Pre-activation landing */
-          <div className="max-w-6xl mx-auto py-8 px-4 md:px-6 animate-in slide-in-from-bottom-4 duration-500 w-full">
-            <div className="space-y-12 text-center flex flex-col items-center">
-              {/* Value Proposition Banner */}
-              <div className="space-y-4 flex flex-col items-center max-w-2xl">
-                <h2 className="text-2xl md:text-3xl font-headline font-bold text-slate-900 leading-tight">
-                  Get Professional Email for Your Domain
-                </h2>
-                <p className="text-slate-500 text-xs md:text-sm leading-relaxed max-w-xl mx-auto">
-                  Create custom email addresses using your own domain name (like info@{selectedOrg?.domain || "example.com"}) and automatically forward messages directly to your existing personal inbox. Simple, beautiful, and completely secure.
-                </p>
-              </div>
+            <TabsTrigger
+              value="settings"
+              className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+            >
+              <Settings className="w-3.5 h-3.5 mr-2" />
+              Settings
+            </TabsTrigger>
+          </TabsList>
 
-              {/* How it Works Flow Visualization */}
-              <div className="max-w-5xl w-full p-6 md:p-8 rounded-xl border border-slate-200 bg-white shadow-sm relative overflow-hidden text-left">
-                
-                <h4 className="text-xs font-semibold text-slate-700 text-center mb-6">How it works</h4>
-                
-                <div className="flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-4 relative z-10 w-full px-2">
-                  {/* Sender Card */}
-                  <div className="flex-1 w-full lg:max-w-[270px] p-4 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center gap-3.5 transition-all hover:border-slate-200">
-                    <div className="p-2 bg-slate-50 border border-slate-100 rounded-lg shrink-0">
-                      <MailOpen className="w-5 h-5 text-slate-500 " />
-                    </div>
-                    <div className="text-left space-y-0.5 min-w-0">
-                      <p className="text-xs font-medium text-slate-500">Email from anyone</p>
-                      <p className="text-xs font-bold text-slate-800 truncate">customer@gmail.com</p>
-                    </div>
-                  </div>
-                  
-                  {/* Flow Arrow 1 */}
-                  <div className="flex lg:flex-col items-center gap-1.5 text-primary shrink-0">
-                    <div className="w-2 h-2 rounded-full bg-primary " />
-                    <div className="h-0.5 w-8 lg:w-0.5 lg:h-8 bg-gradient-to-r lg:bg-gradient-to-b from-primary to-blue-400 hidden md:block" />
-                    <ArrowRight className="w-4 h-4 lg:rotate-0 rotate-90" />
-                  </div>
-                  
-                  {/* Custom Domain Gateway */}
-                  <div className="flex-1 w-full lg:max-w-[300px] p-5 rounded-xl bg-slate-900 text-white shadow-lg shadow-slate-900/10 flex items-center gap-3.5 relative border border-slate-800 transition-all hover:bg-black">
-                    <div className="p-2 bg-white/10 rounded-lg shrink-0">
-                      <Globe className="w-5 h-5 text-white " style={{ animationDuration: '15s' }} />
-                    </div>
-                    <div className="text-left space-y-0.5 min-w-0">
-                      <p className="text-xs font-medium text-slate-400">Your custom address</p>
-                      <p className="text-xs font-bold font-mono truncate text-emerald-400">info@{selectedOrg?.domain || "example.com"}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Flow Arrow 2 */}
-                  <div className="flex lg:flex-col items-center gap-1.5 text-emerald-500 shrink-0">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 " />
-                    <div className="h-0.5 w-8 lg:w-0.5 lg:h-8 bg-gradient-to-r lg:bg-gradient-to-b from-emerald-500 to-teal-400 hidden md:block" />
-                    <ArrowRight className="w-4 h-4 lg:rotate-0 rotate-90" />
-                  </div>
-                  
-                  {/* Destination Card */}
-                  <div className="flex-1 w-full lg:max-w-[270px] p-4 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center gap-3.5 transition-all hover:border-slate-200">
-                    <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg shrink-0">
-                      <Send className="w-5 h-5 text-emerald-600 " style={{ animationDuration: '4s' }} />
-                    </div>
-                    <div className="text-left space-y-0.5 min-w-0">
-                      <p className="text-xs font-medium text-slate-500">Your personal inbox</p>
-                      <p className="text-xs font-bold text-slate-800 truncate">you@gmail.com</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Capability Highlights Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left w-full">
-                {[
-                  {
-                    title: "Easy Email Forwarding",
-                    desc: "Receive emails on your custom brand address and read them inside your normal personal inbox. No new passwords to remember.",
-                    icon: ArrowRightLeft,
-                    color: "bg-blue-50/50 hover:bg-blue-50 text-blue-600 border-blue-100 hover:border-blue-200",
-                  },
-                  {
-                    title: "1-Click Automated Setup",
-                    desc: "We handle all the complicated connection setup behind the scenes. Just click activate and your brand is ready to receive mail.",
-                    icon: ShieldAlert,
-                    color: "bg-emerald-50/50 hover:bg-emerald-50 text-emerald-600 border-emerald-100 hover:border-emerald-200",
-                  },
-                  {
-                    title: "Spam & Identity Protection",
-                    desc: "Built-in cryptographic shields secure your domain from hackers and ensure your emails always arrive safely.",
-                    icon: Lock,
-                    color: "bg-purple-50/50 hover:bg-purple-50 text-purple-600 border-purple-100 hover:border-purple-200",
-                  },
-                ].map((feature) => (
-                  <div key={feature.title} className={cn("p-5 rounded-xl border flex items-start gap-4 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 duration-200", feature.color)}>
-                    <div className="p-2.5 bg-white rounded-lg shadow-sm shrink-0 border border-slate-100/80">
-                      <feature.icon className="w-4 h-4" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-xs md:text-sm font-bold text-slate-800">{feature.title}</h4>
-                      <p className="text-[11px] opacity-90 leading-relaxed font-medium text-slate-500">{feature.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Get Started Button */}
-              <div className="pt-2 flex flex-col items-center">
-                <Button
-                  onClick={() => setIsActivateDialogOpen(true)}
-                  size="default"
-                  className="font-bold px-10 h-11 shadow-md shadow-primary/10 text-xs group bg-slate-900 hover:bg-black text-white rounded-lg transition-all"
+          {/* =====================================================================
+              TAB 1: USERS DIRECTORY
+          ===================================================================== */}
+          <TabsContent value="users" className="space-y-4 mt-0">
+            {/* OU Filter Pills + Search + Create User */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserOu("ALL")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                    selectedUserOu === "ALL"
+                      ? "bg-primary text-white shadow-sm"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/70"
+                  )}
                 >
-                  <Mail className="w-4 h-4 mr-2 group-hover:rotate-12 transition-transform" />
-                  Activate Email Service
+                  All Units ({activeUsers.length})
+                </button>
+                {allOuOptions.map((ouPath) => {
+                  const count = activeUsers.filter((u) => u.orgUnitPath === ouPath).length
+                  return (
+                    <button
+                      key={ouPath}
+                      type="button"
+                      onClick={() => setSelectedUserOu(ouPath)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                        selectedUserOu === ouPath
+                          ? "bg-primary text-white shadow-sm"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200/70"
+                      )}
+                    >
+                      {ouPath === "/" ? "/ (Root)" : ouPath} ({count})
+                    </button>
+                  )
+                })}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsOuModalOpen(true)}
+                  className="h-7 px-2.5 text-xs font-semibold text-primary hover:bg-primary/5 rounded-lg"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  New OU
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    placeholder="Search users or aliases..."
+                    className="h-9 pl-8 text-xs border-slate-200 bg-slate-50/50 focus-visible:bg-white rounded-lg"
+                  />
+                </div>
+                <Button
+                  onClick={() => {
+                    setCreateUserForm({
+                      firstName: "",
+                      lastName: "",
+                      emailPrefix: "",
+                      password: "",
+                      orgUnitPath: selectedUserOu === "ALL" ? "/" : selectedUserOu,
+                    })
+                    setIsCreateUserOpen(true)
+                  }}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shadow-sm shrink-0"
+                >
+                  <UserPlus className="w-3.5 h-3.5 mr-2" />
+                  Add User
                 </Button>
               </div>
             </div>
-          </div>
 
-        ) : selectedOrg && zoneId && emailServiceActive && (
-          /* STATE 5: Active Management Workspace */
-          <div className="space-y-8 animate-in fade-in duration-700">
-            {/* Email Service Rules Table */}
-            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4 px-4 sm:px-6">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-xs font-semibold text-slate-700">Active Custom Emails</CardTitle>
-                  <Badge variant="outline" className="text-[9px] font-bold h-5 px-1.5 bg-white border-slate-200">{verifiedRules.length}</Badge>
+            {/* Users Table */}
+            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <CardContent className="p-0">
+                {filteredActiveUsers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center">
+                      <Users className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-headline font-bold text-slate-900">
+                        {activeUsers.length === 0
+                          ? "No Email Accounts Created Yet"
+                          : "No Matching Email Accounts"}
+                      </h3>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        {activeUsers.length === 0
+                          ? `Create your first user account on @${selectedOrg.domain} with sign-in credentials for Revlet Mail.`
+                          : "Try adjusting your Organizational Unit filter or search query."}
+                      </p>
+                    </div>
+                    {activeUsers.length === 0 && (
+                      <Button
+                        size="sm"
+                        onClick={() => setIsCreateUserOpen(true)}
+                        className="mt-1 bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-8 px-4 rounded-lg text-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1.5" />
+                        Create First Email Account
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
+                        <TableHead className="text-xs font-semibold py-3.5 pl-6 text-slate-600">
+                          Account Name
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
+                          Primary Email
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
+                          Email Aliases
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
+                          Organizational Unit
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3.5 text-right pr-6 text-slate-600">
+                          Actions
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredActiveUsers.map((u) => (
+                        <TableRow
+                          key={u.id}
+                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
+                        >
+                          <TableCell className="pl-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+                                {(u.firstName?.[0] || u.primaryEmail?.[0] || "U").toUpperCase()}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold text-slate-900">
+                                  {u.displayName}
+                                </span>
+                                <span className="text-[11px] text-slate-400">Active account</span>
+                              </div>
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="py-4">
+                            <span className="text-xs font-mono font-semibold text-slate-700">
+                              {u.primaryEmail}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="py-4">
+                            {u.aliases.length === 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAliasTargetUser(u)
+                                  setNewAliasPrefix("")
+                                  setEditingAliasOriginal(null)
+                                }}
+                                className="text-[11px] text-slate-400 hover:text-primary font-medium transition-colors"
+                              >
+                                + Add alias
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {u.aliases.map((alias) => (
+                                  <Badge
+                                    key={alias}
+                                    variant="outline"
+                                    className="text-[10px] font-mono font-medium px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-700"
+                                  >
+                                    {alias}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="py-4">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-mono font-medium px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-600"
+                            >
+                              {u.orgUnitPath}
+                            </Badge>
+                          </TableCell>
+
+                          <TableCell className="text-right pr-6 py-4">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 border-slate-200 bg-white hover:bg-slate-50 rounded-lg shadow-none"
+                                >
+                                  <MoreVertical className="w-4 h-4 text-slate-600" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-56 bg-white border border-slate-200 shadow-md rounded-xl p-1"
+                              >
+                                <DropdownMenuItem
+                                  onSelect={() => {
+                                    setEditingUser(u)
+                                    setEditUserForm({
+                                      firstName: u.firstName,
+                                      lastName: u.lastName,
+                                      orgUnitPath: u.orgUnitPath || "/",
+                                    })
+                                  }}
+                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
+                                >
+                                  <UserPen className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>Update account name</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onSelect={() => {
+                                    setPasswordTargetUser(u)
+                                    setNewPasswordValue("")
+                                  }}
+                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
+                                >
+                                  <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>Reset password</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onSelect={() => {
+                                    setAliasTargetUser(u)
+                                    setNewAliasPrefix("")
+                                    setEditingAliasOriginal(null)
+                                    setEditingAliasPrefix("")
+                                  }}
+                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
+                                >
+                                  <AtSign className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>Manage email aliases ({u.aliases.length})</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem
+                                  onSelect={() => handleSuspendOrReactivateUser(u, true)}
+                                  className="gap-2.5 py-2 text-xs text-amber-700 focus:text-amber-800 cursor-pointer rounded-lg"
+                                >
+                                  <Ban className="w-3.5 h-3.5" />
+                                  <span>Suspend account</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onSelect={() => setDeletingUser(u)}
+                                  className="gap-2.5 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete email account</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* =====================================================================
+              TAB 2: GROUPS (Same Styling & Approach as Users Directory Tab)
+          ===================================================================== */}
+          <TabsContent value="groups" className="space-y-4 mt-0">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setSelectedGroupOu("ALL")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                    selectedGroupOu === "ALL"
+                      ? "bg-primary text-white shadow-sm"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/70"
+                  )}
+                >
+                  All Units ({groups.length})
+                </button>
+                {allOuOptions.map((ouPath) => {
+                  const count = groups.filter((g) => g.orgUnitPath === ouPath).length
+                  return (
+                    <button
+                      key={ouPath}
+                      type="button"
+                      onClick={() => setSelectedGroupOu(ouPath)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                        selectedGroupOu === ouPath
+                          ? "bg-primary text-white shadow-sm"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200/70"
+                      )}
+                    >
+                      {ouPath === "/" ? "/ (Root)" : ouPath} ({count})
+                    </button>
+                  )
+                })}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsOuModalOpen(true)}
+                  className="h-7 px-2.5 text-xs font-semibold text-primary hover:bg-primary/5 rounded-lg"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  New OU
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    value={groupSearchQuery}
+                    onChange={(e) => setGroupSearchQuery(e.target.value)}
+                    placeholder="Search groups or members..."
+                    className="h-9 pl-8 text-xs border-slate-200 bg-slate-50/50 focus-visible:bg-white rounded-lg"
+                  />
+                </div>
+                <Button
+                  onClick={() => {
+                    setCreateGroupForm({
+                      name: "",
+                      emailPrefix: "",
+                      orgUnitPath: selectedGroupOu === "ALL" ? "/" : selectedGroupOu,
+                      memberEmails: [],
+                    })
+                    setNewGroupMemberInput("")
+                    setIsCreateGroupOpen(true)
+                  }}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shadow-sm shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-2" />
+                  Create Group
+                </Button>
+              </div>
+            </div>
+
+            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <CardContent className="p-0">
+                {filteredGroups.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center">
+                      <UsersRound className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-headline font-bold text-slate-900">
+                        {groups.length === 0 ? "No Groups Created Yet" : "No Matching Groups"}
+                      </h3>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        {groups.length === 0
+                          ? `Create shared group addresses (such as support@${selectedOrg.domain} or faculty@${selectedOrg.domain}) that deliver incoming mail to multiple recipients.`
+                          : "Try adjusting your Organizational Unit filter or search query."}
+                      </p>
+                    </div>
+                    {groups.length === 0 && (
+                      <Button
+                        size="sm"
+                        onClick={() => setIsCreateGroupOpen(true)}
+                        className="mt-1 bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-8 px-4 rounded-lg text-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1.5" />
+                        Create First Group
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
+                        <TableHead className="text-xs font-semibold py-3.5 pl-6 text-slate-600">
+                          Group Name
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
+                          Group Email
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
+                          Members
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
+                          Organizational Unit
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3.5 text-right pr-6 text-slate-600">
+                          Actions
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredGroups.map((g) => (
+                        <TableRow
+                          key={g.id}
+                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
+                        >
+                          <TableCell className="pl-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+                                {(g.name?.[0] || "G").toUpperCase()}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold text-slate-900">{g.name}</span>
+                                <span className="text-[11px] text-slate-400">
+                                  Distribution group
+                                </span>
+                              </div>
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="py-4">
+                            <span className="text-xs font-mono font-semibold text-slate-700">
+                              {g.groupEmail}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="py-4">
+                            {g.memberEmails.length === 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMembersTargetGroup(g)
+                                  setGroupMemberInput("")
+                                }}
+                                className="text-[11px] text-slate-400 hover:text-primary font-medium transition-colors"
+                              >
+                                + Add members
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {g.memberEmails.slice(0, 3).map((member) => (
+                                  <Badge
+                                    key={member}
+                                    variant="outline"
+                                    className="text-[10px] font-mono font-medium px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-700"
+                                  >
+                                    {member}
+                                  </Badge>
+                                ))}
+                                {g.memberEmails.length > 3 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] font-medium px-2 py-0.5 bg-slate-100 border-slate-200 text-slate-600"
+                                  >
+                                    +{g.memberEmails.length - 3} more
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="py-4">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-mono font-medium px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-600"
+                            >
+                              {g.orgUnitPath}
+                            </Badge>
+                          </TableCell>
+
+                          <TableCell className="text-right pr-6 py-4">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 border-slate-200 bg-white hover:bg-slate-50 rounded-lg shadow-none"
+                                >
+                                  <MoreVertical className="w-4 h-4 text-slate-600" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-56 bg-white border border-slate-200 shadow-md rounded-xl p-1"
+                              >
+                                <DropdownMenuItem
+                                  onSelect={() => {
+                                    setEditingGroup(g)
+                                    setEditGroupForm({
+                                      name: g.name,
+                                      orgUnitPath: g.orgUnitPath || "/",
+                                    })
+                                  }}
+                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>Update group name</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onSelect={() => {
+                                    setMembersTargetGroup(g)
+                                    setGroupMemberInput("")
+                                  }}
+                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
+                                >
+                                  <Users className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>Manage members ({g.memberEmails.length})</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem
+                                  onSelect={() => setDeletingGroup(g)}
+                                  className="gap-2.5 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete group</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* =====================================================================
+              TAB 3: SUSPENDED ACCOUNTS & 14-DAY DELETED RECOVERY
+          ===================================================================== */}
+          <TabsContent value="suspended" className="space-y-6 mt-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="space-y-0.5">
+                <h2 className="text-sm font-headline font-bold text-slate-900">
+                  Suspended & Recently Deleted Accounts
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Suspended accounts cannot sign in or send mail. Deleted accounts remain recoverable for 14 days before permanent removal.
+                </p>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  value={suspendedSearchQuery}
+                  onChange={(e) => setSuspendedSearchQuery(e.target.value)}
+                  placeholder="Filter accounts..."
+                  className="h-9 pl-8 text-xs border-slate-200 bg-slate-50/50 focus-visible:bg-white rounded-lg"
+                />
+              </div>
+            </div>
+
+            {/* Section A: Suspended Accounts */}
+            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <CardHeader className="border-b border-slate-100 py-4 px-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <CardTitle className="text-sm font-headline font-bold text-slate-900">
+                      Suspended Accounts ({filteredSuspendedUsers.length})
+                    </CardTitle>
+                    <CardDescription className="text-xs text-slate-500">
+                      Reactivate a suspended account at any time or move it to 14-day deletion recovery.
+                    </CardDescription>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                {isLoadingRules ? (
-                  <EmailRulesSkeleton />
-                ) : verifiedRules.length === 0 && !searchTerm ? (
-                  <div className="p-24 text-center space-y-3">
-                    <Mail className="w-8 h-8 text-slate-100 mx-auto" />
-                    <p className="text-sm font-bold text-slate-400">No active custom email addresses found.</p>
-                    <p className="text-xs text-slate-400 font-medium">Create your first address above to start forwarding mail!</p>
+                {filteredSuspendedUsers.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-slate-400">
+                    No suspended email accounts.
                   </div>
                 ) : (
-                  <>
-                    {/* Search and Filters Bar */}
-                    <div className="p-4 border-b border-slate-100 bg-slate-50/20 flex flex-col sm:flex-row items-center gap-3">
-                      <div className="relative w-full sm:max-w-xs">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <Input
-                          placeholder="Search email addresses..."
-                          className="pl-9 h-9 text-xs border-slate-200 focus-visible:ring-slate-300 font-semibold"
-                          value={searchTerm}
-                          onChange={(e) => {
-                            setSearchTerm(e.target.value)
-                            setCurrentPage(1)
-                          }}
-                        />
-                      </div>
-                      {searchTerm && (
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            setSearchTerm("")
-                            setCurrentPage(1)
-                          }}
-                          className="text-[11px] font-bold text-slate-500 h-9 px-3 hover:bg-slate-100"
-                        >
-                          Clear Search
-                        </Button>
-                      )}
-                      <div className="ml-auto text-xs text-slate-500 font-medium hidden sm:block">
-                        Showing {paginatedRules.length} of {filteredRules.length} matches
-                      </div>
-                    </div>
-
-                    {filteredRules.length === 0 ? (
-                      <div className="p-20 text-center space-y-2">
-                        <Search className="w-8 h-8 text-slate-200 mx-auto" />
-                        <p className="text-xs font-bold text-slate-600">No matching email addresses found</p>
-                        <p className="text-[11px] text-slate-400 font-medium">Try checking your spelling or clearing the search term.</p>
-                      </div>
-                    ) : (
-                      <>
-                        {/* DESKTOP TABLE VIEW */}
-                        <div className="hidden md:block">
-                          <Table>
-                            <TableHeader className="bg-slate-50/50">
-                              <TableRow className="border-b border-slate-100">
-                                <TableHead className="text-xs font-medium py-3.5 pl-6 text-slate-500">Custom email</TableHead>
-                                <TableHead className="text-xs font-medium py-3.5 text-slate-500">Forwards to</TableHead>
-                                <TableHead className="text-xs font-medium py-3.5 text-right pr-6 w-24 text-slate-500">Action</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {paginatedRules.map((rule) => (
-                                <TableRow key={rule.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                                  <TableCell className="pl-6 py-4">
-                                    <span className="font-bold text-xs text-slate-800">{rule.alias}</span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="font-mono text-[11px] text-slate-500">{rule.destination}</span>
-                                  </TableCell>
-                                  <TableCell className="text-right pr-6">
-                                    <Button
-                                      variant="ghost" size="icon"
-                                      className="h-8 w-8 text-slate-400 hover:bg-destructive hover:text-white transition-all rounded-md"
-                                      onClick={() => { setDeletingRuleId(rule.id); setIsDeleteOpen(true) }}
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-
-                        {/* MOBILE RESPONSIVE CARD LIST VIEW */}
-                        <div className="block md:hidden space-y-6 py-6 px-4">
-                          {paginatedRules.map((rule) => (
-                            <div 
-                              key={rule.id}
-                              className="bg-white border border-slate-200 rounded-xl p-6 relative overflow-hidden transition-all shadow-sm flex flex-col gap-4"
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
+                        <TableHead className="text-xs font-semibold py-3 pl-6 text-slate-600">
+                          Account Name
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3 text-slate-600">
+                          Primary Email
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3 text-slate-600">
+                          Organizational Unit
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3 text-right pr-6 text-slate-600">
+                          Actions
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredSuspendedUsers.map((u) => (
+                        <TableRow key={u.id} className="border-b border-slate-100 last:border-0">
+                          <TableCell className="pl-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-bold text-xs flex items-center justify-center">
+                                {(u.firstName?.[0] || "S").toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-slate-900">
+                                  {u.displayName}
+                                </div>
+                                <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-4 font-medium hover:bg-amber-50">
+                                  Suspended
+                                </Badge>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4 text-xs font-mono font-semibold text-slate-700">
+                            {u.primaryEmail}
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-mono bg-slate-50 border-slate-200 text-slate-600"
                             >
-                              {/* Left status color indicator strip */}
-                              <div className="absolute left-0 top-0 bottom-0 w-[5px] bg-primary" />
-
-                              {/* Top Row: Alias Email Address */}
-                              <div className="space-y-1">
-                                <p className="text-xs font-medium text-slate-500 leading-none">Custom email</p>
-                                <p className="font-bold text-slate-800 text-sm break-all leading-snug">{rule.alias}</p>
-                              </div>
-
-                              {/* Middle Row: Destination Forward Target */}
-                              <div className="space-y-1">
-                                <p className="text-xs font-medium text-slate-500 leading-none">Forwards to</p>
-                                <p className="font-mono text-xs text-slate-500 break-all leading-relaxed">{rule.destination}</p>
-                              </div>
-
-                              {/* Bottom Row: Actions */}
-                              <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-1">
-                                <span className="flex items-center gap-1.5 text-emerald-500 bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-0.5 h-6">
-                                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                                  <span className="text-xs font-medium">Active</span>
-                                </span>
+                              {u.orgUnitPath}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right pr-6 py-4">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
                                 <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 gap-1.5 text-red-500 hover:text-white hover:bg-red-600 border border-transparent hover:border-red-655 rounded-lg px-3 transition-colors text-xs font-bold shrink-0"
-                                  onClick={() => { setDeletingRuleId(rule.id); setIsDeleteOpen(true) }}
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 border-slate-200 bg-white hover:bg-slate-50 rounded-lg shadow-none"
+                                >
+                                  <MoreVertical className="w-4 h-4 text-slate-600" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-52 bg-white border border-slate-200 shadow-md rounded-xl p-1"
+                              >
+                                <DropdownMenuItem
+                                  onSelect={() => handleSuspendOrReactivateUser(u, false)}
+                                  className="gap-2.5 py-2 text-xs text-emerald-700 focus:text-emerald-800 cursor-pointer rounded-lg"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>Reactivate account</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onSelect={() => setDeletingUser(u)}
+                                  className="gap-2.5 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
-                                  Remove Email
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Pagination Controls */}
-                        {totalPages > 1 && (
-                          <div className="p-4 border-t border-slate-100 bg-slate-50/30 flex items-center justify-between">
-                            <div className="text-[11px] text-slate-500 font-medium">
-                              Page <span className="font-bold text-slate-700">{activePage}</span> of <span className="font-bold text-slate-700">{totalPages}</span>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 text-[11px] font-bold border-slate-200"
-                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                disabled={activePage === 1}
-                              >
-                                Previous
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 text-[11px] font-bold border-slate-200"
-                                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                                disabled={activePage === totalPages}
-                              >
-                                Next
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </>
+                                  <span>Delete email account</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </CardContent>
             </Card>
 
-            {/* Security Status Dashboard (Placed at the bottom) */}
-            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-4 sm:px-6">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-slate-400" />
-                  <CardTitle className="text-xs font-semibold text-slate-700">Domain Security Parameters</CardTitle>
+            {/* Section B: Deleted Accounts (14-Day Recovery Window) */}
+            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <CardHeader className="border-b border-slate-100 py-4 px-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <CardTitle className="text-sm font-headline font-bold text-slate-900">
+                      Deleted Accounts — 14-Day Recovery ({filteredDeletedUsers.length})
+                    </CardTitle>
+                    <CardDescription className="text-xs text-slate-500">
+                      Deleted email accounts can be restored within 14 days of deletion. After 14 days, accounts are purged permanently.
+                    </CardDescription>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-4 sm:p-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* SPF Card */}
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-600">SPF protocol</span>
-                      <Badge className={cn(
-                        "text-[9px] font-bold border shadow-none",
-                        isSpfValid 
-                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                          : "bg-amber-50 text-amber-600 border-amber-100"
-                      )}>
-                        {isSpfValid ? "ALIGNED" : "NOT CONFIGURED"}
-                      </Badge>
-                    </div>
-                    <code className="text-[10px] font-mono text-slate-500 block leading-relaxed break-all">
-                      {isSpfValid ? spfRecord.content : "v=spf1 include:_spf.mx.cloudflare.net ~all"}
-                    </code>
-                    {!isSpfValid && (
-                      <p className="text-[9px] text-slate-400 font-medium">Recommended: Add a TXT record pointing to the secure mail relay.</p>
-                    )}
+              <CardContent className="p-0">
+                {filteredDeletedUsers.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-slate-400">
+                    No deleted accounts pending 14-day recovery.
                   </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
+                        <TableHead className="text-xs font-semibold py-3 pl-6 text-slate-600">
+                          Account Name
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3 text-slate-600">
+                          Primary Email
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3 text-slate-600">
+                          Recovery Window
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold py-3 text-right pr-6 text-slate-600">
+                          Actions
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDeletedUsers.map((u) => {
+                        const daysLeft = getDaysRemaining(u.recoverableUntil)
+                        return (
+                          <TableRow key={u.id} className="border-b border-slate-100 last:border-0">
+                            <TableCell className="pl-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center">
+                                  {(u.firstName?.[0] || "D").toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="text-xs font-bold text-slate-900">
+                                    {u.displayName}
+                                  </div>
+                                  <span className="text-[11px] text-slate-400">
+                                    OU: {u.orgUnitPath}
+                                  </span>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4 text-xs font-mono font-semibold text-slate-700">
+                              {u.primaryEmail}
+                            </TableCell>
+                            <TableCell className="py-4">
+                              <Badge className="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-semibold px-2 py-0.5 hover:bg-rose-50">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {daysLeft} {daysLeft === 1 ? "day" : "days"} remaining
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right pr-6 py-4">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRecoverDeletedUser(u)}
+                                className="h-8 px-3 text-xs font-semibold border-slate-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-lg"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                                Recover Account
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-                  {/* DKIM Card */}
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-600">DKIM verification</span>
-                      <Badge className={cn(
-                        "text-[9px] font-bold border shadow-none",
-                        emailServiceActive 
-                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                          : "bg-amber-50 text-amber-600 border-amber-100"
-                      )}>
-                        {emailServiceActive ? "VERIFIED / PASS-THROUGH" : "INACTIVE"}
-                      </Badge>
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-medium">Cryptographic key validation is automatically managed by the routing infrastructure.</p>
+          {/* =====================================================================
+              TAB 4: SETTINGS (Domain Catch-All Routing + Required DNS Records)
+          ===================================================================== */}
+          <TabsContent value="settings" className="space-y-6 mt-0">
+            {/* Section 1: Domain Catch-All Routing */}
+            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <CardHeader className="border-b border-slate-100 py-5 px-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <CardTitle className="text-base font-headline font-bold text-slate-900">
+                      Domain Catch-All Routing
+                    </CardTitle>
+                    <CardDescription className="text-xs text-slate-500">
+                      Route incoming messages addressed to any unmatched{" "}
+                      <span className="font-mono font-semibold text-slate-700">
+                        @{selectedOrg.domain}
+                      </span>{" "}
+                      recipient to a designated fallback email account.
+                    </CardDescription>
                   </div>
-
-                  {/* DMARC Card */}
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-600">DMARC protection</span>
-                      <Badge className={cn(
-                        "text-[9px] font-bold border shadow-none",
-                        isDmarcValid 
-                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                          : "bg-amber-50 text-amber-600 border-amber-100"
-                      )}>
-                        {isDmarcValid ? "ENFORCED" : "NOT CONFIGURED"}
-                      </Badge>
-                    </div>
-                    <code className="text-[10px] font-mono text-slate-500 block leading-relaxed">
-                      {isDmarcValid ? dmarcRecord.content : "v=DMARC1; p=none;"}
-                    </code>
-                    {!isDmarcValid && (
-                      <p className="text-[9px] text-slate-400 font-medium">Recommended: Add a TXT record with name _dmarc to prevent address spoofing.</p>
-                    )}
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-semibold text-slate-600">
+                      {catchAllUserId ? "Enabled" : "Disabled"}
+                    </span>
+                    <Switch
+                      checked={Boolean(catchAllUserId)}
+                      disabled={isUpdatingCatchAll}
+                      onCheckedChange={handleCatchAllToggle}
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                  <div className="space-y-2 flex-1 max-w-md">
+                    <Label className="text-xs font-semibold text-slate-700">
+                      Designated Catch-All Account
+                    </Label>
+                    <Select
+                      value={catchAllUserId || "NONE"}
+                      disabled={isUpdatingCatchAll || activeUsers.length === 0}
+                      onValueChange={(val) =>
+                        handleCatchAllTargetChange(val === "NONE" ? null : val)
+                      }
+                    >
+                      <SelectTrigger className="h-10 text-xs border-slate-200 bg-white rounded-lg">
+                        <SelectValue placeholder="Select an active email account..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-slate-200">
+                        <SelectItem value="NONE" className="text-xs">
+                          Disabled (Reject unmatched addresses)
+                        </SelectItem>
+                        {activeUsers.map((u) => (
+                          <SelectItem key={u.id} value={u.id} className="text-xs">
+                            {u.displayName} ({u.primaryEmail})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-slate-500">
+                      {catchAllEmail
+                        ? `All unmatched @${selectedOrg.domain} emails are currently delivered to ${catchAllEmail}.`
+                        : `Unmatched @${selectedOrg.domain} emails are rejected when Catch-All Routing is disabled.`}
+                    </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </div>
-        )}
 
-        {/* Activation Confirmation Dialog */}
-        <Dialog open={isActivateDialogOpen} onOpenChange={setIsActivateDialogOpen}>
-          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white [&>button]:text-white [&>button]:hover:text-white [&>button]:opacity-90 [&>button]:transition-all">
-            <DialogHeader className="bg-primary text-white p-6">
-              <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5" />
-                Confirm Service Activation
-              </DialogTitle>
-              <p className="text-white/70 text-xs mt-1">This action will modify your domain&apos;s mail configuration.</p>
-            </DialogHeader>
-            <div className="p-6 space-y-3">
-              <p className="text-sm font-medium text-slate-700 leading-relaxed">
-                Activating this service will automatically replace existing MX records on your domain to prioritize your new secure forwarding paths. Do you wish to proceed?
-              </p>
-            </div>
-            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
-              <Button variant="ghost" onClick={() => setIsActivateDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleActivate} disabled={isActivating}>
-                {isActivating ? <Loader2 className="w-4 h-4  mr-2" /> : null}
-                Activate Service
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            {/* Section 2: Required DNS Records */}
+            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <CardHeader className="border-b border-slate-100 py-5 px-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5">
+                      <CardTitle className="text-base font-headline font-bold text-slate-900">
+                        Required DNS Records
+                      </CardTitle>
+                      <Badge
+                        className={cn(
+                          "text-[10px] font-semibold px-2 py-0.5 border shadow-none",
+                          verifiedDnsCount === requiredDnsRecords.length &&
+                            requiredDnsRecords.length > 0
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                            : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50"
+                        )}
+                      >
+                        {verifiedDnsCount} / {requiredDnsRecords.length} Verified
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-xs text-slate-500">
+                      Required domain records for inbound mail delivery, sender policy authorization, and cryptographic signing on{" "}
+                      <span className="font-mono font-semibold text-slate-700">
+                        {selectedOrg.domain}
+                      </span>
+                      .
+                    </CardDescription>
+                  </div>
 
-        {/* Create Alias Dialog */}
-        <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
-          setIsCreateDialogOpen(open)
-          if (!open) setFormErrors({})
-        }}>
-          <DialogContent className="max-w-md p-0 overflow-hidden border border-slate-200/80 shadow-2xl bg-white rounded-xl">
-            <DialogHeader className="bg-white border-b border-slate-100 px-5 py-4">
-              <DialogTitle className="font-headline font-bold text-base text-slate-900">
-                Create Custom Email Address
-              </DialogTitle>
-              <p className="text-slate-500 text-xs mt-0.5 font-normal">Domain: {selectedOrg?.domain}</p>
-            </DialogHeader>
-            <div className="px-5 py-4 space-y-3.5">
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-slate-700">Custom email name</Label>
-                  <div className="flex items-center gap-0">
-                    <Input
-                      placeholder="e.g. hello, support, info"
-                      className={cn(
-                        "h-9 font-semibold text-xs border-slate-200 transition-all rounded-r-none",
-                        formErrors.alias && "border-red-400 focus-visible:ring-red-500 bg-red-50/20"
+                  {dnsServiceActive && (
+                    <Button
+                      size="sm"
+                      onClick={handleSyncDnsRecords}
+                      disabled={isSyncingDns}
+                      className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shadow-sm shrink-0"
+                    >
+                      {isSyncingDns ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                          Syncing DNS Records...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 mr-2" />
+                          Sync Required DNS Records
+                        </>
                       )}
-                      value={aliasPrefix}
-                      onChange={(e) => {
-                        setAliasPrefix(e.target.value)
-                        setFormErrors((prev) => ({ ...prev, alias: undefined }))
-                      }}
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
+                      <TableHead className="text-xs font-semibold py-3.5 pl-6 text-slate-600">
+                        Purpose
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
+                        Type
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
+                        Host / Name
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
+                        Value / Points To
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold py-3.5 text-right pr-6 text-slate-600">
+                        Status
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {requiredDnsRecords.map((rec) => (
+                      <TableRow key={rec.id} className="border-b border-slate-100 last:border-0">
+                        <TableCell className="pl-6 py-4 text-xs font-semibold text-slate-800">
+                          {rec.purpose}
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-700"
+                          >
+                            {rec.type}
+                            {rec.priority !== undefined ? ` (${rec.priority})` : ""}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <div className="flex items-center gap-2 max-w-[220px]">
+                            <span className="text-xs font-mono text-slate-700 truncate">
+                              {rec.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(rec.name, `${rec.id}-name`)}
+                              className="text-slate-400 hover:text-slate-700 shrink-0"
+                              title="Copy Host"
+                            >
+                              {copiedKey === `${rec.id}-name` ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <div className="flex items-center gap-2 max-w-[280px]">
+                            <span className="text-xs font-mono text-slate-700 truncate">
+                              {rec.content}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(rec.content, `${rec.id}-content`)}
+                              className="text-slate-400 hover:text-slate-700 shrink-0"
+                              title="Copy Value"
+                            >
+                              {copiedKey === `${rec.id}-content` ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right pr-6 py-4">
+                          {rec.verified ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold px-2 py-0.5 hover:bg-emerald-50">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Verified
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold px-2 py-0.5 hover:bg-amber-50">
+                              <AlertCircle className="w-3 h-3 mr-1" />
+                              {dnsServiceActive ? "Pending Sync" : "Add at Registrar"}
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Section 3: Service Status Control */}
+            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-headline font-bold text-slate-900">
+                    Deactivate Email Service
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Pause Email Service for {selectedOrg.domain}. Existing accounts, aliases, and groups will remain saved in your directory.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsDeactivateConfirmOpen(true)}
+                  className="h-9 px-4 text-xs font-semibold text-destructive border-slate-200 hover:bg-rose-50 hover:text-destructive rounded-lg shrink-0"
+                >
+                  Deactivate Service
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* =========================================================================
+            PROGRAMMATIC DIALOGS
+        ========================================================================= */}
+
+        {/* 1. ORGANIZATIONAL UNITS DIALOG */}
+        <Dialog open={isOuModalOpen} onOpenChange={setIsOuModalOpen}>
+          <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-6 border-b border-slate-100">
+              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
+                Organizational Units
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Create and manage Organizational Units to organize email accounts and groups.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-6 space-y-5">
+              <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-slate-700">Unit Name</Label>
+                    <Input
+                      value={newOuName}
+                      onChange={(e) => setNewOuName(e.target.value)}
+                      placeholder="e.g. Faculty or Admissions"
+                      className="h-9 text-xs bg-white border-slate-200"
                     />
-                    <div className="h-9 px-3 bg-slate-100 border border-l-0 border-slate-200 rounded-r-md flex items-center">
-                      <span className="text-xs font-bold text-slate-500">@{selectedOrg?.domain}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-slate-700">
+                      Description (Optional)
+                    </Label>
+                    <Input
+                      value={newOuDescription}
+                      onChange={(e) => setNewOuDescription(e.target.value)}
+                      placeholder="Optional note"
+                      className="h-9 text-xs bg-white border-slate-200"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={handleCreateOu}
+                    disabled={isSavingOu || !newOuName.trim()}
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-8 px-4 rounded-lg text-xs"
+                  >
+                    {isSavingOu ? (
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    Create Organizational Unit
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white">
+                  <div>
+                    <div className="text-xs font-mono font-bold text-slate-800">/ (Root)</div>
+                    <div className="text-[11px] text-slate-400">
+                      Default organization-wide root unit
                     </div>
                   </div>
-                  {formErrors.alias && <p className="text-xs text-red-500 font-medium">{formErrors.alias}</p>}
+                  <Badge variant="outline" className="text-[10px] border-slate-200 text-slate-500">
+                    System Default
+                  </Badge>
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-slate-700">Forward messages to</Label>
+                {orgUnits.map((ou) => (
+                  <div
+                    key={ou.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white"
+                  >
+                    <div>
+                      <div className="text-xs font-mono font-bold text-slate-800">{ou.path}</div>
+                      {ou.description && (
+                        <div className="text-[11px] text-slate-500">{ou.description}</div>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={isSavingOu}
+                      onClick={() => handleDeleteOu(ou)}
+                      className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsOuModalOpen(false)}
+                className="h-8 px-4 text-xs font-semibold rounded-lg"
+              >
+                Done
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 2. CREATE USER DIALOG */}
+        <Dialog open={isCreateUserOpen} onOpenChange={setIsCreateUserOpen}>
+          <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-6 border-b border-slate-100">
+              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
+                Create Email Account
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Create an email address and password for signing in to Revlet Mail.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-700">First Name</Label>
                   <Input
-                    type="email"
-                    placeholder="Your personal email (e.g. you@gmail.com)"
-                    className={cn(
-                      "h-9 font-semibold text-xs border-slate-200 transition-all",
-                      formErrors.destination && "border-red-400 focus-visible:ring-red-500 bg-red-50/20"
-                    )}
-                    value={destinationEmail}
-                    onChange={(e) => {
-                      setDestinationEmail(e.target.value)
-                      setFormErrors((prev) => ({ ...prev, destination: undefined }))
-                    }}
+                    value={createUserForm.firstName}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({ ...prev, firstName: e.target.value }))
+                    }
+                    placeholder="Alex"
+                    className="h-9 text-xs border-slate-200"
                   />
-                  {formErrors.destination && <p className="text-xs text-red-500 font-medium">{formErrors.destination}</p>}
                 </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-700">Last Name</Label>
+                  <Input
+                    value={createUserForm.lastName}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({ ...prev, lastName: e.target.value }))
+                    }
+                    placeholder="Morgan"
+                    className="h-9 text-xs border-slate-200"
+                  />
+                </div>
+              </div>
 
-                <div className="p-4 bg-blue-50/30 border border-blue-100 rounded-xl flex gap-3.5 text-left shadow-sm">
-                  <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5 " />
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-bold text-slate-900">One-Time Inbox Verification Required</p>
-                    <p className="text-[11px] text-slate-600 leading-relaxed font-medium text-slate-700">
-                      To protect your security, a secure confirmation link will be sent to <span className="font-bold text-slate-900">{destinationEmail || "your personal email"}</span>. 
-                      <strong> Simply open that inbox, click the verification link inside, and this custom address will automatically activate and appear in your active list!</strong>
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-normal leading-normal">
-                      Emails sent to <span className="font-mono">{aliasPrefix || "name"}@{selectedOrg?.domain || "example.com"}</span> will begin forwarding to your personal email as soon as it is confirmed.
-                    </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">Email Address</Label>
+                <div className="flex items-center">
+                  <Input
+                    value={createUserForm.emailPrefix}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({ ...prev, emailPrefix: e.target.value }))
+                    }
+                    placeholder="alex"
+                    className="h-9 text-xs font-mono border-slate-200 rounded-r-none"
+                  />
+                  <div className="h-9 px-3 bg-slate-100 border border-l-0 border-slate-200 rounded-r-md flex items-center text-xs font-mono text-slate-600">
+                    @{selectedOrg.domain}
                   </div>
                 </div>
               </div>
-            </div>
-            <DialogFooter className="bg-white border-t border-slate-100/60 px-5 py-3 flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setIsCreateDialogOpen(false)} className="text-xs font-medium text-slate-600 h-9">Cancel</Button>
-              <Button onClick={handleCreateRule} disabled={isSubmitting} className="h-9 px-5 bg-slate-900 hover:bg-black !text-white text-white font-medium text-xs shadow-sm rounded-lg">
-                {isSubmitting ? <Loader2 className="w-3.5 h-3.5  mr-2" /> : "Create Custom Email"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-          <DialogContent className="max-w-md p-0 overflow-hidden border border-slate-200/80 shadow-2xl bg-white rounded-xl">
-            <DialogHeader className="bg-white border-b border-slate-100 px-5 py-4 flex flex-row items-center gap-3">
-              <div className="p-2 bg-red-50 rounded-lg text-red-600 shrink-0">
-                <AlertCircle className="w-5 h-5" />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">
+                  Revlet Mail Sign-In Password
+                </Label>
+                <Input
+                  type="password"
+                  value={createUserForm.password}
+                  onChange={(e) =>
+                    setCreateUserForm((prev) => ({ ...prev, password: e.target.value }))
+                  }
+                  placeholder="Minimum 8 characters"
+                  className="h-9 text-xs border-slate-200"
+                />
               </div>
-              <div className="text-left">
-                <DialogTitle className="font-headline font-bold text-base text-slate-900">
-                  Delete Custom Email
-                </DialogTitle>
-                <p className="text-slate-500 text-xs font-normal">This action is permanent</p>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
+                <Select
+                  value={createUserForm.orgUnitPath}
+                  onValueChange={(val) =>
+                    setCreateUserForm((prev) => ({ ...prev, orgUnitPath: val }))
+                  }
+                >
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-slate-200">
+                    {allOuOptions.map((ouPath) => (
+                      <SelectItem key={ouPath} value={ouPath} className="text-xs">
+                        {ouPath === "/" ? "/ (Root)" : ouPath}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </DialogHeader>
-            <div className="px-5 py-5 text-left">
-              <p className="text-xs font-medium text-slate-600 leading-relaxed">
-                Are you sure you want to delete this custom email address? Any new emails sent to it will no longer be forwarded to your personal inbox.
-              </p>
             </div>
-            <DialogFooter className="bg-slate-50 border-t border-slate-100/60 px-5 py-3 flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} className="text-xs font-medium text-slate-600 h-9">Cancel</Button>
+
+            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 gap-2">
               <Button
-                onClick={handleDeleteRule}
-                className="h-9 px-5 bg-red-600 hover:bg-red-700 !text-white text-white font-medium text-xs shadow-sm rounded-lg"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreateUserOpen(false)}
+                className="h-9 px-4 text-xs font-semibold rounded-lg"
               >
-                Delete Email Address
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleCreateUser}
+                disabled={
+                  isCreatingUser ||
+                  !createUserForm.firstName.trim() ||
+                  !createUserForm.emailPrefix.trim() ||
+                  createUserForm.password.length < 8
+                }
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+              >
+                {isCreatingUser && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                Create Email Account
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* Deactivation Confirmation Dialog */}
-        <Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
-          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white [&>button]:text-white [&>button]:hover:text-white [&>button]:opacity-90 [&>button]:transition-all">
-            <DialogHeader className="bg-red-600 text-white p-6">
-              <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5" />
-                Confirm Service Deactivation
+        {/* 3. UPDATE USER ACCOUNT NAME / OU DIALOG */}
+        <Dialog
+          open={Boolean(editingUser)}
+          onOpenChange={(open) => {
+            if (!open) setEditingUser(null)
+          }}
+        >
+          <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-6 border-b border-slate-100">
+              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
+                Update Account Name
               </DialogTitle>
-              <p className="text-white/70 text-xs mt-1">This action will disable email routing for your domain.</p>
+              <DialogDescription className="text-xs text-slate-500">
+                Update display name and organizational unit for{" "}
+                <span className="font-mono font-semibold text-slate-700">
+                  {editingUser?.primaryEmail}
+                </span>
+                .
+              </DialogDescription>
             </DialogHeader>
-            <div className="p-6 space-y-3">
-              <p className="text-sm font-medium text-slate-700 leading-relaxed">
-                Deactivating this service will immediately stop all custom email forwards. Your DNS records will remain intact. Do you wish to proceed?
-              </p>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-700">First Name</Label>
+                  <Input
+                    value={editUserForm.firstName}
+                    onChange={(e) =>
+                      setEditUserForm((prev) => ({ ...prev, firstName: e.target.value }))
+                    }
+                    className="h-9 text-xs border-slate-200"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-700">Last Name</Label>
+                  <Input
+                    value={editUserForm.lastName}
+                    onChange={(e) =>
+                      setEditUserForm((prev) => ({ ...prev, lastName: e.target.value }))
+                    }
+                    className="h-9 text-xs border-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
+                <Select
+                  value={editUserForm.orgUnitPath}
+                  onValueChange={(val) =>
+                    setEditUserForm((prev) => ({ ...prev, orgUnitPath: val }))
+                  }
+                >
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-slate-200">
+                    {allOuOptions.map((ouPath) => (
+                      <SelectItem key={ouPath} value={ouPath} className="text-xs">
+                        {ouPath === "/" ? "/ (Root)" : ouPath}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100">
-              <Button variant="ghost" onClick={() => setIsDisableDialogOpen(false)} className="text-slate-700 hover:bg-blue-600 hover:text-white focus:bg-blue-600 focus:text-white active:bg-blue-700 active:text-white">Cancel</Button>
-              <Button onClick={handleDisable} disabled={isDisabling} variant="destructive">
-                {isDisabling ? <Loader2 className="w-4 h-4  mr-2" /> : null}
-                Disable Service
+
+            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingUser(null)}
+                className="h-9 px-4 text-xs font-semibold rounded-lg"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleUpdateUserAccount}
+                disabled={isUpdatingUser || !editUserForm.firstName.trim()}
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+              >
+                {isUpdatingUser && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                Save Changes
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* 4. RESET USER PASSWORD DIALOG */}
+        <Dialog
+          open={Boolean(passwordTargetUser)}
+          onOpenChange={(open) => {
+            if (!open) setPasswordTargetUser(null)
+          }}
+        >
+          <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-6 border-b border-slate-100">
+              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
+                Reset Password
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Set a new Revlet Mail sign-in password for{" "}
+                <span className="font-mono font-semibold text-slate-700">
+                  {passwordTargetUser?.primaryEmail}
+                </span>
+                .
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-6 space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">New Password</Label>
+                <Input
+                  type="password"
+                  value={newPasswordValue}
+                  onChange={(e) => setNewPasswordValue(e.target.value)}
+                  placeholder="Minimum 8 characters"
+                  className="h-9 text-xs border-slate-200"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPasswordTargetUser(null)}
+                className="h-9 px-4 text-xs font-semibold rounded-lg"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleResetUserPassword}
+                disabled={isResettingPassword || newPasswordValue.length < 8}
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+              >
+                {isResettingPassword && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                Update Password
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 5. MANAGE USER EMAIL ALIASES DIALOG (ADD / UPDATE / REMOVE) */}
+        <Dialog
+          open={Boolean(aliasTargetUser)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setAliasTargetUser(null)
+              setEditingAliasOriginal(null)
+            }
+          }}
+        >
+          <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-6 border-b border-slate-100">
+              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
+                Manage Email Aliases
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Add, update, or remove email aliases for{" "}
+                <span className="font-mono font-semibold text-slate-700">
+                  {aliasTargetUser?.primaryEmail}
+                </span>
+                .
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-6 space-y-5">
+              {/* Add new alias */}
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-slate-700">Add New Email Alias</Label>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center flex-1">
+                    <Input
+                      value={newAliasPrefix}
+                      onChange={(e) => setNewAliasPrefix(e.target.value)}
+                      placeholder="alias-name"
+                      className="h-9 text-xs font-mono border-slate-200 rounded-r-none"
+                    />
+                    <div className="h-9 px-3 bg-slate-100 border border-l-0 border-slate-200 rounded-r-md flex items-center text-xs font-mono text-slate-600">
+                      @{selectedOrg.domain}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={isMutatingAlias || !newAliasPrefix.trim()}
+                    onClick={() =>
+                      handleAliasAction("add", { aliasPrefix: newAliasPrefix.trim() })
+                    }
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Add Alias
+                  </Button>
+                </div>
+              </div>
+
+              {/* Existing aliases list */}
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {aliasTargetUser?.aliases.length === 0 ? (
+                  <div className="p-6 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                    No email aliases configured for this user.
+                  </div>
+                ) : (
+                  aliasTargetUser?.aliases.map((alias) => {
+                    const isEditingThis = editingAliasOriginal === alias
+                    return (
+                      <div
+                        key={alias}
+                        className="flex items-center justify-between gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50/60"
+                      >
+                        {isEditingThis ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="flex items-center flex-1">
+                              <Input
+                                value={editingAliasPrefix}
+                                onChange={(e) => setEditingAliasPrefix(e.target.value)}
+                                className="h-8 text-xs font-mono bg-white border-slate-200 rounded-r-none"
+                              />
+                              <div className="h-8 px-2.5 bg-slate-100 border border-l-0 border-slate-200 rounded-r-md flex items-center text-xs font-mono text-slate-600">
+                                @{selectedOrg.domain}
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              disabled={isMutatingAlias || !editingAliasPrefix.trim()}
+                              onClick={() =>
+                                handleAliasAction("update", {
+                                  targetAlias: alias,
+                                  updatedAliasPrefix: editingAliasPrefix.trim(),
+                                })
+                              }
+                              className="h-8 px-3 text-xs font-semibold bg-primary !text-white text-white rounded-lg"
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingAliasOriginal(null)
+                                setEditingAliasPrefix("")
+                              }}
+                              className="h-8 px-2 text-xs text-slate-500"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-xs font-mono font-semibold text-slate-800">
+                              {alias}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={isMutatingAlias}
+                                onClick={() => {
+                                  setEditingAliasOriginal(alias)
+                                  setEditingAliasPrefix(alias.split("@")[0] || "")
+                                }}
+                                className="h-7 w-7 text-slate-500 hover:text-slate-800 rounded-lg"
+                                title="Update alias"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={isMutatingAlias}
+                                onClick={() =>
+                                  handleAliasAction("remove", { targetAlias: alias })
+                                }
+                                className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
+                                title="Remove alias"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAliasTargetUser(null)}
+                className="h-8 px-4 text-xs font-semibold rounded-lg"
+              >
+                Done
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 6. DELETE USER CONFIRMATION (14-DAY RECOVERY) */}
+        <AlertDialog
+          open={Boolean(deletingUser)}
+          onOpenChange={(open) => {
+            if (!open) setDeletingUser(null)
+          }}
+        >
+          <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-headline font-bold text-slate-900">
+                Delete Email Account?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+                <span className="font-mono font-semibold text-slate-800">
+                  {deletingUser?.primaryEmail}
+                </span>{" "}
+                will be moved to Deleted Accounts and will remain available to be recovered for{" "}
+                <span className="font-semibold text-slate-800">14 days</span> before permanent deletion.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="h-9 text-xs font-semibold rounded-lg">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault()
+                  handleConfirmDeleteUser()
+                }}
+                disabled={isDeletingUser}
+                className="h-9 text-xs font-semibold bg-destructive text-white hover:bg-destructive/90 rounded-lg"
+              >
+                {isDeletingUser && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                Delete Email Account
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* 7. CREATE GROUP DIALOG */}
+        <Dialog open={isCreateGroupOpen} onOpenChange={setIsCreateGroupOpen}>
+          <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-6 border-b border-slate-100">
+              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
+                Create Group
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Create a shared group email address that forwards incoming messages to its members.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">Group Name</Label>
+                <Input
+                  value={createGroupForm.name}
+                  onChange={(e) =>
+                    setCreateGroupForm((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  placeholder="e.g. Admissions Team"
+                  className="h-9 text-xs border-slate-200"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">Group Email Address</Label>
+                <div className="flex items-center">
+                  <Input
+                    value={createGroupForm.emailPrefix}
+                    onChange={(e) =>
+                      setCreateGroupForm((prev) => ({ ...prev, emailPrefix: e.target.value }))
+                    }
+                    placeholder="admissions"
+                    className="h-9 text-xs font-mono border-slate-200 rounded-r-none"
+                  />
+                  <div className="h-9 px-3 bg-slate-100 border border-l-0 border-slate-200 rounded-r-md flex items-center text-xs font-mono text-slate-600">
+                    @{selectedOrg.domain}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
+                <Select
+                  value={createGroupForm.orgUnitPath}
+                  onValueChange={(val) =>
+                    setCreateGroupForm((prev) => ({ ...prev, orgUnitPath: val }))
+                  }
+                >
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-slate-200">
+                    {allOuOptions.map((ouPath) => (
+                      <SelectItem key={ouPath} value={ouPath} className="text-xs">
+                        {ouPath === "/" ? "/ (Root)" : ouPath}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-slate-700">
+                  Initial Member Emails (Optional)
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={newGroupMemberInput}
+                    onChange={(e) => setNewGroupMemberInput(e.target.value)}
+                    placeholder={`member@${selectedOrg.domain}`}
+                    className="h-9 text-xs font-mono border-slate-200"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const clean = newGroupMemberInput.toLowerCase().trim()
+                      if (clean && clean.includes("@")) {
+                        setCreateGroupForm((prev) => ({
+                          ...prev,
+                          memberEmails: Array.from(new Set([...prev.memberEmails, clean])),
+                        }))
+                        setNewGroupMemberInput("")
+                      }
+                    }}
+                    className="h-9 px-3 text-xs font-semibold border-slate-200"
+                  >
+                    Add
+                  </Button>
+                </div>
+                {createGroupForm.memberEmails.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {createGroupForm.memberEmails.map((m) => (
+                      <Badge
+                        key={m}
+                        variant="outline"
+                        className="text-[10px] font-mono px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-700 flex items-center gap-1"
+                      >
+                        {m}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCreateGroupForm((prev) => ({
+                              ...prev,
+                              memberEmails: prev.memberEmails.filter((item) => item !== m),
+                            }))
+                          }
+                        >
+                          <X className="w-3 h-3 text-slate-400 hover:text-slate-700" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreateGroupOpen(false)}
+                className="h-9 px-4 text-xs font-semibold rounded-lg"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleCreateGroup}
+                disabled={
+                  isCreatingGroup ||
+                  !createGroupForm.name.trim() ||
+                  !createGroupForm.emailPrefix.trim()
+                }
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+              >
+                {isCreatingGroup && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                Create Group
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 8. UPDATE GROUP NAME / OU DIALOG */}
+        <Dialog
+          open={Boolean(editingGroup)}
+          onOpenChange={(open) => {
+            if (!open) setEditingGroup(null)
+          }}
+        >
+          <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-6 border-b border-slate-100">
+              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
+                Update Group Name
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Update group display name and organizational unit for{" "}
+                <span className="font-mono font-semibold text-slate-700">
+                  {editingGroup?.groupEmail}
+                </span>
+                .
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">Group Name</Label>
+                <Input
+                  value={editGroupForm.name}
+                  onChange={(e) =>
+                    setEditGroupForm((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  className="h-9 text-xs border-slate-200"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
+                <Select
+                  value={editGroupForm.orgUnitPath}
+                  onValueChange={(val) =>
+                    setEditGroupForm((prev) => ({ ...prev, orgUnitPath: val }))
+                  }
+                >
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-slate-200">
+                    {allOuOptions.map((ouPath) => (
+                      <SelectItem key={ouPath} value={ouPath} className="text-xs">
+                        {ouPath === "/" ? "/ (Root)" : ouPath}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingGroup(null)}
+                className="h-9 px-4 text-xs font-semibold rounded-lg"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleUpdateGroupDetails}
+                disabled={isUpdatingGroup || !editGroupForm.name.trim()}
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+              >
+                {isUpdatingGroup && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 9. MANAGE GROUP MEMBERS DIALOG */}
+        <Dialog
+          open={Boolean(membersTargetGroup)}
+          onOpenChange={(open) => {
+            if (!open) setMembersTargetGroup(null)
+          }}
+        >
+          <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-6 border-b border-slate-100">
+              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
+                Manage Group Members
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Add or remove recipient email addresses for{" "}
+                <span className="font-mono font-semibold text-slate-700">
+                  {membersTargetGroup?.groupEmail}
+                </span>
+                .
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-6 space-y-5">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-slate-700">Add Member Address</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={groupMemberInput}
+                    onChange={(e) => setGroupMemberInput(e.target.value)}
+                    placeholder={`user@${selectedOrg.domain}`}
+                    className="h-9 text-xs font-mono border-slate-200"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={
+                      isUpdatingGroupMembers ||
+                      !groupMemberInput.trim() ||
+                      !groupMemberInput.includes("@")
+                    }
+                    onClick={() => {
+                      if (!membersTargetGroup) return
+                      const clean = groupMemberInput.toLowerCase().trim()
+                      const next = Array.from(
+                        new Set([...membersTargetGroup.memberEmails, clean])
+                      )
+                      handleUpdateGroupMembersList(next)
+                    }}
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Add Member
+                  </Button>
+                </div>
+
+                {activeUsers.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <span className="text-[11px] text-slate-400 mr-1">Quick add:</span>
+                    {activeUsers
+                      .filter(
+                        (u) => !membersTargetGroup?.memberEmails.includes(u.primaryEmail)
+                      )
+                      .slice(0, 5)
+                      .map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          disabled={isUpdatingGroupMembers}
+                          onClick={() => {
+                            if (!membersTargetGroup) return
+                            handleUpdateGroupMembersList([
+                              ...membersTargetGroup.memberEmails,
+                              u.primaryEmail,
+                            ])
+                          }}
+                          className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 hover:bg-primary/10 hover:text-primary text-slate-600 transition-colors"
+                        >
+                          + {u.primaryEmail}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {membersTargetGroup?.memberEmails.length === 0 ? (
+                  <div className="p-6 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                    No members in this group yet.
+                  </div>
+                ) : (
+                  membersTargetGroup?.memberEmails.map((member) => (
+                    <div
+                      key={member}
+                      className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50/60"
+                    >
+                      <span className="text-xs font-mono font-semibold text-slate-800">
+                        {member}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={isUpdatingGroupMembers}
+                        onClick={() => {
+                          if (!membersTargetGroup) return
+                          handleUpdateGroupMembersList(
+                            membersTargetGroup.memberEmails.filter((m) => m !== member)
+                          )
+                        }}
+                        className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMembersTargetGroup(null)}
+                className="h-8 px-4 text-xs font-semibold rounded-lg"
+              >
+                Done
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 10. DELETE GROUP CONFIRMATION */}
+        <AlertDialog
+          open={Boolean(deletingGroup)}
+          onOpenChange={(open) => {
+            if (!open) setDeletingGroup(null)
+          }}
+        >
+          <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-headline font-bold text-slate-900">
+                Delete Group?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+                This will permanently remove the group{" "}
+                <span className="font-mono font-semibold text-slate-800">
+                  {deletingGroup?.groupEmail}
+                </span>
+                . Individual member accounts will not be deleted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="h-9 text-xs font-semibold rounded-lg">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault()
+                  handleConfirmDeleteGroup()
+                }}
+                disabled={isDeletingGroup}
+                className="h-9 text-xs font-semibold bg-destructive text-white hover:bg-destructive/90 rounded-lg"
+              >
+                {isDeletingGroup && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                Delete Group
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* 11. DEACTIVATE EMAIL SERVICE CONFIRMATION */}
+        <AlertDialog
+          open={isDeactivateConfirmOpen}
+          onOpenChange={setIsDeactivateConfirmOpen}
+        >
+          <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-headline font-bold text-slate-900">
+                Deactivate Email Service?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+                Are you sure you want to deactivate Email Service for{" "}
+                <span className="font-mono font-semibold text-slate-800">
+                  {selectedOrg.domain}
+                </span>
+                ? You can re-activate it at any time.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="h-9 text-xs font-semibold rounded-lg">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault()
+                  handleDeactivateService()
+                }}
+                disabled={isDeactivating}
+                className="h-9 text-xs font-semibold bg-destructive text-white hover:bg-destructive/90 rounded-lg"
+              >
+                {isDeactivating && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                Deactivate Email Service
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardShell>
   )

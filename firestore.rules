@@ -47,6 +47,31 @@ service cloud.firestore {
             .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'memberEmails', 'updatedAt'])
         );
       allow delete: if isResourceOwner() || isSuperAdmin();
+
+      // Revlet Mail Service subcollections (managed via authenticated Server Actions)
+      match /mailUsers/{mailUserId} {
+        allow read: if isAuthenticated() && (
+          get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
+          isSuperAdmin()
+        );
+        allow write: if false; // Mutated exclusively via Server Actions with hashed credentials
+      }
+
+      match /mailGroups/{mailGroupId} {
+        allow read: if isAuthenticated() && (
+          get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
+          isSuperAdmin()
+        );
+        allow write: if false; // Mutated exclusively via Server Actions
+      }
+
+      match /mailOrgUnits/{mailOuId} {
+        allow read: if isAuthenticated() && (
+          get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
+          isSuperAdmin()
+        );
+        allow write: if false; // Mutated exclusively via Server Actions
+      }
     }
 
     // ─── Payment Vouchers ─────────────────────────────────────────────────────

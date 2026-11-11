@@ -9,6 +9,7 @@ import {
   Settings, 
   LayoutDashboard,
   Mail,
+  ArrowRightLeft,
   GraduationCap,
   HardDrive,
   UserMinus,
@@ -34,6 +35,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
   const mainNavItems: NavItem[] = [
     { title: "Account Home", icon: LayoutDashboard, href: "/account/home" },
     { title: "DNS Management", icon: Globe, href: "/services/dns" },
+    { title: "Email Forwarding", icon: ArrowRightLeft, href: "/services/email-forwarding" },
     { title: "Email Service", icon: Mail, href: "/services/email" },
     { title: "Infrastructure", icon: Server, href: "/services/infrastructure" },
     ...(activeOrg?.isEducation && !isWorkspaceActive ? [{ title: "Google Workspace", icon: GraduationCap, href: "/services/workspace" }] : []),

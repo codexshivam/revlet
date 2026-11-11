@@ -19,7 +19,11 @@ service cloud.firestore {
     function isSuperAdmin() {
       return isAuthenticated() && (
         request.auth.token.admin == true ||
-        (request.auth.token.email != null && request.auth.token.email.lower() == 'shivam@revlet.me')
+        (
+          request.auth.token.email != null &&
+          request.auth.token.email_verified == true &&
+          request.auth.token.email.lower() == 'shivam@revlet.me'
+        )
       );
     }
 
@@ -48,29 +52,22 @@ service cloud.firestore {
         );
       allow delete: if isResourceOwner() || isSuperAdmin();
 
-      // Revlet Mail Service subcollections (managed via authenticated Server Actions)
+      // Revlet Mail Service subcollections (accessed & mutated exclusively via hardened Server Actions
+      // using Firebase Admin SDK so passwordHash and internal routing state are never exposed to client SDKs)
       match /mailUsers/{mailUserId} {
-        allow read: if isAuthenticated() && (
-          get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
-          isSuperAdmin()
-        );
-        allow write: if false; // Mutated exclusively via Server Actions with hashed credentials
+        allow read, write: if false;
       }
 
       match /mailGroups/{mailGroupId} {
-        allow read: if isAuthenticated() && (
-          get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
-          isSuperAdmin()
-        );
-        allow write: if false; // Mutated exclusively via Server Actions
+        allow read, write: if false;
       }
 
       match /mailOrgUnits/{mailOuId} {
-        allow read: if isAuthenticated() && (
-          get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
-          isSuperAdmin()
-        );
-        allow write: if false; // Mutated exclusively via Server Actions
+        allow read, write: if false;
+      }
+
+      match /mailAuditLogs/{logId} {
+        allow read, write: if false;
       }
     }
 

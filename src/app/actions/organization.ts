@@ -14,19 +14,25 @@ export async function deleteOrganization(idToken: string, orgId: string) {
       return { success: false, error: 'Unauthorized: Only the organization owner can delete this organization.' };
     }
 
-    // 1. Delete associated team members
-    const membersSnap = await adminDb
-      .collection('teamMembers')
-      .where('organizationId', '==', orgId)
-      .get();
+    const orgRef = adminDb.collection('organizations').doc(orgId);
+
+    // 1. Delete associated team members and Email Service subcollections
+    const [membersSnap, mailUsersSnap, mailGroupsSnap, mailOusSnap, mailLogsSnap] = await Promise.all([
+      adminDb.collection('teamMembers').where('organizationId', '==', orgId).get(),
+      orgRef.collection('mailUsers').get(),
+      orgRef.collection('mailGroups').get(),
+      orgRef.collection('mailOrgUnits').get(),
+      orgRef.collection('mailAuditLogs').get(),
+    ]);
 
     const batch = adminDb.batch();
-    membersSnap.docs.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
+    membersSnap.docs.forEach((doc) => batch.delete(doc.ref));
+    mailUsersSnap.docs.forEach((doc) => batch.delete(doc.ref));
+    mailGroupsSnap.docs.forEach((doc) => batch.delete(doc.ref));
+    mailOusSnap.docs.forEach((doc) => batch.delete(doc.ref));
+    mailLogsSnap.docs.forEach((doc) => batch.delete(doc.ref));
 
     // 2. Delete the organization document itself
-    const orgRef = adminDb.collection('organizations').doc(orgId);
     batch.delete(orgRef);
 
     await batch.commit();

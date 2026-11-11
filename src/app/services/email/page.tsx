@@ -364,13 +364,20 @@ export default function EmailServiceAdminPage() {
       const res = await syncMailDnsRecords(idToken, selectedOrgId)
       if (!res.success) throw new Error(res.error)
 
-      toast({
-        title: "DNS records synchronized",
-        description:
-          res.data?.addedCount && res.data.addedCount > 0
-            ? `Added ${res.data.addedCount} missing DNS record(s) to ${selectedOrg?.domain}.`
-            : `All required DNS records are present on ${selectedOrg?.domain}.`,
-      })
+      if (!dnsServiceActive) {
+        toast({
+          title: "DNS verification complete",
+          description: `${res.data?.verifiedCount ?? 0} of ${res.data?.totalCount ?? requiredDnsRecords.length} required DNS records verified on ${selectedOrg?.domain}.`,
+        })
+      } else {
+        toast({
+          title: "DNS records synchronized",
+          description:
+            res.data?.addedCount && res.data.addedCount > 0
+              ? `Added ${res.data.addedCount} missing DNS record(s) to ${selectedOrg?.domain}.`
+              : `All required DNS records are present on ${selectedOrg?.domain}.`,
+        })
+      }
       await loadAllMailData(true)
     } catch (err: any) {
       toast({
@@ -2022,23 +2029,23 @@ export default function EmailServiceAdminPage() {
                   </p>
                 </div>
 
-                {dnsServiceActive && (
-                  <Button
-                    size="sm"
-                    onClick={handleSyncDnsRecords}
-                    disabled={isSyncingDns}
-                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
-                  >
-                    {isSyncingDns ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
-                        Syncing DNS records
-                      </>
-                    ) : (
-                      "Sync DNS records"
-                    )}
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  onClick={handleSyncDnsRecords}
+                  disabled={isSyncingDns}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
+                >
+                  {isSyncingDns ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
+                      {dnsServiceActive ? "Syncing DNS records" : "Verifying DNS records"}
+                    </>
+                  ) : dnsServiceActive ? (
+                    "Sync DNS records"
+                  ) : (
+                    "Verify DNS records"
+                  )}
+                </Button>
               </div>
 
               <Table>
@@ -2319,7 +2326,7 @@ export default function EmailServiceAdminPage() {
                   onChange={(e) =>
                     setCreateUserForm((prev) => ({ ...prev, password: e.target.value }))
                   }
-                  placeholder="Minimum 8 characters"
+                  placeholder="8+ chars, letter & number/symbol"
                   className="h-9 text-xs border-slate-200 rounded-lg"
                 />
               </div>
@@ -2488,7 +2495,7 @@ export default function EmailServiceAdminPage() {
                   type="password"
                   value={newPasswordValue}
                   onChange={(e) => setNewPasswordValue(e.target.value)}
-                  placeholder="Minimum 8 characters"
+                  placeholder="8+ chars, letter & number/symbol"
                   className="h-9 text-xs border-slate-200 rounded-lg"
                 />
               </div>

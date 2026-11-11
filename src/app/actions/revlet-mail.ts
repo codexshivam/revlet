@@ -1,6 +1,7 @@
 'use server';
 
 import crypto from 'crypto';
+import dns from 'dns';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
 import { verifyUserOrgAccess } from './auth-helper';
@@ -10,6 +11,13 @@ import {
   deleteDNSRecord,
   createZoneSnapshot,
 } from './cloudflare-dns';
+import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
+import {
+  hashMailPassword,
+  buildCanonicalStalwartEmails,
+} from '@/lib/security/mail-crypto';
+
+const dnsPromises = dns.promises;
 
 export interface MailRequiredDnsRecord {
   id: string;
@@ -55,13 +63,247 @@ export interface MailGroupRecord {
   updatedAt: string;
 }
 
-const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+// ============================================================================
+// CONSTANTS & SECURITY LIMITS
+// ============================================================================
 
-function hashMailPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const derived = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `scrypt$${salt}$${derived}`;
+const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+const MAX_ORG_UNITS_PER_ORG = 50;
+const MAX_ALIASES_PER_USER = 25;
+const MAX_MEMBERS_PER_GROUP = 500;
+const MAX_MAILBOXES_PER_ORG = 1000;
+const DEFAULT_MAILBOX_QUOTA_BYTES = 536870912; // 512 MB per mailbox default
+
+const MAIL_MX_HOST = (process.env.MAIL_MX_HOST || 'mx.revlet.me').toLowerCase().trim();
+const MAIL_SPF_INCLUDE = (process.env.MAIL_SPF_INCLUDE || '_spf.mx.revlet.me').toLowerCase().trim();
+const MAIL_DKIM_TARGET_DOMAIN = (process.env.MAIL_DKIM_TARGET_DOMAIN || 'dkim.revlet.me')
+  .toLowerCase()
+  .trim();
+
+// ============================================================================
+// CRYPTOGRAPHIC PASSWORD HASHING & INPUT VALIDATION
+// ============================================================================
+
+function validateMailPassword(password: string): string | null {
+  if (!password || typeof password !== 'string') {
+    return 'Password is required.';
+  }
+  if (password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (password.length > 128) {
+    return 'Password must not exceed 128 characters.';
+  }
+  if (!/[A-Za-z]/.test(password) || !/[\d\W_]/.test(password)) {
+    return 'Password must include at least one letter and one number or symbol.';
+  }
+  return null;
 }
+
+function validateEmailLocalPart(
+  rawInput: string,
+  fieldLabel = 'Email username'
+): { valid: boolean; prefix: string; error?: string } {
+  const prefix = (rawInput || '')
+    .toLowerCase()
+    .trim()
+    .replace(/@.*$/, '');
+
+  if (!prefix) {
+    return { valid: false, prefix: '', error: `${fieldLabel} is required.` };
+  }
+  if (prefix.length > 64) {
+    return { valid: false, prefix, error: `${fieldLabel} cannot exceed 64 characters.` };
+  }
+  if (
+    !/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(prefix) ||
+    prefix.includes('..')
+  ) {
+    return {
+      valid: false,
+      prefix,
+      error: `Enter a valid ${fieldLabel.toLowerCase()} (letters, numbers, dots, hyphens, underscores; cannot start or end with punctuation or contain consecutive dots).`,
+    };
+  }
+  return { valid: true, prefix };
+}
+
+function isValidEmailAddress(email: string): boolean {
+  if (!email || typeof email !== 'string' || email.length > 254) return false;
+  return /^[a-z0-9](?:[a-z0-9._%+-]{0,62}[a-z0-9])?@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(
+    email.trim()
+  );
+}
+
+// ============================================================================
+// IMMUTABLE SECURITY AUDIT LOGGING
+// ============================================================================
+
+async function logMailAuditEvent(params: {
+  orgId: string;
+  actorUid: string;
+  actorEmail?: string;
+  action: string;
+  target: string;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    await adminDb
+      .collection('organizations')
+      .doc(params.orgId)
+      .collection('mailAuditLogs')
+      .add({
+        actorUid: params.actorUid,
+        actorEmail: params.actorEmail || null,
+        action: params.action,
+        target: params.target,
+        metadata: params.metadata || {},
+        createdAt: new Date().toISOString(),
+        timestamp: FieldValue.serverTimestamp(),
+      });
+  } catch (err) {
+    console.warn('[Revlet Mail Audit] Non-fatal audit log write warning:', err);
+  }
+}
+
+// ============================================================================
+// STALWART MAIL SERVER PRINCIPAL DIRECTORY SYNCHRONIZATION BRIDGE
+// ============================================================================
+
+function getStalwartConfig() {
+  const baseUrl = (process.env.STALWART_BASE_URL || '').trim().replace(/\/+$/, '');
+  const adminToken = (process.env.STALWART_ADMIN_TOKEN || '').trim();
+  const enabled = Boolean(baseUrl && adminToken);
+  return { baseUrl, adminToken, enabled };
+}
+
+async function dispatchStalwartApi(
+  method: 'POST' | 'PATCH' | 'DELETE' | 'GET',
+  endpoint: string,
+  body?: unknown
+): Promise<{ ok: boolean; status: number }> {
+  const { baseUrl, adminToken, enabled } = getStalwartConfig();
+  if (!enabled) {
+    return { ok: true, status: 200 };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`${baseUrl}${endpoint}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    return { ok: res.ok, status: res.status };
+  } catch (err: any) {
+    console.warn(`[Stalwart Sync] ${method} ${endpoint} deferred:`, err?.message || err);
+    return { ok: false, status: 503 };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function syncStalwartDomainPrincipal(domain: string) {
+  const cleanDomain = domain.toLowerCase().trim();
+  if (!cleanDomain) return;
+  await dispatchStalwartApi('POST', '/api/principal', {
+    type: 'domain',
+    name: cleanDomain,
+    description: `Revlet Managed Domain (${cleanDomain})`,
+  });
+}
+
+async function syncStalwartUserPrincipal(params: {
+  primaryEmail: string;
+  displayName: string;
+  orgUnitPath: string;
+  aliases: string[];
+  domain: string;
+  isCatchAllTarget: boolean;
+  plainPassword?: string;
+  isCreate?: boolean;
+}) {
+  const emails = buildCanonicalStalwartEmails(
+    params.primaryEmail,
+    params.aliases,
+    params.domain,
+    params.isCatchAllTarget
+  );
+
+  if (params.isCreate) {
+    await dispatchStalwartApi('POST', '/api/principal', {
+      type: 'individual',
+      name: params.primaryEmail.toLowerCase().trim(),
+      description: `${params.displayName} (${params.orgUnitPath})`,
+      emails,
+      quota: DEFAULT_MAILBOX_QUOTA_BYTES,
+      ...(params.plainPassword ? { secrets: [params.plainPassword] } : {}),
+    });
+    return;
+  }
+
+  const patchOps: Array<{ action: string; field: string; value: unknown }> = [
+    {
+      action: 'set',
+      field: 'description',
+      value: `${params.displayName} (${params.orgUnitPath})`,
+    },
+    {
+      action: 'set',
+      field: 'emails',
+      value: emails,
+    },
+  ];
+
+  if (params.plainPassword) {
+    patchOps.push({
+      action: 'set',
+      field: 'secrets',
+      value: [params.plainPassword],
+    });
+  }
+
+  await dispatchStalwartApi(
+    'PATCH',
+    `/api/principal/${encodeURIComponent(params.primaryEmail.toLowerCase().trim())}`,
+    patchOps
+  );
+}
+
+async function syncStalwartGroupPrincipal(params: {
+  groupEmail: string;
+  name: string;
+  memberEmails: string[];
+  isCreate?: boolean;
+}) {
+  const groupEmail = params.groupEmail.toLowerCase().trim();
+  const members = params.memberEmails.map((m) => m.toLowerCase().trim());
+
+  if (params.isCreate) {
+    await dispatchStalwartApi('POST', '/api/principal', {
+      type: 'list',
+      name: groupEmail,
+      description: params.name,
+      emails: [groupEmail],
+      members,
+    });
+    return;
+  }
+
+  await dispatchStalwartApi('PATCH', `/api/principal/${encodeURIComponent(groupEmail)}`, [
+    { action: 'set', field: 'description', value: params.name },
+    { action: 'set', field: 'members', value: members },
+  ]);
+}
+
+// ============================================================================
+// DNS RECORDS & LIVE PUBLIC DNS VERIFICATION
+// ============================================================================
 
 function generateDeterministicDkimTokens(orgId: string, domain: string): string[] {
   return [1, 2, 3].map((index) =>
@@ -71,6 +313,81 @@ function generateDeterministicDkimTokens(orgId: string, domain: string): string[
       .digest('hex')
       .slice(0, 24)
   );
+}
+
+/**
+ * Resolves live public DNS records (MX, TXT, _dmarc TXT, and DKIM CNAMEs)
+ * when an organization manages DNS at an external registrar outside Cloudflare.
+ */
+async function resolvePublicDnsRecords(
+  domain: string,
+  dkimTokens: string[]
+): Promise<Array<{ type: string; name: string; content: string; priority?: number }>> {
+  const normalizedDomain = domain.toLowerCase().trim();
+  if (!normalizedDomain) return [];
+
+  const records: Array<{ type: string; name: string; content: string; priority?: number }> = [];
+
+  const withTimeout = <T>(promise: Promise<T>, ms = 2500): Promise<T | null> =>
+    Promise.race([
+      promise,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+    ]).catch(() => null);
+
+  const [mxRes, txtRes, dmarcRes, ...cnameResults] = await Promise.all([
+    withTimeout(dnsPromises.resolveMx(normalizedDomain)),
+    withTimeout(dnsPromises.resolveTxt(normalizedDomain)),
+    withTimeout(dnsPromises.resolveTxt(`_dmarc.${normalizedDomain}`)),
+    ...dkimTokens.slice(0, 3).map((token) =>
+      withTimeout(dnsPromises.resolveCname(`${token}._domainkey.${normalizedDomain}`))
+    ),
+  ]);
+
+  if (Array.isArray(mxRes)) {
+    for (const mx of mxRes) {
+      records.push({
+        type: 'MX',
+        name: normalizedDomain,
+        content: mx.exchange,
+        priority: mx.priority,
+      });
+    }
+  }
+
+  if (Array.isArray(txtRes)) {
+    for (const chunks of txtRes) {
+      records.push({
+        type: 'TXT',
+        name: normalizedDomain,
+        content: chunks.join(''),
+      });
+    }
+  }
+
+  if (Array.isArray(dmarcRes)) {
+    for (const chunks of dmarcRes) {
+      records.push({
+        type: 'TXT',
+        name: `_dmarc.${normalizedDomain}`,
+        content: chunks.join(''),
+      });
+    }
+  }
+
+  dkimTokens.slice(0, 3).forEach((token, idx) => {
+    const cnames = cnameResults[idx];
+    if (Array.isArray(cnames)) {
+      for (const target of cnames) {
+        records.push({
+          type: 'CNAME',
+          name: `${token}._domainkey.${normalizedDomain}`,
+          content: target,
+        });
+      }
+    }
+  });
+
+  return records;
 }
 
 function buildRequiredDnsRecords(
@@ -102,19 +419,21 @@ function buildRequiredDnsRecords(
       purpose: 'Inbound Mail Routing (MX)',
       type: 'MX',
       name: normalizedDomain,
-      content: 'mx.revlet.me',
+      content: MAIL_MX_HOST,
       priority: 10,
       ttl: 'Auto',
-      verified: isPresent('MX', normalizedDomain, 'mx.revlet.me'),
+      verified: isPresent('MX', normalizedDomain, MAIL_MX_HOST),
     },
     {
       id: 'txt-spf',
       purpose: 'Sender Policy Authorization (SPF)',
       type: 'TXT',
       name: normalizedDomain,
-      content: 'v=spf1 include:_spf.mx.revlet.me ~all',
+      content: `v=spf1 include:${MAIL_SPF_INCLUDE} ~all`,
       ttl: 'Auto',
-      verified: isPresent('TXT', normalizedDomain, 'include:_spf.mx.revlet.me'),
+      verified:
+        isPresent('TXT', normalizedDomain, `include:${MAIL_SPF_INCLUDE}`) ||
+        isPresent('TXT', normalizedDomain, 'include:amazonses.com'),
     },
     {
       id: 'txt-dmarc',
@@ -129,7 +448,7 @@ function buildRequiredDnsRecords(
 
   dkimTokens.slice(0, 3).forEach((token, idx) => {
     const recordName = `${token}._domainkey.${normalizedDomain}`;
-    const recordTarget = `${token}.dkim.revlet.me`;
+    const recordTarget = `${token}.${MAIL_DKIM_TARGET_DOMAIN}`;
     records.push({
       id: `cname-dkim-${idx + 1}`,
       purpose: `Domain Signing Key #${idx + 1} (DKIM)`,
@@ -137,14 +456,19 @@ function buildRequiredDnsRecords(
       name: recordName,
       content: recordTarget,
       ttl: 'Auto',
-      verified: isPresent('CNAME', recordName, recordTarget),
+      verified:
+        isPresent('CNAME', recordName, recordTarget) ||
+        isPresent('CNAME', recordName, `${token}.dkim.amazonses.com`),
     });
   });
 
   return records;
 }
 
-async function ensureOrgDkimTokens(orgId: string, orgData: FirebaseFirestore.DocumentData): Promise<string[]> {
+async function ensureOrgDkimTokens(
+  orgId: string,
+  orgData: FirebaseFirestore.DocumentData
+): Promise<string[]> {
   if (Array.isArray(orgData.mailDkimTokens) && orgData.mailDkimTokens.length === 3) {
     return orgData.mailDkimTokens;
   }
@@ -171,7 +495,11 @@ async function provisionRequiredDnsRecordsOnZone(
 
     const existingRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!existingRes.success) {
-      return { success: false, addedCount: 0, error: existingRes.error || 'Could not inspect domain records.' };
+      return {
+        success: false,
+        addedCount: 0,
+        error: existingRes.error || 'Could not inspect domain records.',
+      };
     }
 
     const currentRecords: any[] = existingRes.data || [];
@@ -182,13 +510,13 @@ async function provisionRequiredDnsRecordsOnZone(
       const rName = (r.name || '').toLowerCase().replace(/\.$/, '');
       const isRoot = rName === normalizedDomain || rName === '@';
       if (!isRoot) return false;
-      if (r.type === 'MX' && !(r.content || '').toLowerCase().includes('mx.revlet.me')) {
+      if (r.type === 'MX' && !(r.content || '').toLowerCase().includes(MAIL_MX_HOST)) {
         return true;
       }
       if (
         r.type === 'TXT' &&
         (r.content || '').toLowerCase().includes('v=spf1') &&
-        !(r.content || '').toLowerCase().includes('_spf.mx.revlet.me')
+        !(r.content || '').toLowerCase().includes(MAIL_SPF_INCLUDE)
       ) {
         return true;
       }
@@ -231,6 +559,10 @@ async function provisionRequiredDnsRecordsOnZone(
   }
 }
 
+// ============================================================================
+// EMAIL SERVICE LIFECYCLE & ROUTING STATE
+// ============================================================================
+
 export async function getMailServiceState(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
@@ -246,6 +578,11 @@ export async function getMailServiceState(idToken: string, orgId: string) {
       if (dnsRes.success && Array.isArray(dnsRes.data)) {
         liveRecords = dnsRes.data;
       }
+    }
+
+    // Fallback to live public DNS resolution if Cloudflare zone is not linked or returned empty
+    if (liveRecords.length === 0 && domain) {
+      liveRecords = await resolvePublicDnsRecords(domain, dkimTokens);
     }
 
     const requiredDnsRecords = buildRequiredDnsRecords(domain, dkimTokens, liveRecords);
@@ -266,14 +603,17 @@ export async function getMailServiceState(idToken: string, orgId: string) {
       },
     };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to load Email Service configuration.' };
+    return {
+      success: false,
+      error: error.message || 'Failed to load Email Service configuration.',
+    };
   }
 }
 
 export async function activateMailService(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
     const domain = (orgData.domain || '').toLowerCase().trim();
     if (!domain) {
       return { success: false, error: 'Organization does not have a valid domain configured.' };
@@ -299,6 +639,9 @@ export async function activateMailService(idToken: string, orgId: string) {
       }
     }
 
+    // Ensure domain principal exists on Stalwart Mail Server
+    await syncStalwartDomainPrincipal(domain);
+
     await adminDb.collection('organizations').doc(orgId).update({
       mailServiceActive: true,
       mailMonthlyLimit: orgData.mailMonthlyLimit ?? 1000,
@@ -309,6 +652,15 @@ export async function activateMailService(idToken: string, orgId: string) {
       mailCatchAllEmail: orgData.mailCatchAllEmail ?? null,
       mailActivatedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_SERVICE_ACTIVATED',
+      target: domain,
+      metadata: { dnsProvisionedAutomatically, dnsAddedCount },
     });
 
     return {
@@ -327,11 +679,27 @@ export async function activateMailService(idToken: string, orgId: string) {
 export async function deactivateMailService(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, isOwner, orgData } = await verifyUserOrgAccess(idToken, orgId);
+    if (!isOwner) {
+      return {
+        success: false,
+        error: 'Unauthorized: Only the organization owner can deactivate Email Service.',
+      };
+    }
+
     await adminDb.collection('organizations').doc(orgId).update({
       mailServiceActive: false,
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_SERVICE_DEACTIVATED',
+      target: orgData.domain || orgId,
+    });
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to deactivate Email Service.' };
@@ -341,16 +709,21 @@ export async function deactivateMailService(idToken: string, orgId: string) {
 export async function syncMailDnsRecords(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const domain = (orgData.domain || '').toLowerCase().trim();
+    const dkimTokens = await ensureOrgDkimTokens(orgId, orgData);
+
     if (!orgData.cloudflareZoneId) {
+      // Perform live DNS verification against public resolvers
+      const livePublic = await resolvePublicDnsRecords(domain, dkimTokens);
+      const verifiedRecords = buildRequiredDnsRecords(domain, dkimTokens, livePublic);
+      const verifiedCount = verifiedRecords.filter((r) => r.verified).length;
       return {
-        success: false,
-        error: 'DNS Management is not active on this organization. Add the records manually at your domain registrar or activate DNS Management first.',
+        success: true,
+        data: { addedCount: 0, verifiedCount, totalCount: verifiedRecords.length },
       };
     }
 
-    const domain = (orgData.domain || '').toLowerCase().trim();
-    const dkimTokens = await ensureOrgDkimTokens(orgId, orgData);
     const result = await provisionRequiredDnsRecordsOnZone(
       idToken,
       orgId,
@@ -362,6 +735,15 @@ export async function syncMailDnsRecords(idToken: string, orgId: string) {
     if (!result.success) {
       return { success: false, error: result.error };
     }
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_DNS_SYNCED',
+      target: domain,
+      metadata: { addedCount: result.addedCount },
+    });
 
     return {
       success: true,
@@ -379,10 +761,13 @@ export async function updateMailCatchAll(
 ) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const domain = (orgData.domain || '').toLowerCase().trim();
+    const previousCatchAllUserId: string | null = orgData.mailCatchAllUserId || null;
 
     let catchAllEmail: string | null = null;
     let resolvedUserId: string | null = null;
+    let nextTargetData: FirebaseFirestore.DocumentData | null = null;
 
     if (catchAllUserId) {
       const userDoc = await adminDb
@@ -401,12 +786,54 @@ export async function updateMailCatchAll(
       }
       resolvedUserId = userDoc.id;
       catchAllEmail = userData.primaryEmail;
+      nextTargetData = userData;
     }
 
     await adminDb.collection('organizations').doc(orgId).update({
       mailCatchAllUserId: resolvedUserId,
       mailCatchAllEmail: catchAllEmail,
       updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Synchronize Stalwart principals if catch-all target changed
+    if (previousCatchAllUserId && previousCatchAllUserId !== resolvedUserId) {
+      const prevDoc = await adminDb
+        .collection('organizations')
+        .doc(orgId)
+        .collection('mailUsers')
+        .doc(previousCatchAllUserId)
+        .get();
+      if (prevDoc.exists) {
+        const prevData = prevDoc.data()!;
+        await syncStalwartUserPrincipal({
+          primaryEmail: prevData.primaryEmail,
+          displayName: prevData.displayName || prevData.firstName,
+          orgUnitPath: prevData.orgUnitPath || '/',
+          aliases: Array.isArray(prevData.aliases) ? prevData.aliases : [],
+          domain,
+          isCatchAllTarget: false,
+        });
+      }
+    }
+
+    if (resolvedUserId && nextTargetData) {
+      await syncStalwartUserPrincipal({
+        primaryEmail: nextTargetData.primaryEmail,
+        displayName: nextTargetData.displayName || nextTargetData.firstName,
+        orgUnitPath: nextTargetData.orgUnitPath || '/',
+        aliases: Array.isArray(nextTargetData.aliases) ? nextTargetData.aliases : [],
+        domain,
+        isCatchAllTarget: true,
+      });
+    }
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_CATCH_ALL_UPDATED',
+      target: catchAllEmail || 'DISABLED',
+      metadata: { previousCatchAllUserId, catchAllUserId: resolvedUserId },
     });
 
     return {
@@ -460,16 +887,47 @@ export async function createMailOrgUnit(
 ) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
-    const cleanName = (payload.name || '').trim().replace(/^\/+|\/+$/g, '');
-    if (!cleanName) {
-      return { success: false, error: 'Organizational Unit name is required.' };
+    const { uid, email } = await verifyUserOrgAccess(idToken, orgId);
+
+    const nameCheck = validateAndSanitizeInput(payload.name || '', 'Organizational Unit name', {
+      required: true,
+      maxLength: 48,
+    });
+    if (!nameCheck.isValid) {
+      return { success: false, error: nameCheck.error };
+    }
+
+    const cleanName = nameCheck.sanitized.replace(/^\/+|\/+$/g, '').trim();
+    if (!cleanName || !/^[A-Za-z0-9 _./-]+$/.test(cleanName)) {
+      return {
+        success: false,
+        error: 'Unit name may only contain letters, numbers, spaces, hyphens, underscores, or slashes.',
+      };
+    }
+
+    const descCheck = validateAndSanitizeInput(payload.description || '', 'Description', {
+      required: false,
+      maxLength: 160,
+    });
+    if (!descCheck.isValid) {
+      return { success: false, error: descCheck.error };
     }
 
     const ouPath = `/${cleanName}`;
     const colRef = adminDb.collection('organizations').doc(orgId).collection('mailOrgUnits');
-    const existing = await colRef.where('path', '==', ouPath).get();
-    if (!existing.empty) {
+
+    const allOusSnap = await colRef.get();
+    if (allOusSnap.size >= MAX_ORG_UNITS_PER_ORG) {
+      return {
+        success: false,
+        error: `Maximum limit of ${MAX_ORG_UNITS_PER_ORG} Organizational Units reached.`,
+      };
+    }
+
+    const duplicate = allOusSnap.docs.some(
+      (doc) => (doc.data().path || '').toLowerCase() === ouPath.toLowerCase()
+    );
+    if (duplicate) {
       return { success: false, error: `Organizational Unit "${ouPath}" already exists.` };
     }
 
@@ -477,8 +935,16 @@ export async function createMailOrgUnit(
     const docRef = await colRef.add({
       name: cleanName,
       path: ouPath,
-      description: (payload.description || '').trim(),
+      description: descCheck.sanitized,
       createdAt: now,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_OU_CREATED',
+      target: ouPath,
     });
 
     return {
@@ -487,7 +953,7 @@ export async function createMailOrgUnit(
         id: docRef.id,
         name: cleanName,
         path: ouPath,
-        description: (payload.description || '').trim(),
+        description: descCheck.sanitized,
         createdAt: now,
       },
     };
@@ -499,7 +965,7 @@ export async function createMailOrgUnit(
 export async function deleteMailOrgUnit(idToken: string, orgId: string, ouId: string) {
   if (!orgId || !ouId) return { success: false, error: 'Missing parameters.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email } = await verifyUserOrgAccess(idToken, orgId);
     const ouRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -543,6 +1009,14 @@ export async function deleteMailOrgUnit(idToken: string, orgId: string, ouId: st
     } else {
       await ouRef.delete();
     }
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_OU_DELETED',
+      target: ouPath || ouId,
+    });
 
     return { success: true };
   } catch (error: any) {
@@ -611,7 +1085,7 @@ export async function listMailUsers(idToken: string, orgId: string) {
     const snap = await colRef.get();
 
     const nowMs = Date.now();
-    const expiredDocs: FirebaseFirestore.DocumentReference[] = [];
+    const expiredDocs: Array<{ ref: FirebaseFirestore.DocumentReference; email: string }> = [];
     const users: MailUserRecord[] = [];
 
     for (const doc of snap.docs) {
@@ -619,7 +1093,7 @@ export async function listMailUsers(idToken: string, orgId: string) {
       if (d.status === 'deleted' && d.recoverableUntil) {
         const expiryMs = new Date(d.recoverableUntil).getTime();
         if (expiryMs <= nowMs) {
-          expiredDocs.push(doc.ref);
+          expiredDocs.push({ ref: doc.ref, email: d.primaryEmail || '' });
           continue;
         }
       }
@@ -642,8 +1116,18 @@ export async function listMailUsers(idToken: string, orgId: string) {
 
     if (expiredDocs.length > 0) {
       const batch = adminDb.batch();
-      expiredDocs.forEach((ref) => batch.delete(ref));
+      expiredDocs.forEach((item) => batch.delete(item.ref));
       await batch.commit();
+
+      // Purge expired principals from Stalwart Mail Server
+      for (const item of expiredDocs) {
+        if (item.email) {
+          await dispatchStalwartApi(
+            'DELETE',
+            `/api/principal/${encodeURIComponent(item.email.toLowerCase().trim())}`
+          );
+        }
+      }
     }
 
     users.sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -666,61 +1150,94 @@ export async function createMailUser(
 ) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
     const domain = (orgData.domain || '').toLowerCase().trim();
     if (!domain) {
       return { success: false, error: 'Organization domain is not configured.' };
     }
 
-    const firstName = (payload.firstName || '').trim();
-    const lastName = (payload.lastName || '').trim();
-    if (!firstName) {
-      return { success: false, error: 'First name is required.' };
+    const firstCheck = validateAndSanitizeInput(payload.firstName || '', 'First name', {
+      required: true,
+      maxLength: 64,
+    });
+    if (!firstCheck.isValid) {
+      return { success: false, error: firstCheck.error };
     }
 
-    const prefix = (payload.emailPrefix || '')
-      .toLowerCase()
-      .trim()
-      .replace(/@.*$/, '');
-    if (!prefix || !/^[a-z0-9._-]+$/.test(prefix)) {
+    const lastCheck = validateAndSanitizeInput(payload.lastName || '', 'Last name', {
+      required: false,
+      maxLength: 64,
+    });
+    if (!lastCheck.isValid) {
+      return { success: false, error: lastCheck.error };
+    }
+
+    const prefixCheck = validateEmailLocalPart(payload.emailPrefix, 'Email username');
+    if (!prefixCheck.valid) {
+      return { success: false, error: prefixCheck.error };
+    }
+
+    const passwordError = validateMailPassword(payload.password);
+    if (passwordError) {
+      return { success: false, error: passwordError };
+    }
+
+    const colRef = adminDb.collection('organizations').doc(orgId).collection('mailUsers');
+    const existingCountSnap = await colRef.count().get();
+    if (existingCountSnap.data().count >= MAX_MAILBOXES_PER_ORG) {
       return {
         success: false,
-        error: 'Enter a valid email username (letters, numbers, dots, hyphens, underscores).',
+        error: `Organization mailbox limit (${MAX_MAILBOXES_PER_ORG}) reached.`,
       };
     }
 
-    if (!payload.password || payload.password.length < 8) {
-      return { success: false, error: 'Password must be at least 8 characters long.' };
-    }
-
-    const primaryEmail = `${prefix}@${domain}`;
+    const primaryEmail = `${prefixCheck.prefix}@${domain}`;
     const conflictError = await isEmailAddressTakenInOrg(orgId, primaryEmail);
     if (conflictError) {
       return { success: false, error: conflictError };
     }
 
+    const firstName = firstCheck.sanitized;
+    const lastName = lastCheck.sanitized;
     const displayName = `${firstName} ${lastName}`.trim();
-    const orgUnitPath = (payload.orgUnitPath || '/').trim() || '/';
+    const orgUnitPath = stripScripts(payload.orgUnitPath || '/', { maxLength: 64 }) || '/';
     const now = new Date().toISOString();
 
-    const docRef = await adminDb
-      .collection('organizations')
-      .doc(orgId)
-      .collection('mailUsers')
-      .add({
-        firstName,
-        lastName,
-        displayName,
-        primaryEmail,
-        passwordHash: hashMailPassword(payload.password),
-        aliases: [],
-        orgUnitPath,
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-        deletedAt: null,
-        recoverableUntil: null,
-      });
+    const docRef = await colRef.add({
+      firstName,
+      lastName,
+      displayName,
+      primaryEmail,
+      passwordHash: hashMailPassword(payload.password),
+      aliases: [],
+      orgUnitPath,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      recoverableUntil: null,
+    });
+
+    // Provision principal in Stalwart Mail Server
+    await syncStalwartUserPrincipal({
+      primaryEmail,
+      displayName,
+      orgUnitPath,
+      aliases: [],
+      domain,
+      isCatchAllTarget: false,
+      plainPassword: payload.password,
+      isCreate: true,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_USER_CREATED',
+      target: primaryEmail,
+      metadata: { userId: docRef.id, orgUnitPath },
+    });
 
     return {
       success: true,
@@ -752,11 +1269,22 @@ export async function updateMailUserAccount(
 ) {
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
-    const firstName = (payload.firstName || '').trim();
-    const lastName = (payload.lastName || '').trim();
-    if (!firstName) {
-      return { success: false, error: 'First name is required.' };
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
+
+    const firstCheck = validateAndSanitizeInput(payload.firstName || '', 'First name', {
+      required: true,
+      maxLength: 64,
+    });
+    if (!firstCheck.isValid) {
+      return { success: false, error: firstCheck.error };
+    }
+
+    const lastCheck = validateAndSanitizeInput(payload.lastName || '', 'Last name', {
+      required: false,
+      maxLength: 64,
+    });
+    if (!lastCheck.isValid) {
+      return { success: false, error: lastCheck.error };
     }
 
     const userRef = adminDb
@@ -770,10 +1298,13 @@ export async function updateMailUserAccount(
       return { success: false, error: 'Email account not found.' };
     }
 
+    const userData = userDoc.data()!;
+    const firstName = firstCheck.sanitized;
+    const lastName = lastCheck.sanitized;
     const displayName = `${firstName} ${lastName}`.trim();
     const orgUnitPath = payload.orgUnitPath
-      ? payload.orgUnitPath.trim()
-      : userDoc.data()?.orgUnitPath || '/';
+      ? stripScripts(payload.orgUnitPath, { maxLength: 64 }) || '/'
+      : userData.orgUnitPath || '/';
     const updatedAt = new Date().toISOString();
 
     await userRef.update({
@@ -782,6 +1313,24 @@ export async function updateMailUserAccount(
       displayName,
       orgUnitPath,
       updatedAt,
+    });
+
+    await syncStalwartUserPrincipal({
+      primaryEmail: userData.primaryEmail,
+      displayName,
+      orgUnitPath,
+      aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
+      domain: (orgData.domain || '').toLowerCase().trim(),
+      isCatchAllTarget: orgData.mailCatchAllUserId === userId,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_USER_UPDATED',
+      target: userData.primaryEmail,
+      metadata: { userId, displayName, orgUnitPath },
     });
 
     return {
@@ -801,9 +1350,10 @@ export async function resetMailUserPassword(
 ) {
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
-    if (!newPassword || newPassword.length < 8) {
-      return { success: false, error: 'New password must be at least 8 characters long.' };
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const passwordError = validateMailPassword(newPassword);
+    if (passwordError) {
+      return { success: false, error: passwordError };
     }
 
     const userRef = adminDb
@@ -817,9 +1367,30 @@ export async function resetMailUserPassword(
       return { success: false, error: 'Email account not found.' };
     }
 
+    const userData = userDoc.data()!;
+
     await userRef.update({
       passwordHash: hashMailPassword(newPassword),
       updatedAt: new Date().toISOString(),
+    });
+
+    await syncStalwartUserPrincipal({
+      primaryEmail: userData.primaryEmail,
+      displayName: userData.displayName || userData.firstName,
+      orgUnitPath: userData.orgUnitPath || '/',
+      aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
+      domain: (orgData.domain || '').toLowerCase().trim(),
+      isCatchAllTarget: orgData.mailCatchAllUserId === userId,
+      plainPassword: newPassword,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_USER_PASSWORD_RESET',
+      target: userData.primaryEmail,
+      metadata: { userId },
     });
 
     return { success: true };
@@ -837,7 +1408,7 @@ export async function manageMailUserAlias(
 ) {
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
     const domain = (orgData.domain || '').toLowerCase().trim();
     if (!domain) {
       return { success: false, error: 'Organization domain is not configured.' };
@@ -858,17 +1429,17 @@ export async function manageMailUserAlias(
     const currentAliases: string[] = Array.isArray(userData.aliases) ? [...userData.aliases] : [];
 
     if (action === 'add') {
-      const prefix = (payload.aliasPrefix || '')
-        .toLowerCase()
-        .trim()
-        .replace(/@.*$/, '');
-      if (!prefix || !/^[a-z0-9._-]+$/.test(prefix)) {
+      if (currentAliases.length >= MAX_ALIASES_PER_USER) {
         return {
           success: false,
-          error: 'Enter a valid alias username (letters, numbers, dots, hyphens, underscores).',
+          error: `Maximum of ${MAX_ALIASES_PER_USER} aliases per email account reached.`,
         };
       }
-      const newAlias = `${prefix}@${domain}`;
+      const prefixCheck = validateEmailLocalPart(payload.aliasPrefix || '', 'Alias username');
+      if (!prefixCheck.valid) {
+        return { success: false, error: prefixCheck.error };
+      }
+      const newAlias = `${prefixCheck.prefix}@${domain}`;
       const conflict = await isEmailAddressTakenInOrg(orgId, newAlias);
       if (conflict) {
         return { success: false, error: conflict };
@@ -880,17 +1451,14 @@ export async function manageMailUserAlias(
       if (idx === -1) {
         return { success: false, error: 'Alias to update was not found on this user.' };
       }
-      const newPrefix = (payload.updatedAliasPrefix || '')
-        .toLowerCase()
-        .trim()
-        .replace(/@.*$/, '');
-      if (!newPrefix || !/^[a-z0-9._-]+$/.test(newPrefix)) {
-        return {
-          success: false,
-          error: 'Enter a valid alias username (letters, numbers, dots, hyphens, underscores).',
-        };
+      const prefixCheck = validateEmailLocalPart(
+        payload.updatedAliasPrefix || '',
+        'Alias username'
+      );
+      if (!prefixCheck.valid) {
+        return { success: false, error: prefixCheck.error };
       }
-      const updatedAlias = `${newPrefix}@${domain}`;
+      const updatedAlias = `${prefixCheck.prefix}@${domain}`;
       if (updatedAlias !== oldAlias) {
         const conflict = await isEmailAddressTakenInOrg(orgId, updatedAlias);
         if (conflict) {
@@ -911,6 +1479,25 @@ export async function manageMailUserAlias(
       updatedAt,
     });
 
+    // Synchronize canonical emails array (primaryEmail at index 0 + aliases + catch-all) to Stalwart
+    await syncStalwartUserPrincipal({
+      primaryEmail: userData.primaryEmail,
+      displayName: userData.displayName || userData.firstName,
+      orgUnitPath: userData.orgUnitPath || '/',
+      aliases: currentAliases,
+      domain,
+      isCatchAllTarget: orgData.mailCatchAllUserId === userId,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: `MAIL_ALIAS_${action.toUpperCase()}`,
+      target: userData.primaryEmail,
+      metadata: { userId, aliases: currentAliases },
+    });
+
     return {
       success: true,
       data: { aliases: currentAliases, updatedAt },
@@ -928,7 +1515,7 @@ export async function toggleMailUserSuspend(
 ) {
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
     const userRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -940,6 +1527,7 @@ export async function toggleMailUserSuspend(
       return { success: false, error: 'Email account not found.' };
     }
 
+    const userData = userDoc.data()!;
     const nextStatus = suspend ? 'suspended' : 'active';
     const updatedAt = new Date().toISOString();
 
@@ -949,26 +1537,48 @@ export async function toggleMailUserSuspend(
     });
 
     // If this account was the catch-all fallback and is now suspended, clear catch-all
-    if (suspend && orgData.mailCatchAllUserId === userId) {
+    const wasCatchAll = orgData.mailCatchAllUserId === userId;
+    if (suspend && wasCatchAll) {
       await adminDb.collection('organizations').doc(orgId).update({
         mailCatchAllUserId: null,
         mailCatchAllEmail: null,
       });
     }
 
+    await syncStalwartUserPrincipal({
+      primaryEmail: userData.primaryEmail,
+      displayName: userData.displayName || userData.firstName,
+      orgUnitPath: userData.orgUnitPath || '/',
+      aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
+      domain: (orgData.domain || '').toLowerCase().trim(),
+      isCatchAllTarget: !suspend && wasCatchAll,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: suspend ? 'MAIL_USER_SUSPENDED' : 'MAIL_USER_REACTIVATED',
+      target: userData.primaryEmail,
+      metadata: { userId },
+    });
+
     return {
       success: true,
       data: { status: nextStatus, updatedAt },
     };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to update account suspension status.' };
+    return {
+      success: false,
+      error: error.message || 'Failed to update account suspension status.',
+    };
   }
 }
 
 export async function deleteMailUserAccount(idToken: string, orgId: string, userId: string) {
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
     const userRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -980,6 +1590,7 @@ export async function deleteMailUserAccount(idToken: string, orgId: string, user
       return { success: false, error: 'Email account not found.' };
     }
 
+    const userData = userDoc.data()!;
     const nowMs = Date.now();
     const deletedAt = new Date(nowMs).toISOString();
     const recoverableUntil = new Date(nowMs + FOURTEEN_DAYS_MS).toISOString();
@@ -998,6 +1609,24 @@ export async function deleteMailUserAccount(idToken: string, orgId: string, user
       });
     }
 
+    await syncStalwartUserPrincipal({
+      primaryEmail: userData.primaryEmail,
+      displayName: userData.displayName || userData.firstName,
+      orgUnitPath: userData.orgUnitPath || '/',
+      aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
+      domain: (orgData.domain || '').toLowerCase().trim(),
+      isCatchAllTarget: false,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_USER_DELETED_14D_RECOVERY',
+      target: userData.primaryEmail,
+      metadata: { userId, recoverableUntil },
+    });
+
     return {
       success: true,
       data: {
@@ -1014,7 +1643,7 @@ export async function deleteMailUserAccount(idToken: string, orgId: string, user
 export async function recoverMailUserAccount(idToken: string, orgId: string, userId: string) {
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email } = await verifyUserOrgAccess(idToken, orgId);
     const userRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -1029,6 +1658,12 @@ export async function recoverMailUserAccount(idToken: string, orgId: string, use
     const data = userDoc.data()!;
     if (data.recoverableUntil && new Date(data.recoverableUntil).getTime() <= Date.now()) {
       await userRef.delete();
+      if (data.primaryEmail) {
+        await dispatchStalwartApi(
+          'DELETE',
+          `/api/principal/${encodeURIComponent(data.primaryEmail.toLowerCase().trim())}`
+        );
+      }
       return { success: false, error: 'The 14-day recovery window for this account has expired.' };
     }
 
@@ -1038,6 +1673,15 @@ export async function recoverMailUserAccount(idToken: string, orgId: string, use
       deletedAt: null,
       recoverableUntil: null,
       updatedAt,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_USER_RECOVERED',
+      target: data.primaryEmail,
+      metadata: { userId },
     });
 
     return {
@@ -1100,42 +1744,41 @@ export async function createMailGroup(
 ) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
     const domain = (orgData.domain || '').toLowerCase().trim();
     if (!domain) {
       return { success: false, error: 'Organization domain is not configured.' };
     }
 
-    const name = (payload.name || '').trim();
-    if (!name) {
-      return { success: false, error: 'Group name is required.' };
+    const nameCheck = validateAndSanitizeInput(payload.name || '', 'Group name', {
+      required: true,
+      maxLength: 80,
+    });
+    if (!nameCheck.isValid) {
+      return { success: false, error: nameCheck.error };
     }
 
-    const prefix = (payload.emailPrefix || '')
-      .toLowerCase()
-      .trim()
-      .replace(/@.*$/, '');
-    if (!prefix || !/^[a-z0-9._-]+$/.test(prefix)) {
-      return {
-        success: false,
-        error: 'Enter a valid group address prefix (letters, numbers, dots, hyphens, underscores).',
-      };
+    const prefixCheck = validateEmailLocalPart(payload.emailPrefix, 'Group address prefix');
+    if (!prefixCheck.valid) {
+      return { success: false, error: prefixCheck.error };
     }
 
-    const groupEmail = `${prefix}@${domain}`;
+    const groupEmail = `${prefixCheck.prefix}@${domain}`;
     const conflict = await isEmailAddressTakenInOrg(orgId, groupEmail);
     if (conflict) {
       return { success: false, error: conflict };
     }
 
-    const orgUnitPath = (payload.orgUnitPath || '/').trim() || '/';
+    const name = nameCheck.sanitized;
+    const orgUnitPath = stripScripts(payload.orgUnitPath || '/', { maxLength: 64 }) || '/';
     const memberEmails = Array.from(
       new Set(
         (payload.memberEmails || [])
           .map((m) => m.toLowerCase().trim())
-          .filter((m) => m.includes('@'))
+          .filter((m) => isValidEmailAddress(m))
       )
-    );
+    ).slice(0, MAX_MEMBERS_PER_GROUP);
+
     const now = new Date().toISOString();
 
     const docRef = await adminDb
@@ -1150,6 +1793,22 @@ export async function createMailGroup(
         createdAt: now,
         updatedAt: now,
       });
+
+    await syncStalwartGroupPrincipal({
+      groupEmail,
+      name,
+      memberEmails,
+      isCreate: true,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_GROUP_CREATED',
+      target: groupEmail,
+      metadata: { groupId: docRef.id, memberCount: memberEmails.length },
+    });
 
     return {
       success: true,
@@ -1180,7 +1839,7 @@ export async function updateMailGroup(
 ) {
   if (!orgId || !groupId) return { success: false, error: 'Missing parameters.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email } = await verifyUserOrgAccess(idToken, orgId);
     const groupRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -1193,26 +1852,41 @@ export async function updateMailGroup(
     }
 
     const current = groupDoc.data()!;
-    const name = payload.name !== undefined ? payload.name.trim() : current.name;
-    if (!name) {
-      return { success: false, error: 'Group name cannot be empty.' };
+    let name = current.name;
+    if (payload.name !== undefined) {
+      const nameCheck = validateAndSanitizeInput(payload.name, 'Group name', {
+        required: true,
+        maxLength: 80,
+      });
+      if (!nameCheck.isValid) {
+        return { success: false, error: nameCheck.error };
+      }
+      name = nameCheck.sanitized;
     }
 
     const orgUnitPath =
-      payload.orgUnitPath !== undefined ? payload.orgUnitPath.trim() || '/' : current.orgUnitPath || '/';
+      payload.orgUnitPath !== undefined
+        ? stripScripts(payload.orgUnitPath, { maxLength: 64 }) || '/'
+        : current.orgUnitPath || '/';
 
-    const memberEmails =
-      payload.memberEmails !== undefined
-        ? Array.from(
-            new Set(
-              payload.memberEmails
-                .map((m) => m.toLowerCase().trim())
-                .filter((m) => m.includes('@'))
-            )
-          )
-        : Array.isArray(current.memberEmails)
-        ? current.memberEmails
-        : [];
+    let memberEmails: string[];
+    if (payload.memberEmails !== undefined) {
+      if (payload.memberEmails.length > MAX_MEMBERS_PER_GROUP) {
+        return {
+          success: false,
+          error: `A group cannot exceed ${MAX_MEMBERS_PER_GROUP} member addresses.`,
+        };
+      }
+      memberEmails = Array.from(
+        new Set(
+          payload.memberEmails
+            .map((m) => m.toLowerCase().trim())
+            .filter((m) => isValidEmailAddress(m))
+        )
+      );
+    } else {
+      memberEmails = Array.isArray(current.memberEmails) ? current.memberEmails : [];
+    }
 
     const updatedAt = new Date().toISOString();
     await groupRef.update({
@@ -1220,6 +1894,22 @@ export async function updateMailGroup(
       orgUnitPath,
       memberEmails,
       updatedAt,
+    });
+
+    await syncStalwartGroupPrincipal({
+      groupEmail: current.groupEmail,
+      name,
+      memberEmails,
+      isCreate: false,
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_GROUP_UPDATED',
+      target: current.groupEmail,
+      metadata: { groupId, memberCount: memberEmails.length },
     });
 
     return {
@@ -1241,13 +1931,34 @@ export async function updateMailGroup(
 export async function deleteMailGroup(idToken: string, orgId: string, groupId: string) {
   if (!orgId || !groupId) return { success: false, error: 'Missing parameters.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
-    await adminDb
+    const { uid, email } = await verifyUserOrgAccess(idToken, orgId);
+    const groupRef = adminDb
       .collection('organizations')
       .doc(orgId)
       .collection('mailGroups')
-      .doc(groupId)
-      .delete();
+      .doc(groupId);
+
+    const groupDoc = await groupRef.get();
+    const groupEmail = groupDoc.exists ? groupDoc.data()?.groupEmail : null;
+
+    await groupRef.delete();
+
+    if (groupEmail) {
+      await dispatchStalwartApi(
+        'DELETE',
+        `/api/principal/${encodeURIComponent(groupEmail.toLowerCase().trim())}`
+      );
+    }
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_GROUP_DELETED',
+      target: groupEmail || groupId,
+      metadata: { groupId },
+    });
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to delete group.' };

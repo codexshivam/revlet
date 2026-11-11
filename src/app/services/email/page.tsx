@@ -1,12 +1,10 @@
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -42,11 +40,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  Mail,
-  Users,
-  FolderTree,
-  ShieldAlert,
-  Settings,
   Plus,
   MoreVertical,
   Search,
@@ -56,19 +49,13 @@ import {
   Ban,
   Trash2,
   RotateCcw,
-  CheckCircle2,
-  AlertCircle,
   Loader2,
   RefreshCw,
   Copy,
   Check,
-  Building2,
-  UserPlus,
-  UsersRound,
-  Sparkles,
-  Clock,
   X,
   Edit2,
+  Users,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { toast } from "@/hooks/use-toast"
@@ -145,14 +132,12 @@ export default function EmailServiceAdminPage() {
   // Copy helper state
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
-  // --- DIALOG STATES ---
-  // 1. Organizational Units Modal
+  // Dialog states
   const [isOuModalOpen, setIsOuModalOpen] = useState(false)
   const [newOuName, setNewOuName] = useState("")
   const [newOuDescription, setNewOuDescription] = useState("")
   const [isSavingOu, setIsSavingOu] = useState(false)
 
-  // 2. Create User Modal
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false)
   const [createUserForm, setCreateUserForm] = useState({
     firstName: "",
@@ -163,7 +148,6 @@ export default function EmailServiceAdminPage() {
   })
   const [isCreatingUser, setIsCreatingUser] = useState(false)
 
-  // 3. Update User Account Name / OU Modal
   const [editingUser, setEditingUser] = useState<MailUserRecord | null>(null)
   const [editUserForm, setEditUserForm] = useState({
     firstName: "",
@@ -172,23 +156,19 @@ export default function EmailServiceAdminPage() {
   })
   const [isUpdatingUser, setIsUpdatingUser] = useState(false)
 
-  // 4. Reset Password Modal
   const [passwordTargetUser, setPasswordTargetUser] = useState<MailUserRecord | null>(null)
   const [newPasswordValue, setNewPasswordValue] = useState("")
   const [isResettingPassword, setIsResettingPassword] = useState(false)
 
-  // 5. Manage User Aliases Modal (Add / Update / Remove)
   const [aliasTargetUser, setAliasTargetUser] = useState<MailUserRecord | null>(null)
   const [newAliasPrefix, setNewAliasPrefix] = useState("")
   const [editingAliasOriginal, setEditingAliasOriginal] = useState<string | null>(null)
   const [editingAliasPrefix, setEditingAliasPrefix] = useState("")
   const [isMutatingAlias, setIsMutatingAlias] = useState(false)
 
-  // 6. Confirm Delete User Modal (14-day recovery)
   const [deletingUser, setDeletingUser] = useState<MailUserRecord | null>(null)
   const [isDeletingUser, setIsDeletingUser] = useState(false)
 
-  // 7. Create Group Modal
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false)
   const [createGroupForm, setCreateGroupForm] = useState({
     name: "",
@@ -199,7 +179,6 @@ export default function EmailServiceAdminPage() {
   const [newGroupMemberInput, setNewGroupMemberInput] = useState("")
   const [isCreatingGroup, setIsCreatingGroup] = useState(false)
 
-  // 8. Update Group Name / OU Modal
   const [editingGroup, setEditingGroup] = useState<MailGroupRecord | null>(null)
   const [editGroupForm, setEditGroupForm] = useState({
     name: "",
@@ -207,22 +186,16 @@ export default function EmailServiceAdminPage() {
   })
   const [isUpdatingGroup, setIsUpdatingGroup] = useState(false)
 
-  // 9. Manage Group Members Modal
   const [membersTargetGroup, setMembersTargetGroup] = useState<MailGroupRecord | null>(null)
   const [groupMemberInput, setGroupMemberInput] = useState("")
   const [isUpdatingGroupMembers, setIsUpdatingGroupMembers] = useState(false)
 
-  // 10. Confirm Delete Group Modal
   const [deletingGroup, setDeletingGroup] = useState<MailGroupRecord | null>(null)
   const [isDeletingGroup, setIsDeletingGroup] = useState(false)
 
-  // 11. Catch-All Saving state
   const [isUpdatingCatchAll, setIsUpdatingCatchAll] = useState(false)
-
-  // 12. Confirm Deactivate Service Modal
   const [isDeactivateConfirmOpen, setIsDeactivateConfirmOpen] = useState(false)
 
-  // Ensure body pointer-events is never stuck after closing dropdowns + dialogs
   useEffect(() => {
     const anyOpen =
       isOuModalOpen ||
@@ -295,7 +268,7 @@ export default function EmailServiceAdminPage() {
       } catch (err: any) {
         toast({
           variant: "destructive",
-          title: "Failed to load Email Service",
+          title: "Failed to load email service",
           description: err.message || "Could not retrieve organization mail configuration.",
         })
       } finally {
@@ -318,8 +291,7 @@ export default function EmailServiceAdminPage() {
     setTimeout(() => setCopiedKey(null), 1800)
   }
 
-  // --- SERVICE ACTIVATION / DEACTIVATION / DNS SYNC ---
-
+  // Service activation / deactivation / DNS sync
   const handleActivateService = async () => {
     if (!user || !selectedOrgId) return
     setIsActivating(true)
@@ -332,18 +304,18 @@ export default function EmailServiceAdminPage() {
 
       if (res.data?.dnsProvisionedAutomatically) {
         toast({
-          title: "Email Service Activated",
-          description: `Email Service is now active and required DNS records were automatically added to ${selectedOrg?.domain}.`,
+          title: "Email service activated",
+          description: `Required DNS records were automatically added to ${selectedOrg?.domain}.`,
         })
       } else if (res.data?.dnsWarning) {
         toast({
-          title: "Email Service Activated",
-          description: `Email Service is active. Please review required DNS records in the Settings tab (${res.data.dnsWarning}).`,
+          title: "Email service activated",
+          description: `Review required DNS records in Settings (${res.data.dnsWarning}).`,
         })
       } else {
         toast({
-          title: "Email Service Activated",
-          description: `Email Service is now active for ${selectedOrg?.domain}. Review the required DNS records in Settings.`,
+          title: "Email service activated",
+          description: `Email service is now active for ${selectedOrg?.domain}.`,
         })
       }
 
@@ -351,8 +323,8 @@ export default function EmailServiceAdminPage() {
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Activation Failed",
-        description: err.message || "Could not activate Email Service.",
+        title: "Activation failed",
+        description: err.message || "Could not activate email service.",
       })
     } finally {
       setIsActivating(false)
@@ -370,14 +342,14 @@ export default function EmailServiceAdminPage() {
       setServiceActive(false)
       setIsDeactivateConfirmOpen(false)
       toast({
-        title: "Email Service Disabled",
-        description: "Email Service has been deactivated for this organization.",
+        title: "Email service deactivated",
+        description: "Email service has been paused for this organization.",
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Deactivation Failed",
-        description: err.message || "Could not disable Email Service.",
+        title: "Deactivation failed",
+        description: err.message || "Could not deactivate email service.",
       })
     } finally {
       setIsDeactivating(false)
@@ -393,17 +365,17 @@ export default function EmailServiceAdminPage() {
       if (!res.success) throw new Error(res.error)
 
       toast({
-        title: "DNS Records Synchronized",
+        title: "DNS records synchronized",
         description:
           res.data?.addedCount && res.data.addedCount > 0
             ? `Added ${res.data.addedCount} missing DNS record(s) to ${selectedOrg?.domain}.`
-            : `All required DNS records are already configured on ${selectedOrg?.domain}.`,
+            : `All required DNS records are present on ${selectedOrg?.domain}.`,
       })
       await loadAllMailData(true)
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "DNS Sync Failed",
+        title: "DNS sync failed",
         description: err.message || "Could not synchronize DNS records.",
       })
     } finally {
@@ -411,16 +383,15 @@ export default function EmailServiceAdminPage() {
     }
   }
 
-  // --- CATCH-ALL HANDLERS ---
-
+  // Catch-all handlers
   const handleCatchAllToggle = async (enabled: boolean) => {
     if (!user || !selectedOrgId) return
     const activeUsersList = users.filter((u) => u.status === "active")
     if (enabled && activeUsersList.length === 0) {
       toast({
         variant: "destructive",
-        title: "No Active Email Accounts",
-        description: "Create at least one active email user before enabling Domain Catch-All Routing.",
+        title: "No active email accounts",
+        description: "Create at least one active user account before enabling catch-all routing.",
       })
       return
     }
@@ -440,15 +411,15 @@ export default function EmailServiceAdminPage() {
       setCatchAllUserId(res.data?.catchAllUserId ?? null)
       setCatchAllEmail(res.data?.catchAllEmail ?? null)
       toast({
-        title: nextUserId ? "Catch-All Routing Updated" : "Catch-All Routing Disabled",
+        title: nextUserId ? "Catch-all routing updated" : "Catch-all routing disabled",
         description: nextUserId
-          ? `Unmatched emails to @${selectedOrg?.domain} will route to ${res.data?.catchAllEmail}.`
-          : `Unmatched emails to @${selectedOrg?.domain} will be rejected.`,
+          ? `Unmatched mail to @${selectedOrg?.domain} routes to ${res.data?.catchAllEmail}.`
+          : `Unmatched mail to @${selectedOrg?.domain} will be rejected.`,
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Failed to Update Catch-All",
+        title: "Update failed",
         description: err.message || "Could not update catch-all routing.",
       })
     } finally {
@@ -456,8 +427,7 @@ export default function EmailServiceAdminPage() {
     }
   }
 
-  // --- ORGANIZATIONAL UNIT HANDLERS ---
-
+  // Organizational unit handlers
   const handleCreateOu = async () => {
     if (!user || !selectedOrgId || !newOuName.trim()) return
     setIsSavingOu(true)
@@ -473,14 +443,14 @@ export default function EmailServiceAdminPage() {
       setNewOuName("")
       setNewOuDescription("")
       toast({
-        title: "Organizational Unit Created",
-        description: `"${res.data.path}" is now available in Users and Groups.`,
+        title: "Organizational unit created",
+        description: `${res.data.path} is now available.`,
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Could Not Create Organizational Unit",
-        description: err.message || "Failed to create Organizational Unit.",
+        title: "Could not create organizational unit",
+        description: err.message || "Failed to create organizational unit.",
       })
     } finally {
       setIsSavingOu(false)
@@ -506,22 +476,21 @@ export default function EmailServiceAdminPage() {
       if (selectedGroupOu === ou.path) setSelectedGroupOu("ALL")
 
       toast({
-        title: "Organizational Unit Removed",
-        description: `"${ou.path}" was deleted and assigned members were moved to "/".`,
+        title: "Organizational unit removed",
+        description: `${ou.path} was removed and members were reassigned to /.`,
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Failed to Remove Organizational Unit",
-        description: err.message || "Could not delete Organizational Unit.",
+        title: "Failed to remove organizational unit",
+        description: err.message || "Could not delete organizational unit.",
       })
     } finally {
       setIsSavingOu(false)
     }
   }
 
-  // --- USER DIRECTORY HANDLERS ---
-
+  // User directory handlers
   const handleCreateUser = async () => {
     if (!user || !selectedOrgId) return
     setIsCreatingUser(true)
@@ -542,13 +511,13 @@ export default function EmailServiceAdminPage() {
         orgUnitPath: "/",
       })
       toast({
-        title: "Email Account Created",
-        description: `${res.data.primaryEmail} is ready for signing in to Revlet Mail.`,
+        title: "Email account created",
+        description: `${res.data.primaryEmail} is ready for sign-in on Revlet Mail.`,
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Could Not Create Email Account",
+        title: "Could not create email account",
         description: err.message || "Failed to create user account.",
       })
     } finally {
@@ -587,13 +556,13 @@ export default function EmailServiceAdminPage() {
       )
       setEditingUser(null)
       toast({
-        title: "Account Updated",
-        description: "Account name and organizational unit have been updated.",
+        title: "Account updated",
+        description: "Account name and organizational unit saved.",
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Update Failed",
+        title: "Update failed",
         description: err.message || "Could not update user account.",
       })
     } finally {
@@ -615,15 +584,15 @@ export default function EmailServiceAdminPage() {
       if (!res.success) throw new Error(res.error)
 
       toast({
-        title: "Password Reset",
-        description: `Sign-in password for ${passwordTargetUser.primaryEmail} has been updated.`,
+        title: "Password reset",
+        description: `Sign-in password updated for ${passwordTargetUser.primaryEmail}.`,
       })
       setPasswordTargetUser(null)
       setNewPasswordValue("")
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Password Reset Failed",
+        title: "Password reset failed",
         description: err.message || "Could not reset password.",
       })
     } finally {
@@ -664,16 +633,16 @@ export default function EmailServiceAdminPage() {
       toast({
         title:
           action === "add"
-            ? "Email Alias Added"
+            ? "Email alias added"
             : action === "update"
-            ? "Email Alias Updated"
-            : "Email Alias Removed",
-        description: `Aliases updated for ${aliasTargetUser.primaryEmail}.`,
+            ? "Email alias updated"
+            : "Email alias removed",
+        description: `Updated aliases for ${aliasTargetUser.primaryEmail}.`,
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Alias Operation Failed",
+        title: "Alias update failed",
         description: err.message || "Could not update email alias.",
       })
     } finally {
@@ -701,15 +670,15 @@ export default function EmailServiceAdminPage() {
       }
 
       toast({
-        title: suspend ? "Account Suspended" : "Account Reactivated",
+        title: suspend ? "Account suspended" : "Account reactivated",
         description: suspend
-          ? `${targetUser.primaryEmail} has been suspended and moved to the Suspended Accounts tab.`
-          : `${targetUser.primaryEmail} is now active again.`,
+          ? `${targetUser.primaryEmail} moved to Suspended accounts.`
+          : `${targetUser.primaryEmail} is active again.`,
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Action Failed",
+        title: "Status update failed",
         description: err.message || "Could not update account status.",
       })
     }
@@ -741,14 +710,14 @@ export default function EmailServiceAdminPage() {
       }
 
       toast({
-        title: "Email Account Deleted (14-Day Recovery)",
-        description: `${deletingUser.primaryEmail} can be recovered from the Suspended Accounts tab for the next 14 days.`,
+        title: "Account scheduled for deletion",
+        description: `${deletingUser.primaryEmail} can be recovered within 14 days from Suspended accounts.`,
       })
       setDeletingUser(null)
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Deletion Failed",
+        title: "Deletion failed",
         description: err.message || "Could not delete email account.",
       })
     } finally {
@@ -778,20 +747,19 @@ export default function EmailServiceAdminPage() {
       )
 
       toast({
-        title: "Email Account Recovered",
+        title: "Email account recovered",
         description: `${targetUser.primaryEmail} has been restored to active status.`,
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Recovery Failed",
+        title: "Recovery failed",
         description: err.message || "Could not recover email account.",
       })
     }
   }
 
-  // --- GROUPS HANDLERS ---
-
+  // Group handlers
   const handleCreateGroup = async () => {
     if (!user || !selectedOrgId) return
     setIsCreatingGroup(true)
@@ -810,13 +778,13 @@ export default function EmailServiceAdminPage() {
       })
       setNewGroupMemberInput("")
       toast({
-        title: "Group Created",
+        title: "Group created",
         description: `${res.data.groupEmail} is now active.`,
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Could Not Create Group",
+        title: "Could not create group",
         description: err.message || "Failed to create group.",
       })
     } finally {
@@ -851,13 +819,13 @@ export default function EmailServiceAdminPage() {
       )
       setEditingGroup(null)
       toast({
-        title: "Group Updated",
-        description: "Group name and organizational unit have been saved.",
+        title: "Group updated",
+        description: "Group name and organizational unit saved.",
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Update Failed",
+        title: "Update failed",
         description: err.message || "Could not update group.",
       })
     } finally {
@@ -886,13 +854,13 @@ export default function EmailServiceAdminPage() {
       setMembersTargetGroup((prev) => (prev ? { ...prev, memberEmails: updatedList } : null))
       setGroupMemberInput("")
       toast({
-        title: "Group Members Updated",
-        description: `Updated recipient list for ${membersTargetGroup.groupEmail}.`,
+        title: "Group members updated",
+        description: `Updated recipients for ${membersTargetGroup.groupEmail}.`,
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Failed to Update Group Members",
+        title: "Failed to update group members",
         description: err.message || "Could not update members.",
       })
     } finally {
@@ -910,14 +878,14 @@ export default function EmailServiceAdminPage() {
 
       setGroups((prev) => prev.filter((g) => g.id !== deletingGroup.id))
       toast({
-        title: "Group Deleted",
-        description: `${deletingGroup.groupEmail} has been permanently removed.`,
+        title: "Group deleted",
+        description: `${deletingGroup.groupEmail} was removed.`,
       })
       setDeletingGroup(null)
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Failed to Delete Group",
+        title: "Failed to delete group",
         description: err.message || "Could not delete group.",
       })
     } finally {
@@ -925,8 +893,7 @@ export default function EmailServiceAdminPage() {
     }
   }
 
-  // --- FILTERED VIEWS ---
-
+  // Filtered views
   const activeUsers = useMemo(() => users.filter((u) => u.status === "active"), [users])
   const suspendedUsers = useMemo(() => users.filter((u) => u.status === "suspended"), [users])
   const deletedUsers = useMemo(() => users.filter((u) => u.status === "deleted"), [users])
@@ -987,14 +954,12 @@ export default function EmailServiceAdminPage() {
     return Array.from(paths)
   }, [orgUnits])
 
-  // --- RENDER LOADING / NO ORG ---
-
   if (authLoading || isLoadingOrgs || isLoadingState) {
     return (
       <DashboardShell>
-        <div className="flex flex-col items-center justify-center h-96 gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-xs font-medium text-slate-500">Loading Email Service Admin Center...</p>
+        <div className="flex flex-col items-center justify-center h-96 gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-slate-400" strokeWidth={1.5} />
+          <p className="text-xs text-slate-500">Loading email service</p>
         </div>
       </DashboardShell>
     )
@@ -1003,1261 +968,1253 @@ export default function EmailServiceAdminPage() {
   if (orgs.length === 0 || !selectedOrg) {
     return (
       <DashboardShell>
-        <div className="flex flex-col items-center justify-center h-96 text-center max-w-sm mx-auto gap-4">
-          <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center">
-            <Building2 className="w-8 h-8 text-slate-300" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-lg font-headline font-bold text-slate-900">No Organization Selected</h2>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Register or select an organization first to manage custom domain email accounts and routing.
-            </p>
-          </div>
+        <div className="py-20 text-center max-w-sm mx-auto space-y-2">
+          <h2 className="text-base font-headline font-semibold text-slate-900">
+            No organization selected
+          </h2>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Register or select an organization on Account home to configure domain email accounts and routing.
+          </p>
         </div>
       </DashboardShell>
     )
   }
 
-  // --- RENDER PRE-ACTIVATION OPT-IN STATE ---
+  const verifiedDnsCount = requiredDnsRecords.filter((r) => r.verified).length
 
+  // Pre-activation screen: asymmetric split with real domain routing ledger preview
   if (!serviceActive) {
     return (
       <DashboardShell>
-        <div className="space-y-8 animate-in fade-in duration-500">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
+        <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-slate-200/80 pb-5">
             <div className="space-y-1">
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">
-                  Email Service
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
+                  Email service
                 </h1>
-                <Badge className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-semibold px-2.5 py-0.5 shadow-none hover:bg-slate-100">
-                  Not Activated
-                </Badge>
+                <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500">
+                  <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                  {selectedOrg.domain}
+                </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium">
-                Custom domain mailboxes, aliases, groups, and organizational directory for{" "}
-                <span className="font-semibold text-slate-700">{selectedOrg.domain}</span>
+              <p className="text-xs text-slate-500">
+                Custom domain mailboxes, send-as aliases, organizational units, and group routing
               </p>
             </div>
           </div>
 
-          <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden max-w-3xl">
-            <div className="h-1.5 w-full bg-primary" />
-            <CardContent className="p-8 space-y-6">
-              <div className="flex items-start gap-4">
-                <div className="p-3.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
-                  <Mail className="w-6 h-6" />
-                </div>
-                <div className="space-y-2">
-                  <h2 className="text-xl font-headline font-bold text-slate-900">
-                    Activate Revlet Mail Service for {selectedOrg.domain}
-                  </h2>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Provision full email accounts with sign-in credentials for Revlet Mail, manage send-as email aliases, organize accounts by Organizational Units, configure distribution groups, and control domain-wide catch-all routing.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <div className="text-xs font-bold text-slate-800">User & Alias Directory</div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Create email accounts, reset passwords, and attach multiple send-as aliases per user.
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <div className="text-xs font-bold text-slate-800">Organizational Units & Groups</div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Structure users and mailing groups into clean organizational units with 14-day account recovery.
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <div className="text-xs font-bold text-slate-800">Included Sending Quota</div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Includes 1,000 outbound emails per month and 100 outbound emails per day for your organization.
-                  </p>
-                </div>
-              </div>
-
-              <div
-                className={cn(
-                  "p-4 rounded-xl border flex items-start gap-3",
-                  dnsServiceActive
-                    ? "bg-emerald-50/60 border-emerald-200 text-emerald-900"
-                    : "bg-amber-50/60 border-amber-200 text-amber-900"
-                )}
-              >
-                {dnsServiceActive ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                )}
-                <div className="text-xs space-y-0.5">
-                  <div className="font-bold">
+          <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200/80">
+              {/* Left column: plain statement and activation action */}
+              <div className="lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between gap-8">
+                <div className="space-y-4">
+                  <div className="inline-flex items-center gap-2 text-xs font-mono text-slate-500">
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        dnsServiceActive ? "bg-emerald-600" : "bg-amber-500"
+                      )}
+                    />
                     {dnsServiceActive
-                      ? "Automatic DNS Configuration Ready"
-                      : "Manual DNS Setup Available"}
+                      ? "DNS management active — records provision automatically"
+                      : "Manual registrar DNS configuration"}
                   </div>
-                  <p className="text-[11px] opacity-90 leading-relaxed">
-                    {dnsServiceActive
-                      ? `DNS Management is active on ${selectedOrg.domain}. All required MX, SPF, DKIM, and DMARC records will be added to your domain automatically the moment you activate Email Service.`
-                      : `DNS Management is not currently linked to ${selectedOrg.domain}. You can still activate Email Service now and view the required DNS records in the Settings tab.`}
+
+                  <h2 className="text-xl font-headline font-semibold text-slate-900 leading-snug">
+                    Domain mail and directory for {selectedOrg.domain}
+                  </h2>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Provision accounts for signing in to Revlet Mail, attach send-as aliases, group addresses by organizational unit, and route unmatched domain mail to a fallback inbox. Deleted accounts remain recoverable for 14 days.
                   </p>
+                </div>
+
+                <div className="space-y-4 pt-2 border-t border-slate-100">
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="text-slate-500">Outbound allowance</span>
+                    <span className="font-mono text-slate-900 tabular-nums">
+                      1,000 / month · 100 / day
+                    </span>
+                  </div>
+
+                  <Button
+                    onClick={handleActivateService}
+                    disabled={isActivating}
+                    className="w-full bg-primary hover:bg-primary/95 !text-white text-white font-medium h-10 px-5 rounded-lg text-xs transition-colors"
+                  >
+                    {isActivating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
+                        Activating email service
+                      </>
+                    ) : (
+                      "Activate email service"
+                    )}
+                  </Button>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end pt-2">
-                <Button
-                  onClick={handleActivateService}
-                  disabled={isActivating}
-                  className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-10 px-6 rounded-lg text-xs shadow-sm"
-                >
-                  {isActivating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Activating Email Service...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Activate Email Service
-                    </>
-                  )}
-                </Button>
+              {/* Right column: real routing & DNS ledger preview for this domain */}
+              <div className="lg:col-span-7 bg-slate-50/50 p-6 sm:p-8 flex flex-col justify-between gap-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-700">
+                    Required routing records for {selectedOrg.domain}
+                  </span>
+                  <span className="text-xs font-mono text-slate-500 tabular-nums">
+                    {requiredDnsRecords.length} records
+                  </span>
+                </div>
+
+                <div className="rounded-lg border border-slate-200/80 bg-white divide-y divide-slate-100">
+                  {requiredDnsRecords.map((rec) => (
+                    <div
+                      key={rec.id}
+                      className="px-4 py-3 flex items-center justify-between gap-4 text-xs"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="font-mono text-[11px] text-slate-500 w-14 shrink-0">
+                          {rec.type}
+                        </span>
+                        <span className="font-mono text-slate-800 truncate">{rec.name}</span>
+                      </div>
+                      <span className="font-mono text-slate-500 truncate max-w-[220px]">
+                        {rec.content}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {dnsServiceActive
+                    ? `Activating email service snapshots your zone and writes these ${requiredDnsRecords.length} records to ${selectedOrg.domain} immediately.`
+                    : `After activation, copy these records from Settings into your domain registrar for ${selectedOrg.domain}.`}
+                </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </DashboardShell>
     )
   }
 
-  // --- RENDER ACTIVE EMAIL SERVICE ADMIN CENTER ---
-
-  const verifiedDnsCount = requiredDnsRecords.filter((r) => r.verified).length
-
+  // Active Email Service Admin Center
   return (
     <DashboardShell>
-      <div className="space-y-6 animate-in fade-in duration-500">
-        {/* PAGE HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <div className="space-y-6 animate-in fade-in duration-300">
+        {/* Page header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">
-                Email Service
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
+                Email service
               </h1>
-              <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold px-2.5 py-0.5 shadow-none hover:bg-emerald-50">
-                Active · {selectedOrg.domain}
-              </Badge>
-              <Badge
-                variant="outline"
-                className="text-[10px] font-medium px-2.5 py-0.5 border-slate-200 text-slate-600 bg-white"
-              >
-                Quota: {monthlySentCount.toLocaleString()} / {monthlyOutboundLimit.toLocaleString()} mo ·{" "}
-                {dailySentCount.toLocaleString()} / {dailyOutboundLimit.toLocaleString()} day
-              </Badge>
+              <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                {selectedOrg.domain}
+              </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium">
-              Administer user accounts, email aliases, organizational units, distribution groups, and domain settings.
+            <p className="text-xs text-slate-500">
+              Directory, aliases, organizational units, distribution groups, and domain routing
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => loadAllMailData(true)}
               disabled={isRefreshing}
-              className="h-9 px-3.5 text-xs font-semibold border-slate-200 bg-white hover:bg-slate-50 rounded-lg"
+              className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
             >
-              <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+              <RefreshCw
+                className={cn("w-4 h-4 mr-2 text-slate-400", isRefreshing && "animate-spin")}
+                strokeWidth={1.5}
+              />
               Refresh
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsOuModalOpen(true)}
-              className="h-9 px-3.5 text-xs font-semibold border-slate-200 bg-white hover:bg-slate-50 rounded-lg"
+              className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
             >
-              <FolderTree className="w-3.5 h-3.5 mr-1.5 text-slate-600" />
-              Organizational Units ({orgUnits.length + 1})
+              Organizational units
+              <span className="ml-2 font-mono text-slate-400 tabular-nums">
+                {orgUnits.length + 1}
+              </span>
             </Button>
           </div>
         </div>
 
-        {/* NAVIGATION TABS */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-slate-100/80 border border-slate-200/80 p-1 rounded-xl h-auto flex flex-wrap gap-1 w-fit">
-            <TabsTrigger
-              value="users"
-              className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
-            >
-              <Users className="w-3.5 h-3.5 mr-2" />
-              Users Directory
-              <span className="ml-2 text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
-                {activeUsers.length}
-              </span>
-            </TabsTrigger>
+        {/* Moment: Live domain routing & outbound quota ledger strip */}
+        <div className="rounded-xl border border-slate-200/80 bg-white grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80">
+          <div className="p-4 sm:p-5 space-y-1">
+            <div className="text-xs text-slate-500">Active mailboxes</div>
+            <div className="text-2xl font-medium text-slate-900 tabular-nums">
+              {activeUsers.length}
+            </div>
+            <div className="text-xs font-mono text-slate-400 tabular-nums">
+              {groups.length} {groups.length === 1 ? "group" : "groups"} · {orgUnits.length + 1} units
+            </div>
+          </div>
 
-            <TabsTrigger
-              value="groups"
-              className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
-            >
-              <UsersRound className="w-3.5 h-3.5 mr-2" />
-              Groups
-              <span className="ml-2 text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
-                {groups.length}
+          <div className="p-4 sm:p-5 space-y-1">
+            <div className="text-xs text-slate-500">Monthly outbound quota</div>
+            <div className="text-2xl font-medium text-slate-900 tabular-nums">
+              {monthlySentCount.toLocaleString()}{" "}
+              <span className="text-sm font-normal text-slate-400">
+                / {monthlyOutboundLimit.toLocaleString()}
               </span>
-            </TabsTrigger>
+            </div>
+            <div className="text-xs font-mono text-slate-400 tabular-nums">
+              {(monthlyOutboundLimit - monthlySentCount).toLocaleString()} remaining this month
+            </div>
+          </div>
 
-            <TabsTrigger
-              value="suspended"
-              className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
-            >
-              <ShieldAlert className="w-3.5 h-3.5 mr-2" />
-              Suspended Accounts
-              <span className="ml-2 text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
-                {suspendedUsers.length + deletedUsers.length}
+          <div className="p-4 sm:p-5 space-y-1">
+            <div className="text-xs text-slate-500">Daily outbound limit</div>
+            <div className="text-2xl font-medium text-slate-900 tabular-nums">
+              {dailySentCount.toLocaleString()}{" "}
+              <span className="text-sm font-normal text-slate-400">
+                / {dailyOutboundLimit.toLocaleString()}
               </span>
-            </TabsTrigger>
+            </div>
+            <div className="text-xs font-mono text-slate-400 tabular-nums">
+              24-hour rolling window
+            </div>
+          </div>
 
-            <TabsTrigger
-              value="settings"
-              className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
-            >
-              <Settings className="w-3.5 h-3.5 mr-2" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
+          <div className="p-4 sm:p-5 space-y-1">
+            <div className="text-xs text-slate-500">Domain routing status</div>
+            <div className="flex items-center gap-2 pt-0.5">
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full shrink-0",
+                  verifiedDnsCount === requiredDnsRecords.length && requiredDnsRecords.length > 0
+                    ? "bg-emerald-600"
+                    : "bg-amber-500"
+                )}
+              />
+              <span className="text-base font-medium text-slate-900 tabular-nums">
+                {verifiedDnsCount} of {requiredDnsRecords.length} DNS verified
+              </span>
+            </div>
+            <div className="text-xs font-mono text-slate-400 truncate">
+              {catchAllEmail ? `Catch-all → ${catchAllEmail}` : "Catch-all disabled"}
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <div className="border-b border-slate-200/80">
+            <TabsList className="bg-transparent p-0 h-auto gap-6 rounded-none">
+              <TabsTrigger
+                value="users"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                Users directory
+                <span className="ml-2 font-mono text-slate-400 tabular-nums">
+                  {activeUsers.length}
+                </span>
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="groups"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                Groups
+                <span className="ml-2 font-mono text-slate-400 tabular-nums">
+                  {groups.length}
+                </span>
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="suspended"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                Suspended accounts
+                <span className="ml-2 font-mono text-slate-400 tabular-nums">
+                  {suspendedUsers.length + deletedUsers.length}
+                </span>
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="settings"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                Settings
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* =====================================================================
               TAB 1: USERS DIRECTORY
           ===================================================================== */}
-          <TabsContent value="users" className="space-y-4 mt-0">
-            {/* OU Filter Pills + Search + Create User */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setSelectedUserOu("ALL")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-                    selectedUserOu === "ALL"
-                      ? "bg-primary text-white shadow-sm"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/70"
-                  )}
-                >
-                  All Units ({activeUsers.length})
-                </button>
-                {allOuOptions.map((ouPath) => {
-                  const count = activeUsers.filter((u) => u.orgUnitPath === ouPath).length
-                  return (
-                    <button
-                      key={ouPath}
-                      type="button"
-                      onClick={() => setSelectedUserOu(ouPath)}
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-                        selectedUserOu === ouPath
-                          ? "bg-primary text-white shadow-sm"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200/70"
-                      )}
-                    >
-                      {ouPath === "/" ? "/ (Root)" : ouPath} ({count})
-                    </button>
-                  )
-                })}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsOuModalOpen(true)}
-                  className="h-7 px-2.5 text-xs font-semibold text-primary hover:bg-primary/5 rounded-lg"
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1" />
-                  New OU
-                </Button>
-              </div>
+          <TabsContent value="users" className="mt-0">
+            <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+              {/* Unified filter & action bar */}
+              <div className="p-4 border-b border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/40">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUserOu("ALL")}
+                    className={cn(
+                      "h-8 px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
+                      selectedUserOu === "ALL"
+                        ? "bg-white text-slate-900 border border-slate-200/90 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
+                    )}
+                  >
+                    <span>All units</span>
+                    <span className="font-mono text-slate-400 tabular-nums">
+                      {activeUsers.length}
+                    </span>
+                  </button>
 
-              <div className="flex items-center gap-2.5">
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <Input
-                    value={userSearchQuery}
-                    onChange={(e) => setUserSearchQuery(e.target.value)}
-                    placeholder="Search users or aliases..."
-                    className="h-9 pl-8 text-xs border-slate-200 bg-slate-50/50 focus-visible:bg-white rounded-lg"
-                  />
+                  {allOuOptions.map((ouPath) => {
+                    const count = activeUsers.filter((u) => u.orgUnitPath === ouPath).length
+                    return (
+                      <button
+                        key={ouPath}
+                        type="button"
+                        onClick={() => setSelectedUserOu(ouPath)}
+                        className={cn(
+                          "h-8 px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
+                          selectedUserOu === ouPath
+                            ? "bg-white text-slate-900 border border-slate-200/90 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
+                        )}
+                      >
+                        <span className="font-mono">{ouPath}</span>
+                        <span className="font-mono text-slate-400 tabular-nums">{count}</span>
+                      </button>
+                    )
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsOuModalOpen(true)}
+                    className="h-8 px-2.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 transition-colors flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span>New unit</span>
+                  </button>
                 </div>
-                <Button
-                  onClick={() => {
-                    setCreateUserForm({
-                      firstName: "",
-                      lastName: "",
-                      emailPrefix: "",
-                      password: "",
-                      orgUnitPath: selectedUserOu === "ALL" ? "/" : selectedUserOu,
-                    })
-                    setIsCreateUserOpen(true)
-                  }}
-                  className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shadow-sm shrink-0"
-                >
-                  <UserPlus className="w-3.5 h-3.5 mr-2" />
-                  Add User
-                </Button>
-              </div>
-            </div>
 
-            {/* Users Table */}
-            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <CardContent className="p-0">
-                {filteredActiveUsers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center">
-                      <Users className="w-5 h-5 text-slate-400" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-headline font-bold text-slate-900">
-                        {activeUsers.length === 0
-                          ? "No Email Accounts Created Yet"
-                          : "No Matching Email Accounts"}
-                      </h3>
-                      <p className="text-xs text-slate-500 max-w-sm">
-                        {activeUsers.length === 0
-                          ? `Create your first user account on @${selectedOrg.domain} with sign-in credentials for Revlet Mail.`
-                          : "Try adjusting your Organizational Unit filter or search query."}
-                      </p>
-                    </div>
-                    {activeUsers.length === 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 sm:w-56">
+                    <Search
+                      className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
+                      strokeWidth={1.5}
+                    />
+                    <Input
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      placeholder="Search"
+                      className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setCreateUserForm({
+                        firstName: "",
+                        lastName: "",
+                        emailPrefix: "",
+                        password: "",
+                        orgUnitPath: selectedUserOu === "ALL" ? "/" : selectedUserOu,
+                      })
+                      setIsCreateUserOpen(true)
+                    }}
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
+                  >
+                    <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
+                    Add user
+                  </Button>
+                </div>
+              </div>
+
+              {/* Users table */}
+              {filteredActiveUsers.length === 0 ? (
+                <div className="py-16 px-4 text-center space-y-2">
+                  <p className="text-sm font-medium text-slate-900">
+                    {activeUsers.length === 0
+                      ? "No email accounts provisioned"
+                      : "No matching email accounts"}
+                  </p>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    {activeUsers.length === 0
+                      ? `Create an account on @${selectedOrg.domain} with sign-in credentials for Revlet Mail`
+                      : "Adjust the organizational unit filter or search query"}
+                  </p>
+                  {activeUsers.length === 0 && (
+                    <div className="pt-2">
                       <Button
                         size="sm"
                         onClick={() => setIsCreateUserOpen(true)}
-                        className="mt-1 bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-8 px-4 rounded-lg text-xs"
+                        className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
                       >
-                        <Plus className="w-3.5 h-3.5 mr-1.5" />
-                        Create First Email Account
+                        <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
+                        Add user
                       </Button>
-                    )}
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
-                        <TableHead className="text-xs font-semibold py-3.5 pl-6 text-slate-600">
-                          Account Name
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
-                          Primary Email
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
-                          Email Aliases
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
-                          Organizational Unit
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3.5 text-right pr-6 text-slate-600">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredActiveUsers.map((u) => (
-                        <TableRow
-                          key={u.id}
-                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
-                        >
-                          <TableCell className="pl-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">
-                                {(u.firstName?.[0] || u.primaryEmail?.[0] || "U").toUpperCase()}
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-xs font-bold text-slate-900">
-                                  {u.displayName}
-                                </span>
-                                <span className="text-[11px] text-slate-400">Active account</span>
-                              </div>
-                            </div>
-                          </TableCell>
-
-                          <TableCell className="py-4">
-                            <span className="text-xs font-mono font-semibold text-slate-700">
-                              {u.primaryEmail}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                        Account name
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Primary address
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Aliases
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Organizational unit
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredActiveUsers.map((u) => (
+                      <TableRow
+                        key={u.id}
+                        className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
+                      >
+                        <TableCell className="pl-6 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 shrink-0" />
+                            <span className="text-xs font-medium text-slate-900">
+                              {u.displayName}
                             </span>
-                          </TableCell>
+                          </div>
+                        </TableCell>
 
-                          <TableCell className="py-4">
-                            {u.aliases.length === 0 ? (
-                              <button
-                                type="button"
-                                onClick={() => {
+                        <TableCell className="py-3.5">
+                          <span className="text-xs font-mono text-slate-700">
+                            {u.primaryEmail}
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="py-3.5">
+                          {u.aliases.length === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAliasTargetUser(u)
+                                setNewAliasPrefix("")
+                                setEditingAliasOriginal(null)
+                              }}
+                              className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
+                            >
+                              + Add alias
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {u.aliases.map((alias) => (
+                                <span
+                                  key={alias}
+                                  className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-700"
+                                >
+                                  {alias}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="py-3.5">
+                          <span className="text-xs font-mono text-slate-500">
+                            {u.orgUnitPath}
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="text-right pr-6 py-3.5">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
+                              >
+                                <MoreVertical className="w-4 h-4" strokeWidth={1.5} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-52 bg-white border border-slate-200 shadow-md rounded-xl p-1"
+                            >
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  setEditingUser(u)
+                                  setEditUserForm({
+                                    firstName: u.firstName,
+                                    lastName: u.lastName,
+                                    orgUnitPath: u.orgUnitPath || "/",
+                                  })
+                                }}
+                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                              >
+                                <UserPen className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <span>Update account name</span>
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  setPasswordTargetUser(u)
+                                  setNewPasswordValue("")
+                                }}
+                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                              >
+                                <KeyRound className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <span>Reset password</span>
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onSelect={() => {
                                   setAliasTargetUser(u)
                                   setNewAliasPrefix("")
                                   setEditingAliasOriginal(null)
+                                  setEditingAliasPrefix("")
                                 }}
-                                className="text-[11px] text-slate-400 hover:text-primary font-medium transition-colors"
+                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
                               >
-                                + Add alias
-                              </button>
-                            ) : (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {u.aliases.map((alias) => (
-                                  <Badge
-                                    key={alias}
-                                    variant="outline"
-                                    className="text-[10px] font-mono font-medium px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-700"
-                                  >
-                                    {alias}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                          </TableCell>
+                                <AtSign className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <span className="flex-1">Manage email aliases</span>
+                                <span className="font-mono text-slate-400 tabular-nums">
+                                  {u.aliases.length}
+                                </span>
+                              </DropdownMenuItem>
 
-                          <TableCell className="py-4">
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] font-mono font-medium px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-600"
-                            >
-                              {u.orgUnitPath}
-                            </Badge>
-                          </TableCell>
+                              <DropdownMenuSeparator />
 
-                          <TableCell className="text-right pr-6 py-4">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8 border-slate-200 bg-white hover:bg-slate-50 rounded-lg shadow-none"
-                                >
-                                  <MoreVertical className="w-4 h-4 text-slate-600" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="end"
-                                className="w-56 bg-white border border-slate-200 shadow-md rounded-xl p-1"
+                              <DropdownMenuItem
+                                onSelect={() => handleSuspendOrReactivateUser(u, true)}
+                                className="gap-2 py-2 text-xs text-amber-700 focus:text-amber-800 cursor-pointer rounded-lg"
                               >
-                                <DropdownMenuItem
-                                  onSelect={() => {
-                                    setEditingUser(u)
-                                    setEditUserForm({
-                                      firstName: u.firstName,
-                                      lastName: u.lastName,
-                                      orgUnitPath: u.orgUnitPath || "/",
-                                    })
-                                  }}
-                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
-                                >
-                                  <UserPen className="w-3.5 h-3.5 text-slate-500" />
-                                  <span>Update account name</span>
-                                </DropdownMenuItem>
+                                <Ban className="w-4 h-4" strokeWidth={1.5} />
+                                <span>Suspend account</span>
+                              </DropdownMenuItem>
 
-                                <DropdownMenuItem
-                                  onSelect={() => {
-                                    setPasswordTargetUser(u)
-                                    setNewPasswordValue("")
-                                  }}
-                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
-                                >
-                                  <KeyRound className="w-3.5 h-3.5 text-slate-500" />
-                                  <span>Reset password</span>
-                                </DropdownMenuItem>
-
-                                <DropdownMenuItem
-                                  onSelect={() => {
-                                    setAliasTargetUser(u)
-                                    setNewAliasPrefix("")
-                                    setEditingAliasOriginal(null)
-                                    setEditingAliasPrefix("")
-                                  }}
-                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
-                                >
-                                  <AtSign className="w-3.5 h-3.5 text-slate-500" />
-                                  <span>Manage email aliases ({u.aliases.length})</span>
-                                </DropdownMenuItem>
-
-                                <DropdownMenuSeparator />
-
-                                <DropdownMenuItem
-                                  onSelect={() => handleSuspendOrReactivateUser(u, true)}
-                                  className="gap-2.5 py-2 text-xs text-amber-700 focus:text-amber-800 cursor-pointer rounded-lg"
-                                >
-                                  <Ban className="w-3.5 h-3.5" />
-                                  <span>Suspend account</span>
-                                </DropdownMenuItem>
-
-                                <DropdownMenuItem
-                                  onSelect={() => setDeletingUser(u)}
-                                  className="gap-2.5 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Delete email account</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+                              <DropdownMenuItem
+                                onSelect={() => setDeletingUser(u)}
+                                className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
+                              >
+                                <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                                <span>Delete email account</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
           </TabsContent>
 
           {/* =====================================================================
               TAB 2: GROUPS (Same Styling & Approach as Users Directory Tab)
           ===================================================================== */}
-          <TabsContent value="groups" className="space-y-4 mt-0">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setSelectedGroupOu("ALL")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-                    selectedGroupOu === "ALL"
-                      ? "bg-primary text-white shadow-sm"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/70"
-                  )}
-                >
-                  All Units ({groups.length})
-                </button>
-                {allOuOptions.map((ouPath) => {
-                  const count = groups.filter((g) => g.orgUnitPath === ouPath).length
-                  return (
-                    <button
-                      key={ouPath}
-                      type="button"
-                      onClick={() => setSelectedGroupOu(ouPath)}
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-                        selectedGroupOu === ouPath
-                          ? "bg-primary text-white shadow-sm"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200/70"
-                      )}
-                    >
-                      {ouPath === "/" ? "/ (Root)" : ouPath} ({count})
-                    </button>
-                  )
-                })}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsOuModalOpen(true)}
-                  className="h-7 px-2.5 text-xs font-semibold text-primary hover:bg-primary/5 rounded-lg"
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1" />
-                  New OU
-                </Button>
-              </div>
+          <TabsContent value="groups" className="mt-0">
+            <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+              <div className="p-4 border-b border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/40">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroupOu("ALL")}
+                    className={cn(
+                      "h-8 px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
+                      selectedGroupOu === "ALL"
+                        ? "bg-white text-slate-900 border border-slate-200/90 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
+                    )}
+                  >
+                    <span>All units</span>
+                    <span className="font-mono text-slate-400 tabular-nums">
+                      {groups.length}
+                    </span>
+                  </button>
 
-              <div className="flex items-center gap-2.5">
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <Input
-                    value={groupSearchQuery}
-                    onChange={(e) => setGroupSearchQuery(e.target.value)}
-                    placeholder="Search groups or members..."
-                    className="h-9 pl-8 text-xs border-slate-200 bg-slate-50/50 focus-visible:bg-white rounded-lg"
-                  />
+                  {allOuOptions.map((ouPath) => {
+                    const count = groups.filter((g) => g.orgUnitPath === ouPath).length
+                    return (
+                      <button
+                        key={ouPath}
+                        type="button"
+                        onClick={() => setSelectedGroupOu(ouPath)}
+                        className={cn(
+                          "h-8 px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
+                          selectedGroupOu === ouPath
+                            ? "bg-white text-slate-900 border border-slate-200/90 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
+                        )}
+                      >
+                        <span className="font-mono">{ouPath}</span>
+                        <span className="font-mono text-slate-400 tabular-nums">{count}</span>
+                      </button>
+                    )
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsOuModalOpen(true)}
+                    className="h-8 px-2.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 transition-colors flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span>New unit</span>
+                  </button>
                 </div>
-                <Button
-                  onClick={() => {
-                    setCreateGroupForm({
-                      name: "",
-                      emailPrefix: "",
-                      orgUnitPath: selectedGroupOu === "ALL" ? "/" : selectedGroupOu,
-                      memberEmails: [],
-                    })
-                    setNewGroupMemberInput("")
-                    setIsCreateGroupOpen(true)
-                  }}
-                  className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shadow-sm shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5 mr-2" />
-                  Create Group
-                </Button>
-              </div>
-            </div>
 
-            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <CardContent className="p-0">
-                {filteredGroups.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center">
-                      <UsersRound className="w-5 h-5 text-slate-400" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-headline font-bold text-slate-900">
-                        {groups.length === 0 ? "No Groups Created Yet" : "No Matching Groups"}
-                      </h3>
-                      <p className="text-xs text-slate-500 max-w-sm">
-                        {groups.length === 0
-                          ? `Create shared group addresses (such as support@${selectedOrg.domain} or faculty@${selectedOrg.domain}) that deliver incoming mail to multiple recipients.`
-                          : "Try adjusting your Organizational Unit filter or search query."}
-                      </p>
-                    </div>
-                    {groups.length === 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 sm:w-56">
+                    <Search
+                      className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
+                      strokeWidth={1.5}
+                    />
+                    <Input
+                      value={groupSearchQuery}
+                      onChange={(e) => setGroupSearchQuery(e.target.value)}
+                      placeholder="Search"
+                      className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setCreateGroupForm({
+                        name: "",
+                        emailPrefix: "",
+                        orgUnitPath: selectedGroupOu === "ALL" ? "/" : selectedGroupOu,
+                        memberEmails: [],
+                      })
+                      setNewGroupMemberInput("")
+                      setIsCreateGroupOpen(true)
+                    }}
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
+                  >
+                    <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
+                    Create group
+                  </Button>
+                </div>
+              </div>
+
+              {filteredGroups.length === 0 ? (
+                <div className="py-16 px-4 text-center space-y-2">
+                  <p className="text-sm font-medium text-slate-900">
+                    {groups.length === 0 ? "No distribution groups created" : "No matching groups"}
+                  </p>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    {groups.length === 0
+                      ? `Create shared addresses on @${selectedOrg.domain} that deliver incoming messages to multiple members`
+                      : "Adjust the organizational unit filter or search query"}
+                  </p>
+                  {groups.length === 0 && (
+                    <div className="pt-2">
                       <Button
                         size="sm"
                         onClick={() => setIsCreateGroupOpen(true)}
-                        className="mt-1 bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-8 px-4 rounded-lg text-xs"
+                        className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
                       >
-                        <Plus className="w-3.5 h-3.5 mr-1.5" />
-                        Create First Group
+                        <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
+                        Create group
                       </Button>
-                    )}
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
-                        <TableHead className="text-xs font-semibold py-3.5 pl-6 text-slate-600">
-                          Group Name
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
-                          Group Email
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
-                          Members
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
-                          Organizational Unit
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3.5 text-right pr-6 text-slate-600">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredGroups.map((g) => (
-                        <TableRow
-                          key={g.id}
-                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
-                        >
-                          <TableCell className="pl-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">
-                                {(g.name?.[0] || "G").toUpperCase()}
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-xs font-bold text-slate-900">{g.name}</span>
-                                <span className="text-[11px] text-slate-400">
-                                  Distribution group
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                        Group name
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Group address
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Members
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Organizational unit
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredGroups.map((g) => (
+                      <TableRow
+                        key={g.id}
+                        className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
+                      >
+                        <TableCell className="pl-6 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 shrink-0" />
+                            <span className="text-xs font-medium text-slate-900">{g.name}</span>
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="py-3.5">
+                          <span className="text-xs font-mono text-slate-700">
+                            {g.groupEmail}
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="py-3.5">
+                          {g.memberEmails.length === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMembersTargetGroup(g)
+                                setGroupMemberInput("")
+                              }}
+                              className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
+                            >
+                              + Add members
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {g.memberEmails.slice(0, 3).map((member) => (
+                                <span
+                                  key={member}
+                                  className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-700"
+                                >
+                                  {member}
                                 </span>
-                              </div>
+                              ))}
+                              {g.memberEmails.length > 3 && (
+                                <span className="text-xs font-mono text-slate-400 tabular-nums">
+                                  +{g.memberEmails.length - 3}
+                                </span>
+                              )}
                             </div>
-                          </TableCell>
+                          )}
+                        </TableCell>
 
-                          <TableCell className="py-4">
-                            <span className="text-xs font-mono font-semibold text-slate-700">
-                              {g.groupEmail}
-                            </span>
-                          </TableCell>
+                        <TableCell className="py-3.5">
+                          <span className="text-xs font-mono text-slate-500">
+                            {g.orgUnitPath}
+                          </span>
+                        </TableCell>
 
-                          <TableCell className="py-4">
-                            {g.memberEmails.length === 0 ? (
-                              <button
-                                type="button"
-                                onClick={() => {
+                        <TableCell className="text-right pr-6 py-3.5">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
+                              >
+                                <MoreVertical className="w-4 h-4" strokeWidth={1.5} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-52 bg-white border border-slate-200 shadow-md rounded-xl p-1"
+                            >
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  setEditingGroup(g)
+                                  setEditGroupForm({
+                                    name: g.name,
+                                    orgUnitPath: g.orgUnitPath || "/",
+                                  })
+                                }}
+                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                              >
+                                <Edit2 className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <span>Update group name</span>
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onSelect={() => {
                                   setMembersTargetGroup(g)
                                   setGroupMemberInput("")
                                 }}
-                                className="text-[11px] text-slate-400 hover:text-primary font-medium transition-colors"
+                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
                               >
-                                + Add members
-                              </button>
-                            ) : (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {g.memberEmails.slice(0, 3).map((member) => (
-                                  <Badge
-                                    key={member}
-                                    variant="outline"
-                                    className="text-[10px] font-mono font-medium px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-700"
-                                  >
-                                    {member}
-                                  </Badge>
-                                ))}
-                                {g.memberEmails.length > 3 && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] font-medium px-2 py-0.5 bg-slate-100 border-slate-200 text-slate-600"
-                                  >
-                                    +{g.memberEmails.length - 3} more
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                          </TableCell>
+                                <Users className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <span className="flex-1">Manage members</span>
+                                <span className="font-mono text-slate-400 tabular-nums">
+                                  {g.memberEmails.length}
+                                </span>
+                              </DropdownMenuItem>
 
-                          <TableCell className="py-4">
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] font-mono font-medium px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-600"
-                            >
-                              {g.orgUnitPath}
-                            </Badge>
-                          </TableCell>
+                              <DropdownMenuSeparator />
 
-                          <TableCell className="text-right pr-6 py-4">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8 border-slate-200 bg-white hover:bg-slate-50 rounded-lg shadow-none"
-                                >
-                                  <MoreVertical className="w-4 h-4 text-slate-600" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="end"
-                                className="w-56 bg-white border border-slate-200 shadow-md rounded-xl p-1"
+                              <DropdownMenuItem
+                                onSelect={() => setDeletingGroup(g)}
+                                className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
                               >
-                                <DropdownMenuItem
-                                  onSelect={() => {
-                                    setEditingGroup(g)
-                                    setEditGroupForm({
-                                      name: g.name,
-                                      orgUnitPath: g.orgUnitPath || "/",
-                                    })
-                                  }}
-                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5 text-slate-500" />
-                                  <span>Update group name</span>
-                                </DropdownMenuItem>
-
-                                <DropdownMenuItem
-                                  onSelect={() => {
-                                    setMembersTargetGroup(g)
-                                    setGroupMemberInput("")
-                                  }}
-                                  className="gap-2.5 py-2 text-xs cursor-pointer rounded-lg"
-                                >
-                                  <Users className="w-3.5 h-3.5 text-slate-500" />
-                                  <span>Manage members ({g.memberEmails.length})</span>
-                                </DropdownMenuItem>
-
-                                <DropdownMenuSeparator />
-
-                                <DropdownMenuItem
-                                  onSelect={() => setDeletingGroup(g)}
-                                  className="gap-2.5 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Delete group</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+                                <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                                <span>Delete group</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
           </TabsContent>
 
           {/* =====================================================================
               TAB 3: SUSPENDED ACCOUNTS & 14-DAY DELETED RECOVERY
           ===================================================================== */}
           <TabsContent value="suspended" className="space-y-6 mt-0">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <div className="space-y-0.5">
-                <h2 className="text-sm font-headline font-bold text-slate-900">
-                  Suspended & Recently Deleted Accounts
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Suspended accounts cannot sign in or send mail. Deleted accounts remain recoverable for 14 days before permanent removal.
-                </p>
+            <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+              <div className="p-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/40">
+                <div className="space-y-0.5">
+                  <h2 className="text-xs font-medium text-slate-900">
+                    Suspended accounts
+                    <span className="ml-2 font-mono text-slate-400 tabular-nums">
+                      {filteredSuspendedUsers.length}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Suspended accounts cannot sign in or send mail until reactivated
+                  </p>
+                </div>
+
+                <div className="relative w-full sm:w-56">
+                  <Search
+                    className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
+                    strokeWidth={1.5}
+                  />
+                  <Input
+                    value={suspendedSearchQuery}
+                    onChange={(e) => setSuspendedSearchQuery(e.target.value)}
+                    placeholder="Search"
+                    className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
+                  />
+                </div>
               </div>
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <Input
-                  value={suspendedSearchQuery}
-                  onChange={(e) => setSuspendedSearchQuery(e.target.value)}
-                  placeholder="Filter accounts..."
-                  className="h-9 pl-8 text-xs border-slate-200 bg-slate-50/50 focus-visible:bg-white rounded-lg"
-                />
-              </div>
+
+              {filteredSuspendedUsers.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  No suspended email accounts
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                        Account name
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Primary address
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Organizational unit
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredSuspendedUsers.map((u) => (
+                      <TableRow key={u.id} className="border-b border-slate-100 last:border-0">
+                        <TableCell className="pl-6 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                            <span className="text-xs font-medium text-slate-900">
+                              {u.displayName}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3.5 text-xs font-mono text-slate-700">
+                          {u.primaryEmail}
+                        </TableCell>
+                        <TableCell className="py-3.5 text-xs font-mono text-slate-500">
+                          {u.orgUnitPath}
+                        </TableCell>
+                        <TableCell className="text-right pr-6 py-3.5">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
+                              >
+                                <MoreVertical className="w-4 h-4" strokeWidth={1.5} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-48 bg-white border border-slate-200 shadow-md rounded-xl p-1"
+                            >
+                              <DropdownMenuItem
+                                onSelect={() => handleSuspendOrReactivateUser(u, false)}
+                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                              >
+                                <RotateCcw className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <span>Reactivate account</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onSelect={() => setDeletingUser(u)}
+                                className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
+                              >
+                                <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                                <span>Delete email account</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
 
-            {/* Section A: Suspended Accounts */}
-            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <CardHeader className="border-b border-slate-100 py-4 px-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <CardTitle className="text-sm font-headline font-bold text-slate-900">
-                      Suspended Accounts ({filteredSuspendedUsers.length})
-                    </CardTitle>
-                    <CardDescription className="text-xs text-slate-500">
-                      Reactivate a suspended account at any time or move it to 14-day deletion recovery.
-                    </CardDescription>
-                  </div>
+            {/* Deleted accounts — 14-day recovery */}
+            <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+              <div className="p-4 border-b border-slate-200/80 bg-slate-50/40 space-y-0.5">
+                <h2 className="text-xs font-medium text-slate-900">
+                  Deleted accounts (14-day recovery)
+                  <span className="ml-2 font-mono text-slate-400 tabular-nums">
+                    {filteredDeletedUsers.length}
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Accounts can be restored for 14 days after deletion before permanent removal
+                </p>
+              </div>
+
+              {filteredDeletedUsers.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  No deleted accounts in the 14-day recovery window
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {filteredSuspendedUsers.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-slate-400">
-                    No suspended email accounts.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
-                        <TableHead className="text-xs font-semibold py-3 pl-6 text-slate-600">
-                          Account Name
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3 text-slate-600">
-                          Primary Email
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3 text-slate-600">
-                          Organizational Unit
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3 text-right pr-6 text-slate-600">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredSuspendedUsers.map((u) => (
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                        Account name
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Primary address
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Recovery window
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredDeletedUsers.map((u) => {
+                      const daysLeft = getDaysRemaining(u.recoverableUntil)
+                      return (
                         <TableRow key={u.id} className="border-b border-slate-100 last:border-0">
-                          <TableCell className="pl-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-bold text-xs flex items-center justify-center">
-                                {(u.firstName?.[0] || "S").toUpperCase()}
-                              </div>
-                              <div>
-                                <div className="text-xs font-bold text-slate-900">
-                                  {u.displayName}
-                                </div>
-                                <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-4 font-medium hover:bg-amber-50">
-                                  Suspended
-                                </Badge>
-                              </div>
+                          <TableCell className="pl-6 py-3.5">
+                            <div className="flex items-center gap-2.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-rose-600 shrink-0" />
+                              <span className="text-xs font-medium text-slate-900">
+                                {u.displayName}
+                              </span>
                             </div>
                           </TableCell>
-                          <TableCell className="py-4 text-xs font-mono font-semibold text-slate-700">
+                          <TableCell className="py-3.5 text-xs font-mono text-slate-700">
                             {u.primaryEmail}
                           </TableCell>
-                          <TableCell className="py-4">
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] font-mono bg-slate-50 border-slate-200 text-slate-600"
-                            >
-                              {u.orgUnitPath}
-                            </Badge>
+                          <TableCell className="py-3.5 text-xs font-mono text-slate-500 tabular-nums">
+                            {daysLeft} {daysLeft === 1 ? "day" : "days"} remaining
                           </TableCell>
-                          <TableCell className="text-right pr-6 py-4">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8 border-slate-200 bg-white hover:bg-slate-50 rounded-lg shadow-none"
-                                >
-                                  <MoreVertical className="w-4 h-4 text-slate-600" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="end"
-                                className="w-52 bg-white border border-slate-200 shadow-md rounded-xl p-1"
-                              >
-                                <DropdownMenuItem
-                                  onSelect={() => handleSuspendOrReactivateUser(u, false)}
-                                  className="gap-2.5 py-2 text-xs text-emerald-700 focus:text-emerald-800 cursor-pointer rounded-lg"
-                                >
-                                  <RotateCcw className="w-3.5 h-3.5" />
-                                  <span>Reactivate account</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onSelect={() => setDeletingUser(u)}
-                                  className="gap-2.5 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Delete email account</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                          <TableCell className="text-right pr-6 py-3.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRecoverDeletedUser(u)}
+                              className="h-8 px-3 text-xs font-medium border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                            >
+                              Recover account
+                            </Button>
                           </TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Section B: Deleted Accounts (14-Day Recovery Window) */}
-            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <CardHeader className="border-b border-slate-100 py-4 px-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <CardTitle className="text-sm font-headline font-bold text-slate-900">
-                      Deleted Accounts — 14-Day Recovery ({filteredDeletedUsers.length})
-                    </CardTitle>
-                    <CardDescription className="text-xs text-slate-500">
-                      Deleted email accounts can be restored within 14 days of deletion. After 14 days, accounts are purged permanently.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {filteredDeletedUsers.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-slate-400">
-                    No deleted accounts pending 14-day recovery.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
-                        <TableHead className="text-xs font-semibold py-3 pl-6 text-slate-600">
-                          Account Name
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3 text-slate-600">
-                          Primary Email
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3 text-slate-600">
-                          Recovery Window
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold py-3 text-right pr-6 text-slate-600">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredDeletedUsers.map((u) => {
-                        const daysLeft = getDaysRemaining(u.recoverableUntil)
-                        return (
-                          <TableRow key={u.id} className="border-b border-slate-100 last:border-0">
-                            <TableCell className="pl-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center">
-                                  {(u.firstName?.[0] || "D").toUpperCase()}
-                                </div>
-                                <div>
-                                  <div className="text-xs font-bold text-slate-900">
-                                    {u.displayName}
-                                  </div>
-                                  <span className="text-[11px] text-slate-400">
-                                    OU: {u.orgUnitPath}
-                                  </span>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4 text-xs font-mono font-semibold text-slate-700">
-                              {u.primaryEmail}
-                            </TableCell>
-                            <TableCell className="py-4">
-                              <Badge className="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-semibold px-2 py-0.5 hover:bg-rose-50">
-                                <Clock className="w-3 h-3 mr-1" />
-                                {daysLeft} {daysLeft === 1 ? "day" : "days"} remaining
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right pr-6 py-4">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleRecoverDeletedUser(u)}
-                                className="h-8 px-3 text-xs font-semibold border-slate-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-lg"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                                Recover Account
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
           </TabsContent>
 
           {/* =====================================================================
               TAB 4: SETTINGS (Domain Catch-All Routing + Required DNS Records)
           ===================================================================== */}
           <TabsContent value="settings" className="space-y-6 mt-0">
-            {/* Section 1: Domain Catch-All Routing */}
-            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <CardHeader className="border-b border-slate-100 py-5 px-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <CardTitle className="text-base font-headline font-bold text-slate-900">
-                      Domain Catch-All Routing
-                    </CardTitle>
-                    <CardDescription className="text-xs text-slate-500">
-                      Route incoming messages addressed to any unmatched{" "}
-                      <span className="font-mono font-semibold text-slate-700">
-                        @{selectedOrg.domain}
-                      </span>{" "}
-                      recipient to a designated fallback email account.
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-semibold text-slate-600">
-                      {catchAllUserId ? "Enabled" : "Disabled"}
-                    </span>
-                    <Switch
-                      checked={Boolean(catchAllUserId)}
-                      disabled={isUpdatingCatchAll}
-                      onCheckedChange={handleCatchAllToggle}
-                    />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                  <div className="space-y-2 flex-1 max-w-md">
-                    <Label className="text-xs font-semibold text-slate-700">
-                      Designated Catch-All Account
-                    </Label>
-                    <Select
-                      value={catchAllUserId || "NONE"}
-                      disabled={isUpdatingCatchAll || activeUsers.length === 0}
-                      onValueChange={(val) =>
-                        handleCatchAllTargetChange(val === "NONE" ? null : val)
-                      }
-                    >
-                      <SelectTrigger className="h-10 text-xs border-slate-200 bg-white rounded-lg">
-                        <SelectValue placeholder="Select an active email account..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-slate-200">
-                        <SelectItem value="NONE" className="text-xs">
-                          Disabled (Reject unmatched addresses)
-                        </SelectItem>
-                        {activeUsers.map((u) => (
-                          <SelectItem key={u.id} value={u.id} className="text-xs">
-                            {u.displayName} ({u.primaryEmail})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-slate-500">
-                      {catchAllEmail
-                        ? `All unmatched @${selectedOrg.domain} emails are currently delivered to ${catchAllEmail}.`
-                        : `Unmatched @${selectedOrg.domain} emails are rejected when Catch-All Routing is disabled.`}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Section 2: Required DNS Records */}
-            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <CardHeader className="border-b border-slate-100 py-5 px-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2.5">
-                      <CardTitle className="text-base font-headline font-bold text-slate-900">
-                        Required DNS Records
-                      </CardTitle>
-                      <Badge
-                        className={cn(
-                          "text-[10px] font-semibold px-2 py-0.5 border shadow-none",
-                          verifiedDnsCount === requiredDnsRecords.length &&
-                            requiredDnsRecords.length > 0
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                            : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50"
-                        )}
-                      >
-                        {verifiedDnsCount} / {requiredDnsRecords.length} Verified
-                      </Badge>
-                    </div>
-                    <CardDescription className="text-xs text-slate-500">
-                      Required domain records for inbound mail delivery, sender policy authorization, and cryptographic signing on{" "}
-                      <span className="font-mono font-semibold text-slate-700">
-                        {selectedOrg.domain}
-                      </span>
-                      .
-                    </CardDescription>
-                  </div>
-
-                  {dnsServiceActive && (
-                    <Button
-                      size="sm"
-                      onClick={handleSyncDnsRecords}
-                      disabled={isSyncingDns}
-                      className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shadow-sm shrink-0"
-                    >
-                      {isSyncingDns ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
-                          Syncing DNS Records...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 mr-2" />
-                          Sync Required DNS Records
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-200">
-                      <TableHead className="text-xs font-semibold py-3.5 pl-6 text-slate-600">
-                        Purpose
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
-                        Type
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
-                        Host / Name
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold py-3.5 text-slate-600">
-                        Value / Points To
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold py-3.5 text-right pr-6 text-slate-600">
-                        Status
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {requiredDnsRecords.map((rec) => (
-                      <TableRow key={rec.id} className="border-b border-slate-100 last:border-0">
-                        <TableCell className="pl-6 py-4 text-xs font-semibold text-slate-800">
-                          {rec.purpose}
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-700"
-                          >
-                            {rec.type}
-                            {rec.priority !== undefined ? ` (${rec.priority})` : ""}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="flex items-center gap-2 max-w-[220px]">
-                            <span className="text-xs font-mono text-slate-700 truncate">
-                              {rec.name}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(rec.name, `${rec.id}-name`)}
-                              className="text-slate-400 hover:text-slate-700 shrink-0"
-                              title="Copy Host"
-                            >
-                              {copiedKey === `${rec.id}-name` ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="flex items-center gap-2 max-w-[280px]">
-                            <span className="text-xs font-mono text-slate-700 truncate">
-                              {rec.content}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(rec.content, `${rec.id}-content`)}
-                              className="text-slate-400 hover:text-slate-700 shrink-0"
-                              title="Copy Value"
-                            >
-                              {copiedKey === `${rec.id}-content` ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right pr-6 py-4">
-                          {rec.verified ? (
-                            <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold px-2 py-0.5 hover:bg-emerald-50">
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Verified
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold px-2 py-0.5 hover:bg-amber-50">
-                              <AlertCircle className="w-3 h-3 mr-1" />
-                              {dnsServiceActive ? "Pending Sync" : "Add at Registrar"}
-                            </Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
-            {/* Section 3: Service Status Control */}
-            <Card className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Domain catch-all routing */}
+            <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+              <div className="p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <h3 className="text-sm font-headline font-bold text-slate-900">
-                    Deactivate Email Service
-                  </h3>
+                  <h2 className="text-sm font-headline font-semibold text-slate-900">
+                    Domain catch-all routing
+                  </h2>
                   <p className="text-xs text-slate-500">
-                    Pause Email Service for {selectedOrg.domain}. Existing accounts, aliases, and groups will remain saved in your directory.
+                    Deliver incoming messages addressed to any unmatched{" "}
+                    <span className="font-mono text-slate-700">@{selectedOrg.domain}</span>{" "}
+                    recipient to a designated fallback email account
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsDeactivateConfirmOpen(true)}
-                  className="h-9 px-4 text-xs font-semibold text-destructive border-slate-200 hover:bg-rose-50 hover:text-destructive rounded-lg shrink-0"
-                >
-                  Deactivate Service
-                </Button>
-              </CardContent>
-            </Card>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-slate-500">
+                    {catchAllUserId ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={Boolean(catchAllUserId)}
+                    disabled={isUpdatingCatchAll}
+                    onCheckedChange={handleCatchAllToggle}
+                  />
+                </div>
+              </div>
+
+              <div className="p-6">
+                <div className="max-w-md space-y-2">
+                  <Label className="text-xs font-medium text-slate-700">
+                    Fallback account
+                  </Label>
+                  <Select
+                    value={catchAllUserId || "NONE"}
+                    disabled={isUpdatingCatchAll || activeUsers.length === 0}
+                    onValueChange={(val) =>
+                      handleCatchAllTargetChange(val === "NONE" ? null : val)
+                    }
+                  >
+                    <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
+                      <SelectValue placeholder="Select an active email account" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200">
+                      <SelectItem value="NONE" className="text-xs">
+                        Disabled (reject unmatched recipients)
+                      </SelectItem>
+                      {activeUsers.map((u) => (
+                        <SelectItem key={u.id} value={u.id} className="text-xs">
+                          {u.displayName} ({u.primaryEmail})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500">
+                    {catchAllEmail
+                      ? `Unmatched mail to @${selectedOrg.domain} routes to ${catchAllEmail}.`
+                      : `Unmatched mail to @${selectedOrg.domain} is rejected when catch-all is disabled.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Required DNS records */}
+            <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+              <div className="p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-headline font-semibold text-slate-900">
+                      Required DNS records
+                    </h2>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500 tabular-nums">
+                      <span
+                        className={cn(
+                          "h-1.5 w-1.5 rounded-full",
+                          verifiedDnsCount === requiredDnsRecords.length &&
+                            requiredDnsRecords.length > 0
+                            ? "bg-emerald-600"
+                            : "bg-amber-500"
+                        )}
+                      />
+                      {verifiedDnsCount} of {requiredDnsRecords.length} verified
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    DNS records required for inbound delivery and outbound domain signing on{" "}
+                    <span className="font-mono text-slate-700">{selectedOrg.domain}</span>
+                  </p>
+                </div>
+
+                {dnsServiceActive && (
+                  <Button
+                    size="sm"
+                    onClick={handleSyncDnsRecords}
+                    disabled={isSyncingDns}
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
+                  >
+                    {isSyncingDns ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
+                        Syncing DNS records
+                      </>
+                    ) : (
+                      "Sync DNS records"
+                    )}
+                  </Button>
+                )}
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/40 hover:bg-slate-50/40 border-b border-slate-200/80">
+                    <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                      Purpose
+                    </TableHead>
+                    <TableHead className="text-xs font-medium py-3 text-slate-500">
+                      Type
+                    </TableHead>
+                    <TableHead className="text-xs font-medium py-3 text-slate-500">
+                      Host
+                    </TableHead>
+                    <TableHead className="text-xs font-medium py-3 text-slate-500">
+                      Value
+                    </TableHead>
+                    <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                      Status
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {requiredDnsRecords.map((rec) => (
+                    <TableRow key={rec.id} className="border-b border-slate-100 last:border-0">
+                      <TableCell className="pl-6 py-3.5 text-xs font-medium text-slate-800">
+                        {rec.purpose}
+                      </TableCell>
+                      <TableCell className="py-3.5">
+                        <span className="text-xs font-mono text-slate-600 tabular-nums">
+                          {rec.type}
+                          {rec.priority !== undefined ? ` ${rec.priority}` : ""}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-3.5">
+                        <div className="flex items-center gap-2 max-w-[220px]">
+                          <span className="text-xs font-mono text-slate-700 truncate">
+                            {rec.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(rec.name, `${rec.id}-name`)}
+                            className="text-slate-400 hover:text-slate-700 shrink-0 transition-colors"
+                            title="Copy host"
+                          >
+                            {copiedKey === `${rec.id}-name` ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.5} />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
+                            )}
+                          </button>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3.5">
+                        <div className="flex items-center gap-2 max-w-[280px]">
+                          <span className="text-xs font-mono text-slate-700 truncate">
+                            {rec.content}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(rec.content, `${rec.id}-content`)}
+                            className="text-slate-400 hover:text-slate-700 shrink-0 transition-colors"
+                            title="Copy value"
+                          >
+                            {copiedKey === `${rec.id}-content` ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.5} />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
+                            )}
+                          </button>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right pr-6 py-3.5">
+                        <span className="inline-flex items-center justify-end gap-1.5 text-xs font-mono text-slate-600">
+                          <span
+                            className={cn(
+                              "h-1.5 w-1.5 rounded-full",
+                              rec.verified ? "bg-emerald-600" : "bg-amber-500"
+                            )}
+                          />
+                          {rec.verified
+                            ? "Verified"
+                            : dnsServiceActive
+                            ? "Pending sync"
+                            : "Unverified"}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Service deactivation */}
+            <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-headline font-semibold text-slate-900">
+                  Deactivate email service
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Pause email service for {selectedOrg.domain}. Accounts, aliases, and groups remain saved in your directory.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDeactivateConfirmOpen(true)}
+                className="h-9 px-4 text-xs font-medium text-destructive border-slate-200 hover:bg-rose-50 hover:text-destructive rounded-lg shrink-0 transition-colors"
+              >
+                Deactivate service
+              </Button>
+            </div>
           </TabsContent>
         </Tabs>
 
         {/* =========================================================================
-            PROGRAMMATIC DIALOGS
+            DIALOGS
         ========================================================================= */}
 
-        {/* 1. ORGANIZATIONAL UNITS DIALOG */}
+        {/* 1. Organizational units dialog */}
         <Dialog open={isOuModalOpen} onOpenChange={setIsOuModalOpen}>
           <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
-              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
-                Organizational Units
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Organizational units
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Create and manage Organizational Units to organize email accounts and groups.
+                Create and manage organizational units for accounts and groups
               </DialogDescription>
             </DialogHeader>
 
-            <div className="p-6 space-y-5">
-              <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+            <div className="p-6 space-y-4">
+              <div className="space-y-3 bg-slate-50/70 p-4 rounded-lg border border-slate-200/80">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-slate-700">Unit Name</Label>
+                    <Label className="text-xs font-medium text-slate-700">Unit name</Label>
                     <Input
                       value={newOuName}
                       onChange={(e) => setNewOuName(e.target.value)}
-                      placeholder="e.g. Faculty or Admissions"
-                      className="h-9 text-xs bg-white border-slate-200"
+                      placeholder="Faculty"
+                      className="h-9 text-xs bg-white border-slate-200 rounded-lg"
                     />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-medium text-slate-700">
-                      Description (Optional)
+                      Description (optional)
                     </Label>
                     <Input
                       value={newOuDescription}
                       onChange={(e) => setNewOuDescription(e.target.value)}
-                      placeholder="Optional note"
-                      className="h-9 text-xs bg-white border-slate-200"
+                      placeholder="Academic staff"
+                      className="h-9 text-xs bg-white border-slate-200 rounded-lg"
                     />
                   </div>
                 </div>
@@ -2266,40 +2223,34 @@ export default function EmailServiceAdminPage() {
                     size="sm"
                     onClick={handleCreateOu}
                     disabled={isSavingOu || !newOuName.trim()}
-                    className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-8 px-4 rounded-lg text-xs"
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-8 px-4 rounded-lg text-xs"
                   >
-                    {isSavingOu ? (
-                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    ) : (
-                      <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    {isSavingOu && (
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" strokeWidth={1.5} />
                     )}
-                    Create Organizational Unit
+                    Create unit
                   </Button>
                 </div>
               </div>
 
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200/80 bg-white">
                   <div>
-                    <div className="text-xs font-mono font-bold text-slate-800">/ (Root)</div>
-                    <div className="text-[11px] text-slate-400">
-                      Default organization-wide root unit
-                    </div>
+                    <div className="text-xs font-mono font-medium text-slate-800">/</div>
+                    <div className="text-xs text-slate-400">Default root organizational unit</div>
                   </div>
-                  <Badge variant="outline" className="text-[10px] border-slate-200 text-slate-500">
-                    System Default
-                  </Badge>
+                  <span className="text-xs font-mono text-slate-400">Default</span>
                 </div>
 
                 {orgUnits.map((ou) => (
                   <div
                     key={ou.id}
-                    className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white"
+                    className="flex items-center justify-between p-3 rounded-lg border border-slate-200/80 bg-white"
                   >
                     <div>
-                      <div className="text-xs font-mono font-bold text-slate-800">{ou.path}</div>
+                      <div className="text-xs font-mono font-medium text-slate-800">{ou.path}</div>
                       {ou.description && (
-                        <div className="text-[11px] text-slate-500">{ou.description}</div>
+                        <div className="text-xs text-slate-500">{ou.description}</div>
                       )}
                     </div>
                     <Button
@@ -2307,9 +2258,9 @@ export default function EmailServiceAdminPage() {
                       size="icon"
                       disabled={isSavingOu}
                       onClick={() => handleDeleteOu(ou)}
-                      className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
+                      className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                     </Button>
                   </div>
                 ))}
@@ -2321,54 +2272,54 @@ export default function EmailServiceAdminPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsOuModalOpen(false)}
-                className="h-8 px-4 text-xs font-semibold rounded-lg"
+                className="h-8 px-4 text-xs font-medium rounded-lg"
               >
-                Done
+                Close
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* 2. CREATE USER DIALOG */}
+        {/* 2. Create user dialog */}
         <Dialog open={isCreateUserOpen} onOpenChange={setIsCreateUserOpen}>
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
-              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
-                Create Email Account
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Create email account
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Create an email address and password for signing in to Revlet Mail.
+                Create an address and password for signing in to Revlet Mail
               </DialogDescription>
             </DialogHeader>
 
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">First Name</Label>
+                  <Label className="text-xs font-medium text-slate-700">First name</Label>
                   <Input
                     value={createUserForm.firstName}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, firstName: e.target.value }))
                     }
                     placeholder="Alex"
-                    className="h-9 text-xs border-slate-200"
+                    className="h-9 text-xs border-slate-200 rounded-lg"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">Last Name</Label>
+                  <Label className="text-xs font-medium text-slate-700">Last name</Label>
                   <Input
                     value={createUserForm.lastName}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, lastName: e.target.value }))
                     }
                     placeholder="Morgan"
-                    className="h-9 text-xs border-slate-200"
+                    className="h-9 text-xs border-slate-200 rounded-lg"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Email Address</Label>
+                <Label className="text-xs font-medium text-slate-700">Email address</Label>
                 <div className="flex items-center">
                   <Input
                     value={createUserForm.emailPrefix}
@@ -2376,18 +2327,16 @@ export default function EmailServiceAdminPage() {
                       setCreateUserForm((prev) => ({ ...prev, emailPrefix: e.target.value }))
                     }
                     placeholder="alex"
-                    className="h-9 text-xs font-mono border-slate-200 rounded-r-none"
+                    className="h-9 text-xs font-mono border-slate-200 rounded-l-lg rounded-r-none"
                   />
-                  <div className="h-9 px-3 bg-slate-100 border border-l-0 border-slate-200 rounded-r-md flex items-center text-xs font-mono text-slate-600">
+                  <div className="h-9 px-3 bg-slate-50 border border-l-0 border-slate-200 rounded-r-lg flex items-center text-xs font-mono text-slate-500">
                     @{selectedOrg.domain}
                   </div>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">
-                  Revlet Mail Sign-In Password
-                </Label>
+                <Label className="text-xs font-medium text-slate-700">Password</Label>
                 <Input
                   type="password"
                   value={createUserForm.password}
@@ -2395,25 +2344,25 @@ export default function EmailServiceAdminPage() {
                     setCreateUserForm((prev) => ({ ...prev, password: e.target.value }))
                   }
                   placeholder="Minimum 8 characters"
-                  className="h-9 text-xs border-slate-200"
+                  className="h-9 text-xs border-slate-200 rounded-lg"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
+                <Label className="text-xs font-medium text-slate-700">Organizational unit</Label>
                 <Select
                   value={createUserForm.orgUnitPath}
                   onValueChange={(val) =>
                     setCreateUserForm((prev) => ({ ...prev, orgUnitPath: val }))
                   }
                 >
-                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-slate-200">
                     {allOuOptions.map((ouPath) => (
-                      <SelectItem key={ouPath} value={ouPath} className="text-xs">
-                        {ouPath === "/" ? "/ (Root)" : ouPath}
+                      <SelectItem key={ouPath} value={ouPath} className="text-xs font-mono">
+                        {ouPath}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2426,7 +2375,7 @@ export default function EmailServiceAdminPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsCreateUserOpen(false)}
-                className="h-9 px-4 text-xs font-semibold rounded-lg"
+                className="h-9 px-4 text-xs font-medium rounded-lg"
               >
                 Cancel
               </Button>
@@ -2439,16 +2388,18 @@ export default function EmailServiceAdminPage() {
                   !createUserForm.emailPrefix.trim() ||
                   createUserForm.password.length < 8
                 }
-                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
               >
-                {isCreatingUser && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                Create Email Account
+                {isCreatingUser && (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                )}
+                Create account
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* 3. UPDATE USER ACCOUNT NAME / OU DIALOG */}
+        {/* 3. Update user account name / OU dialog */}
         <Dialog
           open={Boolean(editingUser)}
           onOpenChange={(open) => {
@@ -2457,57 +2408,54 @@ export default function EmailServiceAdminPage() {
         >
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
-              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
-                Update Account Name
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Update account name
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Update display name and organizational unit for{" "}
-                <span className="font-mono font-semibold text-slate-700">
-                  {editingUser?.primaryEmail}
-                </span>
-                .
+                Update name and organizational unit for{" "}
+                <span className="font-mono text-slate-700">{editingUser?.primaryEmail}</span>
               </DialogDescription>
             </DialogHeader>
 
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">First Name</Label>
+                  <Label className="text-xs font-medium text-slate-700">First name</Label>
                   <Input
                     value={editUserForm.firstName}
                     onChange={(e) =>
                       setEditUserForm((prev) => ({ ...prev, firstName: e.target.value }))
                     }
-                    className="h-9 text-xs border-slate-200"
+                    className="h-9 text-xs border-slate-200 rounded-lg"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">Last Name</Label>
+                  <Label className="text-xs font-medium text-slate-700">Last name</Label>
                   <Input
                     value={editUserForm.lastName}
                     onChange={(e) =>
                       setEditUserForm((prev) => ({ ...prev, lastName: e.target.value }))
                     }
-                    className="h-9 text-xs border-slate-200"
+                    className="h-9 text-xs border-slate-200 rounded-lg"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
+                <Label className="text-xs font-medium text-slate-700">Organizational unit</Label>
                 <Select
                   value={editUserForm.orgUnitPath}
                   onValueChange={(val) =>
                     setEditUserForm((prev) => ({ ...prev, orgUnitPath: val }))
                   }
                 >
-                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-slate-200">
                     {allOuOptions.map((ouPath) => (
-                      <SelectItem key={ouPath} value={ouPath} className="text-xs">
-                        {ouPath === "/" ? "/ (Root)" : ouPath}
+                      <SelectItem key={ouPath} value={ouPath} className="text-xs font-mono">
+                        {ouPath}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2520,7 +2468,7 @@ export default function EmailServiceAdminPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setEditingUser(null)}
-                className="h-9 px-4 text-xs font-semibold rounded-lg"
+                className="h-9 px-4 text-xs font-medium rounded-lg"
               >
                 Cancel
               </Button>
@@ -2528,16 +2476,18 @@ export default function EmailServiceAdminPage() {
                 size="sm"
                 onClick={handleUpdateUserAccount}
                 disabled={isUpdatingUser || !editUserForm.firstName.trim()}
-                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
               >
-                {isUpdatingUser && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                Save Changes
+                {isUpdatingUser && (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                )}
+                Save changes
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* 4. RESET USER PASSWORD DIALOG */}
+        {/* 4. Reset user password dialog */}
         <Dialog
           open={Boolean(passwordTargetUser)}
           onOpenChange={(open) => {
@@ -2546,27 +2496,24 @@ export default function EmailServiceAdminPage() {
         >
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
-              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
-                Reset Password
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Reset password
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Set a new Revlet Mail sign-in password for{" "}
-                <span className="font-mono font-semibold text-slate-700">
-                  {passwordTargetUser?.primaryEmail}
-                </span>
-                .
+                Set a new sign-in password for{" "}
+                <span className="font-mono text-slate-700">{passwordTargetUser?.primaryEmail}</span>
               </DialogDescription>
             </DialogHeader>
 
             <div className="p-6 space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">New Password</Label>
+                <Label className="text-xs font-medium text-slate-700">New password</Label>
                 <Input
                   type="password"
                   value={newPasswordValue}
                   onChange={(e) => setNewPasswordValue(e.target.value)}
                   placeholder="Minimum 8 characters"
-                  className="h-9 text-xs border-slate-200"
+                  className="h-9 text-xs border-slate-200 rounded-lg"
                 />
               </div>
             </div>
@@ -2576,7 +2523,7 @@ export default function EmailServiceAdminPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setPasswordTargetUser(null)}
-                className="h-9 px-4 text-xs font-semibold rounded-lg"
+                className="h-9 px-4 text-xs font-medium rounded-lg"
               >
                 Cancel
               </Button>
@@ -2584,16 +2531,18 @@ export default function EmailServiceAdminPage() {
                 size="sm"
                 onClick={handleResetUserPassword}
                 disabled={isResettingPassword || newPasswordValue.length < 8}
-                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
               >
-                {isResettingPassword && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                Update Password
+                {isResettingPassword && (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                )}
+                Update password
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* 5. MANAGE USER EMAIL ALIASES DIALOG (ADD / UPDATE / REMOVE) */}
+        {/* 5. Manage user email aliases dialog */}
         <Dialog
           open={Boolean(aliasTargetUser)}
           onOpenChange={(open) => {
@@ -2605,31 +2554,27 @@ export default function EmailServiceAdminPage() {
         >
           <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
-              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
-                Manage Email Aliases
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Manage email aliases
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Add, update, or remove email aliases for{" "}
-                <span className="font-mono font-semibold text-slate-700">
-                  {aliasTargetUser?.primaryEmail}
-                </span>
-                .
+                Add, update, or remove aliases for{" "}
+                <span className="font-mono text-slate-700">{aliasTargetUser?.primaryEmail}</span>
               </DialogDescription>
             </DialogHeader>
 
-            <div className="p-6 space-y-5">
-              {/* Add new alias */}
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-slate-700">Add New Email Alias</Label>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-700">New alias</Label>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center flex-1">
                     <Input
                       value={newAliasPrefix}
                       onChange={(e) => setNewAliasPrefix(e.target.value)}
-                      placeholder="alias-name"
-                      className="h-9 text-xs font-mono border-slate-200 rounded-r-none"
+                      placeholder="alias"
+                      className="h-9 text-xs font-mono border-slate-200 rounded-l-lg rounded-r-none"
                     />
-                    <div className="h-9 px-3 bg-slate-100 border border-l-0 border-slate-200 rounded-r-md flex items-center text-xs font-mono text-slate-600">
+                    <div className="h-9 px-3 bg-slate-50 border border-l-0 border-slate-200 rounded-r-lg flex items-center text-xs font-mono text-slate-500">
                       @{selectedOrg.domain}
                     </div>
                   </div>
@@ -2639,19 +2584,17 @@ export default function EmailServiceAdminPage() {
                     onClick={() =>
                       handleAliasAction("add", { aliasPrefix: newAliasPrefix.trim() })
                     }
-                    className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shrink-0"
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0"
                   >
-                    <Plus className="w-3.5 h-3.5 mr-1" />
-                    Add Alias
+                    Add alias
                   </Button>
                 </div>
               </div>
 
-              {/* Existing aliases list */}
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {aliasTargetUser?.aliases.length === 0 ? (
-                  <div className="p-6 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400">
-                    No email aliases configured for this user.
+                  <div className="p-6 rounded-lg border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                    No aliases assigned to this account
                   </div>
                 ) : (
                   aliasTargetUser?.aliases.map((alias) => {
@@ -2659,7 +2602,7 @@ export default function EmailServiceAdminPage() {
                     return (
                       <div
                         key={alias}
-                        className="flex items-center justify-between gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50/60"
+                        className="flex items-center justify-between gap-2 p-3 rounded-lg border border-slate-200/80 bg-slate-50/40"
                       >
                         {isEditingThis ? (
                           <div className="flex items-center gap-2 flex-1">
@@ -2667,9 +2610,9 @@ export default function EmailServiceAdminPage() {
                               <Input
                                 value={editingAliasPrefix}
                                 onChange={(e) => setEditingAliasPrefix(e.target.value)}
-                                className="h-8 text-xs font-mono bg-white border-slate-200 rounded-r-none"
+                                className="h-8 text-xs font-mono bg-white border-slate-200 rounded-l-lg rounded-r-none"
                               />
-                              <div className="h-8 px-2.5 bg-slate-100 border border-l-0 border-slate-200 rounded-r-md flex items-center text-xs font-mono text-slate-600">
+                              <div className="h-8 px-2.5 bg-slate-100 border border-l-0 border-slate-200 rounded-r-lg flex items-center text-xs font-mono text-slate-500">
                                 @{selectedOrg.domain}
                               </div>
                             </div>
@@ -2682,7 +2625,7 @@ export default function EmailServiceAdminPage() {
                                   updatedAliasPrefix: editingAliasPrefix.trim(),
                                 })
                               }
-                              className="h-8 px-3 text-xs font-semibold bg-primary !text-white text-white rounded-lg"
+                              className="h-8 px-3 text-xs font-medium bg-primary !text-white text-white rounded-lg"
                             >
                               Save
                             </Button>
@@ -2700,9 +2643,7 @@ export default function EmailServiceAdminPage() {
                           </div>
                         ) : (
                           <>
-                            <span className="text-xs font-mono font-semibold text-slate-800">
-                              {alias}
-                            </span>
+                            <span className="text-xs font-mono text-slate-800">{alias}</span>
                             <div className="flex items-center gap-1">
                               <Button
                                 variant="ghost"
@@ -2712,10 +2653,10 @@ export default function EmailServiceAdminPage() {
                                   setEditingAliasOriginal(alias)
                                   setEditingAliasPrefix(alias.split("@")[0] || "")
                                 }}
-                                className="h-7 w-7 text-slate-500 hover:text-slate-800 rounded-lg"
+                                className="h-7 w-7 text-slate-400 hover:text-slate-800 rounded-lg"
                                 title="Update alias"
                               >
-                                <Edit2 className="w-3.5 h-3.5" />
+                                <Edit2 className="w-3.5 h-3.5" strokeWidth={1.5} />
                               </Button>
                               <Button
                                 variant="ghost"
@@ -2727,7 +2668,7 @@ export default function EmailServiceAdminPage() {
                                 className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
                                 title="Remove alias"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
                               </Button>
                             </div>
                           </>
@@ -2744,15 +2685,15 @@ export default function EmailServiceAdminPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setAliasTargetUser(null)}
-                className="h-8 px-4 text-xs font-semibold rounded-lg"
+                className="h-8 px-4 text-xs font-medium rounded-lg"
               >
-                Done
+                Close
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* 6. DELETE USER CONFIRMATION (14-DAY RECOVERY) */}
+        {/* 6. Delete user confirmation (14-day recovery) */}
         <AlertDialog
           open={Boolean(deletingUser)}
           onOpenChange={(open) => {
@@ -2761,19 +2702,16 @@ export default function EmailServiceAdminPage() {
         >
           <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle className="font-headline font-bold text-slate-900">
-                Delete Email Account?
+              <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Delete email account
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
-                <span className="font-mono font-semibold text-slate-800">
-                  {deletingUser?.primaryEmail}
-                </span>{" "}
-                will be moved to Deleted Accounts and will remain available to be recovered for{" "}
-                <span className="font-semibold text-slate-800">14 days</span> before permanent deletion.
+                <span className="font-mono text-slate-800">{deletingUser?.primaryEmail}</span> will
+                be moved to Deleted accounts and remain recoverable for 14 days before permanent removal.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="h-9 text-xs font-semibold rounded-lg">
+              <AlertDialogCancel className="h-9 text-xs font-medium rounded-lg">
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
@@ -2782,42 +2720,44 @@ export default function EmailServiceAdminPage() {
                   handleConfirmDeleteUser()
                 }}
                 disabled={isDeletingUser}
-                className="h-9 text-xs font-semibold bg-destructive text-white hover:bg-destructive/90 rounded-lg"
+                className="h-9 text-xs font-medium bg-destructive text-white hover:bg-destructive/90 rounded-lg"
               >
-                {isDeletingUser && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                Delete Email Account
+                {isDeletingUser && (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                )}
+                Delete account
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* 7. CREATE GROUP DIALOG */}
+        {/* 7. Create group dialog */}
         <Dialog open={isCreateGroupOpen} onOpenChange={setIsCreateGroupOpen}>
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
-              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
-                Create Group
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Create group
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Create a shared group email address that forwards incoming messages to its members.
+                Create a shared group email address that forwards to multiple members
               </DialogDescription>
             </DialogHeader>
 
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Group Name</Label>
+                <Label className="text-xs font-medium text-slate-700">Group name</Label>
                 <Input
                   value={createGroupForm.name}
                   onChange={(e) =>
                     setCreateGroupForm((prev) => ({ ...prev, name: e.target.value }))
                   }
-                  placeholder="e.g. Admissions Team"
-                  className="h-9 text-xs border-slate-200"
+                  placeholder="Admissions"
+                  className="h-9 text-xs border-slate-200 rounded-lg"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Group Email Address</Label>
+                <Label className="text-xs font-medium text-slate-700">Group address</Label>
                 <div className="flex items-center">
                   <Input
                     value={createGroupForm.emailPrefix}
@@ -2825,29 +2765,29 @@ export default function EmailServiceAdminPage() {
                       setCreateGroupForm((prev) => ({ ...prev, emailPrefix: e.target.value }))
                     }
                     placeholder="admissions"
-                    className="h-9 text-xs font-mono border-slate-200 rounded-r-none"
+                    className="h-9 text-xs font-mono border-slate-200 rounded-l-lg rounded-r-none"
                   />
-                  <div className="h-9 px-3 bg-slate-100 border border-l-0 border-slate-200 rounded-r-md flex items-center text-xs font-mono text-slate-600">
+                  <div className="h-9 px-3 bg-slate-50 border border-l-0 border-slate-200 rounded-r-lg flex items-center text-xs font-mono text-slate-500">
                     @{selectedOrg.domain}
                   </div>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
+                <Label className="text-xs font-medium text-slate-700">Organizational unit</Label>
                 <Select
                   value={createGroupForm.orgUnitPath}
                   onValueChange={(val) =>
                     setCreateGroupForm((prev) => ({ ...prev, orgUnitPath: val }))
                   }
                 >
-                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-slate-200">
                     {allOuOptions.map((ouPath) => (
-                      <SelectItem key={ouPath} value={ouPath} className="text-xs">
-                        {ouPath === "/" ? "/ (Root)" : ouPath}
+                      <SelectItem key={ouPath} value={ouPath} className="text-xs font-mono">
+                        {ouPath}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2856,14 +2796,14 @@ export default function EmailServiceAdminPage() {
 
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-slate-700">
-                  Initial Member Emails (Optional)
+                  Members (optional)
                 </Label>
                 <div className="flex items-center gap-2">
                   <Input
                     value={newGroupMemberInput}
                     onChange={(e) => setNewGroupMemberInput(e.target.value)}
                     placeholder={`member@${selectedOrg.domain}`}
-                    className="h-9 text-xs font-mono border-slate-200"
+                    className="h-9 text-xs font-mono border-slate-200 rounded-lg"
                   />
                   <Button
                     type="button"
@@ -2879,7 +2819,7 @@ export default function EmailServiceAdminPage() {
                         setNewGroupMemberInput("")
                       }
                     }}
-                    className="h-9 px-3 text-xs font-semibold border-slate-200"
+                    className="h-9 px-3 text-xs font-medium border-slate-200 rounded-lg"
                   >
                     Add
                   </Button>
@@ -2887,10 +2827,9 @@ export default function EmailServiceAdminPage() {
                 {createGroupForm.memberEmails.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {createGroupForm.memberEmails.map((m) => (
-                      <Badge
+                      <span
                         key={m}
-                        variant="outline"
-                        className="text-[10px] font-mono px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-700 flex items-center gap-1"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-700"
                       >
                         {m}
                         <button
@@ -2902,9 +2841,9 @@ export default function EmailServiceAdminPage() {
                             }))
                           }
                         >
-                          <X className="w-3 h-3 text-slate-400 hover:text-slate-700" />
+                          <X className="w-3 h-3 text-slate-400 hover:text-slate-700" strokeWidth={1.5} />
                         </button>
-                      </Badge>
+                      </span>
                     ))}
                   </div>
                 )}
@@ -2916,7 +2855,7 @@ export default function EmailServiceAdminPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsCreateGroupOpen(false)}
-                className="h-9 px-4 text-xs font-semibold rounded-lg"
+                className="h-9 px-4 text-xs font-medium rounded-lg"
               >
                 Cancel
               </Button>
@@ -2928,16 +2867,18 @@ export default function EmailServiceAdminPage() {
                   !createGroupForm.name.trim() ||
                   !createGroupForm.emailPrefix.trim()
                 }
-                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
               >
-                {isCreatingGroup && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                Create Group
+                {isCreatingGroup && (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                )}
+                Create group
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* 8. UPDATE GROUP NAME / OU DIALOG */}
+        {/* 8. Update group name / OU dialog */}
         <Dialog
           open={Boolean(editingGroup)}
           onOpenChange={(open) => {
@@ -2946,45 +2887,42 @@ export default function EmailServiceAdminPage() {
         >
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
-              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
-                Update Group Name
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Update group name
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Update group display name and organizational unit for{" "}
-                <span className="font-mono font-semibold text-slate-700">
-                  {editingGroup?.groupEmail}
-                </span>
-                .
+                Update name and organizational unit for{" "}
+                <span className="font-mono text-slate-700">{editingGroup?.groupEmail}</span>
               </DialogDescription>
             </DialogHeader>
 
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Group Name</Label>
+                <Label className="text-xs font-medium text-slate-700">Group name</Label>
                 <Input
                   value={editGroupForm.name}
                   onChange={(e) =>
                     setEditGroupForm((prev) => ({ ...prev, name: e.target.value }))
                   }
-                  className="h-9 text-xs border-slate-200"
+                  className="h-9 text-xs border-slate-200 rounded-lg"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
+                <Label className="text-xs font-medium text-slate-700">Organizational unit</Label>
                 <Select
                   value={editGroupForm.orgUnitPath}
                   onValueChange={(val) =>
                     setEditGroupForm((prev) => ({ ...prev, orgUnitPath: val }))
                   }
                 >
-                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-slate-200">
                     {allOuOptions.map((ouPath) => (
-                      <SelectItem key={ouPath} value={ouPath} className="text-xs">
-                        {ouPath === "/" ? "/ (Root)" : ouPath}
+                      <SelectItem key={ouPath} value={ouPath} className="text-xs font-mono">
+                        {ouPath}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2997,7 +2935,7 @@ export default function EmailServiceAdminPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setEditingGroup(null)}
-                className="h-9 px-4 text-xs font-semibold rounded-lg"
+                className="h-9 px-4 text-xs font-medium rounded-lg"
               >
                 Cancel
               </Button>
@@ -3005,16 +2943,18 @@ export default function EmailServiceAdminPage() {
                 size="sm"
                 onClick={handleUpdateGroupDetails}
                 disabled={isUpdatingGroup || !editGroupForm.name.trim()}
-                className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs"
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
               >
-                {isUpdatingGroup && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                Save Changes
+                {isUpdatingGroup && (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                )}
+                Save changes
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* 9. MANAGE GROUP MEMBERS DIALOG */}
+        {/* 9. Manage group members dialog */}
         <Dialog
           open={Boolean(membersTargetGroup)}
           onOpenChange={(open) => {
@@ -3023,27 +2963,24 @@ export default function EmailServiceAdminPage() {
         >
           <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
-              <DialogTitle className="font-headline font-bold text-lg text-slate-900">
-                Manage Group Members
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Manage group members
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Add or remove recipient email addresses for{" "}
-                <span className="font-mono font-semibold text-slate-700">
-                  {membersTargetGroup?.groupEmail}
-                </span>
-                .
+                Add or remove recipient addresses for{" "}
+                <span className="font-mono text-slate-700">{membersTargetGroup?.groupEmail}</span>
               </DialogDescription>
             </DialogHeader>
 
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-4">
               <div className="space-y-2">
-                <Label className="text-xs font-medium text-slate-700">Add Member Address</Label>
+                <Label className="text-xs font-medium text-slate-700">Member address</Label>
                 <div className="flex items-center gap-2">
                   <Input
                     value={groupMemberInput}
                     onChange={(e) => setGroupMemberInput(e.target.value)}
                     placeholder={`user@${selectedOrg.domain}`}
-                    className="h-9 text-xs font-mono border-slate-200"
+                    className="h-9 text-xs font-mono border-slate-200 rounded-lg"
                   />
                   <Button
                     size="sm"
@@ -3060,16 +2997,15 @@ export default function EmailServiceAdminPage() {
                       )
                       handleUpdateGroupMembersList(next)
                     }}
-                    className="bg-primary hover:bg-primary/95 !text-white text-white font-semibold h-9 px-4 rounded-lg text-xs shrink-0"
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0"
                   >
-                    <Plus className="w-3.5 h-3.5 mr-1" />
-                    Add Member
+                    Add member
                   </Button>
                 </div>
 
                 {activeUsers.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                    <span className="text-[11px] text-slate-400 mr-1">Quick add:</span>
+                    <span className="text-xs text-slate-400 mr-1">Directory:</span>
                     {activeUsers
                       .filter(
                         (u) => !membersTargetGroup?.memberEmails.includes(u.primaryEmail)
@@ -3087,7 +3023,7 @@ export default function EmailServiceAdminPage() {
                               u.primaryEmail,
                             ])
                           }}
-                          className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 hover:bg-primary/10 hover:text-primary text-slate-600 transition-colors"
+                          className="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200/70 text-slate-600 transition-colors"
                         >
                           + {u.primaryEmail}
                         </button>
@@ -3098,18 +3034,16 @@ export default function EmailServiceAdminPage() {
 
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {membersTargetGroup?.memberEmails.length === 0 ? (
-                  <div className="p-6 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400">
-                    No members in this group yet.
+                  <div className="p-6 rounded-lg border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                    No members assigned to this group
                   </div>
                 ) : (
                   membersTargetGroup?.memberEmails.map((member) => (
                     <div
                       key={member}
-                      className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50/60"
+                      className="flex items-center justify-between p-3 rounded-lg border border-slate-200/80 bg-slate-50/40"
                     >
-                      <span className="text-xs font-mono font-semibold text-slate-800">
-                        {member}
-                      </span>
+                      <span className="text-xs font-mono text-slate-800">{member}</span>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -3122,7 +3056,7 @@ export default function EmailServiceAdminPage() {
                         }}
                         className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
                       </Button>
                     </div>
                   ))
@@ -3135,15 +3069,15 @@ export default function EmailServiceAdminPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setMembersTargetGroup(null)}
-                className="h-8 px-4 text-xs font-semibold rounded-lg"
+                className="h-8 px-4 text-xs font-medium rounded-lg"
               >
-                Done
+                Close
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* 10. DELETE GROUP CONFIRMATION */}
+        {/* 10. Delete group confirmation */}
         <AlertDialog
           open={Boolean(deletingGroup)}
           onOpenChange={(open) => {
@@ -3152,19 +3086,17 @@ export default function EmailServiceAdminPage() {
         >
           <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle className="font-headline font-bold text-slate-900">
-                Delete Group?
+              <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Delete group
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
-                This will permanently remove the group{" "}
-                <span className="font-mono font-semibold text-slate-800">
-                  {deletingGroup?.groupEmail}
-                </span>
-                . Individual member accounts will not be deleted.
+                Permanently remove the group{" "}
+                <span className="font-mono text-slate-800">{deletingGroup?.groupEmail}</span>.
+                Member accounts will not be deleted.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="h-9 text-xs font-semibold rounded-lg">
+              <AlertDialogCancel className="h-9 text-xs font-medium rounded-lg">
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
@@ -3173,35 +3105,35 @@ export default function EmailServiceAdminPage() {
                   handleConfirmDeleteGroup()
                 }}
                 disabled={isDeletingGroup}
-                className="h-9 text-xs font-semibold bg-destructive text-white hover:bg-destructive/90 rounded-lg"
+                className="h-9 text-xs font-medium bg-destructive text-white hover:bg-destructive/90 rounded-lg"
               >
-                {isDeletingGroup && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                Delete Group
+                {isDeletingGroup && (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                )}
+                Delete group
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* 11. DEACTIVATE EMAIL SERVICE CONFIRMATION */}
+        {/* 11. Deactivate email service confirmation */}
         <AlertDialog
           open={isDeactivateConfirmOpen}
           onOpenChange={setIsDeactivateConfirmOpen}
         >
           <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle className="font-headline font-bold text-slate-900">
-                Deactivate Email Service?
+              <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Deactivate email service
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
-                Are you sure you want to deactivate Email Service for{" "}
-                <span className="font-mono font-semibold text-slate-800">
-                  {selectedOrg.domain}
-                </span>
-                ? You can re-activate it at any time.
+                Deactivate email service for{" "}
+                <span className="font-mono text-slate-800">{selectedOrg.domain}</span>? Existing
+                directory records will remain saved.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="h-9 text-xs font-semibold rounded-lg">
+              <AlertDialogCancel className="h-9 text-xs font-medium rounded-lg">
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
@@ -3210,10 +3142,12 @@ export default function EmailServiceAdminPage() {
                   handleDeactivateService()
                 }}
                 disabled={isDeactivating}
-                className="h-9 text-xs font-semibold bg-destructive text-white hover:bg-destructive/90 rounded-lg"
+                className="h-9 text-xs font-medium bg-destructive text-white hover:bg-destructive/90 rounded-lg"
               >
-                {isDeactivating && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                Deactivate Email Service
+                {isDeactivating && (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                )}
+                Deactivate service
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import React from 'react';
-import { RevletLogo } from '@/components/brand/revlet-logo';
 import {
   Mail,
   LifeBuoy,
@@ -47,7 +46,9 @@ export function PublicSupportView() {
             href="/"
             className="flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary rounded-lg p-1"
           >
-            <RevletLogo variant="horizontal" size="md" />
+            <span className="font-semibold text-base tracking-tight text-slate-900">
+              Revlet
+            </span>
           </Link>
 
           <nav

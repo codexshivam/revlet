@@ -1,6 +1,5 @@
 import Link from "next/link"
 import React from "react"
-import { RevletLogo } from "@/components/brand/revlet-logo"
 
 interface AuthFrameProps {
   children: React.ReactNode
@@ -14,9 +13,11 @@ export function AuthFrame({ children, className }: AuthFrameProps) {
       <header className="w-full bg-white border-b border-slate-200 px-4 sm:px-8 lg:px-12 h-14 flex items-center justify-between shrink-0">
         <Link
           href="https://revlet.me"
-          className="flex items-center hover:opacity-90 transition-opacity"
+          className="flex items-center hover:opacity-85 transition-opacity"
         >
-          <RevletLogo variant="horizontal" size="sm" />
+          <span className="font-semibold text-base tracking-tight text-slate-900">
+            Revlet
+          </span>
         </Link>
 
         <nav className="flex items-center gap-4 sm:gap-6 text-xs">
@@ -67,7 +68,7 @@ export function AuthFrame({ children, className }: AuthFrameProps) {
         </div>
 
         <div className="text-center sm:text-right text-slate-400">
-          Revlet IT Management Control Plane
+          Developed &amp; Managed by Shivam Yadav
         </div>
       </footer>
     </div>

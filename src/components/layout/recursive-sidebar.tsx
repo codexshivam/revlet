@@ -18,7 +18,6 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useActiveOrg } from "@/hooks/use-active-org"
-import { RevletLogo } from "@/components/brand/revlet-logo"
 
 interface NavItem {
   title: string
@@ -73,7 +72,9 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
           href="/account/home"
           className="inline-flex items-center hover:opacity-85 transition-opacity"
         >
-          <RevletLogo variant="horizontal" size="sm" />
+          <span className="font-semibold text-base tracking-tight text-slate-900">
+            Revlet
+          </span>
         </Link>
       </div>
 

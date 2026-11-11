@@ -6,7 +6,6 @@ import { TopHeader } from "@/components/layout/top-header"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase"
 import { useRouter } from "next/navigation"
-import { RevletLogo } from "@/components/brand/revlet-logo"
 
 export function DashboardShell({
   children,
@@ -27,8 +26,8 @@ export function DashboardShell({
   if (loading || !user) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
-        <div className="opacity-80">
-          <RevletLogo variant="horizontal" size="md" />
+        <div className="font-semibold text-base tracking-tight text-slate-900 select-none">
+          Revlet
         </div>
       </div>
     )

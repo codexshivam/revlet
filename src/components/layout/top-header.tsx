@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { OrgSelector } from "@/components/org/org-selector"
 import { RecursiveSidebar } from "@/components/layout/recursive-sidebar"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
-import { RevletLogo } from "@/components/brand/revlet-logo"
 import Link from "next/link"
 
 export function TopHeader() {
@@ -35,7 +34,9 @@ export function TopHeader() {
           href="/account/home"
           className="lg:hidden flex items-center pr-2 hover:opacity-85 transition-opacity"
         >
-          <RevletLogo variant="mark" size="sm" />
+          <span className="font-semibold text-base tracking-tight text-slate-900">
+            Revlet
+          </span>
         </Link>
 
         <OrgSelector compact />

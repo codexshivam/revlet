@@ -33,9 +33,18 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
-  AlertTriangle
+  AlertTriangle,
+  MoreVertical,
+  ShieldAlert
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -165,7 +174,7 @@ export default function DNSManagementPage() {
   const [apiTokenInput, setApiTokenInput] = useState("")
   const [showTokenSecret, setShowTokenSecret] = useState(false)
   const [isConnectingToken, setIsConnectingToken] = useState(false)
-  const [isDisconnectDialogOpen, setIsDisconnectDialogOpen] = useState(false)
+  const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false)
   const [isDisconnectingToken, setIsDisconnectingToken] = useState(false)
 
   // Snapshots & Safe-Mode Rollback state
@@ -543,10 +552,10 @@ export default function DNSManagementPage() {
       const res = await disconnectCloudflareToken(idToken, selectedOrg.id)
       if (res.success) {
         toast({
-          title: "Cloudflare Token Disconnected",
+          title: "DNS Service Disabled",
           description: "Domain credentials and zone connection removed from Revlet."
         })
-        setIsDisconnectDialogOpen(false)
+        setIsDisableDialogOpen(false)
         setRecords([])
         setZoneDetails(null)
       } else {
@@ -555,8 +564,8 @@ export default function DNSManagementPage() {
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Disconnect Failed",
-        description: err.message || "Could not disconnect token."
+        title: "Disable Failed",
+        description: err.message || "Could not disable DNS service."
       })
     } finally {
       setIsDisconnectingToken(false)
@@ -770,39 +779,62 @@ export default function DNSManagementPage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-1">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h1 className="text-3xl font-headline font-bold text-slate-900">Domain Management</h1>
-            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 shrink-0">
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end sm:justify-start">
                {zoneId && (
-                 <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                   <Button 
-                     variant="outline" 
-                     onClick={() => {
-                       setIsSnapshotsOpen(true)
-                       loadSnapshots()
-                     }} 
-                     className="h-10 font-bold text-xs border-slate-200"
-                   >
-                     <History className="w-4 h-4 mr-2" />
-                     Snapshots
-                   </Button>
-                   <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="h-10 font-bold text-xs border-slate-200">
-                     <Upload className="w-4 h-4 mr-2" />
-                     Import
-                   </Button>
-                   <Button variant="outline" onClick={handleExportBIND} className="h-10 font-bold text-xs border-slate-200">
-                     <Download className="w-4 h-4 mr-2" />
-                     Export
-                   </Button>
+                 <>
+                   <DropdownMenu>
+                     <DropdownMenuTrigger asChild>
+                       <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200 hover:bg-slate-50 transition-colors shrink-0">
+                         <MoreVertical className="w-4 h-4 text-slate-600" />
+                       </Button>
+                     </DropdownMenuTrigger>
+                     <DropdownMenuContent align="end" className="w-52">
+                       <DropdownMenuItem
+                         onClick={() => {
+                           setIsSnapshotsOpen(true)
+                           loadSnapshots()
+                         }}
+                         className="gap-2 cursor-pointer text-xs"
+                       >
+                         <History className="w-4 h-4 text-slate-500" />
+                         <span>Snapshots &amp; Rollback</span>
+                       </DropdownMenuItem>
+                       <DropdownMenuItem
+                         onClick={() => setIsImportDialogOpen(true)}
+                         className="gap-2 cursor-pointer text-xs"
+                       >
+                         <Upload className="w-4 h-4 text-slate-500" />
+                         <span>Import BIND Zone</span>
+                       </DropdownMenuItem>
+                       <DropdownMenuItem
+                         onClick={handleExportBIND}
+                         className="gap-2 cursor-pointer text-xs"
+                       >
+                         <Download className="w-4 h-4 text-slate-500" />
+                         <span>Export BIND Zone</span>
+                       </DropdownMenuItem>
+                       <DropdownMenuSeparator />
+                       <DropdownMenuItem
+                         onClick={() => setIsDisableDialogOpen(true)}
+                         className="gap-2 text-destructive focus:text-destructive focus:bg-red-50 cursor-pointer text-xs"
+                       >
+                         <ShieldAlert className="w-4 h-4" />
+                         <span>Disable DNS Service</span>
+                       </DropdownMenuItem>
+                     </DropdownMenuContent>
+                   </DropdownMenu>
+
                    <Button onClick={() => {
                      setEditingRecord(null)
                      setFormData({ type: "A", name: "", content: "", ttl: "Auto", proxied: true, priority: 10 })
                      setIsDialogOpen(true)
-                   }} className="bg-slate-900 hover:bg-black text-white font-bold h-10 px-6 shadow-lg shadow-slate-200">
+                   }} className="bg-slate-900 hover:bg-black !text-white text-white font-medium text-xs h-10 px-5 shadow-sm rounded-lg w-full sm:w-auto">
                      <Plus className="w-4 h-4 mr-2" />
                      Add Record
                    </Button>
-                 </div>
+                 </>
                )}
             </div>
           </div>
@@ -813,10 +845,10 @@ export default function DNSManagementPage() {
             <Card className="bg-slate-50 border-slate-200 border-dashed shadow-sm rounded-xl">
               <CardContent className="p-8 sm:p-16 flex flex-col items-center text-center gap-6">
                 <div className="p-4 bg-white rounded-full border border-slate-100 shadow-sm shrink-0">
-                  <Globe className="w-10 h-10 text-slate-300 animate-pulse" />
+                  <Globe className="w-10 h-10 text-slate-300" />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-xl font-headline font-bold text-slate-900">No Registered Organizations</h3>
+                  <h3 className="text-xl font-headline font-bold text-slate-900">No registered organizations</h3>
                   <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed font-medium">
                     To manage DNS edge configurations, you must first register your organization on the Account Home screen.
                   </p>
@@ -833,10 +865,10 @@ export default function DNSManagementPage() {
           <div className="max-w-4xl mx-auto py-6 space-y-8 animate-in slide-in-from-bottom-4 duration-500">
             <div className="text-center space-y-3">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
-                <Shield className="w-3.5 h-3.5" /> Bring Your Own Cloudflare Token (BYOT)
+                <Shield className="w-3.5 h-3.5" /> Bring your own Cloudflare token (BYOT)
               </div>
               <h2 className="text-3xl font-headline font-bold text-slate-900 tracking-tight">
-                Connect Your Domain with Zero Handover
+                Connect your domain with zero handover
               </h2>
               <p className="text-slate-600 text-sm max-w-2xl mx-auto leading-relaxed">
                 Retain 100% ownership of your domain nameservers in your own Cloudflare account. Revlet acts as your specialized, high-speed control plane with zero billing access and least-privilege scoping.
@@ -847,7 +879,7 @@ export default function DNSManagementPage() {
             <Card className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden">
               <CardHeader className="bg-slate-50/70 border-b border-slate-100 py-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <CardTitle className="text-sm font-bold text-slate-900">Step-by-Step Scoped Authorization</CardTitle>
+                  <CardTitle className="text-sm font-bold text-slate-900">Step-by-step scoped authorization</CardTitle>
                   <p className="text-xs text-slate-500 font-medium">Domain: <strong className="text-slate-800">{selectedOrg.domain}</strong></p>
                 </div>
                 <a
@@ -856,7 +888,7 @@ export default function DNSManagementPage() {
                   rel="noopener noreferrer"
                 >
                   <Button className="h-9 px-4 bg-slate-900 hover:bg-black !text-white text-white font-medium text-xs shadow-sm rounded-lg flex items-center gap-2">
-                    <span>Generate Scoped Token on Cloudflare</span>
+                    <span>Generate scoped token on Cloudflare</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Button>
                 </a>
@@ -865,24 +897,24 @@ export default function DNSManagementPage() {
               <CardContent className="p-6 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5">
-                    <div className="text-xs font-mono font-bold text-blue-600">01. 1-Click Template</div>
-                    <h4 className="text-xs font-bold text-slate-900">Pre-Configured Scope</h4>
+                    <div className="text-xs font-mono font-bold text-blue-600">01. 1-click template</div>
+                    <h4 className="text-xs font-bold text-slate-900">Pre-configured scope</h4>
                     <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                       Click the button above. Cloudflare opens with <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: DNS (Edit)</code> and <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: Zone (Read)</code> already pre-selected.
                     </p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5">
-                    <div className="text-xs font-mono font-bold text-blue-600">02. Restrict to Domain</div>
-                    <h4 className="text-xs font-bold text-slate-900">Specific Zone Isolation</h4>
+                    <div className="text-xs font-mono font-bold text-blue-600">02. Restrict to domain</div>
+                    <h4 className="text-xs font-bold text-slate-900">Specific zone isolation</h4>
                     <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                       Under <strong>Zone Resources</strong>, select <span className="font-semibold text-slate-800">Include → Specific zone → {selectedOrg.domain}</span> so the token physically cannot touch any other domain in your account.
                     </p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5">
-                    <div className="text-xs font-mono font-bold text-blue-600">03. Verify & Connect</div>
-                    <h4 className="text-xs font-bold text-slate-900">Envelope Encryption</h4>
+                    <div className="text-xs font-mono font-bold text-blue-600">03. Verify and connect</div>
+                    <h4 className="text-xs font-bold text-slate-900">Envelope encryption</h4>
                     <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                       Click <strong>Create Token</strong>, copy the secret string, and paste it below. Revlet verifies least privilege live and secures it with AES-256-GCM.
                     </p>
@@ -892,8 +924,8 @@ export default function DNSManagementPage() {
                 {/* Token Input Box */}
                 <div className="space-y-3 pt-2">
                   <Label className="text-xs font-bold text-slate-800 flex items-center justify-between">
-                    <span>Cloudflare Scoped API Token</span>
-                    <span className="text-[11px] font-normal text-slate-400">Never share Global API Keys</span>
+                    <span>Cloudflare scoped API token</span>
+                    <span className="text-[11px] font-normal text-slate-400">Never share global API keys</span>
                   </Label>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
@@ -921,12 +953,12 @@ export default function DNSManagementPage() {
                       {isConnectingToken ? (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
-                          Verifying Scope...
+                          Verifying scope...
                         </>
                       ) : (
                         <>
                           <ShieldCheck className="w-4 h-4 mr-2" />
-                          Verify & Connect Domain
+                          Verify and connect domain
                         </>
                       )}
                     </Button>
@@ -942,7 +974,7 @@ export default function DNSManagementPage() {
                   <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
                     <Lock className="w-4 h-4" />
                   </div>
-                  <h4 className="text-xs font-bold text-slate-900">Zero Billing & Account Access</h4>
+                  <h4 className="text-xs font-bold text-slate-900">Zero billing and account access</h4>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed font-normal">
                   Revlet requires least-privilege tokens strictly scoped to DNS editing. We physically cannot view invoices, manage payment methods, or read other zones in your account.
@@ -954,7 +986,7 @@ export default function DNSManagementPage() {
                   <div className="p-2 rounded-lg bg-blue-50 text-blue-700">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
-                  <h4 className="text-xs font-bold text-slate-900">AES-256-GCM Envelope Encryption</h4>
+                  <h4 className="text-xs font-bold text-slate-900">AES-256-GCM envelope encryption</h4>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed font-normal">
                   Tokens are encrypted with AES-256-GCM authenticated cipher before storage. Tokens are write-only and never exposed in plaintext back to the client interface.
@@ -966,7 +998,7 @@ export default function DNSManagementPage() {
                   <div className="p-2 rounded-lg bg-purple-50 text-purple-700">
                     <Globe className="w-4 h-4" />
                   </div>
-                  <h4 className="text-xs font-bold text-slate-900">100% Root Domain Ownership</h4>
+                  <h4 className="text-xs font-bold text-slate-900">100% root domain ownership</h4>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed font-normal">
                   No nameserver transfer needed. Your registrar continues pointing to your own Cloudflare infrastructure, eliminating downtime and root hijacking risks.
@@ -978,7 +1010,7 @@ export default function DNSManagementPage() {
                   <div className="p-2 rounded-lg bg-amber-50 text-amber-700">
                     <History className="w-4 h-4" />
                   </div>
-                  <h4 className="text-xs font-bold text-slate-900">Safe-Mode Rollback Guardrails</h4>
+                  <h4 className="text-xs font-bold text-slate-900">Safe-mode rollback guardrails</h4>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed font-normal">
                   Automatic point-in-time zone snapshots before batch changes or email routing activations. Roll back to any historical snapshot with a single click.
@@ -999,56 +1031,7 @@ export default function DNSManagementPage() {
             </div>
           </div>
         ) : selectedOrg && zoneId && (
-          <div className="space-y-8 animate-in fade-in duration-700">
-            {/* Verified Security Scope Badge Banner */}
-            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
-              <div className="flex items-start sm:items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0 mt-0.5 sm:mt-0">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-xs sm:text-sm text-slate-900">Verified Security Scope:</span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                      Token Active • Scoped strictly to 1 Zone ({selectedOrg.domain}) • Zero Billing Access
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 font-mono">
-                    Token: <span className="font-semibold text-slate-700">{selectedOrg.cloudflareTokenMasked || 'Scoped Token Active'}</span>
-                    {selectedOrg.cloudflareTokenVerifiedAt && (
-                      <span className="ml-3 font-sans">• Verified {new Date(selectedOrg.cloudflareTokenVerifiedAt).toLocaleDateString()}</span>
-                    )}
-                    {selectedOrg.cloudflareTokenExpiresOn && (
-                      <span className="ml-3 font-sans">• Expires {new Date(selectedOrg.cloudflareTokenExpiresOn).toLocaleDateString()}</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setIsSnapshotsOpen(true)
-                    loadSnapshots()
-                  }}
-                  className="h-8 text-xs font-medium border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-800"
-                >
-                  <History className="w-3.5 h-3.5 mr-1.5" />
-                  Snapshots & Rollback
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsDisconnectDialogOpen(true)}
-                  className="h-8 text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50"
-                >
-                  Disconnect
-                </Button>
-              </div>
-            </div>
+          <div className="space-y-6 animate-in fade-in duration-500">
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
               <CardHeader 
                 className={cn(
@@ -1059,7 +1042,7 @@ export default function DNSManagementPage() {
               >
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-slate-400" />
-                  <CardTitle className="text-xs font-semibold text-slate-700">Global Network Nameservers</CardTitle>
+                  <CardTitle className="text-xs font-semibold text-slate-700">Global network nameservers</CardTitle>
                 </div>
                 <div className="flex items-center gap-4">
                   <Badge className={cn(
@@ -1087,7 +1070,7 @@ export default function DNSManagementPage() {
                          {(zoneDetails?.nameServers || []).map((ns: string) => (
                            <div 
                              key={ns} 
-                             className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group hover:border-primary/20 cursor-pointer transition-all"
+                             className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg group hover:border-slate-300 cursor-pointer transition-colors"
                              onClick={() => handleCopyText(ns)}
                            >
                              <code className="text-xs font-mono font-semibold text-slate-700">{ns}</code>
@@ -1097,46 +1080,82 @@ export default function DNSManagementPage() {
                          {!zoneDetails?.nameServers?.length && <p className="text-xs text-slate-400 italic">Nameservers will appear once initialized.</p>}
                        </div>
                      </div>
-                     <div className="flex flex-col justify-center border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 pl-0 md:pl-8 space-y-5">
-                        <div className="space-y-2">
-                          {zoneDetails?.status !== 'active' && (
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-xs font-medium text-blue-700 mb-1">
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                              </span>
-                              Action Required
-                            </div>
-                          )}
-                          <h4 className="text-base font-headline font-semibold text-slate-900">Configure Registrar</h4>
-                          <p className="text-xs text-slate-500 leading-relaxed font-normal">
-                            Your edge network is ready. Complete the setup by pointing your domain registrar to our global nameservers.
-                          </p>
-                        </div>
-                        
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
-                          <Button 
-                            className="w-full justify-between font-medium text-xs bg-white border border-slate-200 h-11 hover:border-blue-200 hover:bg-blue-50 text-slate-700 hover:text-blue-700 transition-all group shadow-sm rounded-lg"
-                            onClick={() => setIsInstructionsOpen(true)}
-                          >
-                            <span className="flex items-center gap-2.5 overflow-hidden">
-                              <div className="p-1.5 bg-slate-100 rounded-md group-hover:bg-blue-100 transition-colors shrink-0">
-                                <FileText className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-600" />
+
+                     {selectedOrg?.cloudflareTokenMasked ? (
+                       <div className="flex flex-col justify-between border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 pl-0 md:pl-8 space-y-4">
+                         <div className="space-y-1.5">
+                           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-800">
+                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                             API connection active
+                           </div>
+                           <h4 className="text-sm font-bold text-slate-900">Custom Cloudflare API token</h4>
+                           <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                             Authenticated via your scoped Cloudflare API token. All DNS record updates synchronize directly to your edge zone.
+                           </p>
+                         </div>
+
+                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2.5 text-xs">
+                           <div className="flex items-center justify-between">
+                             <span className="text-slate-500 font-medium">API token</span>
+                             <code className="font-mono font-semibold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+                               {selectedOrg.cloudflareTokenMasked}
+                             </code>
+                           </div>
+                           <div className="flex items-center justify-between">
+                             <span className="text-slate-500 font-medium">Scoped zone</span>
+                             <span className="font-semibold text-slate-800">{selectedOrg.domain}</span>
+                           </div>
+                           <div className="flex items-center justify-between">
+                             <span className="text-slate-500 font-medium">Access scope</span>
+                             <span className="font-medium text-emerald-700">DNS:Edit, Zone:Read (Zero billing)</span>
+                           </div>
+                           {selectedOrg.cloudflareTokenVerifiedAt && (
+                             <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-400">
+                               <span>Verified</span>
+                               <span>{new Date(selectedOrg.cloudflareTokenVerifiedAt).toLocaleDateString()}</span>
+                             </div>
+                           )}
+                         </div>
+                       </div>
+                     ) : (
+                       <div className="flex flex-col justify-center border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 pl-0 md:pl-8 space-y-5">
+                          <div className="space-y-2">
+                            {zoneDetails?.status !== 'active' && (
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-medium text-blue-700 mb-1">
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+                                Action required
                               </div>
-                              <span className="truncate max-w-[130px] sm:max-w-none text-left">Setup Instructions</span>
-                            </span>
-                            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500 group-hover:text-blue-600 shrink-0">
-                              Start <ArrowRight className="w-3 h-3" />
-                            </span>
-                          </Button>
-                          <div className="flex gap-2.5 items-start">
-                            <Info className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
-                            <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                              DNS propagation typically takes 1-2 hours depending on your registrar.
+                            )}
+                            <h4 className="text-base font-headline font-semibold text-slate-900">Configure registrar</h4>
+                            <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                              Your edge network is ready. Complete the setup by pointing your domain registrar to our global nameservers.
                             </p>
                           </div>
-                        </div>
-                     </div>
+                          
+                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
+                            <Button 
+                              className="w-full justify-between font-medium text-xs bg-white border border-slate-200 h-11 hover:border-blue-200 hover:bg-blue-50 text-slate-700 hover:text-blue-700 transition-all group shadow-sm rounded-lg"
+                              onClick={() => setIsInstructionsOpen(true)}
+                            >
+                              <span className="flex items-center gap-2.5 overflow-hidden">
+                                <div className="p-1.5 bg-slate-100 rounded-md group-hover:bg-blue-100 transition-colors shrink-0">
+                                  <FileText className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-600" />
+                                </div>
+                                <span className="truncate max-w-[130px] sm:max-w-none text-left">Setup instructions</span>
+                              </span>
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500 group-hover:text-blue-600 shrink-0">
+                                Start <ArrowRight className="w-3 h-3" />
+                              </span>
+                            </Button>
+                            <div className="flex gap-2.5 items-start">
+                              <Info className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+                              <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                                DNS propagation typically takes 1-2 hours depending on your registrar.
+                              </p>
+                            </div>
+                          </div>
+                       </div>
+                     )}
                    </div>
                   </CardContent>
                 </div>
@@ -1146,13 +1165,13 @@ export default function DNSManagementPage() {
             <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-xl">
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 px-4 sm:px-6">
                 <div className="flex items-center gap-2">
-                  <CardTitle className="text-xs font-semibold text-slate-700">DNS Records</CardTitle>
+                  <CardTitle className="text-xs font-semibold text-slate-700">DNS records</CardTitle>
                   <Badge variant="outline" className="text-[10px] font-medium h-5 px-1.5 bg-white border-slate-200">{records.length}</Badge>
                 </div>
                 <div className="relative w-full sm:w-auto">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <Input 
-                    placeholder="Search records..." 
+                    placeholder="Search records" 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="h-8 pl-8 text-xs w-full sm:w-48 bg-white border-slate-200 font-medium" 
@@ -1164,9 +1183,9 @@ export default function DNSManagementPage() {
                   {isLoadingRecords ? (
                     <DNSRecordsSkeleton />
                   ) : filteredRecords.length === 0 ? (
-                    <div className="p-24 text-center space-y-3">
-                      <AlertCircle className="w-8 h-8 text-slate-100 mx-auto" />
-                      <p className="text-sm font-bold text-slate-400">No active DNS records found.</p>
+                    <div className="p-20 text-center space-y-2">
+                      <AlertCircle className="w-7 h-7 text-slate-300 mx-auto" />
+                      <p className="text-sm font-medium text-slate-500">No active DNS records found</p>
                     </div>
                   ) : (
                     <>
@@ -1199,13 +1218,13 @@ export default function DNSManagementPage() {
                           <TableBody>
                             {filteredRecords.map((rec) => (
                               <TableRow key={rec.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-100 last:border-0">
-                                <TableCell className="pl-6 py-4">
+                                <TableCell className="pl-6 py-3.5">
                                   <Badge className={cn(
                                     "font-mono text-[9px] font-bold px-2 py-0 h-5 border shadow-none",
-                                    rec.type === "A" ? "bg-blue-50 text-blue-600 border-blue-100" :
-                                    rec.type === "MX" ? "bg-amber-50 text-amber-600 border-amber-100" :
-                                    rec.type === "TXT" ? "bg-slate-50 text-slate-500 border-slate-200" :
-                                    "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                    rec.type === "A" ? "bg-blue-50 text-blue-700 border-blue-200/60" :
+                                    rec.type === "MX" ? "bg-amber-50 text-amber-700 border-amber-200/60" :
+                                    rec.type === "TXT" ? "bg-slate-100 text-slate-700 border-slate-200" :
+                                    "bg-emerald-50 text-emerald-700 border-emerald-200/60"
                                   )}>
                                     {rec.type}
                                   </Badge>
@@ -1235,14 +1254,14 @@ export default function DNSManagementPage() {
                                    {!isProxyAllowed(rec.type) ? (
                                      <span className="text-xs text-slate-300 font-medium ml-1.5">—</span>
                                    ) : rec.proxied ? (
-                                     <div className="flex items-center gap-1.5 text-amber-600">
-                                       <ShieldCheck className="w-4 h-4" />
-                                       <span className="text-xs font-medium">On</span>
+                                     <div className="flex items-center gap-1.5 text-amber-700">
+                                       <ShieldCheck className="w-4 h-4 text-amber-600" />
+                                       <span className="text-xs font-medium">Proxied</span>
                                      </div>
                                    ) : (
                                      <div className="flex items-center gap-1.5 text-slate-500">
-                                       <Globe className="w-4 h-4" />
-                                       <span className="text-xs font-medium">Off</span>
+                                       <Globe className="w-4 h-4 text-slate-400" />
+                                       <span className="text-xs font-medium">DNS only</span>
                                      </div>
                                    )}
                                 </TableCell>
@@ -1303,10 +1322,10 @@ export default function DNSManagementPage() {
                             <div className="flex items-start justify-between gap-3">
                               <Badge className={cn(
                                 "font-mono text-xs font-semibold px-2 py-0.5 h-6 border shadow-none",
-                                rec.type === "A" ? "bg-blue-50 text-blue-600 border-blue-100" :
-                                rec.type === "MX" ? "bg-amber-50 text-amber-600 border-amber-100" :
-                                rec.type === "TXT" ? "bg-slate-50 text-slate-500 border-slate-200" :
-                                "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                rec.type === "A" ? "bg-blue-50 text-blue-700 border-blue-200/60" :
+                                rec.type === "MX" ? "bg-amber-50 text-amber-700 border-amber-200/60" :
+                                rec.type === "TXT" ? "bg-slate-100 text-slate-700 border-slate-200" :
+                                "bg-emerald-50 text-emerald-700 border-emerald-200/60"
                               )}>
                                 {rec.type}
                               </Badge>
@@ -1315,14 +1334,14 @@ export default function DNSManagementPage() {
                               {!isProxyAllowed(rec.type) ? (
                                 <span className="text-[10px] text-slate-300 font-bold">—</span>
                               ) : rec.proxied ? (
-                                <div className="flex items-center gap-1 text-amber-500 bg-amber-50 border border-amber-100 rounded-full px-2.5 py-0.5 h-6">
-                                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                                <div className="flex items-center gap-1.5 text-amber-700 bg-amber-50 border border-amber-200/60 rounded-full px-2.5 py-0.5 h-6">
+                                  <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-amber-600" />
                                   <span className="text-xs font-medium">Proxied</span>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1 text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-0.5 h-6">
-                                  <Globe className="w-3.5 h-3.5 shrink-0" />
-                                  <span className="text-xs font-medium">DNS Only</span>
+                                <div className="flex items-center gap-1.5 text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-0.5 h-6">
+                                  <Globe className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                                  <span className="text-xs font-medium">DNS only</span>
                                 </div>
                               )}
                             </div>
@@ -1889,34 +1908,34 @@ export default function DNSManagementPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Disconnect Cloudflare Token Dialog */}
-        <Dialog open={isDisconnectDialogOpen} onOpenChange={setIsDisconnectDialogOpen}>
-          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white">
-            <DialogHeader className="bg-slate-900 text-white p-6">
+        {/* Disable DNS Service Confirmation Dialog */}
+        <Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white [&>button]:text-white [&>button]:hover:text-white [&>button]:opacity-90 [&>button]:transition-all">
+            <DialogHeader className="bg-red-600 text-white p-6">
               <DialogTitle className="font-headline font-bold text-lg flex items-center gap-2">
-                <Lock className="w-5 h-5 text-white" />
-                Disconnect Cloudflare Token
+                <ShieldAlert className="w-5 h-5 text-white" />
+                Confirm Service Deactivation
               </DialogTitle>
-              <p className="text-slate-300 text-xs mt-1">Remove scoped credentials from Revlet.</p>
+              <p className="text-white/80 text-xs mt-1">This action will disconnect the domain and disable DNS management in Revlet.</p>
             </DialogHeader>
             <div className="p-6 space-y-3">
               <p className="text-sm font-medium text-slate-700 leading-relaxed">
-                Are you sure you want to disconnect your Cloudflare API token for <strong className="text-slate-900">{selectedOrg?.domain}</strong>?
+                Are you sure you want to disable DNS Service for <strong className="text-slate-900">{selectedOrg?.domain}</strong>?
               </p>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Revlet will securely delete your encrypted token. Your domain, records, and nameservers in your own Cloudflare account will remain completely untouched.
+                Revlet will remove the domain association and safely clear your stored credentials. Your domain records and nameservers in your own Cloudflare account will remain completely untouched.
               </p>
             </div>
             <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100 flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setIsDisconnectDialogOpen(false)} className="text-xs font-medium text-slate-600">
+              <Button variant="ghost" onClick={() => setIsDisableDialogOpen(false)} className="text-xs font-medium text-slate-600 h-9">
                 Cancel
               </Button>
               <Button
                 onClick={handleDisconnectToken}
                 disabled={isDisconnectingToken}
-                className="px-5 bg-red-600 hover:bg-red-700 !text-white text-white font-medium h-9 shadow-sm rounded-lg"
+                className="px-5 bg-red-600 hover:bg-red-700 !text-white text-white font-medium text-xs h-9 shadow-sm rounded-lg"
               >
-                {isDisconnectingToken ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : "Disconnect Token"}
+                {isDisconnectingToken ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : "Disable DNS Service"}
               </Button>
             </DialogFooter>
           </DialogContent>

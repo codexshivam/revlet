@@ -6,13 +6,13 @@ import { TopHeader } from "@/components/layout/top-header"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/firebase"
 import { useRouter } from "next/navigation"
-import { Loader2 } from "lucide-react"
+import { RevletLogo } from "@/components/brand/revlet-logo"
 
-export function DashboardShell({ 
-  children, 
-  className 
-}: { 
-  children: React.ReactNode 
+export function DashboardShell({
+  children,
+  className,
+}: {
+  children: React.ReactNode
   className?: string
 }) {
   const { user, loading } = useUser()
@@ -26,24 +26,27 @@ export function DashboardShell({
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-white">
-        <div className="font-headline font-semibold text-xl tracking-tight text-slate-900 select-none">
-          Revlet
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
+        <div className="opacity-80">
+          <RevletLogo variant="horizontal" size="md" />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="h-screen w-full flex bg-white overflow-hidden">
+    <div className="h-screen w-full flex bg-slate-50 overflow-hidden">
       <RecursiveSidebar />
-      <div className="flex-1 flex flex-col min-w-0 bg-white h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-slate-50 h-screen overflow-hidden">
         <TopHeader />
-        <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#F8FAFC]">
-          <div className={cn("p-4 md:p-8 max-w-6xl mx-auto space-y-6 md:space-y-8 min-h-[calc(100vh-3.5rem)] flex flex-col", className)}>
-            <div className="space-y-6 md:space-y-8 flex-1">
-              {children}
-            </div>
+        <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
+          <div
+            className={cn(
+              "p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-8 min-h-[calc(100vh-3.5rem)] flex flex-col",
+              className
+            )}
+          >
+            <div className="space-y-8 flex-1">{children}</div>
           </div>
         </main>
       </div>

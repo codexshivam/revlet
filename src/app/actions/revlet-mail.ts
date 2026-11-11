@@ -334,11 +334,25 @@ async function syncStalwartUserPrincipal(params: {
     (a) => (a.emailAddress || '').toLowerCase() === cleanEmail
   );
 
-  const aliasesMap: Record<string, boolean> = {};
+  const aliasesMap: Record<string, unknown> = {};
+  let aliasIdx = 0;
   for (const alias of params.aliases || []) {
     const cleanAlias = alias.toLowerCase().trim();
     if (cleanAlias && cleanAlias !== cleanEmail) {
-      aliasesMap[cleanAlias] = true;
+      const [aLocal, aDomain] = cleanAlias.split('@');
+      if (aLocal && aDomain) {
+        const aDomId =
+          aDomain === domainPart
+            ? domainId
+            : await ensureStalwartDomainId(aDomain);
+        if (aDomId) {
+          aliasesMap[String(aliasIdx++)] = {
+            name: aLocal,
+            domainId: aDomId,
+            enable: true,
+          };
+        }
+      }
     }
   }
 
@@ -362,10 +376,7 @@ async function syncStalwartUserPrincipal(params: {
                     credentials: {
                       '0': {
                         '@type': 'Password',
-                        credentialId: 'a',
                         secret: params.plainPassword,
-                        expiresAt: null,
-                        allowedIps: {},
                       },
                     },
                   }
@@ -387,10 +398,7 @@ async function syncStalwartUserPrincipal(params: {
     updateFields.credentials = {
       '0': {
         '@type': 'Password',
-        credentialId: 'a',
         secret: params.plainPassword,
-        expiresAt: null,
-        allowedIps: {},
       },
     };
   }

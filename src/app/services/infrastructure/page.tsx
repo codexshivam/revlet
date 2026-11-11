@@ -23,7 +23,6 @@ export default function InfrastructurePage() {
   const zoneId = activeOrg?.cloudflareZoneId
   const domain = activeOrg?.domain
 
-  // Tab State: speed | ssl | security
   const [activeTab, setActiveTab] = useState("speed")
 
   const getIdToken = useCallback(async () => {
@@ -35,17 +34,18 @@ export default function InfrastructurePage() {
   if (isLoadingOrgs) {
     return (
       <DashboardShell>
-        <div className="space-y-8 animate-in fade-in duration-500">
-          <div className="flex flex-col gap-1">
-            <Skeleton className="h-8 w-48" />
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-72" />
           </div>
           <div className="space-y-6">
-            <Skeleton className="h-11 w-full rounded-xl" />
+            <Skeleton className="h-10 w-full max-w-md rounded-lg" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Skeleton className="h-44 w-full rounded-xl" />
-              <Skeleton className="h-44 w-full rounded-xl" />
+              <Skeleton className="h-40 w-full rounded-xl" />
+              <Skeleton className="h-40 w-full rounded-xl" />
             </div>
-            <Skeleton className="h-64 w-full rounded-xl" />
+            <Skeleton className="h-60 w-full rounded-xl" />
           </div>
         </div>
       </DashboardShell>
@@ -56,26 +56,24 @@ export default function InfrastructurePage() {
   if (!activeOrg) {
     return (
       <DashboardShell>
-        <div className="max-w-xl mx-auto py-16 animate-in slide-in-from-bottom-4 duration-500">
-          <Card className="border-dashed border-2 border-slate-200 bg-white/50 text-center p-8">
-            <CardContent className="space-y-4 pt-4">
-              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
-                <Server className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-headline font-bold text-slate-900">No Organization Selected</h3>
-                <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed font-medium">
-                  To manage domain infrastructure, you must first register your organization on the Account Home screen.
-                </p>
-              </div>
-              <Link href="/account/home">
-                <Button className="font-medium gap-2 h-10 px-5 bg-slate-900 hover:bg-black !text-white text-white transition-all shadow-sm rounded-lg text-xs">
-                  Go to Account Home
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="bg-white border-slate-200 border-dashed shadow-none rounded-xl py-12 max-w-lg mx-auto">
+          <CardContent className="flex flex-col items-center text-center gap-4">
+            <div className="p-3 bg-slate-50 rounded-full border border-slate-100 text-slate-400">
+              <Server className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold text-slate-900">No organization selected</h3>
+              <p className="text-xs text-slate-500">
+                To manage edge infrastructure, register an organization on the account home screen.
+              </p>
+            </div>
+            <Link href="/account/home">
+              <Button className="h-9 px-4 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none">
+                Go to account home
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </DashboardShell>
     )
   }
@@ -84,60 +82,63 @@ export default function InfrastructurePage() {
   if (!zoneId) {
     return (
       <DashboardShell>
-        <div className="max-w-4xl mx-auto py-20 animate-in slide-in-from-bottom-4 duration-500">
-          <Card className="bg-slate-50 border-slate-200 border-dashed shadow-sm">
-            <CardContent className="p-16 flex flex-col items-center text-center gap-6">
-              <div className="p-4 bg-white rounded-full border border-slate-100 shadow-sm shrink-0">
-                <Globe className="w-10 h-10 text-slate-300 animate-pulse" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-headline font-bold text-slate-900">DNS Management Required</h3>
-                <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed font-medium">
-                  Domain infrastructure requires an active domain configuration. Please activate DNS management for your organization first.
-                </p>
-              </div>
-              <Link href="/services/dns">
-                <Button className="font-medium gap-2 h-10 px-5 bg-slate-900 hover:bg-black !text-white text-white transition-all shadow-sm rounded-lg text-xs">
-                  Go to DNS Management
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="bg-white border-slate-200 border-dashed shadow-none rounded-xl py-12 max-w-lg mx-auto">
+          <CardContent className="flex flex-col items-center text-center gap-4">
+            <div className="p-3 bg-slate-50 rounded-full border border-slate-100 text-slate-400">
+              <Globe className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold text-slate-900">DNS configuration required</h3>
+              <p className="text-xs text-slate-500">
+                Domain edge infrastructure requires an active DNS configuration. Configure DNS management for your domain to continue.
+              </p>
+            </div>
+            <Link href="/services/dns">
+              <Button className="h-9 px-4 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none">
+                Go to DNS management
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </DashboardShell>
     )
   }
 
   return (
     <DashboardShell>
-      <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="space-y-8 animate-in fade-in duration-300">
         {/* Page Header */}
-        <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-headline font-bold text-slate-900">
-            Infrastructure
-          </h1>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200 pb-5">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
+              Infrastructure
+            </h1>
+            <p className="text-sm text-slate-500">
+              Edge routing, caching, TLS encryption, and DDoS defense controls for {domain}.
+            </p>
+          </div>
         </div>
 
-        {/* Essential Domain Infrastructure Tabs */}
+        {/* Tab Controls */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-slate-100 p-1 rounded-xl grid grid-cols-1 sm:grid-cols-3 w-full h-auto gap-1 border border-slate-200/60">
+          <TabsList className="bg-slate-100 p-1 rounded-lg grid grid-cols-1 sm:grid-cols-3 max-w-md w-full h-auto gap-1 border border-slate-200">
             <TabsTrigger
               value="speed"
-              className="py-2.5 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
+              className="py-1.5 text-xs font-medium rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              Speed &amp; Cache
+              Speed &amp; cache
             </TabsTrigger>
             <TabsTrigger
               value="ssl"
-              className="py-2.5 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
+              className="py-1.5 text-xs font-medium rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              SSL &amp; Encryption
+              SSL &amp; encryption
             </TabsTrigger>
             <TabsTrigger
               value="security"
-              className="py-2.5 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
+              className="py-1.5 text-xs font-medium rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              DDoS &amp; Protection
+              DDoS &amp; defense
             </TabsTrigger>
           </TabsList>
 

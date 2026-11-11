@@ -14,8 +14,6 @@ import {
 } from "@/components/ui/select"
 import {
   Check,
-  Info,
-  Loader2,
   RefreshCw,
   Copy,
   CheckCheck,
@@ -27,6 +25,7 @@ import {
   getZoneDNSSEC,
   setZoneDNSSEC,
 } from "@/app/actions/cloudflare-infrastructure"
+import { cn } from "@/lib/utils"
 
 interface SslEncryptionTabProps {
   zoneId?: string
@@ -35,7 +34,7 @@ interface SslEncryptionTabProps {
   getIdToken: () => Promise<string>
 }
 
-export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncryptionTabProps) {
+export function SslEncryptionTab({ zoneId, orgId, getIdToken }: SslEncryptionTabProps) {
   const [loading, setLoading] = useState(true)
   const [sslMode, setSslMode] = useState<string>("full")
   const [isUpdatingSSL, setIsUpdatingSSL] = useState(false)
@@ -47,7 +46,6 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
   const [isUpdatingRewrites, setIsUpdatingRewrites] = useState(false)
 
   const [minTls, setMinTls] = useState<string>("1.2")
-  const [isUpdatingTls, setIsUpdatingTls] = useState(false)
 
   const [dnssecStatus, setDnssecStatus] = useState<string>("disabled")
   const [dnssecData, setDnssecData] = useState<any>(null)
@@ -63,7 +61,6 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
     try {
       const token = await getIdToken()
 
-      // 1. SSL Settings
       const sslRes = await getZoneSSLSettings(token, orgId, zoneId)
       if (sslRes.success && sslRes.data) {
         setSslMode(sslRes.data.ssl || "full")
@@ -72,14 +69,13 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
         setMinTls(sslRes.data.minTlsVersion || "1.2")
       }
 
-      // 2. DNSSEC Status
       const dnssecRes = await getZoneDNSSEC(token, orgId, zoneId)
       if (dnssecRes.success && dnssecRes.data) {
         setDnssecStatus(dnssecRes.data.status || "disabled")
         setDnssecData(dnssecRes.data)
       }
     } catch {
-      // Ignore background fetch error
+      // background fetch error
     } finally {
       setLoading(false)
     }
@@ -98,20 +94,20 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
       if (res.success) {
         setSslMode(mode)
         toast({
-          title: "SSL/TLS Mode Updated",
+          title: "SSL mode updated",
           description: `Edge encryption protocol set to ${mode.toUpperCase()}.`,
         })
       } else {
         toast({
           variant: "destructive",
-          title: "Update Failed",
+          title: "Update failed",
           description: res.error || "Could not update SSL mode.",
         })
       }
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Update Failed",
+        title: "Update failed",
         description: err.message,
       })
     } finally {
@@ -136,20 +132,20 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
         toast({
           title: "Always Use HTTPS",
           description: enabled
-            ? "HTTP traffic will now automatically 301-redirect to HTTPS."
+            ? "HTTP traffic will automatically redirect to HTTPS."
             : "HTTPS enforcement disabled.",
         })
       } else {
         toast({
           variant: "destructive",
-          title: "Update Failed",
+          title: "Update failed",
           description: res.error,
         })
       }
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Update Failed",
+        title: "Update failed",
         description: err.message,
       })
     } finally {
@@ -172,22 +168,20 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
       if (res.success) {
         setAutoRewrites(enabled)
         toast({
-          title: "Automatic HTTPS Rewrites",
-          description: enabled
-            ? "Mixed content links will be rewritten to secure HTTPS automatically."
-            : "Automatic rewrites disabled.",
+          title: "Automatic HTTPS rewrites",
+          description: enabled ? "Enabled" : "Disabled",
         })
       } else {
         toast({
           variant: "destructive",
-          title: "Update Failed",
+          title: "Update failed",
           description: res.error,
         })
       }
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Update Failed",
+        title: "Update failed",
         description: err.message,
       })
     } finally {
@@ -197,31 +191,28 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
 
   const handleUpdateMinTLS = async (version: string) => {
     if (!zoneId || !orgId) return
-    setIsUpdatingTls(true)
     try {
       const token = await getIdToken()
       const res = await setZoneSSLSetting(token, orgId, zoneId, "min_tls_version", version)
       if (res.success) {
         setMinTls(version)
         toast({
-          title: "Minimum TLS Version Updated",
-          description: `Connections older than TLS ${version} will now be rejected.`,
+          title: "Minimum TLS version updated",
+          description: `Connections older than TLS ${version} are rejected.`,
         })
       } else {
         toast({
           variant: "destructive",
-          title: "Update Failed",
+          title: "Update failed",
           description: res.error,
         })
       }
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Update Failed",
+        title: "Update failed",
         description: err.message,
       })
-    } finally {
-      setIsUpdatingTls(false)
     }
   }
 
@@ -236,23 +227,20 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
         setDnssecStatus(nextStatus)
         if (res.data) setDnssecData(res.data)
         toast({
-          title: "DNSSEC Status Changed",
-          description:
-            nextStatus === "active"
-              ? "DNSSEC activated on domain."
-              : "DNSSEC cryptographic signing disabled.",
+          title: "DNSSEC updated",
+          description: nextStatus === "active" ? "DNSSEC enabled." : "DNSSEC disabled.",
         })
       } else {
         toast({
           variant: "destructive",
-          title: "DNSSEC Update Failed",
+          title: "DNSSEC update failed",
           description: res.error,
         })
       }
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "DNSSEC Update Failed",
+        title: "DNSSEC update failed",
         description: err.message,
       })
     } finally {
@@ -264,7 +252,7 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
     if (dnssecData?.ds) {
       navigator.clipboard.writeText(dnssecData.ds)
       setCopiedDs(true)
-      toast({ title: "Copied DS Record", description: "Copied to clipboard." })
+      toast({ title: "Copied DS record", description: "Copied to clipboard." })
       setTimeout(() => setCopiedDs(false), 2000)
     }
   }
@@ -272,44 +260,17 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
   if (loading) {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
-        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
+        <Card className="bg-white border-slate-200 shadow-none rounded-xl p-6 space-y-4">
           <div className="space-y-2">
             <Skeleton className="h-5 w-48" />
             <Skeleton className="h-4 w-72" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-            <Skeleton className="h-28 w-full rounded-xl" />
-            <Skeleton className="h-28 w-full rounded-xl" />
-            <Skeleton className="h-28 w-full rounded-xl" />
-            <Skeleton className="h-28 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
           </div>
-        </Card>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-40" />
-                <Skeleton className="h-4 w-60" />
-              </div>
-              <Skeleton className="h-6 w-11 rounded-full" />
-            </div>
-          </Card>
-          <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-40" />
-                <Skeleton className="h-4 w-60" />
-              </div>
-              <Skeleton className="h-6 w-11 rounded-full" />
-            </div>
-          </Card>
-        </div>
-        <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl p-6 space-y-4">
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-4 w-56" />
-          </div>
-          <Skeleton className="h-24 w-full rounded-xl" />
         </Card>
       </div>
     )
@@ -318,104 +279,94 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
   return (
     <div className="space-y-6">
       {/* 1. SSL/TLS Encryption Mode */}
-      <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
-        <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900">
-              SSL/TLS Encryption Mode
+      <Card className="bg-white border-slate-200 shadow-none rounded-xl">
+        <CardHeader className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <CardTitle className="text-base font-semibold text-slate-900">
+              SSL/TLS encryption mode
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Controls end-to-end cryptographic encryption between user browsers, Cloudflare edge, and your backend origin.
+              Controls cryptographic encryption between browsers, Cloudflare edge POPs, and your backend origin.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadData}
-              disabled={loading}
-              className="border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-black text-xs h-8 gap-1.5 rounded-lg"
-            >
-              <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
-              <span>Refresh</span>
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadData}
+            disabled={loading}
+            className="h-8 text-xs font-medium border-slate-200 rounded-lg flex items-center gap-1.5"
+          >
+            <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+            <span>Refresh</span>
+          </Button>
         </CardHeader>
 
-        <CardContent className="p-5 sm:p-6 space-y-4">
+        <CardContent className="p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             {[
               {
                 key: "off",
                 label: "Off",
-                desc: "No encryption. Traffic is transmitted over insecure plain HTTP.",
+                desc: "No encryption. Plain HTTP.",
               },
               {
                 key: "flexible",
                 label: "Flexible",
-                desc: "Browser to edge is encrypted HTTPS; edge to origin connects over plain HTTP.",
+                desc: "HTTPS to edge; HTTP to origin.",
               },
               {
                 key: "full",
                 label: "Full",
-                desc: "End-to-end encryption. Allows self-signed or wildcard origin SSL certificates.",
+                desc: "End-to-end encryption. Accepts self-signed origin certs.",
               },
               {
                 key: "strict",
-                label: "Full (Strict)",
-                desc: "End-to-end verified encryption. Requires a valid CA certificate on origin.",
+                label: "Full (strict)",
+                desc: "End-to-end verified encryption. Requires valid CA certificate.",
               },
             ].map((opt) => (
               <button
                 key={opt.key}
                 onClick={() => handleUpdateSSLMode(opt.key)}
                 disabled={isUpdatingSSL}
-                className={`p-3.5 rounded-xl border text-left transition-all ${
+                className={cn(
+                  "p-3 rounded-lg border text-left transition-colors",
                   sslMode === opt.key
-                    ? "border-emerald-600 bg-emerald-50/60 shadow-xs ring-1 ring-emerald-600"
-                    : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50"
-                }`}
+                    ? "border-slate-900 bg-slate-50"
+                    : "border-slate-200 hover:border-slate-300 bg-white"
+                )}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-900">{opt.label}</span>
-                  {sslMode === opt.key && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                  <span className="text-xs font-semibold text-slate-900">{opt.label}</span>
+                  {sslMode === opt.key && <Check className="w-3.5 h-3.5 text-slate-900" />}
                 </div>
-                <p className="text-[11px] text-slate-500 leading-normal">{opt.desc}</p>
+                <p className="text-xs text-slate-500 leading-normal">{opt.desc}</p>
               </button>
             ))}
           </div>
 
-          <div className="flex items-start gap-2.5 p-3.5 bg-blue-50/70 rounded-xl border border-blue-200/80 text-blue-900">
-            <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-            <div className="space-y-0.5">
-              <p className="text-xs font-semibold text-blue-900">Recommended configuration for modern web apps</p>
-              <p className="text-xs text-blue-800 leading-relaxed font-normal">
-                Use <strong>Full (Strict)</strong> whenever your backend is hosted on Vercel, Supabase, Render, Railway, or AWS.
-                This eliminates the common &quot;ERR_TOO_MANY_REDIRECTS&quot; loop and 521 origin down errors.
-              </p>
-            </div>
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 leading-relaxed">
+            <span className="font-medium text-slate-900">Recommended configuration:</span> Use{" "}
+            <span className="font-medium text-slate-900">Full (strict)</span> when deploying on Vercel, Render, Railway, or AWS to prevent redirect loops and invalid certificate errors.
           </div>
         </CardContent>
       </Card>
 
-      {/* 2. HTTPS Enforcement & Security Protocols */}
-      <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
-        <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100">
-          <CardTitle className="text-base font-bold text-slate-900">
-            HTTPS Enforcement &amp; Protocols
+      {/* 2. HTTPS & TLS Protocol Settings */}
+      <Card className="bg-white border-slate-200 shadow-none rounded-xl">
+        <CardHeader className="p-6 border-b border-slate-100">
+          <CardTitle className="text-base font-semibold text-slate-900">
+            HTTPS and TLS parameters
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
-            Force cryptographic transport across all endpoints and block obsolete SSL ciphers.
+            Transport security policies enforced at the edge.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-5 sm:p-6 divide-y divide-slate-100 space-y-4">
-          {/* Always Use HTTPS */}
+        <CardContent className="p-6 divide-y divide-slate-100 space-y-4">
           <div className="flex items-center justify-between pt-1">
-            <div className="space-y-0.5 pr-4">
-              <p className="text-xs font-semibold text-slate-800">Always Use HTTPS</p>
-              <p className="text-[11px] text-slate-500">
-                Redirects all unencrypted <code>http://{domain || "domain.com"}</code> requests to secure <code>https://</code> with a 301 permanent redirect.
-              </p>
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-slate-900">Always use HTTPS</p>
+              <p className="text-xs text-slate-500">Redirect all HTTP requests to HTTPS with 301 responses.</p>
             </div>
             <Switch
               checked={alwaysHttps}
@@ -424,13 +375,10 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
             />
           </div>
 
-          {/* Automatic HTTPS Rewrites */}
           <div className="flex items-center justify-between pt-4">
-            <div className="space-y-0.5 pr-4">
-              <p className="text-xs font-semibold text-slate-800">Automatic HTTPS Rewrites</p>
-              <p className="text-[11px] text-slate-500">
-                Eliminates browser &quot;mixed-content&quot; warnings by rewriting embedded image and script URLs from HTTP to HTTPS dynamically on the edge.
-              </p>
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-slate-900">Automatic HTTPS rewrites</p>
+              <p className="text-xs text-slate-500">Rewrite mixed-content resources from HTTP to HTTPS.</p>
             </div>
             <Switch
               checked={autoRewrites}
@@ -439,87 +387,68 @@ export function SslEncryptionTab({ zoneId, domain, orgId, getIdToken }: SslEncry
             />
           </div>
 
-          {/* Minimum TLS Version */}
           <div className="flex items-center justify-between pt-4">
-            <div className="space-y-0.5 pr-4">
-              <p className="text-xs font-semibold text-slate-800">Minimum TLS Version</p>
-              <p className="text-[11px] text-slate-500">
-                Enforce modern TLS 1.2 or modern TLS 1.3 cryptographic protocols, blocking outdated and vulnerable TLS 1.0/1.1 connections.
-              </p>
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-slate-900">Minimum TLS version</p>
+              <p className="text-xs text-slate-500">Enforce modern cipher suites and protocol versions.</p>
             </div>
-            <Select
-              value={minTls}
-              onValueChange={handleUpdateMinTLS}
-              disabled={isUpdatingTls}
-            >
-              <SelectTrigger className="w-32 h-8 text-xs border-slate-200">
+            <Select value={minTls} onValueChange={handleUpdateMinTLS}>
+              <SelectTrigger className="h-8 w-28 text-xs border-slate-200 rounded-lg">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1.2">TLS 1.2</SelectItem>
-                <SelectItem value="1.3">TLS 1.3</SelectItem>
+              <SelectContent className="rounded-lg">
+                <SelectItem value="1.0" className="text-xs">TLS 1.0</SelectItem>
+                <SelectItem value="1.1" className="text-xs">TLS 1.1</SelectItem>
+                <SelectItem value="1.2" className="text-xs">TLS 1.2</SelectItem>
+                <SelectItem value="1.3" className="text-xs">TLS 1.3</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* 3. DNSSEC (Domain Name System Security Extensions) */}
-      <Card className="bg-white border-slate-200/80 shadow-xs rounded-xl overflow-hidden">
-        <CardHeader className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle className="text-base font-bold text-slate-900">
-              DNSSEC (Domain Security Extensions)
+      {/* 3. DNSSEC */}
+      <Card className="bg-white border-slate-200 shadow-none rounded-xl">
+        <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <CardTitle className="text-base font-semibold text-slate-900">
+              DNSSEC cryptographic signing
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Cryptographically signs DNS lookups to prevent DNS spoofing, hijacking, and cache poisoning.
+              Protects against DNS cache poisoning and spoofing by signing zone records.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant={dnssecStatus === "active" ? "outline" : "default"}
-              size="sm"
-              onClick={handleToggleDNSSEC}
-              disabled={isTogglingDnssec}
-              className={`text-xs h-8 rounded-lg gap-1.5 ${
-                dnssecStatus === "active"
-                  ? "border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-black"
-                  : "bg-indigo-600 hover:bg-indigo-700 text-white"
-              }`}
-            >
-              {isTogglingDnssec && <Loader2 className="w-3 h-3 animate-spin" />}
-              <span>{dnssecStatus === "active" ? "Disable DNSSEC" : "Enable DNSSEC"}</span>
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleToggleDNSSEC}
+            disabled={isTogglingDnssec}
+            className="h-8 text-xs font-medium border-slate-200 rounded-lg"
+          >
+            {dnssecStatus === "active" ? "Disable DNSSEC" : "Enable DNSSEC"}
+          </Button>
         </CardHeader>
-
-        <CardContent className="p-5 sm:p-6 space-y-3 text-xs text-slate-600">
+        <CardContent className="p-6">
           {dnssecStatus === "active" && dnssecData?.ds ? (
-            <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-slate-800 text-xs">Registrar Delegation Signer (DS) Record</p>
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-slate-700">Delegation Signer (DS) record</p>
+              <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <code className="text-xs font-mono text-slate-800 break-all flex-1">
+                  {dnssecData.ds}
+                </code>
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon"
+                  className="h-7 w-7 text-slate-400 hover:text-slate-900 shrink-0"
                   onClick={copyDsRecord}
-                  className="h-7 px-2 text-xs text-slate-600 hover:bg-slate-200 hover:text-black gap-1"
                 >
                   {copiedDs ? <CheckCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedDs ? "Copied" : "Copy DS"}</span>
                 </Button>
-              </div>
-              <p className="font-mono text-[11px] text-slate-700 break-all bg-white p-2 rounded border border-slate-200">
-                {dnssecData.ds}
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-[11px] text-slate-500">
-                {dnssecData.key_tag && <div>Key Tag: <span className="font-bold text-slate-700">{dnssecData.key_tag}</span></div>}
-                {dnssecData.algorithm && <div>Algorithm: <span className="font-bold text-slate-700">{dnssecData.algorithm}</span></div>}
-                {dnssecData.digest_type && <div>Digest Type: <span className="font-bold text-slate-700">{dnssecData.digest_type}</span></div>}
               </div>
             </div>
           ) : (
-            <p className="text-xs text-slate-500 leading-relaxed">
-              When enabled, Cloudflare generates cryptographic signatures for your DNS records. To finish setup, add the DS record shown above to your domain registrar (e.g., Namecheap, GoDaddy, Google Domains).
+            <p className="text-xs text-slate-500">
+              DNSSEC is currently disabled for this domain zone.
             </p>
           )}
         </CardContent>

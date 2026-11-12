@@ -309,7 +309,7 @@ async function syncStalwartDomainPrincipal(domain: string) {
   await ensureStalwartDomainId(domain);
 }
 
-async function syncStalwartUserPrincipal(params: {
+export async function syncStalwartUserPrincipal(params: {
   primaryEmail: string;
   displayName: string;
   orgUnitPath: string;

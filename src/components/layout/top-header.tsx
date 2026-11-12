@@ -34,7 +34,7 @@ export function TopHeader() {
           href="/account/home"
           className="lg:hidden flex items-center pr-2 hover:opacity-85 transition-opacity"
         >
-          <span className="font-semibold text-base tracking-tight text-slate-900">
+          <span className="font-bold text-[18px] tracking-tight text-slate-950 font-headline">
             Revlet
           </span>
         </Link>

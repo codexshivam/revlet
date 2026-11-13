@@ -65,7 +65,6 @@ import { useActiveOrg } from "@/hooks/use-active-org"
 import { cn } from "@/lib/utils"
 import {
   getMailServiceState,
-  resetOrgEmailQuota,
   activateMailService,
   deactivateMailService,
   syncMailDnsRecords,
@@ -105,12 +104,18 @@ export default function EmailServiceAdminPage() {
   const [isLoadingQuota, setIsLoadingQuota] = useState(true)
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [isResettingQuota, setIsResettingQuota] = useState(false)
   const [isActivating, setIsActivating] = useState(false)
   const [isDeactivating, setIsDeactivating] = useState(false)
   const [isSyncingDns, setIsSyncingDns] = useState(false)
 
-  const [serviceActive, setServiceActive] = useState(false)
+  const [serviceActive, setServiceActive] = useState<boolean>(() => Boolean(selectedOrg?.mailServiceActive))
+  const isEffectiveServiceActive = serviceActive || Boolean(selectedOrg?.mailServiceActive)
+
+  useEffect(() => {
+    if (selectedOrg?.mailServiceActive !== undefined) {
+      setServiceActive(Boolean(selectedOrg.mailServiceActive))
+    }
+  }, [selectedOrg?.mailServiceActive])
   const [dnsServiceActive, setDnsServiceActive] = useState(false)
   const [monthlyOutboundLimit, setMonthlyOutboundLimit] = useState(1000)
   const [dailyOutboundLimit, setDailyOutboundLimit] = useState(100)
@@ -306,29 +311,6 @@ export default function EmailServiceAdminPage() {
     },
     [user, selectedOrgId]
   )
-
-  const handleResetQuota = async (scope: "all" | "daily" | "monthly" = "all") => {
-    if (!user || !selectedOrgId) return
-    setIsResettingQuota(true)
-    try {
-      const idToken = await user.getIdToken()
-      const res = await resetOrgEmailQuota(idToken, selectedOrgId, scope)
-      if (!res.success) throw new Error(res.error)
-      toast({
-        title: "Quota Reset Successfully",
-        description: `Outbound email quota (${scope === "daily" ? "24-Hour" : scope === "monthly" ? "30-Day" : "All"}) has been reset.`,
-      })
-      await loadAllMailData(true)
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Reset failed",
-        description: err.message || "Could not reset outbound email quotas.",
-      })
-    } finally {
-      setIsResettingQuota(false)
-    }
-  }
 
   useEffect(() => {
     if (!authLoading && !isLoadingOrgs) {
@@ -1012,7 +994,7 @@ export default function EmailServiceAdminPage() {
     return Array.from(paths)
   }, [orgUnits])
 
-  if (authLoading || isLoadingOrgs) {
+  if (authLoading || isLoadingOrgs || (!isEffectiveServiceActive && isLoadingQuota)) {
     return (
       <DashboardShell>
         <div className="flex flex-col items-center justify-center min-h-[50vh] bg-white">
@@ -1029,10 +1011,10 @@ export default function EmailServiceAdminPage() {
       <DashboardShell>
         <div className="py-20 text-center max-w-sm mx-auto space-y-2">
           <h2 className="text-base font-headline font-semibold text-slate-900">
-            No organization selected
+            No Organization Selected
           </h2>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Register or select an organization on Account home to configure domain email accounts and routing.
+            Register or select an organization on Account Home to configure domain email accounts and routing.
           </p>
         </div>
       </DashboardShell>
@@ -1042,7 +1024,7 @@ export default function EmailServiceAdminPage() {
   const verifiedDnsCount = requiredDnsRecords.filter((r) => r.verified).length
 
   // Pre-activation screen: asymmetric split with real domain routing ledger preview
-  if (!serviceActive) {
+  if (!isEffectiveServiceActive) {
     return (
       <DashboardShell>
         <div className="space-y-6 animate-in fade-in duration-300">
@@ -1063,7 +1045,7 @@ export default function EmailServiceAdminPage() {
               <div className="lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between gap-8">
                 <div className="space-y-4">
                   <h2 className="text-xl font-headline font-semibold text-slate-900 leading-snug">
-                    Domain mail and directory for {selectedOrg.domain}
+                    Domain Mail and Directory for {selectedOrg.domain}
                   </h2>
 
                   <p className="text-xs text-slate-600 leading-relaxed">
@@ -1073,9 +1055,9 @@ export default function EmailServiceAdminPage() {
 
                 <div className="space-y-4 pt-2 border-t border-slate-100">
                   <div className="flex items-baseline justify-between text-xs">
-                    <span className="text-slate-500">Outbound allowance</span>
+                    <span className="text-slate-500">Outbound Allowance</span>
                     <span className="font-mono text-slate-900 tabular-nums">
-                      1,000 / month · 100 / day
+                      1,000 / Month · 100 / Day
                     </span>
                   </div>
 
@@ -1100,10 +1082,10 @@ export default function EmailServiceAdminPage() {
               <div className="lg:col-span-7 bg-slate-50/50 p-6 sm:p-8 flex flex-col justify-between gap-6">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-700">
-                    Required routing records for {selectedOrg.domain}
+                    Required Routing Records for {selectedOrg.domain}
                   </span>
                   <span className="text-xs font-mono text-slate-500 tabular-nums">
-                    {requiredDnsRecords.length} records
+                    {requiredDnsRecords.length} {requiredDnsRecords.length === 1 ? "Record" : "Records"}
                   </span>
                 </div>
 
@@ -1158,18 +1140,6 @@ export default function EmailServiceAdminPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleResetQuota("all")}
-              disabled={isResettingQuota}
-              className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
-            >
-              {isResettingQuota ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin text-slate-400" strokeWidth={1.5} />
-              ) : null}
-              Reset Quotas
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => loadAllMailData(true)}
               disabled={isRefreshing}
               className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
@@ -1209,7 +1179,7 @@ export default function EmailServiceAdminPage() {
                   {activeUsers.length}
                 </div>
                 <div className="text-xs font-mono text-slate-400 tabular-nums">
-                  {groups.length} {groups.length === 1 ? "group" : "groups"} · {orgUnits.length + 1} units
+                  {groups.length} {groups.length === 1 ? "Group" : "Groups"} · {orgUnits.length + 1} Units
                 </div>
               </>
             )}
@@ -1231,25 +1201,14 @@ export default function EmailServiceAdminPage() {
                   </span>
                 </div>
                 <div className="text-xs font-mono text-slate-400 tabular-nums">
-                  {(monthlyOutboundLimit - monthlySentCount).toLocaleString()} remaining this month
+                  {(monthlyOutboundLimit - monthlySentCount).toLocaleString()} Remaining This Month
                 </div>
               </>
             )}
           </div>
 
           <div className="p-4 sm:p-5 space-y-1">
-            <div className="flex items-center justify-between">
-              <div className="text-xs text-slate-500">Daily Outbound Limit</div>
-              <button
-                type="button"
-                onClick={() => handleResetQuota("daily")}
-                disabled={isResettingQuota}
-                className="text-[11px] text-primary hover:text-primary/80 font-medium transition-colors"
-                title="Reset 24-hour quota"
-              >
-                Reset
-              </button>
-            </div>
+            <div className="text-xs text-slate-500">Daily Outbound Limit</div>
             {isLoadingQuota ? (
               <div className="space-y-1.5 pt-1">
                 <Skeleton className="h-7 w-20" />
@@ -1264,7 +1223,7 @@ export default function EmailServiceAdminPage() {
                   </span>
                 </div>
                 <div className="text-xs font-mono text-slate-400 tabular-nums">
-                  24-hour rolling window
+                  24-Hour Rolling Window
                 </div>
               </>
             )}
@@ -1289,11 +1248,11 @@ export default function EmailServiceAdminPage() {
                     )}
                   />
                   <span className="text-base font-medium text-slate-900 tabular-nums">
-                    {verifiedDnsCount} of {requiredDnsRecords.length} DNS verified
+                    {verifiedDnsCount} of {requiredDnsRecords.length} DNS Verified
                   </span>
                 </div>
                 <div className="text-xs font-mono text-slate-400 truncate">
-                  {catchAllEmail ? `Catch-all → ${catchAllEmail}` : "Catch-all disabled"}
+                  {catchAllEmail ? `Catch-All → ${catchAllEmail}` : "Catch-All Disabled"}
                 </div>
               </>
             )}
@@ -1393,7 +1352,7 @@ export default function EmailServiceAdminPage() {
                     className="h-8 px-2.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 transition-colors flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span>New unit</span>
+                    <span>New Unit</span>
                   </button>
                 </div>
 
@@ -1406,7 +1365,7 @@ export default function EmailServiceAdminPage() {
                     <Input
                       value={userSearchQuery}
                       onChange={(e) => setUserSearchQuery(e.target.value)}
-                      placeholder="Search"
+                      placeholder="Search accounts..."
                       className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
                     />
                   </div>
@@ -1424,7 +1383,7 @@ export default function EmailServiceAdminPage() {
                     className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
                   >
                     <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                    Add user
+                    Add User
                   </Button>
                 </div>
               </div>
@@ -1483,8 +1442,8 @@ export default function EmailServiceAdminPage() {
                 <div className="py-16 px-4 text-center space-y-2">
                   <p className="text-sm font-medium text-slate-900">
                     {activeUsers.length === 0
-                      ? "No email accounts provisioned"
-                      : "No matching email accounts"}
+                      ? "No Email Accounts Provisioned"
+                      : "No Matching Email Accounts"}
                   </p>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">
                     {activeUsers.length === 0
@@ -1499,7 +1458,7 @@ export default function EmailServiceAdminPage() {
                         className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
                       >
                         <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                        Add user
+                        Add User
                       </Button>
                     </div>
                   )}
@@ -1509,16 +1468,16 @@ export default function EmailServiceAdminPage() {
                   <TableHeader>
                     <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
                       <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                        Account name
+                        Account Name
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Primary address
+                        Primary Address
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
                         Aliases
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Organizational unit
+                        Organizational Unit
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                         Actions
@@ -1557,7 +1516,7 @@ export default function EmailServiceAdminPage() {
                               }}
                               className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
                             >
-                              + Add alias
+                              + Add Alias
                             </button>
                           ) : (
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1606,7 +1565,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
                               >
                                 <UserPen className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
-                                <span>Update account name</span>
+                                <span>Update Account Name</span>
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
@@ -1617,7 +1576,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
                               >
                                 <KeyRound className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
-                                <span>Reset password</span>
+                                <span>Reset Password</span>
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
@@ -1630,7 +1589,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
                               >
                                 <AtSign className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
-                                <span className="flex-1">Manage email aliases</span>
+                                <span className="flex-1">Manage Email Aliases</span>
                                 <span className="font-mono text-slate-400 tabular-nums">
                                   {u.aliases.length}
                                 </span>
@@ -1643,7 +1602,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs text-amber-700 focus:text-amber-800 cursor-pointer rounded-lg"
                               >
                                 <Ban className="w-4 h-4" strokeWidth={1.5} />
-                                <span>Suspend account</span>
+                                <span>Suspend Account</span>
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
@@ -1651,7 +1610,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
                               >
                                 <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                                <span>Delete email account</span>
+                                <span>Delete Email Account</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1681,7 +1640,7 @@ export default function EmailServiceAdminPage() {
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
                     )}
                   >
-                    <span>All units</span>
+                    <span>All Units</span>
                     <span className="font-mono text-slate-400 tabular-nums">
                       {groups.length}
                     </span>
@@ -1713,7 +1672,7 @@ export default function EmailServiceAdminPage() {
                     className="h-8 px-2.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 transition-colors flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span>New unit</span>
+                    <span>New Unit</span>
                   </button>
                 </div>
 
@@ -1726,7 +1685,7 @@ export default function EmailServiceAdminPage() {
                     <Input
                       value={groupSearchQuery}
                       onChange={(e) => setGroupSearchQuery(e.target.value)}
-                      placeholder="Search"
+                      placeholder="Search groups..."
                       className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
                     />
                   </div>
@@ -1744,7 +1703,7 @@ export default function EmailServiceAdminPage() {
                     className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
                   >
                     <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                    Create group
+                    Create Group
                   </Button>
                 </div>
               </div>
@@ -1752,7 +1711,7 @@ export default function EmailServiceAdminPage() {
               {filteredGroups.length === 0 ? (
                 <div className="py-16 px-4 text-center space-y-2">
                   <p className="text-sm font-medium text-slate-900">
-                    {groups.length === 0 ? "No distribution groups created" : "No matching groups"}
+                    {groups.length === 0 ? "No Distribution Groups Created" : "No Matching Distribution Groups"}
                   </p>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">
                     {groups.length === 0
@@ -1767,7 +1726,7 @@ export default function EmailServiceAdminPage() {
                         className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
                       >
                         <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                        Create group
+                        Create Group
                       </Button>
                     </div>
                   )}
@@ -1777,16 +1736,16 @@ export default function EmailServiceAdminPage() {
                   <TableHeader>
                     <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
                       <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                        Group name
+                        Group Name
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Group address
+                        Group Address
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
                         Members
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Organizational unit
+                        Organizational Unit
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                         Actions
@@ -1822,7 +1781,7 @@ export default function EmailServiceAdminPage() {
                               }}
                               className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
                             >
-                              + Add members
+                              + Add Members
                             </button>
                           ) : (
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1875,7 +1834,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
                               >
                                 <Edit2 className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
-                                <span>Update group name</span>
+                                <span>Update Group Name</span>
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
@@ -1886,7 +1845,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
                               >
                                 <Users className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
-                                <span className="flex-1">Manage members</span>
+                                <span className="flex-1">Manage Members</span>
                                 <span className="font-mono text-slate-400 tabular-nums">
                                   {g.memberEmails.length}
                                 </span>
@@ -1899,7 +1858,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
                               >
                                 <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                                <span>Delete group</span>
+                                <span>Delete Group</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1920,7 +1879,7 @@ export default function EmailServiceAdminPage() {
               <div className="p-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/40">
                 <div className="space-y-0.5">
                   <h2 className="text-xs font-medium text-slate-900">
-                    Suspended accounts
+                    Suspended Accounts
                     <span className="ml-2 font-mono text-slate-400 tabular-nums">
                       {filteredSuspendedUsers.length}
                     </span>
@@ -1938,7 +1897,7 @@ export default function EmailServiceAdminPage() {
                   <Input
                     value={suspendedSearchQuery}
                     onChange={(e) => setSuspendedSearchQuery(e.target.value)}
-                    placeholder="Search"
+                    placeholder="Search suspended accounts..."
                     className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
                   />
                 </div>
@@ -1946,20 +1905,20 @@ export default function EmailServiceAdminPage() {
 
               {filteredSuspendedUsers.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-400">
-                  No suspended email accounts
+                  No Suspended Email Accounts
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
                       <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                        Account name
+                        Account Name
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Primary address
+                        Primary Address
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Organizational unit
+                        Organizational Unit
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                         Actions
@@ -2003,7 +1962,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
                               >
                                 <RotateCcw className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
-                                <span>Reactivate account</span>
+                                <span>Reactivate Account</span>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -2011,7 +1970,7 @@ export default function EmailServiceAdminPage() {
                                 className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
                               >
                                 <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                                <span>Delete email account</span>
+                                <span>Delete Email Account</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -2027,7 +1986,7 @@ export default function EmailServiceAdminPage() {
             <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
               <div className="p-4 border-b border-slate-200/80 bg-slate-50/40 space-y-0.5">
                 <h2 className="text-xs font-medium text-slate-900">
-                  Deleted accounts (14-day recovery)
+                  Deleted Accounts (14-Day Recovery)
                   <span className="ml-2 font-mono text-slate-400 tabular-nums">
                     {filteredDeletedUsers.length}
                   </span>
@@ -2046,13 +2005,13 @@ export default function EmailServiceAdminPage() {
                   <TableHeader>
                     <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
                       <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                        Account name
+                        Account Name
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Primary address
+                        Primary Address
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Recovery window
+                        Recovery Window
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                         Actions
@@ -2076,7 +2035,7 @@ export default function EmailServiceAdminPage() {
                             {u.primaryEmail}
                           </TableCell>
                           <TableCell className="py-3.5 text-xs font-mono text-slate-500 tabular-nums">
-                            {daysLeft} {daysLeft === 1 ? "day" : "days"} remaining
+                            {daysLeft} {daysLeft === 1 ? "Day" : "Days"} Remaining
                           </TableCell>
                           <TableCell className="text-right pr-6 py-3.5">
                             <Button
@@ -2085,7 +2044,7 @@ export default function EmailServiceAdminPage() {
                               onClick={() => handleRecoverDeletedUser(u)}
                               className="h-8 px-3 text-xs font-medium border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
                             >
-                              Recover account
+                              Recover Account
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -2106,7 +2065,7 @@ export default function EmailServiceAdminPage() {
               <div className="p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <h2 className="text-sm font-headline font-semibold text-slate-900">
-                    Domain catch-all routing
+                    Domain Catch-All Routing
                   </h2>
                   <p className="text-xs text-slate-500">
                     Deliver incoming messages addressed to any unmatched{" "}
@@ -2130,7 +2089,7 @@ export default function EmailServiceAdminPage() {
               <div className="p-6">
                 <div className="max-w-md space-y-2">
                   <Label className="text-xs font-medium text-slate-700">
-                    Fallback account
+                    Fallback Account
                   </Label>
                   <Select
                     value={catchAllUserId || "NONE"}
@@ -2140,11 +2099,11 @@ export default function EmailServiceAdminPage() {
                     }
                   >
                     <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
-                      <SelectValue placeholder="Select an active email account" />
+                      <SelectValue placeholder="Select an Active Email Account" />
                     </SelectTrigger>
                     <SelectContent className="bg-white border-slate-200">
                       <SelectItem value="NONE" className="text-xs">
-                        Disabled (reject unmatched recipients)
+                        Disabled (Reject Unmatched Recipients)
                       </SelectItem>
                       {activeUsers.map((u) => (
                         <SelectItem key={u.id} value={u.id} className="text-xs">
@@ -2162,13 +2121,13 @@ export default function EmailServiceAdminPage() {
               </div>
             </div>
 
-            {/* Required DNS records */}
+            {/* Required DNS Records */}
             <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
               <div className="p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
                     <h2 className="text-sm font-headline font-semibold text-slate-900">
-                      Required DNS records
+                      Required DNS Records
                     </h2>
                     <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500 tabular-nums">
                       <span
@@ -2180,7 +2139,7 @@ export default function EmailServiceAdminPage() {
                             : "bg-amber-500"
                         )}
                       />
-                      {verifiedDnsCount} of {requiredDnsRecords.length} verified
+                      {verifiedDnsCount} of {requiredDnsRecords.length} Verified
                     </span>
                   </div>
                   <p className="text-xs text-slate-500">
@@ -2198,12 +2157,12 @@ export default function EmailServiceAdminPage() {
                   {isSyncingDns ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
-                      {dnsServiceActive ? "Syncing DNS records" : "Verifying DNS records"}
+                      {dnsServiceActive ? "Syncing DNS Records" : "Verifying DNS Records"}
                     </>
                   ) : dnsServiceActive ? (
-                    "Sync DNS records"
+                    "Sync DNS Records"
                   ) : (
-                    "Verify DNS records"
+                    "Verify DNS Records"
                   )}
                 </Button>
               </div>
@@ -2289,7 +2248,7 @@ export default function EmailServiceAdminPage() {
                           {rec.verified
                             ? "Verified"
                             : dnsServiceActive
-                            ? "Pending sync"
+                            ? "Pending Sync"
                             : "Unverified"}
                         </span>
                       </TableCell>
@@ -2297,40 +2256,6 @@ export default function EmailServiceAdminPage() {
                   ))}
                 </TableBody>
               </Table>
-            </div>
-
-            {/* Outbound Quota Management */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <h3 className="text-sm font-headline font-semibold text-slate-900">
-                  Reset Outbound Quota
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Reset the 24-hour rolling window counter or the 30-day monthly outbound limit for testing or immediate quota replenishment.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isResettingQuota}
-                  onClick={() => handleResetQuota("daily")}
-                  className="h-9 px-3 text-xs font-medium border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-                >
-                  {isResettingQuota ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
-                  Reset 24-Hour Quota
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isResettingQuota}
-                  onClick={() => handleResetQuota("all")}
-                  className="h-9 px-3 text-xs font-medium border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-                >
-                  {isResettingQuota ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
-                  Reset All Quotas
-                </Button>
-              </div>
             </div>
 
             {/* Service deactivation */}
@@ -2349,7 +2274,7 @@ export default function EmailServiceAdminPage() {
                 onClick={() => setIsDeactivateConfirmOpen(true)}
                 className="h-9 px-4 text-xs font-medium text-destructive border-slate-200 hover:bg-rose-50 hover:text-destructive rounded-lg shrink-0 transition-colors"
               >
-                Deactivate service
+                Deactivate Service
               </Button>
             </div>
           </TabsContent>
@@ -2364,7 +2289,7 @@ export default function EmailServiceAdminPage() {
           <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Organizational units
+                Organizational Units
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Create and manage organizational units for accounts and groups
@@ -2375,7 +2300,7 @@ export default function EmailServiceAdminPage() {
               <div className="space-y-3 bg-slate-50/70 p-4 rounded-lg border border-slate-200/80">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-slate-700">Unit name</Label>
+                    <Label className="text-xs font-medium text-slate-700">Unit Name</Label>
                     <Input
                       value={newOuName}
                       onChange={(e) => setNewOuName(e.target.value)}
@@ -2385,7 +2310,7 @@ export default function EmailServiceAdminPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-medium text-slate-700">
-                      Description (optional)
+                      Description (Optional)
                     </Label>
                     <Input
                       value={newOuDescription}
@@ -2405,7 +2330,7 @@ export default function EmailServiceAdminPage() {
                     {isSavingOu && (
                       <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" strokeWidth={1.5} />
                     )}
-                    Create unit
+                    Create Unit
                   </Button>
                 </div>
               </div>
@@ -2462,7 +2387,7 @@ export default function EmailServiceAdminPage() {
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Create email account
+                Create Email Account
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Create an address and password for signing in to Revlet Mail
@@ -2472,7 +2397,7 @@ export default function EmailServiceAdminPage() {
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">First name</Label>
+                  <Label className="text-xs font-medium text-slate-700">First Name</Label>
                   <Input
                     value={createUserForm.firstName}
                     onChange={(e) =>
@@ -2483,7 +2408,7 @@ export default function EmailServiceAdminPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">Last name</Label>
+                  <Label className="text-xs font-medium text-slate-700">Last Name</Label>
                   <Input
                     value={createUserForm.lastName}
                     onChange={(e) =>
@@ -2496,7 +2421,7 @@ export default function EmailServiceAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Email address</Label>
+                <Label className="text-xs font-medium text-slate-700">Email Address</Label>
                 <div className="flex items-center">
                   <Input
                     value={createUserForm.emailPrefix}
@@ -2526,7 +2451,7 @@ export default function EmailServiceAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational unit</Label>
+                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
                 <Select
                   value={createUserForm.orgUnitPath}
                   onValueChange={(val) =>
@@ -2570,7 +2495,7 @@ export default function EmailServiceAdminPage() {
                 {isCreatingUser && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Create account
+                Create Account
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -2586,7 +2511,7 @@ export default function EmailServiceAdminPage() {
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Update account name
+                Update Account Name
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Update name and organizational unit for{" "}
@@ -2597,7 +2522,7 @@ export default function EmailServiceAdminPage() {
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">First name</Label>
+                  <Label className="text-xs font-medium text-slate-700">First Name</Label>
                   <Input
                     value={editUserForm.firstName}
                     onChange={(e) =>
@@ -2607,7 +2532,7 @@ export default function EmailServiceAdminPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">Last name</Label>
+                  <Label className="text-xs font-medium text-slate-700">Last Name</Label>
                   <Input
                     value={editUserForm.lastName}
                     onChange={(e) =>
@@ -2619,7 +2544,7 @@ export default function EmailServiceAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational unit</Label>
+                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
                 <Select
                   value={editUserForm.orgUnitPath}
                   onValueChange={(val) =>
@@ -2658,7 +2583,7 @@ export default function EmailServiceAdminPage() {
                 {isUpdatingUser && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Save changes
+                Save Changes
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -2674,7 +2599,7 @@ export default function EmailServiceAdminPage() {
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Reset password
+                Reset Password
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Set a new sign-in password for{" "}
@@ -2684,7 +2609,7 @@ export default function EmailServiceAdminPage() {
 
             <div className="p-6 space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">New password</Label>
+                <Label className="text-xs font-medium text-slate-700">New Password</Label>
                 <Input
                   type="password"
                   value={newPasswordValue}
@@ -2713,7 +2638,7 @@ export default function EmailServiceAdminPage() {
                 {isResettingPassword && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Update password
+                Update Password
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -2732,7 +2657,7 @@ export default function EmailServiceAdminPage() {
           <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Manage email aliases
+                Manage Email Aliases
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Add, update, or remove aliases for{" "}
@@ -2742,7 +2667,7 @@ export default function EmailServiceAdminPage() {
 
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">New alias</Label>
+                <Label className="text-xs font-medium text-slate-700">New Alias</Label>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center flex-1">
                     <Input
@@ -2763,7 +2688,7 @@ export default function EmailServiceAdminPage() {
                     }
                     className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0"
                   >
-                    Add alias
+                    Add Alias
                   </Button>
                 </div>
               </div>
@@ -2880,7 +2805,7 @@ export default function EmailServiceAdminPage() {
           <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Delete email account
+                Delete Email Account
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
                 <span className="font-mono text-slate-800">{deletingUser?.primaryEmail}</span> will
@@ -2902,7 +2827,7 @@ export default function EmailServiceAdminPage() {
                 {isDeletingUser && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Delete account
+                Delete Account
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -2913,7 +2838,7 @@ export default function EmailServiceAdminPage() {
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Create group
+                Create Group
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Create a shared group email address that forwards to multiple members
@@ -2922,7 +2847,7 @@ export default function EmailServiceAdminPage() {
 
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Group name</Label>
+                <Label className="text-xs font-medium text-slate-700">Group Name</Label>
                 <Input
                   value={createGroupForm.name}
                   onChange={(e) =>
@@ -2934,7 +2859,7 @@ export default function EmailServiceAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Group address</Label>
+                <Label className="text-xs font-medium text-slate-700">Group Address</Label>
                 <div className="flex items-center">
                   <Input
                     value={createGroupForm.emailPrefix}
@@ -2951,7 +2876,7 @@ export default function EmailServiceAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational unit</Label>
+                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
                 <Select
                   value={createGroupForm.orgUnitPath}
                   onValueChange={(val) =>
@@ -2973,7 +2898,7 @@ export default function EmailServiceAdminPage() {
 
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-slate-700">
-                  Members (optional)
+                  Members (Optional)
                 </Label>
                 <div className="flex items-center gap-2">
                   <Input
@@ -3049,7 +2974,7 @@ export default function EmailServiceAdminPage() {
                 {isCreatingGroup && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Create group
+                Create Group
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -3065,7 +2990,7 @@ export default function EmailServiceAdminPage() {
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Update group name
+                Update Group Name
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Update name and organizational unit for{" "}
@@ -3075,7 +3000,7 @@ export default function EmailServiceAdminPage() {
 
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Group name</Label>
+                <Label className="text-xs font-medium text-slate-700">Group Name</Label>
                 <Input
                   value={editGroupForm.name}
                   onChange={(e) =>
@@ -3086,7 +3011,7 @@ export default function EmailServiceAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational unit</Label>
+                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
                 <Select
                   value={editGroupForm.orgUnitPath}
                   onValueChange={(val) =>
@@ -3125,7 +3050,7 @@ export default function EmailServiceAdminPage() {
                 {isUpdatingGroup && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Save changes
+                Save Changes
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -3141,7 +3066,7 @@ export default function EmailServiceAdminPage() {
           <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Manage group members
+                Manage Group Members
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Add or remove recipient addresses for{" "}
@@ -3151,7 +3076,7 @@ export default function EmailServiceAdminPage() {
 
             <div className="p-6 space-y-4">
               <div className="space-y-2">
-                <Label className="text-xs font-medium text-slate-700">Member address</Label>
+                <Label className="text-xs font-medium text-slate-700">Member Address</Label>
                 <div className="flex items-center gap-2">
                   <Input
                     value={groupMemberInput}
@@ -3176,7 +3101,7 @@ export default function EmailServiceAdminPage() {
                     }}
                     className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0"
                   >
-                    Add member
+                    Add Member
                   </Button>
                 </div>
 
@@ -3264,7 +3189,7 @@ export default function EmailServiceAdminPage() {
           <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Delete group
+                Delete Group
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
                 Permanently remove the group{" "}
@@ -3287,7 +3212,7 @@ export default function EmailServiceAdminPage() {
                 {isDeletingGroup && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Delete group
+                Delete Group
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -3324,7 +3249,7 @@ export default function EmailServiceAdminPage() {
                 {isDeactivating && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Deactivate service
+                Deactivate Service
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -1870,34 +1870,17 @@ export default function EmailServiceAdminPage() {
                         </TableCell>
 
                         <TableCell className="py-3.5">
-                          {g.memberEmails.length === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMembersTargetGroup(g)
-                                setGroupMemberInput("")
-                              }}
-                              className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
-                            >
-                              + Add Members
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {g.memberEmails.slice(0, 3).map((member) => (
-                                <span
-                                  key={member}
-                                  className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-700"
-                                >
-                                  {member}
-                                </span>
-                              ))}
-                              {g.memberEmails.length > 3 && (
-                                <span className="text-xs font-mono text-slate-400 tabular-nums">
-                                  +{g.memberEmails.length - 3}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMembersTargetGroup(g)
+                              setGroupMemberInput("")
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 hover:bg-slate-200/80 text-slate-700 transition-colors cursor-pointer"
+                          >
+                            <span className="font-mono tabular-nums font-semibold">{g.memberEmails.length}</span>
+                            <span>{g.memberEmails.length === 1 ? "Member" : "Members"}</span>
+                          </button>
                         </TableCell>
 
                         <TableCell className="py-3.5">

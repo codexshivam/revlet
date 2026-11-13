@@ -442,8 +442,64 @@ async function syncStalwartGroupPrincipal(params: {
   memberEmails: string[];
   isCreate?: boolean;
 }) {
-  // Handled via Stalwart JMAP MailingList/Group sync when configured
-  void params;
+  const cleanEmail = params.groupEmail.toLowerCase().trim();
+  const [localPart, domainPart] = cleanEmail.split('@');
+  if (!localPart || !domainPart) return;
+
+  const domainId = await ensureStalwartDomainId(domainPart);
+  if (!domainId) return;
+
+  const mlResponses = await callStalwartJmap([
+    ['x:MailingList/get', { accountId: 'b', ids: null }, 'mlList'],
+  ]);
+  const mlList: any[] = mlResponses.find((r) => r[0] === 'x:MailingList/get')?.[1]?.list || [];
+  const existingMl = mlList.find(
+    (m) => (m.emailAddress || '').toLowerCase() === cleanEmail
+  );
+
+  const recipientsMap: Record<string, boolean> = {};
+  for (const member of params.memberEmails || []) {
+    const cleanMem = member.toLowerCase().trim();
+    if (cleanMem) {
+      recipientsMap[cleanMem] = true;
+    }
+  }
+
+  if (!existingMl) {
+    await callStalwartJmap([
+      [
+        'x:MailingList/set',
+        {
+          accountId: 'b',
+          create: {
+            ml0: {
+              name: localPart,
+              domainId,
+              description: params.name || localPart,
+              recipients: recipientsMap,
+            },
+          },
+        },
+        'createMl',
+      ],
+    ]);
+  } else {
+    await callStalwartJmap([
+      [
+        'x:MailingList/set',
+        {
+          accountId: 'b',
+          update: {
+            [existingMl.id]: {
+              description: params.name || existingMl.description || localPart,
+              recipients: recipientsMap,
+            },
+          },
+        },
+        'updMl',
+      ],
+    ]);
+  }
 }
 
 // ============================================================================
@@ -2352,9 +2408,26 @@ export async function deleteMailGroup(idToken: string, orgId: string, groupId: s
     await groupRef.delete();
 
     if (groupEmail) {
+      const cleanEmail = groupEmail.toLowerCase().trim();
+      try {
+        const mlResponses = await callStalwartJmap([
+          ['x:MailingList/get', { accountId: 'b', ids: null }, 'mlList'],
+        ]);
+        const mlList: any[] = mlResponses.find((r) => r[0] === 'x:MailingList/get')?.[1]?.list || [];
+        const existingMl = mlList.find(
+          (m) => (m.emailAddress || '').toLowerCase() === cleanEmail
+        );
+        if (existingMl?.id) {
+          await callStalwartJmap([
+            ['x:MailingList/set', { accountId: 'b', destroy: [existingMl.id] }, 'delMl'],
+          ]);
+        }
+      } catch (stalwartErr) {
+        console.warn('[Stalwart JMAP] Delete mailing list warning:', stalwartErr);
+      }
       await dispatchStalwartApi(
         'DELETE',
-        `/api/principal/${encodeURIComponent(groupEmail.toLowerCase().trim())}`
+        `/api/principal/${encodeURIComponent(cleanEmail)}`
       );
     }
 

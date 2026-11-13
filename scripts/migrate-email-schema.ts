@@ -48,7 +48,7 @@ async function runMigration() {
         serviceType: 'email_service',
         mailboxType: 'stalwart_mailbox',
         status: muDoc.data().status || 'active',
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: new Date().toISOString(),
       }, { merge: true });
       updatedMailUsers++;
     }
@@ -59,7 +59,7 @@ async function runMigration() {
       await mgDoc.ref.set({
         serviceType: 'email_service',
         groupType: 'distribution_list',
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: new Date().toISOString(),
       }, { merge: true });
       updatedMailGroups++;
     }
@@ -69,7 +69,7 @@ async function runMigration() {
     for (const ouDoc of mailOusSnap.docs) {
       await ouDoc.ref.set({
         serviceType: 'email_service',
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: new Date().toISOString(),
       }, { merge: true });
       updatedMailOus++;
     }

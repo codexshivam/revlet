@@ -101,6 +101,7 @@ export default function EmailServiceAdminPage() {
   const { orgs, activeOrg: selectedOrg, activeOrgId: selectedOrgId, loading: isLoadingOrgs } = useActiveOrg()
 
   // Core service state
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [isLoadingQuota, setIsLoadingQuota] = useState(true)
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -240,6 +241,7 @@ export default function EmailServiceAdminPage() {
       if (!user || !selectedOrgId) {
         setIsLoadingQuota(false)
         setIsLoadingDirectory(false)
+        setIsInitialLoad(false)
         return
       }
       if (!silent) {
@@ -307,6 +309,7 @@ export default function EmailServiceAdminPage() {
         })
       } finally {
         setIsRefreshing(false)
+        setIsInitialLoad(false)
       }
     },
     [user, selectedOrgId]
@@ -994,7 +997,7 @@ export default function EmailServiceAdminPage() {
     return Array.from(paths)
   }, [orgUnits])
 
-  if (authLoading || isLoadingOrgs || (!isEffectiveServiceActive && isLoadingQuota)) {
+  if (authLoading || isLoadingOrgs || (isInitialLoad && !isEffectiveServiceActive)) {
     return (
       <DashboardShell>
         <div className="flex flex-col items-center justify-center min-h-[50vh] bg-white">

@@ -67,6 +67,25 @@ export interface MailGroupRecord {
 // CONSTANTS & SECURITY LIMITS
 // ============================================================================
 
+function toIsoSafe(val: any, fallback = new Date().toISOString()): string {
+  if (!val) return fallback;
+  if (typeof val === 'string') return val;
+  if (typeof val.toDate === 'function') {
+    try {
+      return val.toDate().toISOString();
+    } catch {
+      return fallback;
+    }
+  }
+  if (typeof val._seconds === 'number') {
+    return new Date(val._seconds * 1000).toISOString();
+  }
+  if (typeof val.seconds === 'number') {
+    return new Date(val.seconds * 1000).toISOString();
+  }
+  return fallback;
+}
+
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 const MAX_ORG_UNITS_PER_ORG = 50;
 const MAX_ALIASES_PER_USER = 25;
@@ -1235,7 +1254,7 @@ export async function listMailOrgUnits(idToken: string, orgId: string) {
         name: d.name || '',
         path: d.path || `/${d.name || ''}`,
         description: d.description || '',
-        createdAt: d.createdAt || new Date().toISOString(),
+        createdAt: toIsoSafe(d.createdAt),
       };
     });
 
@@ -1472,10 +1491,10 @@ export async function listMailUsers(idToken: string, orgId: string) {
         aliases: Array.isArray(d.aliases) ? d.aliases : [],
         orgUnitPath: d.orgUnitPath || '/',
         status: d.status || 'active',
-        createdAt: d.createdAt || new Date().toISOString(),
-        updatedAt: d.updatedAt || new Date().toISOString(),
-        deletedAt: d.deletedAt || null,
-        recoverableUntil: d.recoverableUntil || null,
+        createdAt: toIsoSafe(d.createdAt),
+        updatedAt: toIsoSafe(d.updatedAt),
+        deletedAt: d.deletedAt ? toIsoSafe(d.deletedAt) : null,
+        recoverableUntil: d.recoverableUntil ? toIsoSafe(d.recoverableUntil) : null,
       });
     }
 
@@ -2085,8 +2104,8 @@ export async function listMailGroups(idToken: string, orgId: string) {
         groupEmail: d.groupEmail || '',
         orgUnitPath: d.orgUnitPath || '/',
         memberEmails: Array.isArray(d.memberEmails) ? d.memberEmails : [],
-        createdAt: d.createdAt || new Date().toISOString(),
-        updatedAt: d.updatedAt || new Date().toISOString(),
+        createdAt: toIsoSafe(d.createdAt),
+        updatedAt: toIsoSafe(d.updatedAt),
       };
     });
 

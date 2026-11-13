@@ -101,36 +101,85 @@ export async function POST(req: NextRequest) {
       }
 
       const now = new Date();
-      const currentDayBucket = now.toISOString().slice(0, 10); // YYYY-MM-DD
-      const currentMonthBucket = now.toISOString().slice(0, 7); // YYYY-MM
+      const nowMs = now.getTime();
+      const oneDayAgo = nowMs - 24 * 60 * 60 * 1000;
+      const thirtyDaysAgo = nowMs - 30 * 24 * 60 * 60 * 1000;
+
+      const currentHourKey = now.toISOString().slice(0, 13); // e.g. "2026-11-13T11"
+      const currentDayKey = now.toISOString().slice(0, 10); // e.g. "2026-11-13"
 
       const dailyLimit = d.mailDailyLimit ?? 100;
       const monthlyLimit = d.mailMonthlyLimit ?? 1000;
 
-      const baseDailySent = d.mailDailyBucket === currentDayBucket ? (d.mailDailySent ?? 0) : 0;
-      const baseMonthlySent =
-        d.mailMonthlyBucket === currentMonthBucket ? (d.mailMonthlySent ?? 0) : 0;
+      // 1. Calculate 24-hour rolling sent count from hourly buckets
+      const existingHourly: Record<string, number> = d.mailHourlyBuckets || {};
+      const activeHourly: Record<string, number> = {};
+      let rollingDailySent = 0;
 
-      const projectedDaily = baseDailySent + recipientCount;
-      const projectedMonthly = baseMonthlySent + recipientCount;
+      for (const [key, count] of Object.entries(existingHourly)) {
+        const bucketTime = new Date(key + ':00:00.000Z').getTime();
+        if (!isNaN(bucketTime) && bucketTime >= oneDayAgo) {
+          const val = typeof count === 'number' ? count : 0;
+          rollingDailySent += val;
+          activeHourly[key] = val;
+        }
+      }
+
+      // If hourly buckets not initialized but legacy dailyBucket was set within last 24h:
+      if (Object.keys(existingHourly).length === 0 && d.mailDailyBucket) {
+        const legacyTime = new Date(d.mailDailyBucket + 'T00:00:00.000Z').getTime();
+        if (!isNaN(legacyTime) && legacyTime >= oneDayAgo) {
+          rollingDailySent = d.mailDailySent ?? 0;
+        }
+      }
+
+      // 2. Calculate 30-day rolling sent count from daily buckets
+      const existingDaily: Record<string, number> = d.mailDailyBuckets || {};
+      const activeDaily: Record<string, number> = {};
+      let rollingMonthlySent = 0;
+
+      for (const [key, count] of Object.entries(existingDaily)) {
+        const bucketTime = new Date(key + 'T00:00:00.000Z').getTime();
+        if (!isNaN(bucketTime) && bucketTime >= thirtyDaysAgo) {
+          const val = typeof count === 'number' ? count : 0;
+          rollingMonthlySent += val;
+          activeDaily[key] = val;
+        }
+      }
+
+      // If daily buckets not initialized but legacy monthlyBucket was set within last 30d:
+      if (Object.keys(existingDaily).length === 0 && d.mailMonthlyBucket) {
+        const legacyTime = new Date(d.mailMonthlyBucket + '-01T00:00:00.000Z').getTime();
+        if (!isNaN(legacyTime) && legacyTime >= thirtyDaysAgo) {
+          rollingMonthlySent = d.mailMonthlySent ?? 0;
+        }
+      }
+
+      const projectedDaily = rollingDailySent + recipientCount;
+      const projectedMonthly = rollingMonthlySent + recipientCount;
 
       if (projectedDaily > dailyLimit || projectedMonthly > monthlyLimit) {
         return {
           allowed: false,
           smtpCode: 451,
           smtpMessage: '451 4.7.1 Organization outbound email quota reached.',
-          dailySent: baseDailySent,
-          monthlySent: baseMonthlySent,
+          dailySent: rollingDailySent,
+          monthlySent: rollingMonthlySent,
           dailyLimit,
           monthlyLimit,
         };
       }
 
+      activeHourly[currentHourKey] = (activeHourly[currentHourKey] || 0) + recipientCount;
+      activeDaily[currentDayKey] = (activeDaily[currentDayKey] || 0) + recipientCount;
+
       tx.update(orgRef, {
-        mailDailyBucket: currentDayBucket,
-        mailMonthlyBucket: currentMonthBucket,
+        mailHourlyBuckets: activeHourly,
+        mailDailyBuckets: activeDaily,
         mailDailySent: projectedDaily,
         mailMonthlySent: projectedMonthly,
+        mailDailyBucket: currentDayKey,
+        mailMonthlyBucket: currentDayKey.slice(0, 7),
         updatedAt: FieldValue.serverTimestamp(),
       });
 

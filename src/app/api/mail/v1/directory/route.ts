@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin';
+import { calculateRollingQuota } from '@/app/actions/revlet-mail';
 import { buildCanonicalStalwartEmails } from '@/lib/security/mail-crypto';
 
 function verifyInternalServiceSecret(req: NextRequest): boolean {
@@ -112,6 +113,8 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const rolling = await calculateRollingQuota(orgData);
+
     return NextResponse.json({
       ok: true,
       organization: {
@@ -123,8 +126,8 @@ export async function GET(req: NextRequest) {
         catchAllEmail: orgData.mailCatchAllEmail || null,
         monthlyOutboundLimit: orgData.mailMonthlyLimit ?? 1000,
         dailyOutboundLimit: orgData.mailDailyLimit ?? 100,
-        monthlySentCount: orgData.mailMonthlySent ?? 0,
-        dailySentCount: orgData.mailDailySent ?? 0,
+        monthlySentCount: rolling.monthlySentCount,
+        dailySentCount: rolling.dailySentCount,
       },
       mailboxes,
       groups,

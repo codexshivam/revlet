@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { calculateRollingQuota } from '@/app/actions/revlet-mail';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin';
 import {
@@ -136,6 +137,8 @@ export async function POST(req: NextRequest) {
       })),
     ];
 
+    const rolling = await calculateRollingQuota(orgData);
+
     return NextResponse.json({
       ok: true,
       organization: {
@@ -144,8 +147,8 @@ export async function POST(req: NextRequest) {
         domain,
         monthlyOutboundLimit: orgData.mailMonthlyLimit ?? 1000,
         dailyOutboundLimit: orgData.mailDailyLimit ?? 100,
-        monthlySentCount: orgData.mailMonthlySent ?? 0,
-        dailySentCount: orgData.mailDailySent ?? 0,
+        monthlySentCount: rolling.monthlySentCount,
+        dailySentCount: rolling.dailySentCount,
       },
       mailbox: {
         id: matchedDoc.id,

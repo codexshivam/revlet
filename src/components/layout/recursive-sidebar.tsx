@@ -44,13 +44,13 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
   }
 
   const generalItems: NavItem[] = [
-    { title: "Account home", icon: LayoutDashboard, href: "/account/home" },
+    { title: "Account Home", icon: LayoutDashboard, href: "/account/home" },
   ]
 
   const serviceItems: NavItem[] = [
-    { title: "DNS management", icon: Globe, href: "/services/dns" },
-    { title: "Email forwarding", icon: ArrowRightLeft, href: "/services/email-forwarding" },
-    { title: "Email service", icon: Mail, href: "/services/email" },
+    { title: "DNS Management", icon: Globe, href: "/services/dns" },
+    { title: "Email Forwarding", icon: ArrowRightLeft, href: "/services/email-forwarding" },
+    { title: "Email Service", icon: Mail, href: "/services/email" },
     { title: "Infrastructure", icon: Server, href: "/services/infrastructure" },
   ]
 
@@ -60,18 +60,18 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
       : []),
     ...(isWorkspaceActive && activeOrg?.isEducation
       ? [
-          { title: "Workspace overview", icon: GraduationCap, href: "/services/workspace" },
+          { title: "Workspace Overview", icon: GraduationCap, href: "/services/workspace" },
           { title: "Users", icon: Users, href: "/services/workspace/users" },
-          { title: "Classes & sections", icon: Library, href: "/management/academics" },
+          { title: "Classes & Sections", icon: Library, href: "/management/academics" },
           { title: "Storage", icon: HardDrive, href: "/services/workspace/storage" },
-          { title: "Deactivated users", icon: UserMinus, href: "/services/workspace/deactivated" },
-          { title: "Alumni manager", icon: GraduationCap, href: "/services/workspace/alumni" },
+          { title: "Deactivated Users", icon: UserMinus, href: "/services/workspace/deactivated" },
+          { title: "Alumni Manager", icon: GraduationCap, href: "/services/workspace/alumni" },
         ]
       : []),
   ]
 
   const bottomNavItems: NavItem[] = [
-    { title: "Team management", icon: Users, href: "/management/team" },
+    { title: "Team Management", icon: Users, href: "/management/team" },
     { title: "Settings", icon: Settings, href: "/management/settings" },
   ]
 

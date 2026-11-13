@@ -814,6 +814,119 @@ async function provisionRequiredDnsRecordsOnZone(
 // EMAIL SERVICE LIFECYCLE & ROUTING STATE
 // ============================================================================
 
+export async function calculateRollingQuota(orgData: any) {
+  const now = Date.now();
+  const oneDayAgo = now - 24 * 60 * 60 * 1000;
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+
+  // 1. Calculate 24-hour rolling window from hourly buckets
+  let dailySentCount = 0;
+  const hourlyBuckets: Record<string, number> = orgData.mailHourlyBuckets || {};
+  const cleanedHourly: Record<string, number> = {};
+  let hasHourlyChanges = false;
+
+  for (const [key, count] of Object.entries(hourlyBuckets)) {
+    const bucketTime = new Date(key + ':00:00.000Z').getTime();
+    if (!isNaN(bucketTime) && bucketTime >= oneDayAgo) {
+      const val = typeof count === 'number' ? count : 0;
+      dailySentCount += val;
+      cleanedHourly[key] = val;
+    } else {
+      hasHourlyChanges = true;
+    }
+  }
+
+  // Fallback for legacy format before hourly buckets
+  if (Object.keys(hourlyBuckets).length === 0 && orgData.mailDailyBucket) {
+    const legacyDayTime = new Date(orgData.mailDailyBucket + 'T00:00:00.000Z').getTime();
+    if (!isNaN(legacyDayTime) && legacyDayTime >= oneDayAgo) {
+      dailySentCount = orgData.mailDailySent ?? 0;
+    } else {
+      dailySentCount = 0; // Expired 24-hour window
+    }
+  }
+
+  // 2. Calculate 30-day rolling window from daily buckets
+  let monthlySentCount = 0;
+  const dailyBuckets: Record<string, number> = orgData.mailDailyBuckets || {};
+  const cleanedDaily: Record<string, number> = {};
+  let hasDailyChanges = false;
+
+  for (const [key, count] of Object.entries(dailyBuckets)) {
+    const bucketTime = new Date(key + 'T00:00:00.000Z').getTime();
+    if (!isNaN(bucketTime) && bucketTime >= thirtyDaysAgo) {
+      const val = typeof count === 'number' ? count : 0;
+      monthlySentCount += val;
+      cleanedDaily[key] = val;
+    } else {
+      hasDailyChanges = true;
+    }
+  }
+
+  // Fallback for legacy format before daily buckets
+  if (Object.keys(dailyBuckets).length === 0 && orgData.mailMonthlyBucket) {
+    const legacyMonthTime = new Date(orgData.mailMonthlyBucket + '-01T00:00:00.000Z').getTime();
+    if (!isNaN(legacyMonthTime) && legacyMonthTime >= thirtyDaysAgo) {
+      monthlySentCount = orgData.mailMonthlySent ?? 0;
+    } else {
+      monthlySentCount = 0; // Expired 30-day window
+    }
+  }
+
+  return {
+    dailySentCount,
+    monthlySentCount,
+    cleanedHourly,
+    cleanedDaily,
+    hasChanges: hasHourlyChanges || hasDailyChanges,
+  };
+}
+
+export async function resetOrgEmailQuota(
+  idToken: string,
+  orgId: string,
+  scope: "all" | "daily" | "monthly" = "all"
+) {
+  if (!orgId) return { success: false, error: 'Missing organization ID.' };
+  try {
+    await verifyUserOrgAccess(idToken, orgId);
+    const now = new Date();
+    const currentDayKey = now.toISOString().slice(0, 10);
+    const currentMonthKey = now.toISOString().slice(0, 7);
+
+    const updatePayload: Record<string, any> = {
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    if (scope === 'all' || scope === 'daily') {
+      updatePayload.mailDailySent = 0;
+      updatePayload.mailHourlyBuckets = {};
+      updatePayload.mailDailyBucket = currentDayKey;
+    }
+
+    if (scope === 'all' || scope === 'monthly') {
+      updatePayload.mailMonthlySent = 0;
+      updatePayload.mailDailyBuckets = {};
+      updatePayload.mailMonthlyBucket = currentMonthKey;
+    }
+
+    await adminDb.collection('organizations').doc(orgId).update(updatePayload);
+
+    return {
+      success: true,
+      data: {
+        scope,
+        resetAt: now.toISOString(),
+      },
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to reset organization email quota.',
+    };
+  }
+}
+
 export async function getMailServiceState(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
@@ -837,6 +950,7 @@ export async function getMailServiceState(idToken: string, orgId: string) {
     }
 
     const requiredDnsRecords = buildRequiredDnsRecords(domain, dkimTokens, liveRecords);
+    const rolling = await calculateRollingQuota(orgData);
 
     return {
       success: true,
@@ -846,8 +960,8 @@ export async function getMailServiceState(idToken: string, orgId: string) {
         domain,
         monthlyOutboundLimit: orgData.mailMonthlyLimit ?? 1000,
         dailyOutboundLimit: orgData.mailDailyLimit ?? 100,
-        monthlySentCount: orgData.mailMonthlySent ?? 0,
-        dailySentCount: orgData.mailDailySent ?? 0,
+        monthlySentCount: rolling.monthlySentCount,
+        dailySentCount: rolling.dailySentCount,
         catchAllUserId: orgData.mailCatchAllUserId || null,
         catchAllEmail: orgData.mailCatchAllEmail || null,
         requiredDnsRecords,

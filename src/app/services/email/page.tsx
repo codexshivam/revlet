@@ -39,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Plus,
   MoreVertical,
@@ -64,6 +65,7 @@ import { useActiveOrg } from "@/hooks/use-active-org"
 import { cn } from "@/lib/utils"
 import {
   getMailServiceState,
+  resetOrgEmailQuota,
   activateMailService,
   deactivateMailService,
   syncMailDnsRecords,
@@ -100,8 +102,10 @@ export default function EmailServiceAdminPage() {
   const { orgs, activeOrg: selectedOrg, activeOrgId: selectedOrgId, loading: isLoadingOrgs } = useActiveOrg()
 
   // Core service state
-  const [isLoadingState, setIsLoadingState] = useState(true)
+  const [isLoadingQuota, setIsLoadingQuota] = useState(true)
+  const [isLoadingDirectory, setIsLoadingDirectory] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isResettingQuota, setIsResettingQuota] = useState(false)
   const [isActivating, setIsActivating] = useState(false)
   const [isDeactivating, setIsDeactivating] = useState(false)
   const [isSyncingDns, setIsSyncingDns] = useState(false)
@@ -229,42 +233,67 @@ export default function EmailServiceAdminPage() {
   const loadAllMailData = useCallback(
     async (silent = false) => {
       if (!user || !selectedOrgId) {
-        setIsLoadingState(false)
+        setIsLoadingQuota(false)
+        setIsLoadingDirectory(false)
         return
       }
-      if (!silent) setIsLoadingState(true)
-      else setIsRefreshing(true)
+      if (!silent) {
+        setIsLoadingQuota(true)
+        setIsLoadingDirectory(true)
+      } else {
+        setIsRefreshing(true)
+      }
 
       try {
         const idToken = await user.getIdToken()
-        const [stateRes, ousRes, usersRes, groupsRes] = await Promise.all([
-          getMailServiceState(idToken, selectedOrgId),
+
+        // Fetch directory collections (Users, OrgUnits, Groups) immediately in parallel
+        const dirPromise = Promise.all([
           listMailOrgUnits(idToken, selectedOrgId),
           listMailUsers(idToken, selectedOrgId),
           listMailGroups(idToken, selectedOrgId),
         ])
+          .then(([ousRes, usersRes, groupsRes]) => {
+            if (ousRes.success && ousRes.data) {
+              setOrgUnits(ousRes.data)
+            }
+            if (usersRes.success && usersRes.data) {
+              setUsers(usersRes.data)
+            }
+            if (groupsRes.success && groupsRes.data) {
+              setGroups(groupsRes.data)
+            }
+          })
+          .catch((err) => {
+            console.error("Failed to load mail directory:", err)
+          })
+          .finally(() => {
+            setIsLoadingDirectory(false)
+          })
 
-        if (stateRes.success && stateRes.data) {
-          setServiceActive(stateRes.data.mailServiceActive)
-          setDnsServiceActive(stateRes.data.dnsServiceActive)
-          setMonthlyOutboundLimit(stateRes.data.monthlyOutboundLimit)
-          setDailyOutboundLimit(stateRes.data.dailyOutboundLimit)
-          setMonthlySentCount(stateRes.data.monthlySentCount)
-          setDailySentCount(stateRes.data.dailySentCount)
-          setCatchAllUserId(stateRes.data.catchAllUserId)
-          setCatchAllEmail(stateRes.data.catchAllEmail)
-          setRequiredDnsRecords(stateRes.data.requiredDnsRecords)
-        }
+        // Fetch DNS status and quota state in parallel
+        const statePromise = getMailServiceState(idToken, selectedOrgId)
+          .then((stateRes) => {
+            if (stateRes.success && stateRes.data) {
+              setServiceActive(stateRes.data.mailServiceActive)
+              setDnsServiceActive(stateRes.data.dnsServiceActive)
+              setMonthlyOutboundLimit(stateRes.data.monthlyOutboundLimit)
+              setDailyOutboundLimit(stateRes.data.dailyOutboundLimit)
+              setMonthlySentCount(stateRes.data.monthlySentCount)
+              setDailySentCount(stateRes.data.dailySentCount)
+              setCatchAllUserId(stateRes.data.catchAllUserId)
+              setCatchAllEmail(stateRes.data.catchAllEmail)
+              setRequiredDnsRecords(stateRes.data.requiredDnsRecords)
+            }
+          })
+          .catch((err) => {
+            console.error("Failed to load mail state:", err)
+          })
+          .finally(() => {
+            setIsLoadingQuota(false)
+          })
 
-        if (ousRes.success && ousRes.data) {
-          setOrgUnits(ousRes.data)
-        }
-        if (usersRes.success && usersRes.data) {
-          setUsers(usersRes.data)
-        }
-        if (groupsRes.success && groupsRes.data) {
-          setGroups(groupsRes.data)
-        }
+        await Promise.all([dirPromise, statePromise])
       } catch (err: any) {
         toast({
           variant: "destructive",
@@ -272,12 +301,34 @@ export default function EmailServiceAdminPage() {
           description: err.message || "Could not retrieve organization mail configuration.",
         })
       } finally {
-        setIsLoadingState(false)
         setIsRefreshing(false)
       }
     },
     [user, selectedOrgId]
   )
+
+  const handleResetQuota = async (scope: "all" | "daily" | "monthly" = "all") => {
+    if (!user || !selectedOrgId) return
+    setIsResettingQuota(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await resetOrgEmailQuota(idToken, selectedOrgId, scope)
+      if (!res.success) throw new Error(res.error)
+      toast({
+        title: "Quota Reset Successfully",
+        description: `Outbound email quota (${scope === "daily" ? "24-Hour" : scope === "monthly" ? "30-Day" : "All"}) has been reset.`,
+      })
+      await loadAllMailData(true)
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Reset failed",
+        description: err.message || "Could not reset outbound email quotas.",
+      })
+    } finally {
+      setIsResettingQuota(false)
+    }
+  }
 
   useEffect(() => {
     if (!authLoading && !isLoadingOrgs) {
@@ -961,12 +1012,13 @@ export default function EmailServiceAdminPage() {
     return Array.from(paths)
   }, [orgUnits])
 
-  if (authLoading || isLoadingOrgs || isLoadingState) {
+  if (authLoading || isLoadingOrgs) {
     return (
       <DashboardShell>
-        <div className="flex flex-col items-center justify-center h-96 gap-3">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-400" strokeWidth={1.5} />
-          <p className="text-xs text-slate-500">Loading Email Service</p>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] bg-white">
+          <span className="text-[30px] font-bold tracking-tight text-slate-950 font-headline select-none">
+            Revlet
+          </span>
         </div>
       </DashboardShell>
     )
@@ -1102,7 +1154,19 @@ export default function EmailServiceAdminPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleResetQuota("all")}
+              disabled={isResettingQuota}
+              className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
+            >
+              {isResettingQuota ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin text-slate-400" strokeWidth={1.5} />
+              ) : null}
+              Reset Quotas
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -1122,7 +1186,7 @@ export default function EmailServiceAdminPage() {
               onClick={() => setIsOuModalOpen(true)}
               className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
             >
-              Organizational units
+              Organizational Units
               <span className="ml-2 font-mono text-slate-400 tabular-nums">
                 {orgUnits.length + 1}
               </span>
@@ -1131,73 +1195,120 @@ export default function EmailServiceAdminPage() {
         </div>
 
         {/* Moment: Live domain routing & outbound quota ledger strip */}
-        <div className="rounded-xl border border-slate-200/80 bg-white grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80">
+        <div className="rounded-xl border border-slate-200/80 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="p-4 sm:p-5 space-y-1">
-            <div className="text-xs text-slate-500">Active mailboxes</div>
-            <div className="text-2xl font-medium text-slate-900 tabular-nums">
-              {activeUsers.length}
-            </div>
-            <div className="text-xs font-mono text-slate-400 tabular-nums">
-              {groups.length} {groups.length === 1 ? "group" : "groups"} · {orgUnits.length + 1} units
-            </div>
+            <div className="text-xs text-slate-500">Active Mailboxes</div>
+            {isLoadingDirectory ? (
+              <div className="space-y-1.5 pt-1">
+                <Skeleton className="h-7 w-16" />
+                <Skeleton className="h-3.5 w-32" />
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-medium text-slate-900 tabular-nums">
+                  {activeUsers.length}
+                </div>
+                <div className="text-xs font-mono text-slate-400 tabular-nums">
+                  {groups.length} {groups.length === 1 ? "group" : "groups"} · {orgUnits.length + 1} units
+                </div>
+              </>
+            )}
           </div>
 
           <div className="p-4 sm:p-5 space-y-1">
-            <div className="text-xs text-slate-500">Monthly outbound quota</div>
-            <div className="text-2xl font-medium text-slate-900 tabular-nums">
-              {monthlySentCount.toLocaleString()}{" "}
-              <span className="text-sm font-normal text-slate-400">
-                / {monthlyOutboundLimit.toLocaleString()}
-              </span>
-            </div>
-            <div className="text-xs font-mono text-slate-400 tabular-nums">
-              {(monthlyOutboundLimit - monthlySentCount).toLocaleString()} remaining this month
-            </div>
+            <div className="text-xs text-slate-500">Monthly Outbound Quota</div>
+            {isLoadingQuota ? (
+              <div className="space-y-1.5 pt-1">
+                <Skeleton className="h-7 w-24" />
+                <Skeleton className="h-3.5 w-36" />
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-medium text-slate-900 tabular-nums">
+                  {monthlySentCount.toLocaleString()}{" "}
+                  <span className="text-sm font-normal text-slate-400">
+                    / {monthlyOutboundLimit.toLocaleString()}
+                  </span>
+                </div>
+                <div className="text-xs font-mono text-slate-400 tabular-nums">
+                  {(monthlyOutboundLimit - monthlySentCount).toLocaleString()} remaining this month
+                </div>
+              </>
+            )}
           </div>
 
           <div className="p-4 sm:p-5 space-y-1">
-            <div className="text-xs text-slate-500">Daily outbound limit</div>
-            <div className="text-2xl font-medium text-slate-900 tabular-nums">
-              {dailySentCount.toLocaleString()}{" "}
-              <span className="text-sm font-normal text-slate-400">
-                / {dailyOutboundLimit.toLocaleString()}
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-500">Daily Outbound Limit</div>
+              <button
+                type="button"
+                onClick={() => handleResetQuota("daily")}
+                disabled={isResettingQuota}
+                className="text-[11px] text-primary hover:text-primary/80 font-medium transition-colors"
+                title="Reset 24-hour quota"
+              >
+                Reset
+              </button>
             </div>
-            <div className="text-xs font-mono text-slate-400 tabular-nums">
-              24-hour rolling window
-            </div>
+            {isLoadingQuota ? (
+              <div className="space-y-1.5 pt-1">
+                <Skeleton className="h-7 w-20" />
+                <Skeleton className="h-3.5 w-28" />
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-medium text-slate-900 tabular-nums">
+                  {dailySentCount.toLocaleString()}{" "}
+                  <span className="text-sm font-normal text-slate-400">
+                    / {dailyOutboundLimit.toLocaleString()}
+                  </span>
+                </div>
+                <div className="text-xs font-mono text-slate-400 tabular-nums">
+                  24-hour rolling window
+                </div>
+              </>
+            )}
           </div>
 
           <div className="p-4 sm:p-5 space-y-1">
-            <div className="text-xs text-slate-500">Domain routing status</div>
-            <div className="flex items-center gap-2 pt-0.5">
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full shrink-0",
-                  verifiedDnsCount === requiredDnsRecords.length && requiredDnsRecords.length > 0
-                    ? "bg-emerald-600"
-                    : "bg-amber-500"
-                )}
-              />
-              <span className="text-base font-medium text-slate-900 tabular-nums">
-                {verifiedDnsCount} of {requiredDnsRecords.length} DNS verified
-              </span>
-            </div>
-            <div className="text-xs font-mono text-slate-400 truncate">
-              {catchAllEmail ? `Catch-all → ${catchAllEmail}` : "Catch-all disabled"}
-            </div>
+            <div className="text-xs text-slate-500">Domain Routing Status</div>
+            {isLoadingQuota ? (
+              <div className="space-y-1.5 pt-1">
+                <Skeleton className="h-7 w-36" />
+                <Skeleton className="h-3.5 w-24" />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full shrink-0",
+                      verifiedDnsCount === requiredDnsRecords.length && requiredDnsRecords.length > 0
+                        ? "bg-emerald-600"
+                        : "bg-amber-500"
+                    )}
+                  />
+                  <span className="text-base font-medium text-slate-900 tabular-nums">
+                    {verifiedDnsCount} of {requiredDnsRecords.length} DNS verified
+                  </span>
+                </div>
+                <div className="text-xs font-mono text-slate-400 truncate">
+                  {catchAllEmail ? `Catch-all → ${catchAllEmail}` : "Catch-all disabled"}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         {/* Navigation tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <div className="border-b border-slate-200/80">
-            <TabsList className="bg-transparent p-0 h-auto gap-6 rounded-none">
+          <div className="border-b border-slate-200/80 overflow-x-auto scrollbar-none">
+            <TabsList className="bg-transparent p-0 h-auto gap-4 sm:gap-6 rounded-none inline-flex min-w-max">
               <TabsTrigger
                 value="users"
                 className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
               >
-                Users directory
+                Users Directory
                 <span className="ml-2 font-mono text-slate-400 tabular-nums">
                   {activeUsers.length}
                 </span>
@@ -1217,7 +1328,7 @@ export default function EmailServiceAdminPage() {
                 value="suspended"
                 className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
               >
-                Suspended accounts
+                Suspended Accounts
                 <span className="ml-2 font-mono text-slate-400 tabular-nums">
                   {suspendedUsers.length + deletedUsers.length}
                 </span>
@@ -1319,7 +1430,56 @@ export default function EmailServiceAdminPage() {
               </div>
 
               {/* Users table */}
-              {filteredActiveUsers.length === 0 ? (
+              {isLoadingDirectory ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                        Account Name
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Primary Address
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Aliases
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-slate-500">
+                        Organizational Unit
+                      </TableHead>
+                      <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[1, 2, 3, 4, 5].map((idx) => (
+                      <TableRow key={idx} className="border-b border-slate-100 last:border-0">
+                        <TableCell className="pl-6 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <Skeleton className="h-8 w-8 rounded-full" />
+                            <div className="space-y-1">
+                              <Skeleton className="h-4 w-28" />
+                              <Skeleton className="h-3 w-40" />
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3.5">
+                          <Skeleton className="h-4 w-36" />
+                        </TableCell>
+                        <TableCell className="py-3.5">
+                          <Skeleton className="h-5 w-16 rounded-full" />
+                        </TableCell>
+                        <TableCell className="py-3.5">
+                          <Skeleton className="h-4 w-24" />
+                        </TableCell>
+                        <TableCell className="text-right pr-6 py-3.5">
+                          <Skeleton className="h-8 w-8 rounded-md ml-auto" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : filteredActiveUsers.length === 0 ? (
                 <div className="py-16 px-4 text-center space-y-2">
                   <p className="text-sm font-medium text-slate-900">
                     {activeUsers.length === 0
@@ -2137,6 +2297,40 @@ export default function EmailServiceAdminPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* Outbound Quota Management */}
+            <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-headline font-semibold text-slate-900">
+                  Reset Outbound Quota
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Reset the 24-hour rolling window counter or the 30-day monthly outbound limit for testing or immediate quota replenishment.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isResettingQuota}
+                  onClick={() => handleResetQuota("daily")}
+                  className="h-9 px-3 text-xs font-medium border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                >
+                  {isResettingQuota ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+                  Reset 24-Hour Quota
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isResettingQuota}
+                  onClick={() => handleResetQuota("all")}
+                  className="h-9 px-3 text-xs font-medium border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                >
+                  {isResettingQuota ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+                  Reset All Quotas
+                </Button>
+              </div>
             </div>
 
             {/* Service deactivation */}

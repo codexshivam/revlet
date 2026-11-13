@@ -62,14 +62,14 @@ export default function InfrastructurePage() {
               <Server className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-semibold text-slate-900">No organization selected</h3>
+              <h3 className="text-base font-semibold text-slate-900">No Organization Selected</h3>
               <p className="text-xs text-slate-500">
                 To manage edge infrastructure, register an organization on the account home screen.
               </p>
             </div>
             <Link href="/account/home">
               <Button className="h-9 px-4 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none">
-                Go to account home
+                Go to Account Home
               </Button>
             </Link>
           </CardContent>
@@ -88,14 +88,14 @@ export default function InfrastructurePage() {
               <Globe className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-semibold text-slate-900">DNS configuration required</h3>
+              <h3 className="text-base font-semibold text-slate-900">DNS Configuration Required</h3>
               <p className="text-xs text-slate-500">
                 Domain edge infrastructure requires an active DNS configuration. Configure DNS management for your domain to continue.
               </p>
             </div>
             <Link href="/services/dns">
               <Button className="h-9 px-4 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none">
-                Go to DNS management
+                Go to DNS Management
               </Button>
             </Link>
           </CardContent>
@@ -126,19 +126,19 @@ export default function InfrastructurePage() {
               value="speed"
               className="py-1.5 text-xs font-medium rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              Speed &amp; cache
+              Speed &amp; Cache
             </TabsTrigger>
             <TabsTrigger
               value="ssl"
               className="py-1.5 text-xs font-medium rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              SSL &amp; encryption
+              SSL &amp; Encryption
             </TabsTrigger>
             <TabsTrigger
               value="security"
               className="py-1.5 text-xs font-medium rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs transition-all"
             >
-              DDoS &amp; defense
+              DDoS &amp; Defense
             </TabsTrigger>
           </TabsList>
 

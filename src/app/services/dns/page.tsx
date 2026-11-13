@@ -680,7 +680,7 @@ export default function DNSManagementPage() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200 pb-5">
           <div className="space-y-1">
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
-              DNS management
+              DNS Management
             </h1>
             <p className="text-sm text-slate-500">
               Authoritative DNS records and edge routing for {selectedOrg?.domain || "your domain"}.
@@ -699,7 +699,7 @@ export default function DNSManagementPage() {
                   className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add record</span>
+                  <span>Add Record</span>
                 </Button>
 
                 <DropdownMenu>
@@ -721,21 +721,21 @@ export default function DNSManagementPage() {
                       className="gap-2 text-xs cursor-pointer"
                     >
                       <History className="w-4 h-4 text-slate-500" />
-                      <span>Snapshots and rollback</span>
+                      <span>Snapshots and Rollback</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => setIsImportDialogOpen(true)}
                       className="gap-2 text-xs cursor-pointer"
                     >
                       <Upload className="w-4 h-4 text-slate-500" />
-                      <span>Import BIND zone</span>
+                      <span>Import BIND Zone</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={handleExportBIND}
                       className="gap-2 text-xs cursor-pointer"
                     >
                       <Download className="w-4 h-4 text-slate-500" />
-                      <span>Export BIND zone</span>
+                      <span>Export BIND Zone</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -743,7 +743,7 @@ export default function DNSManagementPage() {
                       className="gap-2 text-destructive focus:text-destructive focus:bg-red-50 text-xs cursor-pointer"
                     >
                       <ShieldAlert className="w-4 h-4" />
-                      <span>Disable DNS service</span>
+                      <span>Disable DNS Service</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -760,14 +760,14 @@ export default function DNSManagementPage() {
                 <Globe className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-base font-semibold text-slate-900">No organizations registered</h3>
+                <h3 className="text-base font-semibold text-slate-900">No Organizations Registered</h3>
                 <p className="text-xs text-slate-500">
                   Register an organization to manage DNS zones and record routing.
                 </p>
               </div>
               <Link href="/account/home">
                 <Button className="h-9 px-4 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none">
-                  Go to account home
+                  Go to Account Home
                 </Button>
               </Link>
             </CardContent>
@@ -777,10 +777,10 @@ export default function DNSManagementPage() {
           <div className="max-w-4xl mx-auto space-y-6">
             <div className="text-center space-y-2 max-w-2xl mx-auto">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-medium">
-                <Shield className="w-3.5 h-3.5 text-slate-500" /> Bring your own Cloudflare token
+                <Shield className="w-3.5 h-3.5 text-slate-500" /> Bring Your Own Cloudflare Token
               </span>
               <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
-                Connect your domain with zero delegation handover
+                Connect Your Domain with Zero Delegation Handover
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
                 Retain root domain ownership in your own Cloudflare account. Revlet functions as your high-speed operations console with least-privilege scoping and zero billing access.
@@ -792,7 +792,7 @@ export default function DNSManagementPage() {
               <CardHeader className="border-b border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <CardTitle className="text-sm font-semibold text-slate-900">
-                    Scoped API authorization
+                    Scoped API Authorization
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500 font-mono">
                     Domain: {selectedOrg.domain}
@@ -807,7 +807,7 @@ export default function DNSManagementPage() {
                     variant="outline"
                     className="h-9 px-3.5 text-xs font-medium border-slate-200 hover:bg-slate-50 rounded-lg flex items-center gap-1.5"
                   >
-                    <span>Generate token on Cloudflare</span>
+                    <span>Generate Token on Cloudflare</span>
                     <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                   </Button>
                 </a>
@@ -816,16 +816,16 @@ export default function DNSManagementPage() {
               <CardContent className="p-6 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                   <div className="p-4 rounded-lg bg-slate-50/60 border border-slate-200/80 space-y-1.5">
-                    <p className="font-mono text-xs text-slate-500">01. Scoped template</p>
-                    <p className="font-medium text-slate-900">Pre-configured permissions</p>
+                    <p className="font-mono text-xs text-slate-500">01. Scoped Template</p>
+                    <p className="font-medium text-slate-900">Pre-Configured Permissions</p>
                     <p className="text-slate-500 leading-relaxed">
                       Opens Cloudflare with <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: DNS (Edit)</code> and <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: Zone (Read)</code> pre-selected.
                     </p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-slate-50/60 border border-slate-200/80 space-y-1.5">
-                    <p className="font-mono text-xs text-slate-500">02. Domain restrict</p>
-                    <p className="font-medium text-slate-900">Zone isolation</p>
+                    <p className="font-mono text-xs text-slate-500">02. Domain Restrict</p>
+                    <p className="font-medium text-slate-900">Zone Isolation</p>
                     <p className="text-slate-500 leading-relaxed">
                       Under <strong>Zone Resources</strong>, select <span className="text-slate-800">Include → Specific zone → {selectedOrg.domain}</span> to ensure the token cannot access other domains.
                     </p>
@@ -833,7 +833,7 @@ export default function DNSManagementPage() {
 
                   <div className="p-4 rounded-lg bg-slate-50/60 border border-slate-200/80 space-y-1.5">
                     <p className="font-mono text-xs text-slate-500">03. Connect</p>
-                    <p className="font-medium text-slate-900">Encrypted token storage</p>
+                    <p className="font-medium text-slate-900">Encrypted Token Storage</p>
                     <p className="text-slate-500 leading-relaxed">
                       Copy the generated token and paste it below. Credentials are encrypted at rest with AES-256-GCM.
                     </p>
@@ -842,8 +842,8 @@ export default function DNSManagementPage() {
 
                 <div className="space-y-2 pt-2">
                   <Label htmlFor="token" className="text-xs font-medium text-slate-700 flex items-center justify-between">
-                    <span>Cloudflare API token</span>
-                    <span className="text-slate-400 font-normal">Scoped tokens only</span>
+                    <span>Cloudflare API Token</span>
+                    <span className="text-slate-400 font-normal">Scoped Tokens Only</span>
                   </Label>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <div className="relative flex-1">
@@ -870,7 +870,7 @@ export default function DNSManagementPage() {
                       className="h-10 px-5 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none shrink-0 flex items-center gap-2"
                     >
                       {isConnectingToken && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      {isConnectingToken ? "Verifying scope..." : "Verify and connect"}
+                      {isConnectingToken ? "Verifying Scope..." : "Verify and Connect"}
                     </Button>
                   </div>
                 </div>
@@ -882,7 +882,7 @@ export default function DNSManagementPage() {
               <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-1">
                 <div className="flex items-center gap-2 font-medium text-slate-900">
                   <Lock className="w-4 h-4 text-slate-500" />
-                  <span>Zero billing access</span>
+                  <span>Zero Billing Access</span>
                 </div>
                 <p className="text-slate-500 leading-relaxed">
                   Tokens cannot access payment methods, invoices, or non-scoped domains in your Cloudflare account.
@@ -892,7 +892,7 @@ export default function DNSManagementPage() {
               <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-1">
                 <div className="flex items-center gap-2 font-medium text-slate-900">
                   <ShieldCheck className="w-4 h-4 text-slate-500" />
-                  <span>Envelope encryption</span>
+                  <span>Envelope Encryption</span>
                 </div>
                 <p className="text-slate-500 leading-relaxed">
                   Tokens are encrypted with AES-256-GCM authenticated cipher prior to storage and never exposed back to the client.
@@ -902,7 +902,7 @@ export default function DNSManagementPage() {
               <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-1">
                 <div className="flex items-center gap-2 font-medium text-slate-900">
                   <Globe className="w-4 h-4 text-slate-500" />
-                  <span>100% domain ownership</span>
+                  <span>100% Domain Ownership</span>
                 </div>
                 <p className="text-slate-500 leading-relaxed">
                   No registrar transfer needed. Nameservers remain under your own account with zero root hijack risk.
@@ -912,7 +912,7 @@ export default function DNSManagementPage() {
               <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-1">
                 <div className="flex items-center gap-2 font-medium text-slate-900">
                   <History className="w-4 h-4 text-slate-500" />
-                  <span>Point-in-time snapshots</span>
+                  <span>Point-in-Time Snapshots</span>
                 </div>
                 <p className="text-slate-500 leading-relaxed">
                   Automatic zone snapshots before modifications allow one-click rollback to prior configurations.
@@ -943,7 +943,7 @@ export default function DNSManagementPage() {
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-slate-400" />
                   <CardTitle className="text-xs font-semibold text-slate-700">
-                    Network nameservers
+                    Network Nameservers
                   </CardTitle>
                 </div>
                 <div className="flex items-center gap-3">
@@ -969,7 +969,7 @@ export default function DNSManagementPage() {
                 <CardContent className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
-                      <p className="text-xs font-medium text-slate-500">Assigned nameservers</p>
+                      <p className="text-xs font-medium text-slate-500">Assigned Nameservers</p>
                       <div className="space-y-2">
                         {(zoneDetails?.nameServers || []).map((ns: string) => (
                           <div
@@ -994,14 +994,14 @@ export default function DNSManagementPage() {
                     {selectedOrg?.cloudflareTokenMasked ? (
                       <div className="border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 pl-0 md:pl-6 space-y-3">
                         <div className="space-y-1">
-                          <p className="text-xs font-medium text-slate-500">API connection</p>
+                          <p className="text-xs font-medium text-slate-500">API Connection</p>
                           <p className="text-xs text-slate-700">
                             Authenticated via scoped API token on zone <span className="font-mono text-slate-900">{selectedOrg.domain}</span>.
                           </p>
                         </div>
                         <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
                           <div className="flex items-center justify-between">
-                            <span className="text-slate-500">Masked token</span>
+                            <span className="text-slate-500">Masked Token</span>
                             <code className="font-mono text-slate-900">{selectedOrg.cloudflareTokenMasked}</code>
                           </div>
                           <div className="flex items-center justify-between">
@@ -1013,7 +1013,7 @@ export default function DNSManagementPage() {
                     ) : (
                       <div className="border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 pl-0 md:pl-6 space-y-3">
                         <div className="space-y-1">
-                          <p className="text-xs font-medium text-slate-500">Registrar delegation</p>
+                          <p className="text-xs font-medium text-slate-500">Registrar Delegation</p>
                           <p className="text-xs text-slate-700">
                             Update your domain registrar to point to the nameservers on the left.
                           </p>
@@ -1025,7 +1025,7 @@ export default function DNSManagementPage() {
                           className="h-8 text-xs border-slate-200 hover:bg-slate-50 rounded-lg flex items-center gap-1.5"
                         >
                           <FileText className="w-3.5 h-3.5 text-slate-400" />
-                          <span>View registrar instructions</span>
+                          <span>View Registrar Instructions</span>
                         </Button>
                       </div>
                     )}
@@ -1039,7 +1039,7 @@ export default function DNSManagementPage() {
               <CardHeader className="border-b border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-base font-semibold text-slate-900">
-                    DNS records
+                    DNS Records
                   </CardTitle>
                   <Badge
                     variant="outline"
@@ -1066,7 +1066,7 @@ export default function DNSManagementPage() {
                     <DNSRecordsSkeleton />
                   ) : filteredRecords.length === 0 ? (
                     <div className="py-16 text-center space-y-1.5 px-4">
-                      <p className="text-sm font-medium text-slate-700">No DNS records found</p>
+                      <p className="text-sm font-medium text-slate-700">No DNS Records Found</p>
                       <p className="text-xs text-slate-400">
                         {searchQuery ? "No records match your query." : "Add a record above to configure routing."}
                       </p>
@@ -1085,7 +1085,7 @@ export default function DNSManagementPage() {
                                 Name
                               </TableHead>
                               <TableHead className="text-xs font-medium py-3 text-slate-500">
-                                Value / target
+                                Value / Target
                               </TableHead>
                               <TableHead className="text-xs font-medium py-3 text-slate-500 w-[100px]">
                                 TTL
@@ -1274,7 +1274,7 @@ export default function DNSManagementPage() {
           <DialogContent className="max-w-2xl p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1.5 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                Registrar nameserver setup
+                Registrar Nameserver Setup
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Configure your domain registrar for {selectedOrg?.domain}.
@@ -1282,7 +1282,7 @@ export default function DNSManagementPage() {
             </DialogHeader>
             <div className="space-y-4 py-2 text-xs text-slate-600">
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
-                <p className="font-medium text-slate-900">Assigned nameservers</p>
+                <p className="font-medium text-slate-900">Assigned Nameservers</p>
                 <div className="space-y-1.5">
                   {(zoneDetails?.nameServers || ["Pending...", "Pending..."]).map((ns: string, i: number) => (
                     <div
@@ -1328,7 +1328,7 @@ export default function DNSManagementPage() {
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                {editingRecord ? "Edit DNS record" : "Add DNS record"}
+                {editingRecord ? "Edit DNS Record" : "Add DNS Record"}
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Zone: {selectedOrg?.domain}
@@ -1455,7 +1455,7 @@ export default function DNSManagementPage() {
                 className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
               >
                 {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isSubmitting ? "Saving..." : editingRecord ? "Save changes" : "Save record"}
+                {isSubmitting ? "Saving..." : editingRecord ? "Save Changes" : "Save Record"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1475,7 +1475,7 @@ export default function DNSManagementPage() {
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1.5 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                Import BIND zone
+                Import BIND Zone
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Upload a standard zone file to bulk-import DNS records.
@@ -1505,7 +1505,7 @@ export default function DNSManagementPage() {
 
               <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg">
                 <div className="space-y-0.5">
-                  <Label className="text-xs font-medium text-slate-900">Proxy imported records</Label>
+                  <Label className="text-xs font-medium text-slate-900">Proxy Imported Records</Label>
                   <p className="text-xs text-slate-500">Enable proxying on supported types.</p>
                 </div>
                 <Switch checked={proxyAllImported} onCheckedChange={setProxyAllImported} />
@@ -1541,7 +1541,7 @@ export default function DNSManagementPage() {
                 className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
               >
                 {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isSubmitting ? "Importing..." : "Start import"}
+                {isSubmitting ? "Importing..." : "Start Import"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1552,7 +1552,7 @@ export default function DNSManagementPage() {
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1.5 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                Delete DNS record
+                Delete DNS Record
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Are you sure you want to remove this record? Traffic routed through this hostname will be interrupted.
@@ -1577,7 +1577,7 @@ export default function DNSManagementPage() {
                 variant="destructive"
                 className="h-9 px-4 text-xs font-medium rounded-lg shadow-none"
               >
-                Delete record
+                Delete Record
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1589,7 +1589,7 @@ export default function DNSManagementPage() {
             <DialogHeader className="space-y-1 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
                 <History className="w-4 h-4 text-slate-500" />
-                Zone snapshots and rollback
+                Zone Snapshots and Rollback
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Point-in-time state backups for {selectedOrg?.domain}.
@@ -1599,7 +1599,7 @@ export default function DNSManagementPage() {
             <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto">
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium text-slate-700">Instant zone snapshot</Label>
+                  <Label className="text-xs font-medium text-slate-700">Instant Zone Snapshot</Label>
                   <span className="text-xs text-slate-400 tabular-nums">
                     Captures all {records.length} records
                   </span>
@@ -1617,13 +1617,13 @@ export default function DNSManagementPage() {
                     className="h-9 px-3 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none shrink-0 flex items-center gap-1.5"
                   >
                     {isCreatingSnapshot && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    <span>Take snapshot</span>
+                    <span>Take Snapshot</span>
                   </Button>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-700">Historical snapshots</p>
+                <p className="text-xs font-medium text-slate-700">Historical Snapshots</p>
                 {isLoadingSnapshots ? (
                   <div className="py-8 text-center text-xs text-slate-400">Loading snapshots...</div>
                 ) : snapshots.length === 0 ? (
@@ -1679,7 +1679,7 @@ export default function DNSManagementPage() {
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1.5 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                Confirm zone rollback
+                Confirm Zone Rollback
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Restores live DNS records to match &ldquo;{selectedSnapshotForRollback?.reason}&rdquo;.
@@ -1702,7 +1702,7 @@ export default function DNSManagementPage() {
                 className="h-9 px-4 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
               >
                 {isRollingBack && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isRollingBack ? "Rolling back..." : "Confirm rollback"}
+                {isRollingBack ? "Rolling back..." : "Confirm Rollback"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1713,7 +1713,7 @@ export default function DNSManagementPage() {
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1.5 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                Disable DNS service
+                Disable DNS Service
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Disconnects {selectedOrg?.domain} and clears stored credentials.
@@ -1737,7 +1737,7 @@ export default function DNSManagementPage() {
                 className="h-9 px-4 text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
               >
                 {isDisconnectingToken && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isDisconnectingToken ? "Disabling..." : "Disable service"}
+                {isDisconnectingToken ? "Disabling..." : "Disable Service"}
               </Button>
             </DialogFooter>
           </DialogContent>

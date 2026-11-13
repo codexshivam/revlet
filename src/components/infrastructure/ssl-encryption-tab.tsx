@@ -283,7 +283,7 @@ export function SslEncryptionTab({ zoneId, orgId, getIdToken }: SslEncryptionTab
         <CardHeader className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-0.5">
             <CardTitle className="text-base font-semibold text-slate-900">
-              SSL/TLS encryption mode
+              SSL/TLS Encryption Mode
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Controls cryptographic encryption between browsers, Cloudflare edge POPs, and your backend origin.
@@ -356,7 +356,7 @@ export function SslEncryptionTab({ zoneId, orgId, getIdToken }: SslEncryptionTab
       <Card className="bg-white border-slate-200 shadow-none rounded-xl">
         <CardHeader className="p-6 border-b border-slate-100">
           <CardTitle className="text-base font-semibold text-slate-900">
-            HTTPS and TLS parameters
+            HTTPS and TLS Parameters
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
             Transport security policies enforced at the edge.
@@ -412,7 +412,7 @@ export function SslEncryptionTab({ zoneId, orgId, getIdToken }: SslEncryptionTab
         <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between gap-4">
           <div className="space-y-0.5">
             <CardTitle className="text-base font-semibold text-slate-900">
-              DNSSEC cryptographic signing
+              DNSSEC Cryptographic Signing
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Protects against DNS cache poisoning and spoofing by signing zone records.

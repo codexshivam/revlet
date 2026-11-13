@@ -343,7 +343,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
         <CardHeader className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-0.5">
             <CardTitle className="text-base font-semibold text-slate-900">
-              Edge cache management
+              Edge Cache Management
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Invalidate static assets cached at global edge nodes after deployments.
@@ -360,13 +360,13 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
             ) : (
               <RefreshCw className="w-3.5 h-3.5" />
             )}
-            <span>Purge all cache</span>
+            <span>Purge All Cache</span>
           </Button>
         </CardHeader>
         <CardContent className="p-6 space-y-3">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-slate-700">
-              Selective cache purge (specific file or path)
+              Selective Cache Purge (Specific File or Path)
             </Label>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <Input
@@ -382,7 +382,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
                 className="h-9 px-4 text-xs font-medium border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg shrink-0"
               >
                 {isPurgingSingle && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-                Purge file
+                Purge File
               </Button>
             </div>
             <p className="text-xs text-slate-400">
@@ -397,7 +397,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
         <CardHeader className="p-6 flex flex-row items-center justify-between gap-4">
           <div className="space-y-0.5">
             <CardTitle className="text-base font-semibold text-slate-900">
-              Development mode
+              Development Mode
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Temporarily bypass edge caching for 3 hours so edits to origin servers reflect immediately.
@@ -415,7 +415,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
       <Card className="bg-white border-slate-200 shadow-none rounded-xl">
         <CardHeader className="p-6 border-b border-slate-100">
           <CardTitle className="text-base font-semibold text-slate-900">
-            Performance and compression
+            Performance and Compression
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
             Edge optimizations to reduce latency and bandwidth usage.
@@ -424,7 +424,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
         <CardContent className="p-6 divide-y divide-slate-100">
           <div className="flex items-center justify-between pb-4">
             <div className="space-y-0.5">
-              <p className="text-xs font-medium text-slate-900">Brotli compression</p>
+              <p className="text-xs font-medium text-slate-900">Brotli Compression</p>
               <p className="text-xs text-slate-500">
                 Compress textual assets (HTML, CSS, JSON, JS) using modern Brotli compression.
               </p>
@@ -448,7 +448,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
       <Card className="bg-white border-slate-200 shadow-none rounded-xl">
         <CardHeader className="p-6 border-b border-slate-100">
           <CardTitle className="text-base font-semibold text-slate-900">
-            URL redirects and page rules
+            URL Redirects and Page Rules
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
             Execute 301/302 redirects at the edge without querying application origins.
@@ -457,7 +457,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
         <CardContent className="p-6 space-y-6">
           <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg">
             <div className="space-y-0.5">
-              <p className="text-xs font-medium text-slate-900">Redirect apex to www (301 permanent)</p>
+              <p className="text-xs font-medium text-slate-900">Redirect Apex to WWW (301 Permanent)</p>
               <p className="text-xs text-slate-500">
                 Routes <code className="font-mono text-slate-700">{`${domain}/*`}</code> to <code className="font-mono text-slate-700">{`https://www.${domain}/$1`}</code>.
               </p>
@@ -470,7 +470,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
           </div>
 
           <div className="space-y-3 pt-2">
-            <Label className="text-xs font-medium text-slate-700">Add custom redirect rule</Label>
+            <Label className="text-xs font-medium text-slate-700">Add Custom Redirect Rule</Label>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
               <div className="sm:col-span-5">
                 <Input
@@ -494,7 +494,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
                   disabled={isCreatingRule}
                   className="w-full h-9 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none"
                 >
-                  {isCreatingRule ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Add rule"}
+                  {isCreatingRule ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Add Rule"}
                 </Button>
               </div>
             </div>
@@ -502,7 +502,7 @@ export function SpeedCacheTab({ zoneId, domain, orgId, getIdToken }: SpeedCacheT
 
           {pageRules.length > 0 && (
             <div className="space-y-2 pt-2">
-              <Label className="text-xs font-medium text-slate-700">Active redirect rules</Label>
+              <Label className="text-xs font-medium text-slate-700">Active Redirect Rules</Label>
               <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden bg-white">
                 {pageRules.map((rule) => (
                   <div key={rule.id} className="p-3 flex items-center justify-between gap-4 text-xs">

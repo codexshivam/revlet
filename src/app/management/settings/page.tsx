@@ -250,7 +250,7 @@ export default function SettingsPage() {
             className="border-slate-200 text-slate-700 hover:text-destructive hover:bg-rose-50 hover:border-rose-200 text-xs font-medium h-9 px-4 rounded-lg transition-colors shrink-0"
           >
             <LogOut className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.5} />
-            <span>Sign out</span>
+            <span>Sign Out</span>
           </Button>
         </div>
 
@@ -258,7 +258,7 @@ export default function SettingsPage() {
         <Card className="bg-white border border-slate-200/80 shadow-none rounded-xl overflow-hidden">
           <CardHeader className="p-6 pb-4">
             <CardTitle className="text-sm font-headline font-semibold text-slate-900">
-              Profile details
+              Profile Details
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Display name shown across your organizations and administrative activities
@@ -267,7 +267,7 @@ export default function SettingsPage() {
           <CardContent className="p-6 pt-0 space-y-4">
             <div className="space-y-1.5 max-w-md">
               <Label htmlFor="display-name" className="text-xs font-medium text-slate-700">
-                Display name
+                Display Name
               </Label>
               <Input
                 id="display-name"
@@ -280,7 +280,7 @@ export default function SettingsPage() {
 
             <div className="space-y-1.5 max-w-md">
               <Label htmlFor="readonly-email" className="text-xs font-medium text-slate-700">
-                Current account email
+                Current Account Email
               </Label>
               <Input
                 id="readonly-email"
@@ -299,7 +299,7 @@ export default function SettingsPage() {
                 {isUpdatingName && (
                   <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" strokeWidth={1.5} />
                 )}
-                Save changes
+                Save Changes
               </Button>
             </div>
           </CardContent>
@@ -309,7 +309,7 @@ export default function SettingsPage() {
         <Card className="bg-white border border-slate-200/80 shadow-none rounded-xl overflow-hidden">
           <CardHeader className="p-6 pb-4">
             <CardTitle className="text-sm font-headline font-semibold text-slate-900">
-              Administrative email
+              Administrative Email
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Update your primary login address. A verification link will be sent to confirm ownership
@@ -319,7 +319,7 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="new-email" className="text-xs font-medium text-slate-700">
-                  New email address
+                  New Email Address
                 </Label>
                 <Input
                   id="new-email"
@@ -332,7 +332,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="verify-pass" className="text-xs font-medium text-slate-700">
-                  Current password
+                  Current Password
                 </Label>
                 <Input
                   id="verify-pass"
@@ -361,7 +361,7 @@ export default function SettingsPage() {
                 {isUpdatingEmail && (
                   <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" strokeWidth={1.5} />
                 )}
-                Send verification
+                Send Verification
               </Button>
             </div>
           </CardContent>
@@ -371,7 +371,7 @@ export default function SettingsPage() {
         <Card className="bg-white border border-slate-200/80 shadow-none rounded-xl overflow-hidden">
           <CardHeader className="p-6 pb-4">
             <CardTitle className="text-sm font-headline font-semibold text-slate-900">
-              Password and security
+              Password and Security
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Protect your administrative account with a strong password of at least 6 characters
@@ -380,7 +380,7 @@ export default function SettingsPage() {
           <CardContent className="p-6 pt-0 space-y-4">
             <div className="space-y-1.5 max-w-sm">
               <Label htmlFor="old-pass" className="text-xs font-medium text-slate-700">
-                Current password
+                Current Password
               </Label>
               <Input
                 id="old-pass"
@@ -395,7 +395,7 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="new-pass" className="text-xs font-medium text-slate-700">
-                  New password
+                  New Password
                 </Label>
                 <Input
                   id="new-pass"
@@ -408,7 +408,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="confirm-pass" className="text-xs font-medium text-slate-700">
-                  Confirm new password
+                  Confirm New Password
                 </Label>
                 <Input
                   id="confirm-pass"
@@ -435,7 +435,7 @@ export default function SettingsPage() {
                 {isUpdatingPassword && (
                   <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" strokeWidth={1.5} />
                 )}
-                Update password
+                Update Password
               </Button>
             </div>
           </CardContent>
@@ -445,7 +445,7 @@ export default function SettingsPage() {
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-sm font-headline font-semibold text-slate-900">
-              Active session
+              Active Session
             </h3>
             <p className="text-xs text-slate-500">
               Currently signed in as{" "}
@@ -459,7 +459,7 @@ export default function SettingsPage() {
             className="border-slate-200 text-destructive hover:bg-rose-50 hover:text-destructive text-xs font-medium h-9 px-4 rounded-lg transition-colors shrink-0"
           >
             <LogOut className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.5} />
-            <span>Sign out</span>
+            <span>Sign Out</span>
           </Button>
         </div>
       </div>
@@ -469,7 +469,7 @@ export default function SettingsPage() {
         <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
-              Sign out
+              Sign Out
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
               Are you sure you want to sign out? You will need to sign back in to access your organizations and services.
@@ -490,7 +490,7 @@ export default function SettingsPage() {
               {isLoggingOut && (
                 <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
               )}
-              Sign out
+              Sign Out
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -517,7 +517,7 @@ export default function AccountHomePage() {
                   className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
                 >
                   <Edit2 className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.5} />
-                  <span>Update account name</span>
+                  <span>Update Account Name</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -525,7 +525,7 @@ export default function AccountHomePage() {
                   className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
                 >
                   <LogOut className="w-3.5 h-3.5" strokeWidth={1.5} />
-                  <span>Sign out</span>
+                  <span>Sign Out</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -535,7 +535,7 @@ export default function AccountHomePage() {
               className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs transition-colors shadow-none"
             >
               <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-              Register organization
+              Register Organization
             </Button>
           </div>
         </div>
@@ -552,7 +552,7 @@ export default function AccountHomePage() {
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-sm font-headline font-semibold text-slate-900">
-                    No organizations registered
+                    No Organizations Registered
                   </h3>
                   <p className="text-xs text-slate-500 leading-relaxed">
                     Register your organization to manage domain routing, email accounts, and workspaces.
@@ -565,7 +565,7 @@ export default function AccountHomePage() {
                     className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
                   >
                     <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                    Register organization
+                    Register Organization
                   </Button>
                 </div>
               </div>
@@ -580,10 +580,10 @@ export default function AccountHomePage() {
                           Organization
                         </TableHead>
                         <TableHead className="text-xs font-medium py-3 text-slate-500">
-                          Managed domain
+                          Managed Domain
                         </TableHead>
                         <TableHead className="text-xs font-medium py-3 text-slate-500">
-                          Email quota
+                          Email Quota
                         </TableHead>
                         <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                           Actions
@@ -745,13 +745,13 @@ export default function AccountHomePage() {
             <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
               <DialogHeader className="border-b border-slate-100 p-6">
                 <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                  Update account name
+                  Update Account Name
                 </DialogTitle>
               </DialogHeader>
               <div className="p-6 space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="acc-name" className="text-xs font-medium text-slate-700">
-                    Display name
+                    Display Name
                   </Label>
                   <Input
                     id="acc-name"
@@ -778,7 +778,7 @@ export default function AccountHomePage() {
                   {isUpdatingAccount ? (
                     <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
                   ) : (
-                    "Save changes"
+                    "Save Changes"
                   )}
                 </Button>
               </DialogFooter>
@@ -790,7 +790,7 @@ export default function AccountHomePage() {
             <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
               <DialogHeader className="border-b border-slate-100 p-6">
                 <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                  {editingOrg ? "Edit organization details" : "Register organization"}
+                  {editingOrg ? "Edit Organization Details" : "Register Organization"}
                 </DialogTitle>
               </DialogHeader>
 
@@ -799,7 +799,7 @@ export default function AccountHomePage() {
                   {/* Organization core */}
                   <div className="space-y-4">
                     <div className="text-xs font-medium text-slate-700">
-                      Organization details
+                      Organization Details
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
@@ -810,7 +810,7 @@ export default function AccountHomePage() {
                             errors.name && "text-destructive"
                           )}
                         >
-                          Legal name *
+                          Legal Name *
                         </Label>
                         <Input
                           id="org-name"
@@ -835,7 +835,7 @@ export default function AccountHomePage() {
                             errors.domain && "text-destructive"
                           )}
                         >
-                          Managed domain * {editingOrg && <span className="text-slate-400 font-normal">(immutable)</span>}
+                          Managed Domain * {editingOrg && <span className="text-slate-400 font-normal">(immutable)</span>}
                         </Label>
                         <Input
                           id="org-domain"
@@ -864,7 +864,7 @@ export default function AccountHomePage() {
                             errors.currentEmail && "text-destructive"
                           )}
                         >
-                          General contact email
+                          General Contact Email
                         </Label>
                         <Input
                           id="org-email"
@@ -884,7 +884,7 @@ export default function AccountHomePage() {
 
                       <div className="space-y-1.5">
                         <Label htmlFor="org-address" className="text-xs font-medium text-slate-700">
-                          Physical address
+                          Physical Address
                         </Label>
                         <Input
                           id="org-address"
@@ -900,7 +900,7 @@ export default function AccountHomePage() {
                     <div className="flex items-center justify-between p-4 border border-slate-200/80 rounded-lg bg-slate-50/50">
                       <div className="space-y-0.5 pr-4">
                         <Label htmlFor="org-is-edu" className="text-xs font-medium text-slate-800 cursor-pointer">
-                          Educational institution
+                          Educational Institution
                         </Label>
                         <span className="text-xs text-slate-500 block leading-relaxed">
                           Toggle on if this organization represents a school, college, or academic body.
@@ -921,12 +921,12 @@ export default function AccountHomePage() {
                   {/* Representative contact */}
                   <div className="space-y-4">
                     <div className="text-xs font-medium text-slate-700">
-                      Authorized representative
+                      Authorized Representative
                     </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="org-desc" className="text-xs font-medium text-slate-700">
-                        Description (optional)
+                        Description (Optional)
                       </Label>
                       <Textarea
                         id="org-desc"
@@ -945,7 +945,7 @@ export default function AccountHomePage() {
                           errors.contactName && "text-destructive"
                         )}
                       >
-                        Representative name *
+                        Representative Name *
                       </Label>
                       <Input
                         id="contact-name"
@@ -971,7 +971,7 @@ export default function AccountHomePage() {
                             errors.contactPhone && "text-destructive"
                           )}
                         >
-                          Phone number
+                          Phone Number
                         </Label>
                         <Input
                           id="contact-phone"
@@ -996,7 +996,7 @@ export default function AccountHomePage() {
                             errors.contactEmail && "text-destructive"
                           )}
                         >
-                          Direct email *
+                          Direct Email *
                         </Label>
                         <Input
                           id="contact-email"
@@ -1022,7 +1022,7 @@ export default function AccountHomePage() {
                       <Separator />
                       <div className="p-4 bg-rose-50/50 border border-rose-200/80 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-0.5">
-                          <p className="text-xs font-medium text-rose-900">Delete organization</p>
+                          <p className="text-xs font-medium text-rose-900">Delete Organization</p>
                           <p className="text-xs text-rose-700/80 leading-relaxed">
                             Permanently decommission DNS configurations, website data, and access for {editingOrg.name}.
                           </p>
@@ -1061,9 +1061,9 @@ export default function AccountHomePage() {
                   {isSubmitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
                   ) : editingOrg ? (
-                    "Save changes"
+                    "Save Changes"
                   ) : (
-                    "Confirm registration"
+                    "Confirm Registration"
                   )}
                 </Button>
               </DialogFooter>
@@ -1075,7 +1075,7 @@ export default function AccountHomePage() {
             <AlertDialogContent className="bg-white border-slate-200 rounded-xl max-w-md">
               <AlertDialogHeader>
                 <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
-                  Sign out
+                  Sign Out
                 </AlertDialogTitle>
                 <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
                   Are you sure you want to sign out? You will need to log back in to access your organizations and services.
@@ -1096,7 +1096,7 @@ export default function AccountHomePage() {
                   {isLoggingOut && (
                     <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                   )}
-                  Sign out
+                  Sign Out
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -1118,7 +1118,7 @@ export default function AccountHomePage() {
             <AlertDialogContent className="max-w-md bg-white border border-slate-200 rounded-xl">
               <AlertDialogHeader>
                 <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
-                  Confirm organization deletion
+                  Confirm Organization Deletion
                 </AlertDialogTitle>
                 <AlertDialogDescription asChild>
                   <div className="space-y-3 text-xs text-slate-500 pt-1">
@@ -1161,7 +1161,7 @@ export default function AccountHomePage() {
                   {isSubmitting ? (
                     <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                   ) : (
-                    "Delete organization"
+                    "Delete Organization"
                   )}
                 </Button>
               </AlertDialogFooter>

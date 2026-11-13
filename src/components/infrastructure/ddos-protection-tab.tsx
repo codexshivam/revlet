@@ -116,7 +116,7 @@ export function DdosProtectionTab({ zoneId, domain, orgId, getIdToken }: DdosPro
         <CardHeader className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-0.5">
             <CardTitle className="text-base font-semibold text-slate-900">
-              Emergency attack shield
+              Emergency Attack Shield
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
               Mitigate aggressive Layer 7 HTTP floods across the global edge network.
@@ -137,8 +137,8 @@ export function DdosProtectionTab({ zoneId, domain, orgId, getIdToken }: DdosPro
               {isUpdatingSecurity && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <span>
                 {securityLevel === "under_attack"
-                  ? "Deactivate emergency shield"
-                  : "Activate emergency shield"}
+                  ? "Deactivate Emergency Shield"
+                  : "Activate Emergency Shield"}
               </span>
             </Button>
           </div>
@@ -179,7 +179,7 @@ export function DdosProtectionTab({ zoneId, domain, orgId, getIdToken }: DdosPro
       <Card className="bg-white border-slate-200 shadow-none rounded-xl">
         <CardHeader className="p-6 border-b border-slate-100">
           <CardTitle className="text-base font-semibold text-slate-900">
-            Standard edge security level
+            Standard Edge Security Level
           </CardTitle>
           <CardDescription className="text-xs text-slate-500">
             Adjust reputation heuristics applied to incoming visitor IP addresses.

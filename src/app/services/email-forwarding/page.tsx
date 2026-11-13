@@ -414,7 +414,7 @@ export default function EmailRoutingPage() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200 pb-5">
           <div className="space-y-1">
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
-              Email forwarding
+              Email Forwarding
             </h1>
             <p className="text-sm text-slate-500">
               Configure custom domain email addresses and route incoming mail to personal inboxes.
@@ -433,7 +433,7 @@ export default function EmailRoutingPage() {
                 className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Create address</span>
+                <span>Create Address</span>
               </Button>
 
               <DropdownMenu>
@@ -452,7 +452,7 @@ export default function EmailRoutingPage() {
                     className="gap-2 text-destructive focus:text-destructive focus:bg-red-50 text-xs cursor-pointer"
                   >
                     <ShieldAlert className="w-3.5 h-3.5" />
-                    <span>Disable service</span>
+                    <span>Disable Service</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -468,14 +468,14 @@ export default function EmailRoutingPage() {
                 <Globe className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-base font-semibold text-slate-900">No organizations found</h3>
+                <h3 className="text-base font-semibold text-slate-900">No Organizations Found</h3>
                 <p className="text-xs text-slate-500">
                   Register an organization to manage custom domain email forwarding.
                 </p>
               </div>
               <Link href="/account/home">
                 <Button className="h-9 px-4 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none">
-                  Go to account home
+                  Go to Account Home
                 </Button>
               </Link>
             </CardContent>
@@ -488,14 +488,14 @@ export default function EmailRoutingPage() {
                 <Globe className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-base font-semibold text-slate-900">DNS configuration required</h3>
+                <h3 className="text-base font-semibold text-slate-900">DNS Configuration Required</h3>
                 <p className="text-xs text-slate-500">
                   Email routing requires an active domain zone. Configure DNS management for your organization to proceed.
                 </p>
               </div>
               <Link href="/services/dns">
                 <Button className="h-9 px-4 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none">
-                  Go to DNS management
+                  Go to DNS Management
                 </Button>
               </Link>
             </CardContent>
@@ -512,7 +512,7 @@ export default function EmailRoutingPage() {
             <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
               <CardHeader className="text-center pb-2 pt-8 px-6 space-y-2">
                 <CardTitle className="text-xl sm:text-2xl font-semibold text-slate-900">
-                  Domain email routing
+                  Domain Email Routing
                 </CardTitle>
                 <CardDescription className="text-xs sm:text-sm text-slate-500 max-w-xl mx-auto">
                   Create custom addresses under <span className="font-mono text-slate-700">@{selectedOrg?.domain}</span> and forward incoming mail automatically to existing personal or team inboxes.
@@ -522,7 +522,7 @@ export default function EmailRoutingPage() {
                 {/* Visual Architecture Flow */}
                 <div className="border border-slate-200 rounded-xl p-5 sm:p-6 bg-slate-50/50">
                   <p className="text-xs font-medium text-slate-500 mb-4 text-center">
-                    Routing pipeline
+                    Routing Pipeline
                   </p>
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                     <div className="w-full sm:flex-1 p-3.5 bg-white border border-slate-200 rounded-lg space-y-1">
@@ -533,7 +533,7 @@ export default function EmailRoutingPage() {
                     <ArrowRight className="w-4 h-4 text-slate-400 rotate-90 sm:rotate-0 shrink-0" />
 
                     <div className="w-full sm:flex-1 p-3.5 bg-white border border-slate-200 rounded-lg space-y-1">
-                      <p className="text-slate-400 font-medium">Domain alias</p>
+                      <p className="text-slate-400 font-medium">Domain Alias</p>
                       <p className="font-mono text-slate-900 truncate">info@{selectedOrg?.domain}</p>
                     </div>
 
@@ -549,19 +549,19 @@ export default function EmailRoutingPage() {
                 {/* Technical Features */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                   <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-1.5">
-                    <p className="font-medium text-slate-900">Zero mailboxes to host</p>
+                    <p className="font-medium text-slate-900">Zero Mailboxes to Host</p>
                     <p className="text-slate-500 leading-relaxed">
                       All messages are relayed immediately to destination targets without local mail storage requirements.
                     </p>
                   </div>
                   <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-1.5">
-                    <p className="font-medium text-slate-900">Automatic DNS provisioning</p>
+                    <p className="font-medium text-slate-900">Automatic DNS Provisioning</p>
                     <p className="text-slate-500 leading-relaxed">
                       Enabling the service automatically sets MX and SPF records required for edge relay delivery.
                     </p>
                   </div>
                   <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-1.5">
-                    <p className="font-medium text-slate-900">Anti-spoofing verification</p>
+                    <p className="font-medium text-slate-900">Anti-Spoofing Verification</p>
                     <p className="text-slate-500 leading-relaxed">
                       Every destination address must verify inbox ownership before forwarding becomes active.
                     </p>
@@ -574,7 +574,7 @@ export default function EmailRoutingPage() {
                     className="h-10 px-6 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
                   >
                     <Mail className="w-3.5 h-3.5" />
-                    <span>Enable email forwarding</span>
+                    <span>Enable Email Forwarding</span>
                   </Button>
                 </div>
               </CardContent>
@@ -588,7 +588,7 @@ export default function EmailRoutingPage() {
               <CardHeader className="border-b border-slate-100 px-6 py-4 flex flex-row items-center justify-between gap-4">
                 <div className="space-y-0.5">
                   <CardTitle className="text-base font-semibold text-slate-900">
-                    Forwarding rules
+                    Forwarding Rules
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
                     Active aliases configured on {selectedOrg?.domain}.
@@ -606,7 +606,7 @@ export default function EmailRoutingPage() {
                   <EmailRulesSkeleton />
                 ) : verifiedRules.length === 0 && !searchTerm ? (
                   <div className="py-16 text-center space-y-2 px-4">
-                    <p className="text-sm font-medium text-slate-700">No forwarding rules active</p>
+                    <p className="text-sm font-medium text-slate-700">No Forwarding Rules Active</p>
                     <p className="text-xs text-slate-400 max-w-sm mx-auto">
                       Create your first custom email address to begin routing incoming messages.
                     </p>
@@ -647,7 +647,7 @@ export default function EmailRoutingPage() {
 
                     {filteredRules.length === 0 ? (
                       <div className="py-16 text-center space-y-1.5 px-4">
-                        <p className="text-xs font-medium text-slate-700">No matching rules</p>
+                        <p className="text-xs font-medium text-slate-700">No Matching Rules</p>
                         <p className="text-xs text-slate-400">
                           Try adjusting your search query.
                         </p>
@@ -660,10 +660,10 @@ export default function EmailRoutingPage() {
                             <TableHeader>
                               <TableRow className="border-b border-slate-100 bg-slate-50/50 hover:bg-slate-50/50">
                                 <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                                  Custom alias
+                                  Custom Alias
                                 </TableHead>
                                 <TableHead className="text-xs font-medium py-3 text-slate-500">
-                                  Forwards to
+                                  Forwards To
                                 </TableHead>
                                 <TableHead className="text-xs font-medium py-3 text-slate-500 w-[120px]">
                                   Status
@@ -788,7 +788,7 @@ export default function EmailRoutingPage() {
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-slate-400" />
                   <CardTitle className="text-base font-semibold text-slate-900">
-                    Domain authentication records
+                    Domain Authentication Records
                   </CardTitle>
                 </div>
                 <CardDescription className="text-xs text-slate-500">
@@ -800,7 +800,7 @@ export default function EmailRoutingPage() {
                   {/* SPF */}
                   <div className="p-4 bg-slate-50/60 border border-slate-200 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">SPF protocol</span>
+                      <span className="font-medium text-slate-700">SPF Protocol</span>
                       <span
                         className={cn(
                           "px-2 py-0.5 rounded text-xs font-medium border",
@@ -820,7 +820,7 @@ export default function EmailRoutingPage() {
                   {/* DKIM */}
                   <div className="p-4 bg-slate-50/60 border border-slate-200 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">DKIM relay</span>
+                      <span className="font-medium text-slate-700">DKIM Relay</span>
                       <span
                         className={cn(
                           "px-2 py-0.5 rounded text-xs font-medium border",
@@ -840,7 +840,7 @@ export default function EmailRoutingPage() {
                   {/* DMARC */}
                   <div className="p-4 bg-slate-50/60 border border-slate-200 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">DMARC policy</span>
+                      <span className="font-medium text-slate-700">DMARC Policy</span>
                       <span
                         className={cn(
                           "px-2 py-0.5 rounded text-xs font-medium border",
@@ -867,7 +867,7 @@ export default function EmailRoutingPage() {
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1.5 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                Enable email forwarding
+                Enable Email Forwarding
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 This will update the MX and SPF records on {selectedOrg?.domain} to route incoming mail through edge relays.
@@ -890,7 +890,7 @@ export default function EmailRoutingPage() {
                 className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
               >
                 {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isActivating ? "Enabling..." : "Enable service"}
+                {isActivating ? "Enabling..." : "Enable Service"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -907,7 +907,7 @@ export default function EmailRoutingPage() {
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                Create forwarding address
+                Create Forwarding Address
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Configure an inbound alias for {selectedOrg?.domain}.
@@ -916,7 +916,7 @@ export default function EmailRoutingPage() {
 
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Alias name</Label>
+                <Label className="text-xs font-medium text-slate-700">Alias Name</Label>
                 <div className="flex items-center">
                   <Input
                     placeholder="e.g. contact, info, team"
@@ -940,7 +940,7 @@ export default function EmailRoutingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Forward destination</Label>
+                <Label className="text-xs font-medium text-slate-700">Forward Destination</Label>
                 <Input
                   type="email"
                   placeholder="personal.inbox@gmail.com"
@@ -960,7 +960,7 @@ export default function EmailRoutingPage() {
               </div>
 
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-1 text-xs text-slate-600">
-                <p className="font-medium text-slate-900">Destination verification</p>
+                <p className="font-medium text-slate-900">Destination Verification</p>
                 <p className="leading-relaxed">
                   If this destination is newly added, Cloudflare will dispatch a confirmation email. Follow the link in the message to activate message delivery.
                 </p>
@@ -981,7 +981,7 @@ export default function EmailRoutingPage() {
                 className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
               >
                 {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isSubmitting ? "Creating..." : "Create address"}
+                {isSubmitting ? "Creating..." : "Create Address"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -992,7 +992,7 @@ export default function EmailRoutingPage() {
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1.5 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                Delete forwarding address
+                Delete Forwarding Address
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 Are you sure you want to delete this forwarding address? Messages sent to it will no longer be routed.
@@ -1011,7 +1011,7 @@ export default function EmailRoutingPage() {
                 variant="destructive"
                 className="h-9 px-4 text-xs font-medium rounded-lg shadow-none"
               >
-                Delete address
+                Delete Address
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1022,7 +1022,7 @@ export default function EmailRoutingPage() {
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1.5 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
-                Disable email forwarding
+                Disable Email Forwarding
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
                 This will disable email routing for {selectedOrg?.domain}. Active forwarding rules will cease relaying messages.
@@ -1043,7 +1043,7 @@ export default function EmailRoutingPage() {
                 className="h-9 px-4 text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
               >
                 {isDisabling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isDisabling ? "Disabling..." : "Disable service"}
+                {isDisabling ? "Disabling..." : "Disable Service"}
               </Button>
             </DialogFooter>
           </DialogContent>

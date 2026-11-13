@@ -172,7 +172,7 @@ export async function createEmailRule(
   if (!aliasEmail || !destinationEmail) return { success: false, error: 'Alias email and destination email are required' };
 
   try {
-    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const access = await verifyUserOrgAccess(idToken, orgId, zoneId);
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     if (!accountId) return { success: false, error: 'Account ID is not configured in environment variables.' };
 
@@ -200,10 +200,30 @@ export async function createEmailRule(
       }),
     });
 
+    const ruleId = data.result?.id || data.result?.tag;
+
+    // Synchronize to Firestore forwardingRules collection with explicit serviceType
+    if (ruleId) {
+      await adminDb.collection('forwardingRules').doc(ruleId).set({
+        organizationId: orgId,
+        aliasEmail: aliasEmail.trim(),
+        destinationEmail: destinationEmail.trim(),
+        ownerId: access.orgData?.ownerId || access.uid,
+        serviceType: 'email_forwarding',
+        ruleType: 'alias_forwarding',
+        enabled: true,
+        verified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }, { merge: true }).catch((err) => {
+        console.warn('[Email Routing Action] Could not record rule in Firestore:', err.message);
+      });
+    }
+
     return {
       success: true,
       data: {
-        ruleId: data.result?.id || data.result?.tag,
+        ruleId,
       },
     };
   } catch (error: any) {
@@ -218,6 +238,10 @@ export async function deleteEmailRule(idToken: string, orgId: string, zoneId: st
     await cfFetch(`/zones/${zoneId}/email/routing/rules/${ruleId}`, {
       method: 'DELETE',
     });
+
+    // Remove from Firestore forwardingRules collection
+    await adminDb.collection('forwardingRules').doc(ruleId).delete().catch(() => {});
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to delete email routing rule' };
@@ -311,13 +335,19 @@ export async function syncEmailServiceState(
   try {
     const access = await verifyUserOrgAccess(idToken, orgId);
     await adminDb.collection('organizations').doc(orgId).set({
-      emailServiceActive: enabled,
+      emailForwardingActive: enabled,
+      emailRoutingActive: enabled,
+      emailServiceActive: enabled, // backward-compatibility
+      serviceType: 'organization',
+      updatedAt: new Date(),
     }, { merge: true });
 
     await adminDb.collection('emailRoutingConfigs').doc(orgId).set({
       organizationId: orgId,
       domainName: access.orgData?.domain || '',
       isServiceActive: enabled,
+      serviceType: 'email_forwarding',
+      routingEngine: 'cloudflare_email_routing',
       ownerId: access.orgData?.ownerId || access.uid,
       updatedAt: new Date(),
     }, { merge: true });

@@ -46,7 +46,7 @@ function getStatusBadge(status?: string) {
     return {
       dot: "bg-blue-500",
       pill: "bg-blue-50 text-blue-700 border-blue-200/60",
-      label: "In progress",
+      label: "In Progress",
     }
   }
   return {
@@ -240,7 +240,7 @@ export default function SupportPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="subject" className="text-xs font-medium text-slate-700">
-                  Ticket subject
+                  Ticket Subject
                 </Label>
                 <Input
                   id="subject"
@@ -261,19 +261,19 @@ export default function SupportPage() {
                   </SelectTrigger>
                   <SelectContent className="rounded-lg">
                     <SelectItem value="Technical Support" className="text-xs">
-                      Technical support
+                      Technical Support
                     </SelectItem>
                     <SelectItem value="Billing & Payments" className="text-xs">
-                      Billing & payments
+                      Billing & Payments
                     </SelectItem>
                     <SelectItem value="DNS & Network" className="text-xs">
-                      DNS & network
+                      DNS & Network
                     </SelectItem>
                     <SelectItem value="Bug Report" className="text-xs">
-                      Bug report
+                      Bug Report
                     </SelectItem>
                     <SelectItem value="General Inquiry" className="text-xs">
-                      General inquiry
+                      General Inquiry
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -282,7 +282,7 @@ export default function SupportPage() {
 
             <div className="space-y-2">
               <Label htmlFor="message" className="text-xs font-medium text-slate-700">
-                Detailed description
+                Detailed Description
               </Label>
               <Textarea
                 id="message"
@@ -303,7 +303,7 @@ export default function SupportPage() {
                 className="h-9 px-5 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
               >
                 {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isSubmitting ? "Submitting..." : "Submit ticket"}
+                {isSubmitting ? "Submitting..." : "Submit Ticket"}
               </Button>
             </div>
           </CardContent>
@@ -314,7 +314,7 @@ export default function SupportPage() {
           <CardHeader className="border-b border-slate-100 px-6 py-4 flex flex-row items-center justify-between gap-4">
             <div className="space-y-0.5">
               <CardTitle className="text-base font-semibold text-slate-900">
-                Support tickets
+                Support Tickets
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
                 History and status of your submitted inquiries.
@@ -335,7 +335,7 @@ export default function SupportPage() {
               </div>
             ) : tickets.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center gap-1.5 px-4">
-                <p className="text-sm font-medium text-slate-700">No support tickets found</p>
+                <p className="text-sm font-medium text-slate-700">No Support Tickets Found</p>
                 <p className="text-xs text-slate-400 max-w-sm">
                   Use the form above to reach the Revlet engineering and operations desk.
                 </p>
@@ -357,7 +357,7 @@ export default function SupportPage() {
                           Category
                         </TableHead>
                         <TableHead className="text-xs font-medium py-3 text-slate-500 w-[130px]">
-                          Date opened
+                          Date Opened
                         </TableHead>
                         <TableHead className="text-xs font-medium py-3 text-slate-500 w-[140px]">
                           Status

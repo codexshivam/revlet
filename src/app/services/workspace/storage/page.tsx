@@ -305,7 +305,7 @@ export default function StoragePage() {
 
   // ─── Loading State ───────────────────────────────────────────────────────
 
-  if (isLoadingOrgs) {
+  if (isLoadingOrgs && orgs.length === 0) {
     return (
       <DashboardShell>
         <div className="flex items-center justify-center min-h-[60vh]">

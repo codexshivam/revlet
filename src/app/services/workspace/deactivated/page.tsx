@@ -748,7 +748,7 @@ export default function WorkspaceDeactivatedPage() {
 
   // ─── Loading State ───────────────────────────────────────────────────────
 
-  if (isLoadingOrgs) {
+  if (isLoadingOrgs && orgs.length === 0) {
     return (
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">

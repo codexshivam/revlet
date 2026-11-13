@@ -351,7 +351,7 @@ export default function WorkspaceAlumniPage() {
   }
 
   // ─── Render ─────────────────────────────────────────────────────────────
-  if (isLoadingOrgs) {
+  if (isLoadingOrgs && !selectedOrg) {
     return (
       <DashboardShell>
         <div className="flex flex-col items-center justify-center py-40 gap-4">

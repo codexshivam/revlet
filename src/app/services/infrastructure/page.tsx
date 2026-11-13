@@ -31,7 +31,7 @@ export default function InfrastructurePage() {
   }, [auth])
 
   // STATE 1: Loading organization context
-  if (isLoadingOrgs) {
+  if (isLoadingOrgs && !activeOrg) {
     return (
       <DashboardShell>
         <div className="space-y-8 animate-in fade-in duration-300">

@@ -101,8 +101,7 @@ export default function EmailServiceAdminPage() {
   const { orgs, activeOrg: selectedOrg, activeOrgId: selectedOrgId, loading: isLoadingOrgs } = useActiveOrg()
 
   // Core service state
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const [isLoadingQuota, setIsLoadingQuota] = useState(true)
+  const [isLoadingQuota, setIsLoadingQuota] = useState(false)
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isActivating, setIsActivating] = useState(false)
@@ -110,21 +109,29 @@ export default function EmailServiceAdminPage() {
   const [isSyncingDns, setIsSyncingDns] = useState(false)
 
   const [serviceActive, setServiceActive] = useState<boolean>(() => Boolean(selectedOrg?.mailServiceActive))
-  const isEffectiveServiceActive = serviceActive || Boolean(selectedOrg?.mailServiceActive)
+  const isEffectiveServiceActive = Boolean(selectedOrg?.mailServiceActive ?? serviceActive)
+
+  const [dnsServiceActive, setDnsServiceActive] = useState<boolean>(() => Boolean(selectedOrg?.cloudflareZoneId))
+  const [monthlyOutboundLimit, setMonthlyOutboundLimit] = useState<number>(() => selectedOrg?.mailMonthlyLimit ?? 1000)
+  const [dailyOutboundLimit, setDailyOutboundLimit] = useState<number>(() => selectedOrg?.mailDailyLimit ?? 100)
+  const [monthlySentCount, setMonthlySentCount] = useState<number>(() => selectedOrg?.mailMonthlySent ?? 0)
+  const [dailySentCount, setDailySentCount] = useState<number>(() => selectedOrg?.mailDailySent ?? 0)
+  const [catchAllUserId, setCatchAllUserId] = useState<string | null>(() => selectedOrg?.mailCatchAllUserId ?? null)
+  const [catchAllEmail, setCatchAllEmail] = useState<string | null>(() => selectedOrg?.mailCatchAllEmail ?? null)
+  const [requiredDnsRecords, setRequiredDnsRecords] = useState<MailRequiredDnsRecord[]>([])
 
   useEffect(() => {
-    if (selectedOrg?.mailServiceActive !== undefined) {
+    if (selectedOrg) {
       setServiceActive(Boolean(selectedOrg.mailServiceActive))
+      setDnsServiceActive(Boolean(selectedOrg.cloudflareZoneId))
+      setMonthlyOutboundLimit(selectedOrg.mailMonthlyLimit ?? 1000)
+      setDailyOutboundLimit(selectedOrg.mailDailyLimit ?? 100)
+      setMonthlySentCount(selectedOrg.mailMonthlySent ?? 0)
+      setDailySentCount(selectedOrg.mailDailySent ?? 0)
+      setCatchAllUserId(selectedOrg.mailCatchAllUserId ?? null)
+      setCatchAllEmail(selectedOrg.mailCatchAllEmail ?? null)
     }
-  }, [selectedOrg?.mailServiceActive])
-  const [dnsServiceActive, setDnsServiceActive] = useState(false)
-  const [monthlyOutboundLimit, setMonthlyOutboundLimit] = useState(1000)
-  const [dailyOutboundLimit, setDailyOutboundLimit] = useState(100)
-  const [monthlySentCount, setMonthlySentCount] = useState(0)
-  const [dailySentCount, setDailySentCount] = useState(0)
-  const [catchAllUserId, setCatchAllUserId] = useState<string | null>(null)
-  const [catchAllEmail, setCatchAllEmail] = useState<string | null>(null)
-  const [requiredDnsRecords, setRequiredDnsRecords] = useState<MailRequiredDnsRecord[]>([])
+  }, [selectedOrg])
 
   // Directory collections
   const [orgUnits, setOrgUnits] = useState<MailOrgUnit[]>([])
@@ -241,11 +248,9 @@ export default function EmailServiceAdminPage() {
       if (!user || !selectedOrgId) {
         setIsLoadingQuota(false)
         setIsLoadingDirectory(false)
-        setIsInitialLoad(false)
         return
       }
       if (!silent) {
-        setIsLoadingQuota(true)
         setIsLoadingDirectory(true)
       } else {
         setIsRefreshing(true)
@@ -309,7 +314,6 @@ export default function EmailServiceAdminPage() {
         })
       } finally {
         setIsRefreshing(false)
-        setIsInitialLoad(false)
       }
     },
     [user, selectedOrgId]
@@ -997,7 +1001,7 @@ export default function EmailServiceAdminPage() {
     return Array.from(paths)
   }, [orgUnits])
 
-  if (authLoading || isLoadingOrgs || (isInitialLoad && !isEffectiveServiceActive)) {
+  if (authLoading || (isLoadingOrgs && orgs.length === 0)) {
     return (
       <DashboardShell>
         <div className="flex flex-col items-center justify-center min-h-[50vh] bg-white">

@@ -26,6 +26,8 @@ export interface Organization {
   cloudflareTokenExpiresOn?: string | null
   cloudflareTokenScopedZone?: string
   emailServiceActive?: boolean
+  emailForwardingActive?: boolean
+  emailRoutingActive?: boolean
   mailServiceActive?: boolean
   mailMonthlyLimit?: number
   mailDailyLimit?: number
@@ -148,17 +150,24 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     setActiveOrgId(id)
   }, [])
 
-  const activeOrg = useMemo(() => orgs.find((o) => o.id === activeOrgId), [orgs, activeOrgId])
+  const activeOrg = useMemo(() => {
+    const found = orgs.find((o) => o.id === activeOrgId)
+    if (found) return found
+    if (orgs.length > 0) return orgs[0]
+    return undefined
+  }, [orgs, activeOrgId])
+
+  const effectiveOrgId = activeOrg?.id || activeOrgId
 
   const value = useMemo(
     () => ({
       orgs,
       activeOrg,
-      activeOrgId,
+      activeOrgId: effectiveOrgId,
       setActiveOrgId: changeActiveOrg,
       loading,
     }),
-    [orgs, activeOrg, activeOrgId, changeActiveOrg, loading]
+    [orgs, activeOrg, effectiveOrgId, changeActiveOrg, loading]
   )
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>

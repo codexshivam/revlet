@@ -652,7 +652,7 @@ export default function DNSManagementPage() {
 
   const isProxyAllowed = (type: string) => PROXY_SUPPORTED_TYPES.includes(type)
 
-  if (isLoadingOrgs) {
+  if (isLoadingOrgs && orgs.length === 0) {
     return (
       <DashboardShell>
         <div className="space-y-8 animate-in fade-in duration-300">

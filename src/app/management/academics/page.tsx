@@ -135,7 +135,7 @@ export default function AcademicsManagementPage() {
 
   // ─── STATE 1: Org Loading or Classes Loading ────────────────────────────────
 
-  if (isLoadingOrg || (isWorkspaceActive && isLoadingClasses)) {
+  if ((isLoadingOrg && !activeOrg) || (isWorkspaceActive && isLoadingClasses && classes.length === 0)) {
     return (
       <DashboardShell className="max-w-[1400px]">
         <div className="space-y-8 animate-pulse">

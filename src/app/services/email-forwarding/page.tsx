@@ -82,8 +82,16 @@ export default function EmailRoutingPage() {
   const { user } = useUser()
   const { orgs, activeOrg: selectedOrg, loading: isLoadingOrgs } = useActiveOrg()
 
-  const [emailServiceActive, setEmailServiceActive] = useState(false)
-  const [isCheckingStatus, setIsCheckingStatus] = useState(true)
+  const [emailServiceActive, setEmailServiceActive] = useState<boolean>(() =>
+    Boolean(selectedOrg?.emailForwardingActive ?? selectedOrg?.emailRoutingActive ?? selectedOrg?.emailServiceActive)
+  )
+  const isEffectiveEmailActive = Boolean(
+    selectedOrg?.emailForwardingActive ??
+    selectedOrg?.emailRoutingActive ??
+    selectedOrg?.emailServiceActive ??
+    emailServiceActive
+  )
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false)
   const [rules, setRules] = useState<EmailRule[]>([])
   const [isLoadingRules, setIsLoadingRules] = useState(false)
   const [isActivating, setIsActivating] = useState(false)
@@ -134,42 +142,43 @@ export default function EmailRoutingPage() {
   )
   const isDmarcValid = !!dmarcRecord
 
-  // Check email service status on mount / org change
+  // Sync email service status on mount / org change directly from Firestore
+  useEffect(() => {
+    if (selectedOrg) {
+      const active = Boolean(
+        selectedOrg.emailForwardingActive ??
+        selectedOrg.emailRoutingActive ??
+        selectedOrg.emailServiceActive
+      )
+      setEmailServiceActive(active)
+    }
+  }, [selectedOrg])
+
+  // Background check only for legacy unmigrated documents missing explicit Firestore state
   useEffect(() => {
     let isMounted = true
-    const checkEmailStatus = async () => {
-      if (!selectedOrg) {
-        if (isMounted) setIsCheckingStatus(false)
-        return
-      }
-      setIsCheckingStatus(true)
+    if (!selectedOrg || !zoneId || !user) return
+
+    const hasExplicitFirestoreStatus =
+      selectedOrg.emailForwardingActive !== undefined ||
+      selectedOrg.emailRoutingActive !== undefined ||
+      selectedOrg.emailServiceActive !== undefined
+
+    if (hasExplicitFirestoreStatus) return
+
+    const backgroundCheck = async () => {
       try {
-        if (selectedOrg.emailServiceActive) {
-          if (isMounted) setEmailServiceActive(true)
-        } else if (zoneId && user) {
-          try {
-            const idToken = await user.getIdToken()
-            const stRes = await getEmailRoutingStatus(idToken, selectedOrg.id, zoneId)
-            if (stRes.success && stRes.data?.enabled) {
-              if (isMounted) setEmailServiceActive(true)
-              await syncEmailServiceState(idToken, selectedOrg.id, true)
-            } else {
-              if (isMounted) setEmailServiceActive(false)
-            }
-          } catch {
-            if (isMounted) setEmailServiceActive(false)
-          }
-        } else {
-          if (isMounted) setEmailServiceActive(false)
+        const idToken = await user.getIdToken()
+        const stRes = await getEmailRoutingStatus(idToken, selectedOrg.id, zoneId)
+        if (stRes.success && stRes.data?.enabled && isMounted) {
+          setEmailServiceActive(true)
+          await syncEmailServiceState(idToken, selectedOrg.id, true)
         }
       } catch (error) {
-        console.error("Error checking email status:", error)
-        if (isMounted) setEmailServiceActive(false)
-      } finally {
-        if (isMounted) setIsCheckingStatus(false)
+        console.error("Background email status check error:", error)
       }
     }
-    checkEmailStatus()
+    backgroundCheck()
     return () => {
       isMounted = false
     }
@@ -211,13 +220,13 @@ export default function EmailRoutingPage() {
   }, [zoneId, selectedOrg?.id, user, toast])
 
   useEffect(() => {
-    if (emailServiceActive && zoneId) {
+    if (isEffectiveEmailActive && zoneId) {
       fetchEmailRules()
     } else {
       setRules([])
       setDnsRecords([])
     }
-  }, [emailServiceActive, zoneId, fetchEmailRules])
+  }, [isEffectiveEmailActive, zoneId, fetchEmailRules])
 
   // Handle activation
   const handleActivate = async () => {
@@ -421,7 +430,7 @@ export default function EmailRoutingPage() {
             </p>
           </div>
 
-          {zoneId && emailServiceActive && (
+          {zoneId && isEffectiveEmailActive && (
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => {
@@ -500,13 +509,7 @@ export default function EmailRoutingPage() {
               </Link>
             </CardContent>
           </Card>
-        ) : selectedOrg && zoneId && isCheckingStatus ? (
-          /* Loading Status */
-          <div className="flex flex-col items-center justify-center py-24 gap-3">
-            <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-            <p className="text-xs text-slate-500">Checking routing service status...</p>
-          </div>
-        ) : selectedOrg && zoneId && !emailServiceActive ? (
+        ) : selectedOrg && zoneId && !isEffectiveEmailActive ? (
           /* STATE 4: Pre-activation Landing */
           <div className="space-y-8 max-w-4xl mx-auto py-4">
             <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
@@ -824,12 +827,12 @@ export default function EmailRoutingPage() {
                       <span
                         className={cn(
                           "px-2 py-0.5 rounded text-xs font-medium border",
-                          emailServiceActive
+                          isEffectiveEmailActive
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
                             : "bg-amber-50 text-amber-700 border-amber-200/60"
                         )}
                       >
-                        {emailServiceActive ? "Managed" : "Inactive"}
+                        {isEffectiveEmailActive ? "Managed" : "Inactive"}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 leading-relaxed">

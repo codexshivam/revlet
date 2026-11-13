@@ -2190,6 +2190,21 @@ export async function listMailGroups(idToken: string, orgId: string) {
     });
 
     groups.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Non-blocking self-healing reconciliation to ensure all groups in Firestore
+    // are automatically synchronized in Stalwart Mail Server without manual recreation
+    if (groups.length > 0) {
+      Promise.allSettled(
+        groups.map((g) =>
+          syncStalwartGroupPrincipal({
+            groupEmail: g.groupEmail,
+            name: g.name,
+            memberEmails: g.memberEmails,
+          })
+        )
+      ).catch(() => {});
+    }
+
     return { success: true, data: groups };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to list groups.' };

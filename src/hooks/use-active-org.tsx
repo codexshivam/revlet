@@ -35,6 +35,7 @@ export interface Organization {
   mailDailySent?: number
   mailCatchAllUserId?: string | null
   mailCatchAllEmail?: string | null
+  mailDkimTokens?: string[]
   isEducation?: boolean
   // Google Workspace fields
   workspaceStatus?: 'none' | 'applied' | 'pending' | 'active'

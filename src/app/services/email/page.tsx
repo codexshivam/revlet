@@ -133,6 +133,77 @@ export default function EmailServiceAdminPage() {
     }
   }, [selectedOrg])
 
+  // Pre-computed fallback DNS records for immediate display before network resolution
+  const fallbackDnsRecords = useMemo<MailRequiredDnsRecord[]>(() => {
+    if (!selectedOrg?.domain) return []
+    const domain = selectedOrg.domain.toLowerCase().trim()
+    const tokens =
+      selectedOrg.mailDkimTokens &&
+      Array.isArray(selectedOrg.mailDkimTokens) &&
+      selectedOrg.mailDkimTokens.length === 3
+        ? selectedOrg.mailDkimTokens
+        : ["ses1", "ses2", "ses3"]
+    return [
+      {
+        id: "mx-primary",
+        purpose: "Inbound Mail Routing (MX)",
+        type: "MX",
+        name: domain,
+        content: "mx.revlet.me",
+        priority: 10,
+        ttl: "Auto",
+        verified: false,
+      },
+      {
+        id: "txt-spf",
+        purpose: "Sender Policy Authorization (SPF)",
+        type: "TXT",
+        name: domain,
+        content: "v=spf1 mx include:_spf.mx.revlet.me include:amazonses.com ~all",
+        ttl: "Auto",
+        verified: false,
+      },
+      {
+        id: "txt-dmarc",
+        purpose: "Domain Authentication Policy (DMARC)",
+        type: "TXT",
+        name: `_dmarc.${domain}`,
+        content: "v=DMARC1; p=quarantine; pct=100;",
+        ttl: "Auto",
+        verified: false,
+      },
+      {
+        id: "cname-dkim-1",
+        purpose: "Domain Signing Key #1 (DKIM)",
+        type: "CNAME",
+        name: `${tokens[0]}._domainkey.${domain}`,
+        content: `${tokens[0]}.dkim.amazonses.com`,
+        ttl: "Auto",
+        verified: false,
+      },
+      {
+        id: "cname-dkim-2",
+        purpose: "Domain Signing Key #2 (DKIM)",
+        type: "CNAME",
+        name: `${tokens[1]}._domainkey.${domain}`,
+        content: `${tokens[1]}.dkim.amazonses.com`,
+        ttl: "Auto",
+        verified: false,
+      },
+      {
+        id: "cname-dkim-3",
+        purpose: "Domain Signing Key #3 (DKIM)",
+        type: "CNAME",
+        name: `${tokens[2]}._domainkey.${domain}`,
+        content: `${tokens[2]}.dkim.amazonses.com`,
+        ttl: "Auto",
+        verified: false,
+      },
+    ]
+  }, [selectedOrg?.domain, selectedOrg?.mailDkimTokens])
+
+  const displayDnsRecords = requiredDnsRecords.length > 0 ? requiredDnsRecords : fallbackDnsRecords
+
   // Directory collections
   const [orgUnits, setOrgUnits] = useState<MailOrgUnit[]>([])
   const [users, setUsers] = useState<MailUserRecord[]>([])
@@ -342,20 +413,22 @@ export default function EmailServiceAdminPage() {
         throw new Error(res.error)
       }
 
+      setServiceActive(true)
+
       if (res.data?.dnsProvisionedAutomatically) {
         toast({
           title: "Email Service activated",
-          description: `Required DNS records were automatically added to ${selectedOrg?.domain}.`,
+          description: `Snapshot created, conflicting MX records removed, and required DNS records added to ${selectedOrg?.domain}.`,
         })
       } else if (res.data?.dnsWarning) {
         toast({
           title: "Email Service activated",
-          description: `Review required DNS records in Settings (${res.data.dnsWarning}).`,
+          description: `Email Service is active. Review DNS records in Settings (${res.data.dnsWarning}).`,
         })
       } else {
         toast({
           title: "Email Service activated",
-          description: `Email Service is now active for ${selectedOrg?.domain}.`,
+          description: `Email Service is now active for ${selectedOrg?.domain}. Please ensure required DNS records are added at your registrar.`,
         })
       }
 
@@ -1092,33 +1165,47 @@ export default function EmailServiceAdminPage() {
                     Required Routing Records for {selectedOrg.domain}
                   </span>
                   <span className="text-xs font-mono text-slate-500 tabular-nums">
-                    {requiredDnsRecords.length} {requiredDnsRecords.length === 1 ? "Record" : "Records"}
+                    {displayDnsRecords.length} {displayDnsRecords.length === 1 ? "Record" : "Records"}
                   </span>
                 </div>
 
-                <div className="rounded-lg border border-slate-200/80 bg-white divide-y divide-slate-100">
-                  {requiredDnsRecords.map((rec) => (
-                    <div
-                      key={rec.id}
-                      className="px-4 py-3 flex items-center justify-between gap-4 text-xs"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="font-mono text-[11px] text-slate-500 w-14 shrink-0">
-                          {rec.type}
-                        </span>
-                        <span className="font-mono text-slate-800 truncate">{rec.name}</span>
+                {isLoadingQuota && requiredDnsRecords.length === 0 && displayDnsRecords.length === 0 ? (
+                  <div className="rounded-lg border border-slate-200/80 bg-white divide-y divide-slate-100 p-2 space-y-2">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-4 w-12" />
+                          <Skeleton className="h-4 w-36" />
+                        </div>
+                        <Skeleton className="h-4 w-48" />
                       </div>
-                      <span className="font-mono text-slate-500 truncate max-w-[220px]">
-                        {rec.content}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-200/80 bg-white divide-y divide-slate-100">
+                    {displayDnsRecords.map((rec) => (
+                      <div
+                        key={rec.id}
+                        className="px-4 py-3 flex items-center justify-between gap-4 text-xs"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="font-mono text-[11px] font-semibold text-slate-500 w-14 shrink-0">
+                            {rec.type}
+                          </span>
+                          <span className="font-mono text-slate-800 truncate">{rec.name}</span>
+                        </div>
+                        <span className="font-mono text-slate-500 truncate max-w-[220px]">
+                          {rec.content}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <p className="text-xs text-slate-500 leading-relaxed">
                   {dnsServiceActive
-                    ? `Activating Email Service snapshots your zone and writes these ${requiredDnsRecords.length} records to ${selectedOrg.domain} immediately.`
-                    : `After activation, copy these records from Settings into your domain registrar for ${selectedOrg.domain}.`}
+                    ? `Activating Email Service snapshots your zone and writes these ${displayDnsRecords.length} records to ${selectedOrg.domain} immediately.`
+                    : `After activation, copy these ${displayDnsRecords.length} records from Settings into your domain registrar/DNS provider for ${selectedOrg.domain}.`}
                 </p>
               </div>
             </div>
@@ -1520,22 +1607,26 @@ export default function EmailServiceAdminPage() {
                                 setAliasTargetUser(u)
                                 setNewAliasPrefix("")
                                 setEditingAliasOriginal(null)
+                                setEditingAliasPrefix("")
                               }}
-                              className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
+                              className="text-xs text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                             >
-                              + Add Alias
+                              0 Aliases
                             </button>
                           ) : (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {u.aliases.map((alias) => (
-                                <span
-                                  key={alias}
-                                  className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-700"
-                                >
-                                  {alias}
-                                </span>
-                              ))}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAliasTargetUser(u)
+                                setNewAliasPrefix("")
+                                setEditingAliasOriginal(null)
+                                setEditingAliasPrefix("")
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 hover:bg-slate-200/80 text-slate-700 transition-colors cursor-pointer"
+                            >
+                              <span className="font-mono tabular-nums font-semibold">{u.aliases.length}</span>
+                              <span>{u.aliases.length === 1 ? "Alias" : "Aliases"}</span>
+                            </button>
                           )}
                         </TableCell>
 

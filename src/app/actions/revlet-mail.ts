@@ -11,6 +11,7 @@ import {
   deleteDNSRecord,
   createZoneSnapshot,
 } from './cloudflare-dns';
+import { cfFetch } from './cf-fetch';
 import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
 import {
   hashMailPassword,
@@ -773,28 +774,48 @@ async function provisionRequiredDnsRecordsOnZone(
     }
 
     const currentRecords: any[] = existingRes.data || [];
-    const normalizedDomain = domainName.toLowerCase().trim();
+    const normalizedDomain = domainName.toLowerCase().replace(/\.$/, '').trim();
+    const expectedMxHost = MAIL_MX_HOST.toLowerCase().replace(/\.$/, '').trim();
 
-    // Remove conflicting root MX or SPF records that do not match Email Service
+    // Disable conflicting Cloudflare Email Routing if present on zone so it does not intercept MX records
+    try {
+      const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+      await cfFetch(`/zones/${zoneId}/email/routing/disable`, { method: 'POST' }, verified.cfToken);
+    } catch {
+      // Non-fatal if Email Routing is not configured on zone
+    }
+
+    // Remove conflicting root MX records (any MX that does not point to mx.revlet.me) and conflicting SPF records
     const conflictingRootRecords = currentRecords.filter((r: any) => {
-      const rName = (r.name || '').toLowerCase().replace(/\.$/, '');
-      const isRoot = rName === normalizedDomain || rName === '@';
-      if (!isRoot) return false;
-      if (r.type === 'MX' && !(r.content || '').toLowerCase().includes(MAIL_MX_HOST)) {
-        return true;
+      const rType = (r.type || '').toUpperCase();
+      const rName = (r.name || '').toLowerCase().replace(/\.$/, '').trim();
+      const isRoot = rName === normalizedDomain || rName === '@' || rName === '';
+
+      if (rType === 'MX') {
+        const rContent = (r.content || '').toLowerCase().replace(/\.$/, '').trim();
+        // If it's on root and not pointing to mx.revlet.me, it's a conflict
+        if (isRoot && rContent !== expectedMxHost) {
+          return true;
+        }
       }
-      if (
-        r.type === 'TXT' &&
-        (r.content || '').toLowerCase().includes('v=spf1') &&
-        !(r.content || '').toLowerCase().includes(MAIL_SPF_INCLUDE)
-      ) {
-        return true;
+
+      if (rType === 'TXT' && isRoot) {
+        const rContent = (r.content || '').toLowerCase();
+        if (rContent.includes('v=spf1') && !rContent.includes(MAIL_SPF_INCLUDE.toLowerCase())) {
+          return true;
+        }
       }
+
       return false;
     });
 
     for (const conflict of conflictingRootRecords) {
-      await deleteDNSRecord(idToken, orgId, zoneId, conflict.id);
+      try {
+        console.log(`[Email Service Activation] Removing conflicting record ${conflict.type} ${conflict.name} -> ${conflict.content}`);
+        await deleteDNSRecord(idToken, orgId, zoneId, conflict.id);
+      } catch (delErr) {
+        console.warn(`[Email Service Activation] Warning deleting conflict ${conflict.id}:`, delErr);
+      }
     }
 
     const refreshedRes = await listDNSRecords(idToken, orgId, zoneId);
@@ -1028,6 +1049,9 @@ export async function activateMailService(idToken: string, orgId: string) {
 
     await adminDb.collection('organizations').doc(orgId).update({
       mailServiceActive: true,
+      emailForwardingActive: false,
+      emailRoutingActive: false,
+      emailServiceActive: false,
       mailMonthlyLimit: orgData.mailMonthlyLimit ?? 1000,
       mailDailyLimit: orgData.mailDailyLimit ?? 100,
       mailMonthlySent: orgData.mailMonthlySent ?? 0,
@@ -1035,7 +1059,7 @@ export async function activateMailService(idToken: string, orgId: string) {
       mailCatchAllUserId: orgData.mailCatchAllUserId ?? null,
       mailCatchAllEmail: orgData.mailCatchAllEmail ?? null,
       mailActivatedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: new Date().toISOString(),
     });
 
     await logMailAuditEvent({

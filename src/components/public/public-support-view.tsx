@@ -9,30 +9,10 @@ import {
   ArrowRight,
   FileCode2,
 } from 'lucide-react';
+import { SUPPORT_FAQS } from '@/lib/support-faqs';
 
 export function PublicSupportView() {
-  const faqs = [
-    {
-      q: 'What is Revlet?',
-      a: 'Revlet is a multi-tenant IT Management Control Plane designed for distributed organizations. It unifies DNS Management and Email Service administration into a single pane of glass.',
-    },
-    {
-      q: 'How does Revlet manage Email Service?',
-      a: 'Revlet provisions custom domain mailboxes, groups, organizational units, and automated SPF, DKIM, and DMARC authentication with daily and monthly quota enforcement.',
-    },
-    {
-      q: 'How does Revlet interact with DNS Management?',
-      a: 'Revlet executes atomic CRUD operations on DNS records (A, AAAA, CNAME, MX, TXT, SRV, CAA, PTR, NS), supports point-in-time zone snapshots, and allows either managed or Bring-Your-Own-Token zones.',
-    },
-    {
-      q: 'Is Revlet secure for multi-tenant organizations?',
-      a: 'Yes. Revlet enforces a Defense-in-Depth security model featuring Server Actions tenancy verification to prevent Insecure Direct Object References (IDOR), granular Firestore security rules, and strict Content Security Policy (CSP) headers.',
-    },
-    {
-      q: 'How long does DNS record propagation take?',
-      a: 'Changes made through Revlet are committed directly to Cloudflare’s global Anycast edge network, typically propagating worldwide in under 10 seconds for proxied and standard records.',
-    },
-  ];
+  const faqs = SUPPORT_FAQS;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-body text-slate-900 selection:bg-blue-100 selection:text-blue-900">
@@ -106,10 +86,10 @@ export function PublicSupportView() {
             Documentation &amp; Support Center
           </div>
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-headline font-bold text-slate-900 tracking-tight leading-tight">
-            How can we help your IT team today?
+            How can we help your team today?
           </h1>
           <p className="text-sm sm:text-base text-slate-600 leading-relaxed font-normal max-w-2xl mx-auto">
-            Find answers to frequently asked questions, consult architectural guides, or reach out directly to the Revlet infrastructure engineering desk.
+            Get quick answers about business email, domains, and team access — or reach out and our support team will help you directly.
           </p>
           <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <a

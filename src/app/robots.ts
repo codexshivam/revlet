@@ -1,67 +1,16 @@
 import { MetadataRoute } from 'next';
+import { SITE_URL } from '@/lib/seo';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://app.revlet.me';
-
-  const publicAllowed = [
-    '/',
-    '/login',
-    '/signup',
-    '/support',
-    '/llms.txt',
-    '/llms-full.txt',
-    '/sitemap.xml',
-    '/banner.svg',
-    '/favicon.svg',
-  ];
-
-  const privateDisallowed = [
-    '/services/',
-    '/account/',
-    '/management/',
-    '/api/',
-  ];
+  const privateDisallowed = ['/services/', '/account/', '/management/', '/api/'];
 
   return {
     rules: [
-      // Standard search engine crawlers (Googlebot, Bingbot, DuckDuckGo)
-      {
-        userAgent: '*',
-        allow: publicAllowed,
-        disallow: privateDisallowed,
-      },
-      // Google-Extended (Google Gemini / Vertex AI)
-      {
-        userAgent: 'Google-Extended',
-        allow: publicAllowed,
-        disallow: privateDisallowed,
-      },
-      // OpenAI / ChatGPT web search and training crawler
-      {
-        userAgent: 'GPTBot',
-        allow: publicAllowed,
-        disallow: privateDisallowed,
-      },
-      // Anthropic / Claude web search crawler
-      {
-        userAgent: 'ClaudeBot',
-        allow: publicAllowed,
-        disallow: privateDisallowed,
-      },
-      // Perplexity AI search crawler
-      {
-        userAgent: 'PerplexityBot',
-        allow: publicAllowed,
-        disallow: privateDisallowed,
-      },
-      // Applebot & Apple Intelligence
-      {
-        userAgent: 'Applebot-Extended',
-        allow: publicAllowed,
-        disallow: privateDisallowed,
-      },
+      // All search engines and AI assistants (Googlebot, Bingbot, Google-Extended,
+      // GPTBot, ClaudeBot, PerplexityBot, Applebot) may read public pages only.
+      { userAgent: '*', allow: '/', disallow: privateDisallowed },
     ],
-    sitemap: `${baseUrl}/sitemap.xml`,
-    host: baseUrl,
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   };
 }

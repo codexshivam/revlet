@@ -1,11 +1,7 @@
 import { Metadata } from 'next';
-import { buildPageMetadata } from '@/lib/seo';
+import { buildPageMetadata, PAGE_SEO } from '@/lib/seo';
 
-export const metadata: Metadata = buildPageMetadata({
-  title: 'Email Service | Revlet',
-  description: 'Manage custom domain email accounts, aliases, organizational units, groups, and domain routing.',
-  indexable: false,
-});
+export const metadata: Metadata = buildPageMetadata(PAGE_SEO.email);
 
 export default function EmailServiceLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;

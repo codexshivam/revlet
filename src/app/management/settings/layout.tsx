@@ -1,11 +1,7 @@
 import { Metadata } from 'next';
-import { buildPageMetadata } from '@/lib/seo';
+import { buildPageMetadata, PAGE_SEO } from '@/lib/seo';
 
-export const metadata: Metadata = buildPageMetadata({
-  title: 'Account Settings | Revlet',
-  description: 'Organization settings, security preferences, and tenant configuration in Revlet.',
-  indexable: false,
-});
+export const metadata: Metadata = buildPageMetadata(PAGE_SEO.settings);
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;

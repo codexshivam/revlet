@@ -1,48 +1,39 @@
 import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
-import { buildPageMetadata } from '@/lib/seo';
+import { buildPageMetadata, PAGE_SEO, SITE_URL, MARKETING_URL } from '@/lib/seo';
 
-export const metadata: Metadata = buildPageMetadata({
-  title: 'Login | Revlet',
-  description: 'Sign in to Revlet to manage your organization domains, DNS records, custom email service, and team access.',
-  path: '/login',
-  indexable: true,
-  keywords: [
-    'Revlet login',
-    'Revlet console sign in',
-    'DNS Management login',
-    'Email Service login',
-    'business email admin console',
-    'team access control',
+const page = PAGE_SEO.login;
+
+export const metadata: Metadata = buildPageMetadata({ ...page, indexable: true });
+
+const loginPageLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': `${SITE_URL}${page.path}#webpage`,
+      url: `${SITE_URL}${page.path}`,
+      name: page.ogTitle,
+      description: page.description,
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+      about: { '@id': `${SITE_URL}/#application` },
+      breadcrumb: { '@id': `${SITE_URL}${page.path}#breadcrumb` },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${SITE_URL}${page.path}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Revlet', item: MARKETING_URL },
+        { '@type': 'ListItem', position: 2, name: 'Sign In', item: `${SITE_URL}${page.path}` },
+      ],
+    },
   ],
-  ogTitle: 'Login | Revlet',
-  ogDescription: "Access your organization's unified DNS, Email, and Team Management console.",
-  ogAlt: 'Login | Revlet',
-});
+};
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
-  const breadcrumbLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      {
-        '@type': 'ListItem',
-        position: 1,
-        name: 'Revlet',
-        item: 'https://revlet.me',
-      },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: 'Console',
-        item: 'https://app.revlet.me/login',
-      },
-    ],
-  };
-
   return (
     <>
-      <JsonLd data={breadcrumbLd} />
+      <JsonLd data={loginPageLd} />
       {children}
     </>
   );

@@ -1,12 +1,14 @@
 {
-  "name": "Revlet Console",
+  "name": "Revlet",
   "short_name": "Revlet",
-  "description": "Enterprise infrastructure management console for institutions and businesses.",
+  "description": "Professional email on your own domain, simple DNS management, and secure team access — all in one place.",
   "start_url": "/login",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#ffffff",
+  "theme_color": "#020617",
   "orientation": "any",
+  "lang": "en",
   "icons": [
     {
       "src": "/favicon-48x48.png",

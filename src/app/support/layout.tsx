@@ -1,63 +1,45 @@
 import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
-import { buildPageMetadata } from '@/lib/seo';
+import { buildPageMetadata, PAGE_SEO, SITE_URL, MARKETING_URL } from '@/lib/seo';
+import { SUPPORT_FAQS } from '@/lib/support-faqs';
 
-export const metadata: Metadata = buildPageMetadata({
-  title: 'Help & Support | Revlet',
-  description: 'Access technical documentation, step-by-step onboarding guides, FAQs, and submit infrastructure support tickets.',
-  path: '/support',
-  indexable: true,
-  keywords: [
-    'Revlet support',
-    'IT help desk',
-    'DNS troubleshooting',
-    'DNS Management help',
-    'Email Service help',
-    'SPF DKIM assistance',
+const page = PAGE_SEO.support;
+
+export const metadata: Metadata = buildPageMetadata({ ...page, indexable: true });
+
+const supportPageLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': ['WebPage', 'FAQPage'],
+      '@id': `${SITE_URL}${page.path}#webpage`,
+      url: `${SITE_URL}${page.path}`,
+      name: page.ogTitle,
+      description: page.description,
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+      about: { '@id': `${SITE_URL}/#application` },
+      breadcrumb: { '@id': `${SITE_URL}${page.path}#breadcrumb` },
+      mainEntity: SUPPORT_FAQS.map((faq) => ({
+        '@type': 'Question',
+        name: faq.q,
+        acceptedAnswer: { '@type': 'Answer', text: faq.a },
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${SITE_URL}${page.path}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Revlet', item: MARKETING_URL },
+        { '@type': 'ListItem', position: 2, name: 'Help & Support', item: `${SITE_URL}${page.path}` },
+      ],
+    },
   ],
-  ogTitle: 'Help & Support | Revlet',
-  ogDescription: 'Documentation, FAQs, and ticket support for Revlet organizations and IT teams.',
-  ogAlt: 'Help & Support | Revlet',
-});
+};
 
 export default function SupportLayout({ children }: { children: React.ReactNode }) {
-  const breadcrumbLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      {
-        '@type': 'ListItem',
-        position: 1,
-        name: 'Revlet',
-        item: 'https://revlet.me',
-      },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: 'Documentation & Support',
-        item: 'https://app.revlet.me/support',
-      },
-    ],
-  };
-
-  const supportLd = {
-    '@context': 'https://schema.org',
-    '@type': 'ContactPage',
-    name: 'Revlet Support Center',
-    url: 'https://app.revlet.me/support',
-    description: 'Technical documentation, service status, and customer assistance for Revlet administrators.',
-    mainEntity: {
-      '@type': 'Organization',
-      name: 'Revlet Support',
-      url: 'https://revlet.me',
-      email: 'hello@revlet.me',
-    },
-  };
-
   return (
     <>
-      <JsonLd data={breadcrumbLd} />
-      <JsonLd data={supportLd} />
+      <JsonLd data={supportPageLd} />
       {children}
     </>
   );

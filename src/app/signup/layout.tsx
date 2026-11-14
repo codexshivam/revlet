@@ -1,48 +1,44 @@
 import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
-import { buildPageMetadata } from '@/lib/seo';
+import { buildPageMetadata, PAGE_SEO, SITE_URL, MARKETING_URL } from '@/lib/seo';
 
-export const metadata: Metadata = buildPageMetadata({
-  title: 'Get Started | Revlet',
-  description: 'Create your Revlet organization to manage DNS records, launch custom domain email, and delegate team access in minutes.',
-  path: '/signup',
-  indexable: true,
-  keywords: [
-    'Revlet signup',
-    'get started with Revlet',
-    'register organization',
-    'custom domain email setup',
-    'DNS Management setup',
-    'team IT control plane',
+const page = PAGE_SEO.signup;
+
+export const metadata: Metadata = buildPageMetadata({ ...page, indexable: true });
+
+const signupPageLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': `${SITE_URL}${page.path}#webpage`,
+      url: `${SITE_URL}${page.path}`,
+      name: page.ogTitle,
+      description: page.description,
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+      about: { '@id': `${SITE_URL}/#application` },
+      potentialAction: {
+        '@type': 'RegisterAction',
+        target: `${SITE_URL}${page.path}`,
+        object: { '@id': `${SITE_URL}/#application` },
+      },
+      breadcrumb: { '@id': `${SITE_URL}${page.path}#breadcrumb` },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${SITE_URL}${page.path}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Revlet', item: MARKETING_URL },
+        { '@type': 'ListItem', position: 2, name: 'Get Started', item: `${SITE_URL}${page.path}` },
+      ],
+    },
   ],
-  ogTitle: 'Get Started | Revlet',
-  ogDescription: 'Create your Revlet organization and launch DNS and Business Email Service in minutes.',
-  ogAlt: 'Get Started | Revlet',
-});
+};
 
 export default function SignupLayout({ children }: { children: React.ReactNode }) {
-  const breadcrumbLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      {
-        '@type': 'ListItem',
-        position: 1,
-        name: 'Revlet',
-        item: 'https://revlet.me',
-      },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: 'Get Started',
-        item: 'https://app.revlet.me/signup',
-      },
-    ],
-  };
-
   return (
     <>
-      <JsonLd data={breadcrumbLd} />
+      <JsonLd data={signupPageLd} />
       {children}
     </>
   );

@@ -3,15 +3,9 @@ import Link from "next/link"
 import { Home, LifeBuoy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AuthFrame } from "@/components/layout/auth-frame"
+import { buildPageMetadata, PAGE_SEO } from "@/lib/seo"
 
-export const metadata: Metadata = {
-  title: { absolute: "Not Found Error" },
-  description: "The requested page does not exist or has been relocated.",
-  robots: {
-    index: false,
-    follow: false,
-  },
-}
+export const metadata: Metadata = buildPageMetadata(PAGE_SEO.notFound)
 
 export default function NotFound() {
   return (

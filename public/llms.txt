@@ -1,38 +1,18 @@
-# Revlet Console
+# Revlet Platform (app.revlet.me)
 
-> Enterprise Multi-Tenant IT Management & Cloud Infrastructure Control Plane
+> Professional business email, simple DNS management, and secure team access — all in one place.
 
-Revlet is an open-source, multi-tenant cloud control plane engineered by Shivam Yadav for educational institutions, academies, and distributed organizations. It unifies Cloudflare API v4, Google Workspace Directory & Admin SDK, and Firebase Zero-Trust Security Infrastructure into a high-assurance single pane of glass.
+Revlet helps growing businesses, schools, and teams run their cloud infrastructure from one simple, secure dashboard. Launch custom `@yourdomain.com` email accounts, manage your domain DNS with restore points, and invite teammates with the exact access they need for each organization.
 
-## Founder & Lead Developer
-- **Creator / Developer**: Shivam Yadav
-- **Profile & Entity Home**: https://revlet.me/about/#shivam-yadav
-- **GitHub**: https://github.com/codexshivam
-- **Repository**: https://github.com/codexshivam/revlet
-- **License**: Apache-2.0 Open Source
+## What You Can Do with Revlet
+- **Business Email on Your Own Domain**: Create `@yourcompany.com` mailboxes, aliases, mailing groups, and organizational units in minutes. Built-in SPF, DKIM, and DMARC protection helps your emails reach the inbox, while a 14-day recovery window protects against accidental deletion.
+- **Simple, Reliable DNS Management**: Add, search, and update domain records (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, `SRV`, `NS`) from a clean interface, and save restore points before making major changes.
+- **Per-Organization Team Access**: Invite teammates as organization admins or grant access only to specific services (DNS or Email) per organization—without ever sharing root passwords or provider keys.
+- **Multi-Organization Workspace**: Manage multiple companies, brands, or client domains from a single Revlet account and switch between them in one click.
 
-## Core Capabilities
-- **Cloudflare DNS Management**: Full lifecycle management of authoritative DNS records (A, AAAA, CNAME, MX, TXT, SRV) directly via Cloudflare API v4 with real-time Anycast edge deployment and proxy toggling.
-- **Custom Email Routing & Domain Security**: Instant alias creation forwarding domain mail to verified destination inboxes; automated audit of SPF, DKIM, and DMARC protocol parameters.
-- **Edge Infrastructure Security**: One-click Cloudflare edge cache purging, SSL/TLS encryption mode configuration (Flexible, Full, Strict), and DDoS protection sensitivity adjustment.
-- **Google Workspace for Education Administration**: Centralized directory management using Domain-Wide Delegation (DWD); provision, suspend, restore, and delete user accounts; organize users into Organizational Units (OUs); batch CSV import; monitor aggregate Google Drive storage pools and Google Alert Center security events.
-- **Multi-Tenant Zero-Trust Tenancy**: Cryptographic session verification via Firebase ID tokens; Server Action authorization guard (`verifyUserOrgAccess`) preventing Insecure Direct Object References (IDOR) and cross-tenant zone tampering.
-
-## Architecture & Technology Stack
-- **Framework**: Next.js 15 (App Router, Turbopack, React 19)
-- **Language**: TypeScript (Strict Mode)
-- **Styling**: Tailwind CSS + Radix UI accessible primitives
-- **Network & DNS**: Cloudflare API v4
-- **Directory SDK**: Google Workspace Admin SDK (`googleapis`) via Domain-Wide Delegation
-- **Database & Authentication**: Firebase Authentication, Cloud Firestore, Firebase Storage
-- **License**: Apache-2.0
-
-## Key URLs & Resources
-- Marketing & Project Home: https://revlet.me
-- Founder & Leadership: https://revlet.me/about/
-- Console (Application): https://app.revlet.me
-- Console Sign In: https://app.revlet.me/login
-- Console Registration: https://app.revlet.me/signup
-- Documentation & Support: https://app.revlet.me/support
-- GitHub Repository: https://github.com/codexshivam/revlet
-- Issue Tracker: https://github.com/codexshivam/revlet/issues
+## Key Links
+- **Marketing Site**: https://revlet.me
+- **Platform Dashboard**: https://app.revlet.me
+- **Sign In**: https://app.revlet.me/login
+- **Get Started**: https://app.revlet.me/signup
+- **Help & Support**: https://app.revlet.me/support

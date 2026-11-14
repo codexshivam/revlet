@@ -1,72 +1,34 @@
-# Revlet — Complete Technical Specification for AI & LLM Systems
+# Revlet Platform — Complete Product & Support Overview
 
-Revlet is an open-source, multi-tenant enterprise IT management control plane engineered by Shivam Yadav. It bridges Cloudflare v4 Network API, Google Workspace Directory & Admin SDK, and Firebase Zero-Trust Security Infrastructure into a unified, high-assurance administrative portal.
+> Dashboard | Revlet Platform (`https://app.revlet.me`)
+> Marketing Site: `https://revlet.me` (`Revlet | Enterprise Cloud Infrastructure`)
 
-## Leadership & Entity Provenance
-- **Developer / Creator**: Shivam Yadav (https://revlet.me/about/#shivam-yadav)
-- **GitHub**: https://github.com/codexshivam
-- **Organization**: Revlet (https://revlet.me/#organization)
-- **Repository**: https://github.com/codexshivam/revlet
-- **License**: Apache-2.0 Open Source License
+## Overview
+Revlet brings professional business email, domain DNS management, and team access control together in one clean, reliable platform. Organizations use Revlet so their teams don't have to jump between separate domain registrars, DNS panels, and email admin tools.
 
-## 1. Domain Model & Entities
+## Core Services
 
-### Organization Tenant
-- `id`: Unique Firestore document identifier.
-- `name`: Institutional name (e.g., Apex Institute of Technology).
-- `domain`: Registered apex domain name (e.g., example.edu).
-- `ownerId`: Firebase User UID of the organization creator.
-- `cloudflareZoneId`: Authoritative Cloudflare 32-character hex zone ID.
-- `isEducation`: Boolean flag enabling Google Workspace for Education administration modules.
-- `workspaceStatus`: 'none' | 'applied' | 'pending' | 'active'.
-- `workspaceAdminEmail`: Domain super-administrator email for Domain-Wide Delegation impersonation.
-- `workspaceCustomerId`: Google Workspace domain directory customer ID.
-- `memberEmails`: Array of authorized staff email addresses.
+### 1. Business Email Service (`/services/email`)
+- **Custom Domain Mailboxes**: Create professional email addresses on your own domain (`you@yourcompany.com`).
+- **Aliases & Mailing Groups**: Add multiple email aliases per user and create team distribution groups (`sales@`, `support@`).
+- **Organizational Units**: Group users by department, campus, or team (`/` or custom paths) and filter your directory in one click.
+- **Bulk Import & Export**: Onboard hundreds of users at once using a downloadable CSV template (including initial passwords) or export your directory anytime.
+- **Built-In Deliverability & Protection**: Automatic checks for required `MX`, `SPF`, `DKIM`, and `DMARC` records, with one-click setup when your domain DNS is managed in Revlet.
+- **14-Day Recovery Window**: Deleted email accounts and deactivated email services remain recoverable for 14 days before permanent removal, with automated alerts sent to the organization owner.
 
-### Team Member
-- `id`: Member document ID.
-- `organizationId`: Associated organization ID.
-- `email`: Staff work email.
-- `role`: 'Owner' | 'Admin' | 'Member'.
-- `status`: 'Active' | 'Pending'.
+### 2. DNS Management (`/services/dns`)
+- **Clean Record Management**: View, search, filter, and paginate `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `SRV`, and `NS` records across desktop and mobile.
+- **Proxy & Routing Controls**: Toggle traffic proxying and configure mail routing records without complex syntax.
+- **Restore Points (Snapshots)**: Save a point-in-time snapshot of your domain's DNS records and roll back whenever needed.
 
-## 2. Server Actions & API Integrations
+### 3. Team Management (`/management/team`)
+- **Right-Sized Access Per Organization**: Choose `Admin` access or `Assign Services` (`DNS: Read`, `DNS: Edit`, `DNS: Admin`, `Email: Read`, `Email: Add`, `Email: Admin`) separately for every organization a team member belongs to.
+- **No Shared Passwords**: Team members sign in with their own Revlet account, keeping your organization secure and auditable.
 
-### Network & DNS Infrastructure (Cloudflare API v4)
-- `listDNSRecords(idToken, orgId, zoneId)`: Paginated fetch of up to 1,000 DNS records.
-- `createDNSRecord(idToken, orgId, zoneId, record)`: Creates authoritative record (A, AAAA, CNAME, TXT, MX, SRV) with proxy and TTL options.
-- `updateDNSRecord(idToken, orgId, zoneId, recordId, record)`: Updates existing record with atomic synchronization to Anycast edge.
-- `deleteDNSRecord(idToken, orgId, zoneId, recordId)`: Deletes record from Cloudflare authoritative zone.
-- `purgeCache(idToken, orgId, zoneId, purgeEverything, files)`: Triggers edge cache purge across Cloudflare CDN.
-- `setSSLSetting(idToken, orgId, zoneId, value)`: Sets SSL/TLS encryption mode ('off', 'flexible', 'full', 'strict').
-- `setSecurityLevel(idToken, orgId, zoneId, value)`: Configures DDoS security level ('essentially_off', 'low', 'medium', 'high', 'under_attack').
+### 4. Account Home (`/account/home`)
+- **All Your Organizations in One Place**: Add new organizations, switch active workspaces from the header, and manage organization details from a unified home screen.
 
-### Custom Email Routing (Cloudflare Email Routing)
-- `listEmailRoutingRules(idToken, orgId, zoneId)`: Lists custom forwarder aliases and catch-all status.
-- `createEmailRoutingRule(idToken, orgId, zoneId, rule)`: Configures alias-to-inbox forwarding.
-- `verifyEmailSecurity(idToken, orgId, zoneId)`: Validates SPF, DKIM, and DMARC protocol parameters in real time.
-
-### Google Workspace for Education (Google Admin SDK)
-- `getImpersonatedClient(adminEmail)`: Authorizes Google JWT client with Domain-Wide Delegation using service account credentials.
-- `listWorkspaceUsers(idToken, orgId, adminEmail, pageToken)`: Fetches directory users with pagination, OU paths, and suspension status.
-- `createWorkspaceUser(idToken, orgId, adminEmail, userData)`: Provisions new student/staff account.
-- `updateWorkspaceUser(idToken, orgId, adminEmail, userId, updateData)`: Modifies account details, name, or OU.
-- `suspendWorkspaceUser(idToken, orgId, adminEmail, userId, suspend)`: Toggles account suspension state.
-- `deleteWorkspaceUser(idToken, orgId, adminEmail, userId)`: Permanently deletes user account from Google Workspace.
-- `getStorageUsage(idToken, orgId, adminEmail)`: Queries Reports API for domain storage totals and individual consumer breakdown.
-- `getWorkspaceAlerts(idToken, orgId, adminEmail)`: Fetches security alerts from Google Alert Center.
-
-## 3. Tenancy & Security Protections
-
-### Server-Side Tenancy Guard (`verifyUserOrgAccess`)
-1. Validates caller's Firebase session via `adminAuth.verifyIdToken(idToken)`.
-2. Loads target organization document from Firestore (`organizations/{orgId}`).
-3. Asserts caller is Resource Owner (`ownerId == uid`), Platform Superadmin, or verified team member.
-4. Checks `expectedZoneId`: if a Cloudflare operation is requested, verifies that `orgData.cloudflareZoneId === expectedZoneId` to prevent cross-tenant zone manipulation (anti-IDOR).
-
-### Defense-in-Depth HTTP Headers
-- `Content-Security-Policy`: Restricts scripts, fonts, styles, connections, and frame sources.
-- `Strict-Transport-Security`: `max-age=63072000; includeSubDomains; preload`
-- `X-Frame-Options`: `SAMEORIGIN`
-- `X-Content-Type-Options`: `nosniff`
-- `Referrer-Policy`: `strict-origin-when-cross-origin`
+## Public Pages on `app.revlet.me`
+- **Get Started (`https://app.revlet.me/signup`)**: Create a Revlet account and register your first organization in minutes.
+- **Login (`https://app.revlet.me/login`)**: Sign in to manage your business email, domains, and team access.
+- **Help & Support (`https://app.revlet.me/support`)**: Browse frequently asked questions or contact `hello@revlet.me` for direct support.

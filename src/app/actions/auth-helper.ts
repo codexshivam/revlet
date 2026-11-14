@@ -92,6 +92,11 @@ export async function verifyUserOrgAccess(
     }
   }
 
+  // Platform fallback: use platform Cloudflare token if tenant did not supply BYOT token
+  if (!cfToken && process.env.CLOUDFLARE_DNS_TOKEN) {
+    cfToken = process.env.CLOUDFLARE_DNS_TOKEN.trim();
+  }
+
   return {
     uid: decodedToken.uid,
     email: decodedToken.email,

@@ -788,13 +788,16 @@ async function ensureOrgDkimTokens(
   const domain = (orgData.domain || '').toLowerCase().trim();
 
   // Attempt automatic AWS SES v2 Domain Identity registration & Easy DKIM token fetch
-  if (domain && !orgData.mailSesIdentityProvisioned) {
+  if (domain) {
     const sesTokens = await provisionAwsSesDomainTokens(domain);
     if (sesTokens && sesTokens.length === 3) {
-      await adminDb.collection('organizations').doc(orgId).update({
-        mailDkimTokens: sesTokens,
-        mailSesIdentityProvisioned: true,
-      });
+      if (!orgData.mailSesIdentityProvisioned || JSON.stringify(orgData.mailDkimTokens) !== JSON.stringify(sesTokens)) {
+        await adminDb.collection('organizations').doc(orgId).update({
+          mailDkimTokens: sesTokens,
+          mailSesIdentityProvisioned: true,
+          updatedAt: new Date().toISOString(),
+        }).catch(() => {});
+      }
       return sesTokens;
     }
   }
@@ -805,7 +808,7 @@ async function ensureOrgDkimTokens(
   const tokens = generateDeterministicDkimTokens(orgId, domain || orgId);
   await adminDb.collection('organizations').doc(orgId).update({
     mailDkimTokens: tokens,
-  });
+  }).catch(() => {});
   return tokens;
 }
 

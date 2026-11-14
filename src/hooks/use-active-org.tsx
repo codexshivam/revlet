@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react"
 import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, or, onSnapshot } from "firebase/firestore"
+import { collection, query, where, or, getDocs } from "firebase/firestore"
 
 export interface Organization {
   id: string
@@ -68,7 +68,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   })
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const fetchOrgs = useCallback(async () => {
     if (!user) {
       setOrgs([])
       setActiveOrgId("")
@@ -76,50 +76,51 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    const q = query(
-      collection(db, "organizations"),
-      or(
-        where("ownerId", "==", user.uid),
-        where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
+    try {
+      const q = query(
+        collection(db, "organizations"),
+        or(
+          where("ownerId", "==", user.uid),
+          where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
+        )
       )
-    )
+      const snap = await getDocs(q)
+      const fetched = snap.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter((o: any) => o.status !== "Pending Deletion") as Organization[]
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snap) => {
-        const fetched = snap.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-          .filter((o: any) => o.status !== "Pending Deletion") as Organization[]
+      setOrgs(fetched)
 
-        setOrgs(fetched)
+      const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
+      const found = fetched.find((o) => o.id === storedId)
 
-        // Resolve active organization from localStorage or default to first
-        const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
-        const found = fetched.find((o) => o.id === storedId)
-
-        if (found) {
-          setActiveOrgId(found.id)
-        } else if (fetched.length > 0) {
-          setActiveOrgId(fetched[0].id)
-          if (typeof window !== "undefined") {
-            localStorage.setItem("selectedOrgId", fetched[0].id)
-          }
-        } else {
-          setActiveOrgId("")
+      if (found) {
+        setActiveOrgId(found.id)
+      } else if (fetched.length > 0) {
+        setActiveOrgId(fetched[0].id)
+        if (typeof window !== "undefined") {
+          localStorage.setItem("selectedOrgId", fetched[0].id)
         }
-        setLoading(false)
-      },
-      (error) => {
-        console.error("Error listening to organizations:", error)
-        setLoading(false)
+      } else {
+        setActiveOrgId("")
       }
-    )
-
-    return () => unsubscribe()
+    } catch (error) {
+      console.error("Error fetching organizations:", error)
+    } finally {
+      setLoading(false)
+    }
   }, [user, db])
+
+  useEffect(() => {
+    fetchOrgs()
+    if (typeof window !== "undefined") {
+      window.addEventListener("revlet-orgs-refresh", fetchOrgs)
+      return () => window.removeEventListener("revlet-orgs-refresh", fetchOrgs)
+    }
+  }, [fetchOrgs])
 
   useEffect(() => {
     const handleOrgChanged = () => {

@@ -50,7 +50,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore, syncUserOrganizations } from "@/firebase"
 import { signOut, updateProfile } from "firebase/auth"
@@ -65,7 +65,7 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
-  onSnapshot,
+  getDocs,
 } from "firebase/firestore"
 import { errorEmitter } from "@/firebase/error-emitter"
 import { FirestorePermissionError } from "@/firebase/errors"
@@ -222,6 +222,42 @@ export default function AccountHomePage() {
     }
   }, [isDialogOpen, isDeleteDialogOpen, isSignOutOpen, isEditNameOpen])
 
+  const fetchOrgs = useCallback(async () => {
+    if (authLoading || !user) return
+
+    try {
+      const orgsRef = collection(db, "organizations")
+      const q = query(
+        orgsRef,
+        or(
+          where("ownerId", "==", user.uid),
+          where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
+        )
+      )
+      const snapshot = await getDocs(q)
+      const fetchedOrgs = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      })) as Organization[]
+
+      const sortedOrgs = fetchedOrgs.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || 0
+        const timeB = b.createdAt?.toMillis?.() || 0
+        return timeB - timeA
+      })
+
+      setOrgs(sortedOrgs)
+      setIsLoadingOrgs(false)
+    } catch {
+      const permissionError = new FirestorePermissionError({
+        path: "organizations",
+        operation: "list",
+      })
+      errorEmitter.emit("permission-error", permissionError)
+      setIsLoadingOrgs(false)
+    }
+  }, [user, authLoading, db])
+
   useEffect(() => {
     if (authLoading) return
 
@@ -231,47 +267,12 @@ export default function AccountHomePage() {
       return
     }
 
-    const orgsRef = collection(db, "organizations")
-    const q = query(
-      orgsRef,
-      or(
-        where("ownerId", "==", user.uid),
-        where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
-      )
-    )
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedOrgs = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        })) as Organization[]
-
-        const sortedOrgs = fetchedOrgs.sort((a, b) => {
-          const timeA = a.createdAt?.toMillis?.() || 0
-          const timeB = b.createdAt?.toMillis?.() || 0
-          return timeB - timeA
-        })
-
-        setOrgs(sortedOrgs)
-        setIsLoadingOrgs(false)
-        if (user && user.email && snapshot.docChanges().some((c) => c.type === "added")) {
-          syncUserOrganizations(db, user.uid, user.email, user.displayName || "")
-        }
-      },
-      () => {
-        const permissionError = new FirestorePermissionError({
-          path: "organizations",
-          operation: "list",
-        })
-        errorEmitter.emit("permission-error", permissionError)
-        setIsLoadingOrgs(false)
-      }
-    )
-
-    return () => unsubscribe()
-  }, [user, authLoading, db, router])
+    fetchOrgs()
+    if (typeof window !== "undefined") {
+      window.addEventListener("revlet-orgs-refresh", fetchOrgs)
+      return () => window.removeEventListener("revlet-orgs-refresh", fetchOrgs)
+    }
+  }, [user, authLoading, router, fetchOrgs])
 
   const handleOpenEdit = (org: Organization) => {
     setEditingOrg(org)
@@ -366,6 +367,12 @@ export default function AccountHomePage() {
           title: "Organization registered",
           description: `${formData.name} has been added to your account.`,
         })
+        if (user.email) {
+          syncUserOrganizations(db, user.uid, user.email, user.displayName || "").catch(() => {})
+        }
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("revlet-orgs-refresh"))
       }
       setIsDialogOpen(false)
     } catch (error: any) {
@@ -398,6 +405,7 @@ export default function AccountHomePage() {
       })
 
       if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("revlet-orgs-refresh"))
         const storedId = localStorage.getItem("selectedOrgId")
         if (storedId === editingOrg.id) {
           const remaining = orgs.filter((o) => o.id !== editingOrg.id)

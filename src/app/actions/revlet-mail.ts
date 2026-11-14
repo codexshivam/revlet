@@ -591,7 +591,8 @@ async function callAwsSesV2Api(
 
 async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | null> {
   const cleanDomain = domain.toLowerCase().trim();
-  if (!cleanDomain) return null;
+  // Guard: strictly enforce DOMAIN identities only, never individual EMAIL_ADDRESS identities
+  if (!cleanDomain || cleanDomain.includes('@')) return null;
 
   const encoded = encodeURIComponent(cleanDomain);
   // 1. Check if domain identity already exists in AWS SES v2
@@ -630,16 +631,32 @@ function generateDeterministicDkimTokens(orgId: string, domain: string): string[
   );
 }
 
+const PUBLIC_DNS_CACHE_TTL_MS = 60_000;
+const publicDnsCache = new Map<
+  string,
+  { records: Array<{ type: string; name: string; content: string; priority?: number }>; expiresAt: number }
+>();
+
 /**
  * Resolves live public DNS records (MX, TXT, _dmarc TXT, and DKIM CNAMEs)
  * when an organization manages DNS at an external registrar outside Cloudflare.
+ * Uses a 60s in-memory TTL cache to avoid redundant DNS queries & serverless CPU usage.
  */
 async function resolvePublicDnsRecords(
   domain: string,
-  dkimTokens: string[]
+  dkimTokens: string[],
+  bypassCache = false
 ): Promise<Array<{ type: string; name: string; content: string; priority?: number }>> {
   const normalizedDomain = domain.toLowerCase().trim();
   if (!normalizedDomain) return [];
+
+  const cacheKey = `${normalizedDomain}:${dkimTokens.slice(0, 3).join(',')}`;
+  if (!bypassCache) {
+    const cached = publicDnsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.records;
+    }
+  }
 
   const records: Array<{ type: string; name: string; content: string; priority?: number }> = [];
 
@@ -700,6 +717,11 @@ async function resolvePublicDnsRecords(
         });
       }
     }
+  });
+
+  publicDnsCache.set(cacheKey, {
+    records,
+    expiresAt: Date.now() + PUBLIC_DNS_CACHE_TTL_MS,
   });
 
   return records;

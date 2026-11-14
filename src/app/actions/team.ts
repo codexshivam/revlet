@@ -2,6 +2,7 @@
 
 import { adminAuth, adminDb } from '@/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { ORG_ADMIN_PERMISSION, ADMIN_ALL_PERMISSIONS } from '@/lib/team-permissions';
 
 async function verifyCaller(idToken: string) {
   if (!idToken) throw new Error('Unauthorized: Missing credentials.');
@@ -13,6 +14,90 @@ async function verifyCaller(idToken: string) {
   };
 }
 
+function callerHasOrgAdmin(orgData: any, caller: { uid: string; email: string }): boolean {
+  if (!orgData) return false;
+  if (orgData.ownerId === caller.uid) return true;
+  if (!caller.email) return false;
+  const emailKey = caller.email.replace(/\./g, '__DOT__');
+  const perms: string[] = orgData.memberPermissions?.[emailKey] || [];
+  return Array.isArray(perms) && perms.includes(ORG_ADMIN_PERMISSION);
+}
+
+/**
+ * Lists organizations the caller can manage (owned or Admin-invited) and their team members.
+ */
+export async function listTeamManagementData(idToken: string) {
+  try {
+    const caller = await verifyCaller(idToken);
+
+    const [ownedSnap, memberSnap] = await Promise.all([
+      adminDb.collection('organizations').where('ownerId', '==', caller.uid).get(),
+      caller.email
+        ? adminDb.collection('organizations').where('memberEmails', 'array-contains', caller.email).get()
+        : Promise.resolve(null),
+    ]);
+
+    const orgMap = new Map<string, any>();
+    for (const doc of ownedSnap.docs) {
+      const data = doc.data();
+      if (data.status !== 'Pending Deletion') {
+        orgMap.set(doc.id, { id: doc.id, name: data.name, domain: data.domain, ownerId: data.ownerId });
+      }
+    }
+    if (memberSnap) {
+      for (const doc of memberSnap.docs) {
+        const data = doc.data();
+        if (data.status !== 'Pending Deletion' && callerHasOrgAdmin(data, caller)) {
+          orgMap.set(doc.id, { id: doc.id, name: data.name, domain: data.domain, ownerId: data.ownerId });
+        }
+      }
+    }
+
+    const manageableOrgs = Array.from(orgMap.values());
+    const manageableOrgIds = new Set(manageableOrgs.map((o) => o.id));
+
+    if (manageableOrgIds.size === 0) {
+      return { success: true, data: { orgs: [], members: [] } };
+    }
+
+    // Fetch teamMembers owned by caller OR referencing any manageable org
+    const memberDocsMap = new Map<string, any>();
+    const [byOwnerSnap, ...byOrgSnaps] = await Promise.all([
+      adminDb.collection('teamMembers').where('ownerId', '==', caller.uid).get(),
+      ...Array.from(manageableOrgIds).slice(0, 10).map((orgId) =>
+        adminDb.collection('teamMembers').where('organizationIds', 'array-contains', orgId).get()
+      ),
+    ]);
+
+    for (const snap of [byOwnerSnap, ...byOrgSnaps]) {
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        if ((data.email || '').toLowerCase().trim() === caller.email) continue;
+        memberDocsMap.set(doc.id, {
+          id: doc.id,
+          email: data.email,
+          organizationId: data.organizationId,
+          organizationIds: data.organizationIds || (data.organizationId ? [data.organizationId] : []),
+          permissions: data.permissions || [],
+          accessMode: data.accessMode || ((data.permissions || []).includes(ORG_ADMIN_PERMISSION) ? 'admin' : 'services'),
+          status: data.status || 'Pending',
+          invitedBy: data.invitedBy,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        orgs: manageableOrgs,
+        members: Array.from(memberDocsMap.values()),
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to load team management data.' };
+  }
+}
+
 /**
  * Invites a team member to one or more owned organizations with granular service-level permissions.
  * Only organization owners can invite team members.
@@ -22,6 +107,7 @@ export async function inviteTeamMember(
   params: {
     email: string;
     organizationIds: string[];
+    accessMode?: 'admin' | 'services';
     permissions: string[];
   }
 ) {
@@ -29,7 +115,11 @@ export async function inviteTeamMember(
     const caller = await verifyCaller(idToken);
     const targetEmail = (params.email || '').toLowerCase().trim();
     const orgIds = Array.from(new Set((params.organizationIds || []).filter(Boolean)));
-    const permissions = Array.from(new Set((params.permissions || []).filter(Boolean)));
+    const accessMode: 'admin' | 'services' = params.accessMode === 'admin' ? 'admin' : 'services';
+    const permissions =
+      accessMode === 'admin'
+        ? [...ADMIN_ALL_PERMISSIONS]
+        : Array.from(new Set((params.permissions || []).filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
 
     if (!targetEmail || !targetEmail.includes('@')) {
       return { success: false, error: 'Please enter a valid work email address.' };
@@ -44,7 +134,7 @@ export async function inviteTeamMember(
       return { success: false, error: 'Select at least one service-level permission.' };
     }
 
-    // Verify caller owns EVERY selected organization (team members cannot invite others)
+    // Verify caller is owner or Org Admin for EVERY selected organization
     const orgDocs = await Promise.all(
       orgIds.map((id) => adminDb.collection('organizations').doc(id).get())
     );
@@ -52,10 +142,10 @@ export async function inviteTeamMember(
       if (!orgDoc.exists) {
         return { success: false, error: 'One or more selected organizations no longer exist.' };
       }
-      if (orgDoc.data()?.ownerId !== caller.uid) {
+      if (!callerHasOrgAdmin(orgDoc.data(), caller)) {
         return {
           success: false,
-          error: 'Only the organization owner can invite team members.',
+          error: 'Only an organization owner or Admin can invite team members.',
         };
       }
     }
@@ -108,6 +198,7 @@ export async function inviteTeamMember(
       await existingDoc.ref.update({
         organizationIds: mergedOrgIds,
         organizationId: mergedOrgIds[0],
+        accessMode,
         permissions,
         ownerName: ownerDisplayName,
         status: existingData.status === 'Suspended' ? 'Suspended' : initialStatus,
@@ -122,6 +213,7 @@ export async function inviteTeamMember(
         organizationId: orgIds[0],
         ownerId: caller.uid,
         ownerName: ownerDisplayName,
+        accessMode,
         permissions,
         status: initialStatus,
         ...(existingUserUid ? { memberUid: existingUserUid } : {}),
@@ -173,16 +265,23 @@ export async function updateTeamMemberStatus(
     }
 
     const data = memberDoc.data()!;
-    if (data.ownerId !== caller.uid) {
-      return { success: false, error: 'Only the organization owner can modify team member status.' };
-    }
-
-    const targetEmail = (data.email || '').toLowerCase().trim();
     const orgIds: string[] = Array.isArray(data.organizationIds)
       ? data.organizationIds
       : data.organizationId
       ? [data.organizationId]
       : [];
+
+    const orgDocs = await Promise.all(
+      orgIds.map((id) => adminDb.collection('organizations').doc(id).get())
+    );
+    const canManage =
+      data.ownerId === caller.uid ||
+      orgDocs.some((docSnap) => docSnap.exists && callerHasOrgAdmin(docSnap.data(), caller));
+    if (!canManage) {
+      return { success: false, error: 'Only an organization owner or Admin can modify team member status.' };
+    }
+
+    const targetEmail = (data.email || '').toLowerCase().trim();
 
     // If reactivating a user who never signed up yet, keep as Pending
     let resolvedStatus: 'Active' | 'Pending' | 'Suspended' = newStatus;
@@ -228,7 +327,7 @@ export async function updateTeamMemberStatus(
 export async function updateTeamMemberAccess(
   idToken: string,
   memberId: string,
-  params: { organizationIds: string[]; permissions: string[] }
+  params: { organizationIds: string[]; accessMode?: 'admin' | 'services'; permissions: string[] }
 ) {
   try {
     const caller = await verifyCaller(idToken);
@@ -239,12 +338,19 @@ export async function updateTeamMemberAccess(
     }
 
     const data = memberDoc.data()!;
-    if (data.ownerId !== caller.uid) {
-      return { success: false, error: 'Only the organization owner can update access.' };
-    }
+    const prevOrgIds: string[] = Array.isArray(data.organizationIds)
+      ? data.organizationIds
+      : data.organizationId
+      ? [data.organizationId]
+      : [];
 
     const nextOrgIds = Array.from(new Set((params.organizationIds || []).filter(Boolean)));
-    const nextPermissions = Array.from(new Set((params.permissions || []).filter(Boolean)));
+    const accessMode: 'admin' | 'services' = params.accessMode === 'admin' ? 'admin' : 'services';
+    const nextPermissions =
+      accessMode === 'admin'
+        ? [...ADMIN_ALL_PERMISSIONS]
+        : Array.from(new Set((params.permissions || []).filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
+
     if (nextOrgIds.length === 0) {
       return { success: false, error: 'Select at least one organization.' };
     }
@@ -252,27 +358,23 @@ export async function updateTeamMemberAccess(
       return { success: false, error: 'Select at least one permission.' };
     }
 
-    // Verify ownership of all new orgs
+    // Verify caller is owner or Org Admin of all new orgs
     const nextOrgDocs = await Promise.all(
       nextOrgIds.map((id) => adminDb.collection('organizations').doc(id).get())
     );
     for (const docSnap of nextOrgDocs) {
-      if (!docSnap.exists || docSnap.data()?.ownerId !== caller.uid) {
-        return { success: false, error: 'Only the organization owner can assign organization access.' };
+      if (!docSnap.exists || !callerHasOrgAdmin(docSnap.data(), caller)) {
+        return { success: false, error: 'Only an organization owner or Admin can assign organization access.' };
       }
     }
 
-    const prevOrgIds: string[] = Array.isArray(data.organizationIds)
-      ? data.organizationIds
-      : data.organizationId
-      ? [data.organizationId]
-      : [];
     const targetEmail = (data.email || '').toLowerCase().trim();
     const permKey = `memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`;
 
     await memberRef.update({
       organizationIds: nextOrgIds,
       organizationId: nextOrgIds[0],
+      accessMode,
       permissions: nextPermissions,
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -318,16 +420,23 @@ export async function deleteTeamMember(idToken: string, memberId: string) {
     }
 
     const data = memberDoc.data()!;
-    if (data.ownerId !== caller.uid) {
-      return { success: false, error: 'Only the organization owner can remove team members.' };
-    }
-
-    const targetEmail = (data.email || '').toLowerCase().trim();
     const orgIds: string[] = Array.isArray(data.organizationIds)
       ? data.organizationIds
       : data.organizationId
       ? [data.organizationId]
       : [];
+
+    const orgDocs = await Promise.all(
+      orgIds.map((id) => adminDb.collection('organizations').doc(id).get())
+    );
+    const canManage =
+      data.ownerId === caller.uid ||
+      orgDocs.some((docSnap) => docSnap.exists && callerHasOrgAdmin(docSnap.data(), caller));
+    if (!canManage) {
+      return { success: false, error: 'Only an organization owner or Admin can remove team members.' };
+    }
+
+    const targetEmail = (data.email || '').toLowerCase().trim();
     const permKey = `memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`;
 
     await memberRef.delete();

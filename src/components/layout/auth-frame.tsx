@@ -56,7 +56,7 @@ export function AuthFrame({ children, className }: AuthFrameProps) {
             rel="noopener noreferrer"
             className="hover:text-slate-900 transition-colors"
           >
-            Privacy policy
+            Privacy Policy
           </a>
           <span className="text-slate-200 select-none">/</span>
           <a
@@ -65,7 +65,7 @@ export function AuthFrame({ children, className }: AuthFrameProps) {
             rel="noopener noreferrer"
             className="hover:text-slate-900 transition-colors"
           >
-            Terms of service
+            Terms of Service
           </a>
         </div>
 

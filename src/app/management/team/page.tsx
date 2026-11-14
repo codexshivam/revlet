@@ -2,15 +2,20 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
-import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { useUser } from "@/firebase"
 import {
+  listTeamManagementData,
   inviteTeamMember,
   updateTeamMemberStatus,
   updateTeamMemberAccess,
   deleteTeamMember,
 } from "@/app/actions/team"
-import { SERVICE_PERMISSION_OPTIONS, PERMISSION_GROUPS } from "@/lib/team-permissions"
+import {
+  SERVICE_PERMISSION_OPTIONS,
+  PERMISSION_GROUPS,
+  ORG_ADMIN_PERMISSION,
+  ADMIN_ALL_PERMISSIONS,
+} from "@/lib/team-permissions"
 import {
   Card,
   CardContent,
@@ -54,19 +59,21 @@ import {
   Loader2,
   Building2,
   Pencil,
-  ShieldAlert,
+  ShieldCheck,
+  SlidersHorizontal,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
 interface TeamMember {
   id: string
   email: string
   organizationId?: string
   organizationIds?: string[]
+  accessMode?: "admin" | "services"
   permissions?: string[]
   status: "Active" | "Pending" | "Suspended"
-  invitedBy: string
-  createdAt: any
+  invitedBy?: string
 }
 
 interface Organization {
@@ -74,7 +81,6 @@ interface Organization {
   name: string
   domain?: string
   ownerId: string
-  status?: string
 }
 
 function TeamTableSkeleton() {
@@ -103,6 +109,13 @@ function getMemberOrgIds(member: TeamMember): string[] {
   return []
 }
 
+function isMemberAdmin(member: TeamMember): boolean {
+  return (
+    member.accessMode === "admin" ||
+    (Array.isArray(member.permissions) && member.permissions.includes(ORG_ADMIN_PERMISSION))
+  )
+}
+
 function StatusBadge({ status }: { status: TeamMember["status"] }) {
   const dotColor =
     status === "Active"
@@ -121,7 +134,6 @@ function StatusBadge({ status }: { status: TeamMember["status"] }) {
 
 export default function TeamManagementPage() {
   const { user } = useUser()
-  const db = useFirestore()
   const { toast } = useToast()
 
   const [members, setMembers] = useState<TeamMember[]>([])
@@ -133,49 +145,38 @@ export default function TeamManagementPage() {
   const [isInviteOpen, setIsInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteOrgIds, setInviteOrgIds] = useState<string[]>([])
+  const [inviteAccessMode, setInviteAccessMode] = useState<"admin" | "services">("services")
   const [invitePermissions, setInvitePermissions] = useState<string[]>(["DNS: Read", "Email: Read"])
 
   // Edit modal state
   const [memberToEdit, setMemberToEdit] = useState<TeamMember | null>(null)
   const [editOrgIds, setEditOrgIds] = useState<string[]>([])
+  const [editAccessMode, setEditAccessMode] = useState<"admin" | "services">("services")
   const [editPermissions, setEditPermissions] = useState<string[]>([])
 
   // Delete modal state
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null)
 
   const fetchTeamData = useCallback(async () => {
-    if (!user || !db) {
+    if (!user) {
       setIsLoading(false)
       return
     }
 
     setIsLoading(true)
     try {
-      const [orgsResult, membersResult] = await Promise.allSettled([
-        getDocs(query(collection(db, "organizations"), where("ownerId", "==", user.uid))),
-        getDocs(query(collection(db, "teamMembers"), where("ownerId", "==", user.uid))),
-      ])
-
-      if (orgsResult.status === "fulfilled") {
-        const ownedOrgs = orgsResult.value.docs
-          .map((d) => ({ id: d.id, ...d.data() } as Organization))
-          .filter((o) => o.status !== "Pending Deletion")
-        setOrgs(ownedOrgs)
-      }
-
-      if (membersResult.status === "fulfilled") {
-        const fetchedMembers = membersResult.value.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        })) as TeamMember[]
-        setMembers(fetchedMembers)
+      const idToken = await user.getIdToken()
+      const res = await listTeamManagementData(idToken)
+      if (res.success && res.data) {
+        setOrgs(res.data.orgs)
+        setMembers(res.data.members)
       }
     } catch (error: any) {
       console.error("Failed to fetch team data:", error)
     } finally {
       setIsLoading(false)
     }
-  }, [user, db])
+  }, [user])
 
   useEffect(() => {
     fetchTeamData()
@@ -193,22 +194,26 @@ export default function TeamManagementPage() {
   const handleOpenInvite = () => {
     setInviteEmail("")
     setInviteOrgIds(orgs.length > 0 ? [orgs[0].id] : [])
+    setInviteAccessMode("services")
     setInvitePermissions(["DNS: Read", "Email: Read"])
     setIsInviteOpen(true)
   }
 
   const handleInvite = async () => {
-    if (!user || !inviteEmail.trim() || inviteOrgIds.length === 0 || invitePermissions.length === 0) {
-      return
-    }
+    if (!user || !inviteEmail.trim() || inviteOrgIds.length === 0) return
+    if (inviteAccessMode === "services" && invitePermissions.length === 0) return
 
     setIsSubmitting(true)
     try {
       const idToken = await user.getIdToken()
+      const effectivePermissions =
+        inviteAccessMode === "admin" ? [...ADMIN_ALL_PERMISSIONS] : invitePermissions
+
       const res = await inviteTeamMember(idToken, {
         email: inviteEmail.trim().toLowerCase(),
         organizationIds: inviteOrgIds,
-        permissions: invitePermissions,
+        accessMode: inviteAccessMode,
+        permissions: effectivePermissions,
       })
 
       if (!res.success) {
@@ -221,8 +226,11 @@ export default function TeamManagementPage() {
       }
 
       toast({
-        title: "Invitation sent",
-        description: `${inviteEmail.trim().toLowerCase()} is now Pending activation across ${inviteOrgIds.length} organization(s).`,
+        title: res.data?.status === "Active" ? "Organization access granted" : "Invitation sent",
+        description:
+          res.data?.status === "Active"
+            ? `${inviteEmail.trim().toLowerCase()} now has active access to ${inviteOrgIds.length} organization(s).`
+            : `${inviteEmail.trim().toLowerCase()} is Pending activation across ${inviteOrgIds.length} organization(s).`,
       })
 
       setIsInviteOpen(false)
@@ -241,20 +249,26 @@ export default function TeamManagementPage() {
   const handleOpenEdit = (member: TeamMember) => {
     setMemberToEdit(member)
     setEditOrgIds(getMemberOrgIds(member))
-    setEditPermissions(Array.isArray(member.permissions) ? member.permissions : [])
+    const admin = isMemberAdmin(member)
+    setEditAccessMode(admin ? "admin" : "services")
+    const servicePerms = (member.permissions || []).filter((p) => p !== ORG_ADMIN_PERMISSION)
+    setEditPermissions(servicePerms.length > 0 ? servicePerms : ["DNS: Read", "Email: Read"])
   }
 
   const handleSaveEdit = async () => {
-    if (!user || !memberToEdit || editOrgIds.length === 0 || editPermissions.length === 0) {
-      return
-    }
+    if (!user || !memberToEdit || editOrgIds.length === 0) return
+    if (editAccessMode === "services" && editPermissions.length === 0) return
 
     setIsSubmitting(true)
     try {
       const idToken = await user.getIdToken()
+      const effectivePermissions =
+        editAccessMode === "admin" ? [...ADMIN_ALL_PERMISSIONS] : editPermissions
+
       const res = await updateTeamMemberAccess(idToken, memberToEdit.id, {
         organizationIds: editOrgIds,
-        permissions: editPermissions,
+        accessMode: editAccessMode,
+        permissions: effectivePermissions,
       })
 
       if (!res.success) {
@@ -268,7 +282,7 @@ export default function TeamManagementPage() {
 
       toast({
         title: "Access updated",
-        description: `Updated organizations and permissions for ${memberToEdit.email}.`,
+        description: `Updated organizations and access level for ${memberToEdit.email}.`,
       })
       setMemberToEdit(null)
       await fetchTeamData()
@@ -349,18 +363,36 @@ export default function TeamManagementPage() {
     }
   }
 
-  const renderAccessCheckboxes = (
+  const renderAccessForm = (
     selectedOrgIds: string[],
     setSelectedOrgIds: (ids: string[]) => void,
+    accessMode: "admin" | "services",
+    setAccessMode: (mode: "admin" | "services") => void,
     selectedPermissions: string[],
     setSelectedPermissions: (perms: string[]) => void,
     idPrefix: string
   ) => (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Organizations */}
       <div className="space-y-2">
-        <Label className="text-xs font-medium text-slate-700">
-          Assign organizations ({selectedOrgIds.length} selected)
-        </Label>
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-medium text-slate-700">
+            Organizations ({selectedOrgIds.length} selected)
+          </Label>
+          {orgs.length > 1 && (
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedOrgIds(
+                  selectedOrgIds.length === orgs.length ? [] : orgs.map((o) => o.id)
+                )
+              }
+              className="text-[11px] font-medium text-primary hover:underline"
+            >
+              {selectedOrgIds.length === orgs.length ? "Clear all" : "Select all"}
+            </button>
+          )}
+        </div>
         <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100 bg-white">
           {orgs.map((org) => {
             const checked = selectedOrgIds.includes(org.id)
@@ -387,45 +419,128 @@ export default function TeamManagementPage() {
         </div>
       </div>
 
+      {/* Access Level: Admin vs Assign Services */}
       <div className="space-y-2">
-        <Label className="text-xs font-medium text-slate-700">
-          Service permissions ({selectedPermissions.length} selected)
-        </Label>
-        <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-3">
-          {PERMISSION_GROUPS.map((group) => {
-            const groupOptions = SERVICE_PERMISSION_OPTIONS.filter((opt) => opt.group === group)
-            return (
-              <div key={group} className="space-y-1.5">
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  {group}
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {groupOptions.map((opt) => {
-                    const checked = selectedPermissions.includes(opt.id)
-                    return (
-                      <label
-                        key={opt.id}
-                        htmlFor={`${idPrefix}-perm-${opt.id}`}
-                        className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs hover:border-slate-300 cursor-pointer"
-                        title={opt.description}
-                      >
-                        <Checkbox
-                          id={`${idPrefix}-perm-${opt.id}`}
-                          checked={checked}
-                          onCheckedChange={() =>
-                            setSelectedPermissions(toggleSelection(selectedPermissions, opt.id))
-                          }
-                        />
-                        <span className="text-slate-700 font-medium">{opt.label}</span>
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
+        <Label className="text-xs font-medium text-slate-700">Organization Access Level</Label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setAccessMode("admin")}
+            className={cn(
+              "text-left rounded-lg border p-3.5 transition-all space-y-1",
+              accessMode === "admin"
+                ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                : "border-slate-200 bg-white hover:border-slate-300"
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-900">
+                <ShieldCheck
+                  className={cn("w-4 h-4", accessMode === "admin" ? "text-primary" : "text-slate-400")}
+                  strokeWidth={1.75}
+                />
+                Admin
+              </span>
+              <span
+                className={cn(
+                  "h-3.5 w-3.5 rounded-full border flex items-center justify-center",
+                  accessMode === "admin" ? "border-primary" : "border-slate-300"
+                )}
+              >
+                {accessMode === "admin" && <span className="h-2 w-2 rounded-full bg-primary" />}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Full access to all services and team management. Cannot delete organizations.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAccessMode("services")}
+            className={cn(
+              "text-left rounded-lg border p-3.5 transition-all space-y-1",
+              accessMode === "services"
+                ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                : "border-slate-200 bg-white hover:border-slate-300"
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-900">
+                <SlidersHorizontal
+                  className={cn("w-4 h-4", accessMode === "services" ? "text-primary" : "text-slate-400")}
+                  strokeWidth={1.75}
+                />
+                Assign Services
+              </span>
+              <span
+                className={cn(
+                  "h-3.5 w-3.5 rounded-full border flex items-center justify-center",
+                  accessMode === "services" ? "border-primary" : "border-slate-300"
+                )}
+              >
+                {accessMode === "services" && <span className="h-2 w-2 rounded-full bg-primary" />}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Grant granular DNS Management or Email Service permissions only.
+            </p>
+          </button>
         </div>
       </div>
+
+      {/* Granular Service Permissions (only when Assign Services is chosen) */}
+      {accessMode === "services" && (
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-slate-700">
+            Service Permissions ({selectedPermissions.length} selected)
+          </Label>
+          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3.5 space-y-3">
+            {PERMISSION_GROUPS.map((group) => {
+              const groupOptions = SERVICE_PERMISSION_OPTIONS.filter((opt) => opt.group === group)
+              return (
+                <div key={group} className="space-y-1.5">
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    {group}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {groupOptions.map((opt) => {
+                      const checked = selectedPermissions.includes(opt.id)
+                      return (
+                        <label
+                          key={opt.id}
+                          htmlFor={`${idPrefix}-perm-${opt.id}`}
+                          className={cn(
+                            "flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs cursor-pointer transition-colors",
+                            checked
+                              ? "border-primary/40 bg-white"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          )}
+                        >
+                          <Checkbox
+                            id={`${idPrefix}-perm-${opt.id}`}
+                            checked={checked}
+                            className="mt-0.5"
+                            onCheckedChange={() =>
+                              setSelectedPermissions(toggleSelection(selectedPermissions, opt.id))
+                            }
+                          />
+                          <div className="space-y-0.5">
+                            <span className="text-slate-800 font-medium block">{opt.label}</span>
+                            <span className="text-[10px] text-slate-400 leading-tight block">
+                              {opt.description}
+                            </span>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 
@@ -449,32 +564,34 @@ export default function TeamManagementPage() {
                   Invite member
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-lg rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
+              <DialogContent className="sm:max-w-2xl rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
                 <DialogHeader className="p-6 pb-2">
                   <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                    Invite team member
+                    Invite Team Member
                   </DialogTitle>
                   <DialogDescription className="text-slate-500 text-xs">
-                    Assign one or more organizations and choose the services they can access.
+                    Assign organizations and choose between Admin or service-level permissions.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="p-6 pt-2 space-y-4">
+                <div className="p-6 pt-2 space-y-5 max-h-[75vh] overflow-y-auto">
                   <div className="space-y-1.5">
                     <Label htmlFor="member-email" className="text-xs font-medium text-slate-700">
-                      Email address
+                      Email Address
                     </Label>
                     <Input
                       id="member-email"
                       type="email"
-                      placeholder="staff@example.com"
+                      placeholder="member@example.com"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
                       className="h-9 text-xs border-slate-200 bg-white rounded-lg"
                     />
                   </div>
-                  {renderAccessCheckboxes(
+                  {renderAccessForm(
                     inviteOrgIds,
                     setInviteOrgIds,
+                    inviteAccessMode,
+                    setInviteAccessMode,
                     invitePermissions,
                     setInvitePermissions,
                     "invite"
@@ -494,7 +611,7 @@ export default function TeamManagementPage() {
                       isSubmitting ||
                       !inviteEmail.trim() ||
                       inviteOrgIds.length === 0 ||
-                      invitePermissions.length === 0
+                      (inviteAccessMode === "services" && invitePermissions.length === 0)
                     }
                     className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
                   >
@@ -525,75 +642,84 @@ export default function TeamManagementPage() {
                   </h3>
                   <p className="text-xs text-slate-500 leading-relaxed">
                     {orgs.length > 0
-                      ? "Invite staff members to help manage your owned organizations."
+                      ? "Invite team members to collaborate across your organizations."
                       : "Register your own organization in Account Home to invite team members."}
                   </p>
                 </div>
               </div>
             ) : (
-                <>
-                  {/* Desktop View */}
-                  <div className="hidden md:block">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200/80">
-                          <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                            Team member
-                          </TableHead>
-                          <TableHead className="text-xs font-medium py-3 text-slate-500">
-                            Organizations
-                          </TableHead>
-                          <TableHead className="text-xs font-medium py-3 text-slate-500">
-                            Permissions
-                          </TableHead>
-                          <TableHead className="text-xs font-medium py-3 text-slate-500">
-                            Status
-                          </TableHead>
-                          <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
-                            Actions
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {members.map((member) => {
-                          const assignedIds = getMemberOrgIds(member)
-                          const perms = member.permissions || []
+              <>
+                {/* Desktop View */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200/80">
+                        <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                          Team member
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-slate-500">
+                          Organizations
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-slate-500">
+                          Access
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-slate-500">
+                          Status
+                        </TableHead>
+                        <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                          Actions
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {members.map((member) => {
+                        const assignedIds = getMemberOrgIds(member)
+                        const admin = isMemberAdmin(member)
+                        const servicePerms = (member.permissions || []).filter(
+                          (p) => p !== ORG_ADMIN_PERMISSION
+                        )
 
-                          return (
-                            <TableRow
-                              key={member.id}
-                              className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
-                            >
-                              <TableCell className="pl-6 py-3.5 align-top">
-                                <span className="text-xs font-mono text-slate-800">
-                                  {member.email}
+                        return (
+                          <TableRow
+                            key={member.id}
+                            className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
+                          >
+                            <TableCell className="pl-6 py-3.5 align-top">
+                              <span className="text-xs font-mono text-slate-800">
+                                {member.email}
+                              </span>
+                            </TableCell>
+
+                            <TableCell className="py-3.5 align-top">
+                              <div className="flex flex-wrap gap-1.5">
+                                {assignedIds.length === 0 ? (
+                                  <span className="text-xs text-slate-400">None assigned</span>
+                                ) : (
+                                  assignedIds.map((oid) => (
+                                    <span
+                                      key={oid}
+                                      className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"
+                                    >
+                                      <Building2 className="w-3 h-3 text-slate-400" strokeWidth={1.5} />
+                                      {orgMap.get(oid)?.name || "Organization"}
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+                            </TableCell>
+
+                            <TableCell className="py-3.5 align-top">
+                              {admin ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                                  <ShieldCheck className="w-3 h-3" strokeWidth={1.75} />
+                                  Admin
                                 </span>
-                              </TableCell>
-
-                              <TableCell className="py-3.5 align-top">
-                                <div className="flex flex-wrap gap-1.5">
-                                  {assignedIds.length === 0 ? (
-                                    <span className="text-xs text-slate-400">None assigned</span>
-                                  ) : (
-                                    assignedIds.map((oid) => (
-                                      <span
-                                        key={oid}
-                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"
-                                      >
-                                        <Building2 className="w-3 h-3 text-slate-400" strokeWidth={1.5} />
-                                        {orgMap.get(oid)?.name || "Unknown institution"}
-                                      </span>
-                                    ))
-                                  )}
-                                </div>
-                              </TableCell>
-
-                              <TableCell className="py-3.5 align-top">
+                              ) : (
                                 <div className="flex flex-wrap gap-1">
-                                  {perms.length === 0 ? (
+                                  {servicePerms.length === 0 ? (
                                     <span className="text-[11px] text-slate-400">No permissions</span>
                                   ) : (
-                                    perms.map((p) => (
+                                    servicePerms.map((p) => (
                                       <span
                                         key={p}
                                         className="text-[11px] font-mono text-slate-600 bg-slate-50 border border-slate-200/80 px-1.5 py-0.5 rounded"
@@ -603,84 +729,94 @@ export default function TeamManagementPage() {
                                     ))
                                   )}
                                 </div>
-                              </TableCell>
+                              )}
+                            </TableCell>
 
-                              <TableCell className="py-3.5 align-top">
-                                <StatusBadge status={member.status} />
-                              </TableCell>
+                            <TableCell className="py-3.5 align-top">
+                              <StatusBadge status={member.status} />
+                            </TableCell>
 
-                              <TableCell className="text-right pr-6 py-3.5 align-top">
-                                <div className="flex items-center justify-end gap-2">
-                                  <Switch
-                                    checked={member.status === "Active"}
-                                    disabled={member.status === "Pending"}
-                                    onCheckedChange={() => handleToggleStatus(member)}
-                                    title={
-                                      member.status === "Pending"
-                                        ? "Pending activation until member signs in"
-                                        : member.status === "Active"
-                                        ? "Suspend access"
-                                        : "Restore access"
-                                    }
-                                    className="scale-90"
-                                  />
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleOpenEdit(member)}
-                                    className="h-8 w-8 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                                    title="Edit organizations and permissions"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" strokeWidth={1.5} />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setMemberToDelete(member)}
-                                    className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg transition-colors"
-                                    title="Revoke access"
-                                  >
-                                    <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
+                            <TableCell className="text-right pr-6 py-3.5 align-top">
+                              <div className="flex items-center justify-end gap-2">
+                                <Switch
+                                  checked={member.status === "Active"}
+                                  disabled={member.status === "Pending"}
+                                  onCheckedChange={() => handleToggleStatus(member)}
+                                  title={
+                                    member.status === "Pending"
+                                      ? "Pending activation until member signs in"
+                                      : member.status === "Active"
+                                      ? "Suspend access"
+                                      : "Restore access"
+                                  }
+                                  className="scale-90"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleOpenEdit(member)}
+                                  className="h-8 w-8 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                                  title="Edit organizations and access"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" strokeWidth={1.5} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setMemberToDelete(member)}
+                                  className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg transition-colors"
+                                  title="Revoke access"
+                                >
+                                  <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
 
-                  {/* Mobile View */}
-                  <div className="block md:hidden divide-y divide-slate-100">
-                    {members.map((member) => {
-                      const assignedIds = getMemberOrgIds(member)
-                      const perms = member.permissions || []
+                {/* Mobile View */}
+                <div className="block md:hidden divide-y divide-slate-100">
+                  {members.map((member) => {
+                    const assignedIds = getMemberOrgIds(member)
+                    const admin = isMemberAdmin(member)
+                    const servicePerms = (member.permissions || []).filter(
+                      (p) => p !== ORG_ADMIN_PERMISSION
+                    )
 
-                      return (
-                        <div key={member.id} className="p-4 space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <span className="text-xs font-mono text-slate-800 truncate">
-                              {member.email}
+                    return (
+                      <div key={member.id} className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="text-xs font-mono text-slate-800 truncate">
+                            {member.email}
+                          </span>
+                          <StatusBadge status={member.status} />
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {assignedIds.map((oid) => (
+                            <span
+                              key={oid}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"
+                            >
+                              <Building2 className="w-3 h-3 text-slate-400" strokeWidth={1.5} />
+                              {orgMap.get(oid)?.name || "Organization"}
                             </span>
-                            <StatusBadge status={member.status} />
-                          </div>
+                          ))}
+                        </div>
 
-                          <div className="flex flex-wrap gap-1.5">
-                            {assignedIds.map((oid) => (
-                              <span
-                                key={oid}
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"
-                              >
-                                <Building2 className="w-3 h-3 text-slate-400" strokeWidth={1.5} />
-                                {orgMap.get(oid)?.name || "Unknown institution"}
-                              </span>
-                            ))}
-                          </div>
-
-                          {perms.length > 0 && (
+                        {admin ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                            <ShieldCheck className="w-3 h-3" strokeWidth={1.75} />
+                            Admin
+                          </span>
+                        ) : (
+                          servicePerms.length > 0 && (
                             <div className="flex flex-wrap gap-1">
-                              {perms.map((p) => (
+                              {servicePerms.map((p) => (
                                 <span
                                   key={p}
                                   className="text-[10px] font-mono text-slate-600 bg-slate-50 border border-slate-200/80 px-1.5 py-0.5 rounded"
@@ -689,57 +825,60 @@ export default function TeamManagementPage() {
                                 </span>
                               ))}
                             </div>
-                          )}
+                          )
+                        )}
 
-                          <div className="flex items-center justify-end gap-2 pt-1">
-                            <Switch
-                              checked={member.status === "Active"}
-                              disabled={member.status === "Pending"}
-                              onCheckedChange={() => handleToggleStatus(member)}
-                              className="scale-90"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleOpenEdit(member)}
-                              className="h-8 w-8 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg"
-                            >
-                              <Pencil className="w-3.5 h-3.5" strokeWidth={1.5} />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setMemberToDelete(member)}
-                              className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
-                            >
-                              <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                            </Button>
-                          </div>
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <Switch
+                            checked={member.status === "Active"}
+                            disabled={member.status === "Pending"}
+                            onCheckedChange={() => handleToggleStatus(member)}
+                            className="scale-90"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(member)}
+                            className="h-8 w-8 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg"
+                          >
+                            <Pencil className="w-3.5 h-3.5" strokeWidth={1.5} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setMemberToDelete(member)}
+                            className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                          </Button>
                         </div>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         {/* Edit access dialog */}
         <Dialog open={!!memberToEdit} onOpenChange={(open) => !open && setMemberToEdit(null)}>
-          <DialogContent className="sm:max-w-lg rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
+          <DialogContent className="sm:max-w-2xl rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
             <DialogHeader className="p-6 pb-2">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Edit member access
+                Edit Member Access
               </DialogTitle>
               <DialogDescription className="text-slate-500 text-xs">
-                Update organization allocations and service permissions for{" "}
+                Update organization allocations and access level for{" "}
                 <span className="font-mono text-slate-800">{memberToEdit?.email}</span>.
               </DialogDescription>
             </DialogHeader>
-            <div className="p-6 pt-2">
-              {renderAccessCheckboxes(
+            <div className="p-6 pt-2 max-h-[75vh] overflow-y-auto">
+              {renderAccessForm(
                 editOrgIds,
                 setEditOrgIds,
+                editAccessMode,
+                setEditAccessMode,
                 editPermissions,
                 setEditPermissions,
                 "edit"
@@ -755,7 +894,11 @@ export default function TeamManagementPage() {
               </Button>
               <Button
                 onClick={handleSaveEdit}
-                disabled={isSubmitting || editOrgIds.length === 0 || editPermissions.length === 0}
+                disabled={
+                  isSubmitting ||
+                  editOrgIds.length === 0 ||
+                  (editAccessMode === "services" && editPermissions.length === 0)
+                }
                 className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
               >
                 {isSubmitting ? (

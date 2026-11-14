@@ -1,3 +1,7 @@
+export const ORG_ADMIN_PERMISSION = 'Org: Admin';
+
+export const ADMIN_ALL_PERMISSIONS = ['Org: Admin', 'DNS: Admin', 'Email: Admin'] as const;
+
 export const SERVICE_PERMISSION_OPTIONS = [
   { id: 'DNS: Read', label: 'DNS: Read', group: 'DNS Management', description: 'View DNS records and nameservers' },
   { id: 'DNS: Edit', label: 'DNS: Edit', group: 'DNS Management', description: 'Add, update, and delete DNS records' },

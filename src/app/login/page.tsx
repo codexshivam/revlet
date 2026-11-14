@@ -153,7 +153,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[520px] bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6 shadow-sm animate-in fade-in duration-300">
         <div className="space-y-1 text-center sm:text-left">
           <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
-            Sign in to Revlet
+            Sign In to Revlet
           </h1>
           <p className="text-xs text-slate-500">
             Enter your credentials to access the management console.
@@ -163,7 +163,7 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email" className="text-xs font-medium text-slate-700">
-              Work email
+              Work Email
             </Label>
             <Input
               id="email"
@@ -188,13 +188,13 @@ export default function LoginPage() {
                     type="button"
                     className="text-xs text-slate-500 hover:text-slate-900 transition-colors"
                   >
-                    Forgot password?
+                    Forgot Password?
                   </button>
                 </DialogTrigger>
                 <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] border border-slate-200 rounded-xl p-6 bg-white">
                   <DialogHeader className="space-y-1.5 text-left">
                     <DialogTitle className="text-base font-semibold text-slate-900">
-                      Reset your password
+                      Reset Your Password
                     </DialogTitle>
                     <DialogDescription className="text-xs text-slate-500">
                       Enter your work email and we will send you a secure password reset link.
@@ -203,12 +203,12 @@ export default function LoginPage() {
                   <form onSubmit={handleForgotPassword} className="space-y-4 pt-2">
                     <div className="space-y-1.5">
                       <Label htmlFor="reset-email" className="text-xs font-medium text-slate-700">
-                        Work email
+                        Work Email
                       </Label>
                       <Input
                         id="reset-email"
                         type="email"
-                        placeholder="admin@institution.edu"
+                        placeholder="admin@example.com"
                         required
                         className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
                         value={resetEmail}
@@ -222,7 +222,7 @@ export default function LoginPage() {
                         className="w-full h-9 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
                       >
                         {isResetLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        {isResetLoading ? "Sending link..." : "Send reset link"}
+                        {isResetLoading ? "Sending Link..." : "Send Reset Link"}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -261,7 +261,7 @@ export default function LoginPage() {
             disabled={isLoading}
           >
             {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {isLoading ? "Signing in..." : "Sign in"}
+            {isLoading ? "Signing In..." : "Sign In"}
           </Button>
         </form>
 
@@ -271,7 +271,7 @@ export default function LoginPage() {
             href="/signup"
             className="text-slate-900 font-medium hover:underline transition-colors"
           >
-            Create an account
+            Create an Account
           </Link>
         </div>
       </div>

@@ -279,7 +279,7 @@ export default function SignupPage() {
         {/* Step Indicator */}
         <div className="flex items-center justify-between text-xs text-slate-500 border-b border-slate-100 pb-3">
           <span className="font-medium text-slate-900">
-            {step === 1 ? "1. Your account" : "2. Organization setup"}
+            {step === 1 ? "1. Your Account" : "2. Organization Setup"}
           </span>
           <span className="tabular-nums">Step {step} of 2</span>
         </div>
@@ -289,17 +289,17 @@ export default function SignupPage() {
           <>
             <div className="space-y-1 text-center sm:text-left">
               <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
-                Create an account
+                Create an Account
               </h1>
               <p className="text-xs text-slate-500">
-                Register as an administrator to manage your infrastructure.
+                Register as an administrator to manage your organization.
               </p>
             </div>
 
             <form onSubmit={handleUserSignup} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="name" className="text-xs font-medium text-slate-700">
-                  Full name
+                  Full Name
                 </Label>
                 <Input
                   id="name"
@@ -314,12 +314,12 @@ export default function SignupPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-xs font-medium text-slate-700">
-                  Work email
+                  Work Email
                 </Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@institution.edu"
+                  placeholder="admin@example.com"
                   required
                   autoComplete="email"
                   className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
@@ -360,7 +360,7 @@ export default function SignupPage() {
                 disabled={isLoading}
               >
                 {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isLoading ? "Creating account..." : "Continue to organization setup"}
+                {isLoading ? "Creating Account..." : "Continue to Organization Setup"}
               </Button>
             </form>
 
@@ -372,7 +372,7 @@ export default function SignupPage() {
                 rel="noopener noreferrer"
                 className="text-slate-700 hover:underline"
               >
-                terms of service
+                Terms of Service
               </a>{" "}
               and{" "}
               <a
@@ -381,7 +381,7 @@ export default function SignupPage() {
                 rel="noopener noreferrer"
                 className="text-slate-700 hover:underline"
               >
-                privacy policy
+                Privacy Policy
               </a>
               .
             </p>
@@ -392,7 +392,7 @@ export default function SignupPage() {
                 href="/login"
                 className="text-slate-900 font-medium hover:underline transition-colors"
               >
-                Sign in
+                Sign In
               </Link>
             </div>
           </>
@@ -403,7 +403,7 @@ export default function SignupPage() {
           <>
             <div className="space-y-1 text-center sm:text-left">
               <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
-                Create organization
+                Create Organization
               </h1>
               <p className="text-xs text-slate-500">
                 Set up your primary organization to activate management tools and domain services.
@@ -413,7 +413,7 @@ export default function SignupPage() {
             <form onSubmit={handleOrgCreation} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="org-name" className="text-xs font-medium text-slate-700">
-                  Organization name <span className="text-red-500">*</span>
+                  Organization Name <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="org-name"
@@ -427,7 +427,7 @@ export default function SignupPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="org-domain" className="text-xs font-medium text-slate-700">
-                  Primary domain (optional)
+                  Primary Domain (Optional)
                 </Label>
                 <Input
                   id="org-domain"
@@ -441,7 +441,7 @@ export default function SignupPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="org-phone" className="text-xs font-medium text-slate-700">
-                    Phone (optional)
+                    Phone (Optional)
                   </Label>
                   <Input
                     id="org-phone"
@@ -454,7 +454,7 @@ export default function SignupPage() {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="org-address" className="text-xs font-medium text-slate-700">
-                    City / address (optional)
+                    City / Address (Optional)
                   </Label>
                   <Input
                     id="org-address"
@@ -472,7 +472,7 @@ export default function SignupPage() {
                 disabled={isLoading}
               >
                 {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isLoading ? "Creating organization..." : "Complete setup"}
+                {isLoading ? "Creating Organization..." : "Complete Setup"}
               </Button>
             </form>
           </>

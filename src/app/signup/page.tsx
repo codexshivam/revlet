@@ -12,6 +12,7 @@ import { useAuth, useUser, useFirestore, syncUserOrganizations } from "@/firebas
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
 import { collection, addDoc, doc, setDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore"
 import { AuthFrame } from "@/components/layout/auth-frame"
+import { checkAndClaimInvitations } from "@/app/actions/team"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -58,14 +59,23 @@ export default function SignupPage() {
           const snap = await getDocs(q)
           if (!snap.empty) {
             router.push("/account/home")
-          } else {
-            setCreatedUserData({
-              uid: user.uid,
-              email: user.email || "",
-              displayName: user.displayName || "",
-            })
-            setStep(2)
+            return
           }
+
+          // Check if the user has pending or active team invitations
+          const idToken = await user.getIdToken()
+          const inviteRes = await checkAndClaimInvitations(idToken)
+          if (inviteRes.success && inviteRes.data?.hasInvitations) {
+            router.push("/account/home")
+            return
+          }
+
+          setCreatedUserData({
+            uid: user.uid,
+            email: user.email || "",
+            displayName: user.displayName || "",
+          })
+          setStep(2)
         } catch {
           router.push("/account/home")
         }
@@ -128,6 +138,18 @@ export default function SignupPage() {
         email: userCredential.user.email || userFormData.email.trim(),
         displayName: userFormData.name.trim(),
       })
+
+      // Check and claim any pending team invitations for this email
+      const idToken = await userCredential.user.getIdToken()
+      const inviteRes = await checkAndClaimInvitations(idToken)
+      if (inviteRes.success && inviteRes.data?.hasInvitations) {
+        toast({
+          title: "Account activated",
+          description: "Your invited organizations have been allocated to your workspace.",
+        })
+        router.push("/account/home")
+        return
+      }
 
       toast({
         title: "Account created",

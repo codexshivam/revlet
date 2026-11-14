@@ -858,9 +858,9 @@ export default function DNSManagementPage() {
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="font-semibold text-white">Automated Email DNS</p>
+                      <p className="font-semibold text-white">Updated in under a minute</p>
                       <p className="text-white/85 leading-relaxed">
-                        One-click MX, SPF, DKIM, and DMARC provisioning when activating Revlet Email Service.
+                        DNS changes propagate and update globally in under a minute on average.
                       </p>
                     </div>
                     <div className="space-y-1">
@@ -903,7 +903,7 @@ export default function DNSManagementPage() {
                       <div className="space-y-1">
                         <p className="text-xs font-semibold text-slate-900">Bring Your Own Token</p>
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          Verify scoped access and connect your existing zone.
+                          Verify scoped access and connect your existing zone if you need your own Cloudflare control.
                         </p>
                       </div>
                       <div className="relative">

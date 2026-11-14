@@ -6,6 +6,7 @@ export type VerifiedUserOrg = {
   email?: string;
   isOwner: boolean;
   isMember: boolean;
+  permissions: string[];
   orgData: any;
   cfToken?: string;
 };
@@ -57,19 +58,46 @@ export async function verifyUserOrgAccess(
   const isOwner = isSuperAdmin || orgData?.ownerId === decodedToken.uid;
 
   let isMember = isOwner;
-  if (!isMember && userEmail) {
+  let permissions: string[] = isOwner ? ['*'] : [];
+
+  if (!isOwner && userEmail) {
+    const emailPermKey = userEmail.replace(/\./g, '__DOT__');
+    const orgMemberPerms = orgData?.memberPermissions?.[emailPermKey];
+    if (Array.isArray(orgMemberPerms)) {
+      permissions = orgMemberPerms;
+    }
+
     if (Array.isArray(orgData?.memberEmails) && orgData.memberEmails.map((e: string) => e.toLowerCase().trim()).includes(userEmail)) {
       isMember = true;
     } else {
       try {
-        const memberQuery = await adminDb.collection('teamMembers')
-          .where('organizationId', '==', orgId)
+        const memberSnap = await adminDb.collection('teamMembers')
           .where('ownerId', '==', orgData?.ownerId)
           .where('email', '==', userEmail)
-          .where('status', '==', 'Active')
+          .limit(1)
           .get();
-        isMember = !memberQuery.empty;
+
+        if (!memberSnap.empty) {
+          const mData = memberSnap.docs[0].data();
+          const mOrgs: string[] = Array.isArray(mData.organizationIds)
+            ? mData.organizationIds
+            : mData.organizationId
+            ? [mData.organizationId]
+            : [];
+          if (mOrgs.includes(orgId)) {
+            if (mData.status === 'Suspended' || mData.status === 'Inactive') {
+              throw new Error("Unauthorized: Your access to this organization has been suspended.");
+            }
+            if (mData.status === 'Active' || mData.status === 'Pending') {
+              isMember = true;
+              if (Array.isArray(mData.permissions)) {
+                permissions = mData.permissions;
+              }
+            }
+          }
+        }
       } catch (err: any) {
+        if (err?.message?.includes('suspended')) throw err;
         console.warn("[Auth Helper] Team member lookup warning:", err?.message);
       }
     }
@@ -102,6 +130,7 @@ export async function verifyUserOrgAccess(
     email: decodedToken.email,
     isOwner,
     isMember,
+    permissions,
     orgData,
     cfToken,
   };

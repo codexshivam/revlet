@@ -1,19 +1,41 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
-import { Card, CardContent } from "@/components/ui/card"
+import { useUser, useFirestore } from "@/firebase"
+import { collection, query, where, getDocs } from "firebase/firestore"
+import {
+  inviteTeamMember,
+  updateTeamMemberStatus,
+  updateTeamMemberAccess,
+  deleteTeamMember,
+} from "@/app/actions/team"
+import { SERVICE_PERMISSION_OPTIONS, PERMISSION_GROUPS } from "@/lib/team-permissions"
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { UserPlus, Building2, Loader2, Users, Trash2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   AlertDialog,
@@ -25,489 +47,744 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { toast } from "@/hooks/use-toast"
-import { useUser, useFirestore, syncUserOrganizations } from "@/firebase"
 import {
-  collection,
-  query,
-  where,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  onSnapshot,
-} from "firebase/firestore"
-import { errorEmitter } from "@/firebase/error-emitter"
-import { FirestorePermissionError } from "@/firebase/errors"
-
-interface Organization {
-  id: string
-  name: string
-}
+  Users,
+  UserPlus,
+  Trash2,
+  Loader2,
+  Building2,
+  Pencil,
+  ShieldAlert,
+} from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 interface TeamMember {
   id: string
   email: string
-  organizationId: string
-  status: "Active" | "Inactive"
+  organizationId?: string
+  organizationIds?: string[]
+  permissions?: string[]
+  status: "Active" | "Pending" | "Suspended"
+  invitedBy: string
+  createdAt: any
+}
+
+interface Organization {
+  id: string
+  name: string
+  domain?: string
   ownerId: string
+  status?: string
 }
 
 function TeamTableSkeleton() {
   return (
-    <div className="w-full divide-y divide-slate-100 animate-pulse bg-white">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="py-4 px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-3.5 w-48 bg-slate-200 rounded" />
-          </div>
-          <div className="h-3.5 w-28 bg-slate-100 rounded hidden md:block" />
-          <div className="h-4 w-12 bg-slate-100 rounded hidden md:block" />
-          <div className="h-5 w-10 bg-slate-100 rounded-full" />
+    <div className="divide-y divide-slate-100">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="flex items-center justify-between px-6 py-4 animate-pulse">
+          <div className="h-3.5 w-44 rounded bg-slate-100" />
+          <div className="h-3.5 w-40 rounded bg-slate-100" />
+          <div className="h-3.5 w-32 rounded bg-slate-100" />
+          <div className="h-3.5 w-16 rounded bg-slate-100" />
+          <div className="h-6 w-20 rounded bg-slate-100" />
         </div>
       ))}
     </div>
   )
 }
 
+function getMemberOrgIds(member: TeamMember): string[] {
+  if (Array.isArray(member.organizationIds) && member.organizationIds.length > 0) {
+    return member.organizationIds
+  }
+  if (member.organizationId) {
+    return [member.organizationId]
+  }
+  return []
+}
+
+function StatusBadge({ status }: { status: TeamMember["status"] }) {
+  const dotColor =
+    status === "Active"
+      ? "bg-emerald-600"
+      : status === "Pending"
+      ? "bg-amber-500"
+      : "bg-slate-400"
+
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-700">
+      <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+      {status}
+    </span>
+  )
+}
+
 export default function TeamManagementPage() {
-  const { user, loading: authLoading } = useUser()
+  const { user } = useUser()
   const db = useFirestore()
+  const { toast } = useToast()
 
   const [members, setMembers] = useState<TeamMember[]>([])
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+  // Invite modal state
+  const [isInviteOpen, setIsInviteOpen] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteOrgIds, setInviteOrgIds] = useState<string[]>([])
+  const [invitePermissions, setInvitePermissions] = useState<string[]>(["DNS: Read", "Email: Read"])
+
+  // Edit modal state
+  const [memberToEdit, setMemberToEdit] = useState<TeamMember | null>(null)
+  const [editOrgIds, setEditOrgIds] = useState<string[]>([])
+  const [editPermissions, setEditPermissions] = useState<string[]>([])
+
+  // Delete modal state
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null)
 
-  // Form state
-  const [formData, setFormData] = useState({
-    email: "",
-    organizationId: "",
-  })
+  const fetchTeamData = useCallback(async () => {
+    if (!user || !db) {
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const [orgsSnap, membersSnap] = await Promise.all([
+        getDocs(query(collection(db, "organizations"), where("ownerId", "==", user.uid))),
+        getDocs(query(collection(db, "teamMembers"), where("invitedBy", "==", user.uid))),
+      ])
+
+      const ownedOrgs = orgsSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as Organization))
+        .filter((o) => o.status !== "Pending Deletion")
+      setOrgs(ownedOrgs)
+
+      const fetchedMembers = membersSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      })) as TeamMember[]
+      setMembers(fetchedMembers)
+    } catch (error: any) {
+      console.error("Failed to fetch team data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user, db])
 
   useEffect(() => {
-    if (authLoading || !user) return
+    fetchTeamData()
+  }, [fetchTeamData])
 
-    const orgsRef = collection(db, "organizations")
-    const qOrgs = query(orgsRef, where("ownerId", "==", user.uid))
+  const orgMap = useMemo(() => {
+    const map = new Map<string, Organization>()
+    for (const o of orgs) map.set(o.id, o)
+    return map
+  }, [orgs])
 
-    const unsubscribeOrgs = onSnapshot(
-      qOrgs,
-      (orgsSnap) => {
-        setOrgs(
-          orgsSnap.docs.map((d) => ({ id: d.id, name: d.data().name })) as Organization[]
-        )
-      },
-      (error) => {
-        console.error("Error listening to organizations:", error)
-      }
-    )
+  const toggleSelection = (list: string[], value: string): string[] =>
+    list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
 
-    const membersRef = collection(db, "teamMembers")
-    const qMembers = query(membersRef, where("ownerId", "==", user.uid))
-
-    const unsubscribeMembers = onSnapshot(
-      qMembers,
-      (membersSnap) => {
-        setMembers(
-          membersSnap.docs.map((d) => ({
-            id: d.id,
-            ...d.data(),
-          })) as TeamMember[]
-        )
-        setIsLoading(false)
-      },
-      () => {
-        const permissionError = new FirestorePermissionError({
-          path: "teamMembers",
-          operation: "list",
-        })
-        errorEmitter.emit("permission-error", permissionError)
-        setIsLoading(false)
-      }
-    )
-
-    return () => {
-      unsubscribeOrgs()
-      unsubscribeMembers()
-    }
-  }, [user, authLoading, db])
+  const handleOpenInvite = () => {
+    setInviteEmail("")
+    setInviteOrgIds(orgs.length > 0 ? [orgs[0].id] : [])
+    setInvitePermissions(["DNS: Read", "Email: Read"])
+    setIsInviteOpen(true)
+  }
 
   const handleInvite = async () => {
-    if (!user) return
-    if (!formData.email || !formData.organizationId) {
-      toast({
-        variant: "destructive",
-        title: "Missing information",
-        description: "Please enter a staff email and select an organization.",
-      })
+    if (!user || !inviteEmail.trim() || inviteOrgIds.length === 0 || invitePermissions.length === 0) {
       return
     }
 
     setIsSubmitting(true)
-    const membersRef = collection(db, "teamMembers")
-    const targetOrgId = formData.organizationId
-    const targetEmail = formData.email.toLowerCase().trim()
-
     try {
-      await addDoc(membersRef, {
-        email: targetEmail,
-        organizationId: targetOrgId,
-        ownerId: user.uid,
-        status: "Active",
-        invitedAt: serverTimestamp(),
+      const idToken = await user.getIdToken()
+      const res = await inviteTeamMember(idToken, {
+        email: inviteEmail.trim().toLowerCase(),
+        organizationIds: inviteOrgIds,
+        permissions: invitePermissions,
       })
 
-      try {
-        const { updateDoc: updateDocSdk, doc: docSdk, arrayUnion } = await import("firebase/firestore")
-        const orgRef = docSdk(db, "organizations", targetOrgId)
-        await updateDocSdk(orgRef, {
-          memberEmails: arrayUnion(targetEmail),
+      if (!res.success) {
+        toast({
+          variant: "destructive",
+          title: "Invitation failed",
+          description: res.error || "Could not send invitation.",
         })
-      } catch (e) {
-        console.error("Error updating organization memberEmails on invite:", e)
+        return
       }
 
       toast({
         title: "Invitation sent",
-        description: `Access invitation sent to ${targetEmail}.`,
+        description: `${inviteEmail.trim().toLowerCase()} is now Pending activation across ${inviteOrgIds.length} organization(s).`,
       })
-      setIsSubmitting(false)
-      setIsDialogOpen(false)
 
-      try {
-        const { getDocs, query: qQuery, collection: colRef, where: wWhere } = await import("firebase/firestore")
-        const usersRef = colRef(db, "users")
-        const qUser = qQuery(usersRef, wWhere("email", "==", targetEmail))
-        const userSnap = await getDocs(qUser)
-        if (!userSnap.empty) {
-          const invitedUserDoc = userSnap.docs[0].data()
-          const invitedUserId = userSnap.docs[0].id
-          await syncUserOrganizations(db, invitedUserId, invitedUserDoc.email, invitedUserDoc.displayName || "")
-        }
-      } catch (e) {
-        console.error("Error reactive syncing invited user:", e)
-      }
-
-      setFormData({ email: "", organizationId: "" })
-    } catch {
-      const permissionError = new FirestorePermissionError({
-        path: "teamMembers",
-        operation: "create",
-        requestResourceData: formData,
+      setIsInviteOpen(false)
+      await fetchTeamData()
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Invitation failed",
+        description: error.message || "Could not send invitation.",
       })
-      errorEmitter.emit("permission-error", permissionError)
+    } finally {
       setIsSubmitting(false)
     }
   }
 
-  const toggleStatus = async (member: TeamMember) => {
-    const memberRef = doc(db, "teamMembers", member.id)
-    const newStatus = member.status === "Active" ? "Inactive" : "Active"
+  const handleOpenEdit = (member: TeamMember) => {
+    setMemberToEdit(member)
+    setEditOrgIds(getMemberOrgIds(member))
+    setEditPermissions(Array.isArray(member.permissions) ? member.permissions : [])
+  }
 
+  const handleSaveEdit = async () => {
+    if (!user || !memberToEdit || editOrgIds.length === 0 || editPermissions.length === 0) {
+      return
+    }
+
+    setIsSubmitting(true)
     try {
-      await updateDoc(memberRef, { status: newStatus })
+      const idToken = await user.getIdToken()
+      const res = await updateTeamMemberAccess(idToken, memberToEdit.id, {
+        organizationIds: editOrgIds,
+        permissions: editPermissions,
+      })
 
-      const { arrayUnion, arrayRemove } = await import("firebase/firestore")
-      const orgRef = doc(db, "organizations", member.organizationId)
-      await updateDoc(orgRef, {
-        memberEmails:
-          newStatus === "Active"
-            ? arrayUnion(member.email.toLowerCase().trim())
-            : arrayRemove(member.email.toLowerCase().trim()),
+      if (!res.success) {
+        toast({
+          variant: "destructive",
+          title: "Update failed",
+          description: res.error || "Could not update member access.",
+        })
+        return
+      }
+
+      toast({
+        title: "Access updated",
+        description: `Updated organizations and permissions for ${memberToEdit.email}.`,
       })
-    } catch {
-      const permissionError = new FirestorePermissionError({
-        path: memberRef.path,
-        operation: "update",
-        requestResourceData: { status: newStatus },
+      setMemberToEdit(null)
+      await fetchTeamData()
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: error.message || "Could not update member access.",
       })
-      errorEmitter.emit("permission-error", permissionError)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleToggleStatus = async (member: TeamMember) => {
+    if (!user) return
+    if (member.status === "Pending") {
+      toast({
+        title: "Pending activation",
+        description: `${member.email} must sign up or sign in first to activate their account.`,
+      })
+      return
+    }
+
+    const newStatus = member.status === "Active" ? "Suspended" : "Active"
+    try {
+      const idToken = await user.getIdToken()
+      const res = await updateTeamMemberStatus(idToken, member.id, newStatus)
+      if (!res.success) {
+        toast({
+          variant: "destructive",
+          title: "Status update failed",
+          description: res.error || "Could not update member status.",
+        })
+        return
+      }
+
+      toast({
+        title: `Access ${newStatus === "Active" ? "restored" : "suspended"}`,
+        description: `${member.email} is now ${newStatus.toLowerCase()}.`,
+      })
+      await fetchTeamData()
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: error.message || "Could not update member status.",
+      })
     }
   }
 
   const handleDeleteMember = async (member: TeamMember) => {
+    if (!user) return
     try {
-      const memberRef = doc(db, "teamMembers", member.id)
-      await deleteDoc(memberRef)
-
-      const { arrayRemove } = await import("firebase/firestore")
-      const orgRef = doc(db, "organizations", member.organizationId)
-      await updateDoc(orgRef, {
-        memberEmails: arrayRemove(member.email.toLowerCase().trim()),
-      })
-
-      setMembers((prev) => prev.filter((m) => m.id !== member.id))
+      const idToken = await user.getIdToken()
+      const res = await deleteTeamMember(idToken, member.id)
+      if (!res.success) {
+        toast({
+          variant: "destructive",
+          title: "Removal failed",
+          description: res.error || "Could not revoke access.",
+        })
+        return
+      }
 
       toast({
         title: "Access revoked",
-        description: `${member.email} has been removed from the team.`,
+        description: `${member.email} has been removed from all assigned organizations.`,
       })
-    } catch {
-      const permissionError = new FirestorePermissionError({
-        path: `teamMembers/${member.id}`,
-        operation: "delete",
-      })
-      errorEmitter.emit("permission-error", permissionError)
-    } finally {
       setMemberToDelete(null)
+      await fetchTeamData()
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Removal failed",
+        description: error.message || "Could not revoke access.",
+      })
     }
   }
 
-  if (authLoading) {
-    return (
-      <DashboardShell>
-        <div className="flex flex-col items-center justify-center h-96 gap-3">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-400" strokeWidth={1.5} />
-          <p className="text-xs text-slate-500">Loading team members</p>
+  const renderAccessCheckboxes = (
+    selectedOrgIds: string[],
+    setSelectedOrgIds: (ids: string[]) => void,
+    selectedPermissions: string[],
+    setSelectedPermissions: (perms: string[]) => void,
+    idPrefix: string
+  ) => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-xs font-medium text-slate-700">
+          Assign organizations ({selectedOrgIds.length} selected)
+        </Label>
+        <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100 bg-white">
+          {orgs.map((org) => {
+            const checked = selectedOrgIds.includes(org.id)
+            return (
+              <label
+                key={org.id}
+                htmlFor={`${idPrefix}-org-${org.id}`}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                <Checkbox
+                  id={`${idPrefix}-org-${org.id}`}
+                  checked={checked}
+                  onCheckedChange={() => setSelectedOrgIds(toggleSelection(selectedOrgIds, org.id))}
+                />
+                <span className="font-medium text-slate-800 truncate">{org.name}</span>
+                {org.domain && (
+                  <span className="font-mono text-[11px] text-slate-400 ml-auto shrink-0">
+                    {org.domain}
+                  </span>
+                )}
+              </label>
+            )
+          })}
         </div>
-      </DashboardShell>
-    )
-  }
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs font-medium text-slate-700">
+          Service permissions ({selectedPermissions.length} selected)
+        </Label>
+        <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-3">
+          {PERMISSION_GROUPS.map((group) => {
+            const groupOptions = SERVICE_PERMISSION_OPTIONS.filter((opt) => opt.group === group)
+            return (
+              <div key={group} className="space-y-1.5">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  {group}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {groupOptions.map((opt) => {
+                    const checked = selectedPermissions.includes(opt.id)
+                    return (
+                      <label
+                        key={opt.id}
+                        htmlFor={`${idPrefix}-perm-${opt.id}`}
+                        className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs hover:border-slate-300 cursor-pointer"
+                        title={opt.description}
+                      >
+                        <Checkbox
+                          id={`${idPrefix}-perm-${opt.id}`}
+                          checked={checked}
+                          onCheckedChange={() =>
+                            setSelectedPermissions(toggleSelection(selectedPermissions, opt.id))
+                          }
+                        />
+                        <span className="text-slate-700 font-medium">{opt.label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <DashboardShell>
-      <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="space-y-6 max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
-              Team management
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
+          <div>
+            <h1 className="text-2xl font-headline font-semibold tracking-tight text-slate-900">
+              Team Management
             </h1>
-            <p className="text-xs text-slate-500">
-              Authorize staff members to manage your registered organizations
+            <p className="text-xs text-slate-500 mt-1">
+              Invite members across multiple organizations with scoped service permissions.
             </p>
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs transition-colors shrink-0 shadow-none">
-                <UserPlus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                Invite member
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md bg-white p-0 overflow-hidden border border-slate-200 rounded-xl">
-              <DialogHeader className="border-b border-slate-100 p-6">
-                <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                  Invite team member
-                </DialogTitle>
-                <p className="text-slate-500 text-xs mt-1">
-                  Authorize administrative access for a staff member
-                </p>
-              </DialogHeader>
-              <div className="p-6 space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="member-email" className="text-xs font-medium text-slate-700">
-                    Work email address
-                  </Label>
-                  <Input
-                    id="member-email"
-                    type="email"
-                    placeholder="staff@example.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="h-9 text-xs border-slate-200 bg-white rounded-lg"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="member-org" className="text-xs font-medium text-slate-700">
-                    Assign to organization
-                  </Label>
-                  <Select
-                    value={formData.organizationId}
-                    onValueChange={(v) => setFormData({ ...formData, organizationId: v })}
-                  >
-                    <SelectTrigger
-                      id="member-org"
+          {orgs.length > 0 && (
+            <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  onClick={handleOpenInvite}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0"
+                >
+                  <UserPlus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
+                  Invite member
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
+                <DialogHeader className="p-6 pb-2">
+                  <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                    Invite team member
+                  </DialogTitle>
+                  <DialogDescription className="text-slate-500 text-xs">
+                    Assign one or more organizations and choose the services they can access.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="p-6 pt-2 space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="member-email" className="text-xs font-medium text-slate-700">
+                      Email address
+                    </Label>
+                    <Input
+                      id="member-email"
+                      type="email"
+                      placeholder="staff@example.com"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
                       className="h-9 text-xs border-slate-200 bg-white rounded-lg"
-                    >
-                      <SelectValue placeholder="Select organization" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-slate-200">
-                      {orgs.map((org) => (
-                        <SelectItem key={org.id} value={org.id} className="text-xs">
-                          {org.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                  className="rounded-lg text-xs font-medium h-9 px-4"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleInvite}
-                  disabled={isSubmitting || !formData.email || !formData.organizationId}
-                  className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
-                  ) : (
-                    "Send invitation"
+                    />
+                  </div>
+                  {renderAccessCheckboxes(
+                    inviteOrgIds,
+                    setInviteOrgIds,
+                    invitePermissions,
+                    setInvitePermissions,
+                    "invite"
                   )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                </div>
+                <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsInviteOpen(false)}
+                    className="rounded-lg text-xs font-medium h-9 px-4"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleInvite}
+                    disabled={
+                      isSubmitting ||
+                      !inviteEmail.trim() ||
+                      inviteOrgIds.length === 0 ||
+                      invitePermissions.length === 0
+                    }
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                    ) : (
+                      "Send invitation"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
-        {/* Directory table container */}
-        <Card className="bg-white border border-slate-200/80 shadow-none overflow-hidden rounded-xl">
-          <CardContent className="p-0">
-            {isLoading ? (
-              <TeamTableSkeleton />
-            ) : members.length === 0 ? (
-              <div className="py-20 text-center space-y-3 px-4 max-w-sm mx-auto">
-                <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center mx-auto text-slate-400">
-                  <Users className="w-5 h-5" strokeWidth={1.5} />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-sm font-headline font-semibold text-slate-900">
-                    No team members invited
-                  </h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Invite staff members to help manage your registered organizations.
-                  </p>
-                </div>
+        {!isLoading && orgs.length === 0 ? (
+          <Card className="bg-white border border-slate-200/80 shadow-none rounded-xl">
+            <CardContent className="py-16 text-center space-y-3 max-w-md mx-auto px-6">
+              <div className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center mx-auto text-slate-400">
+                <ShieldAlert className="w-5 h-5" strokeWidth={1.5} />
               </div>
-            ) : (
-              <>
-                {/* Desktop View */}
-                <div className="hidden md:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200/80">
-                        <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                          Team member
-                        </TableHead>
-                        <TableHead className="text-xs font-medium py-3 text-slate-500">
-                          Assigned organization
-                        </TableHead>
-                        <TableHead className="text-xs font-medium py-3 text-slate-500">
-                          Status
-                        </TableHead>
-                        <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {members.map((member) => (
-                        <TableRow
-                          key={member.id}
-                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
-                        >
-                          <TableCell className="pl-6 py-3.5">
-                            <span className="text-xs font-mono text-slate-800">
+              <div className="space-y-1">
+                <h3 className="text-sm font-headline font-semibold text-slate-900">
+                  Owner access required
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Only organization owners can invite or manage team members. Invited members with
+                  service-level permissions cannot add other team members.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-white border border-slate-200/80 shadow-none overflow-hidden rounded-xl">
+            <CardContent className="p-0">
+              {isLoading ? (
+                <TeamTableSkeleton />
+              ) : members.length === 0 ? (
+                <div className="py-20 text-center space-y-3 px-4 max-w-sm mx-auto">
+                  <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center mx-auto text-slate-400">
+                    <Users className="w-5 h-5" strokeWidth={1.5} />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-headline font-semibold text-slate-900">
+                      No team members invited
+                    </h3>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Invite staff members to help manage your registered organizations.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Desktop View */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200/80">
+                          <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                            Team member
+                          </TableHead>
+                          <TableHead className="text-xs font-medium py-3 text-slate-500">
+                            Organizations
+                          </TableHead>
+                          <TableHead className="text-xs font-medium py-3 text-slate-500">
+                            Permissions
+                          </TableHead>
+                          <TableHead className="text-xs font-medium py-3 text-slate-500">
+                            Status
+                          </TableHead>
+                          <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                            Actions
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {members.map((member) => {
+                          const assignedIds = getMemberOrgIds(member)
+                          const perms = member.permissions || []
+
+                          return (
+                            <TableRow
+                              key={member.id}
+                              className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
+                            >
+                              <TableCell className="pl-6 py-3.5 align-top">
+                                <span className="text-xs font-mono text-slate-800">
+                                  {member.email}
+                                </span>
+                              </TableCell>
+
+                              <TableCell className="py-3.5 align-top">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {assignedIds.length === 0 ? (
+                                    <span className="text-xs text-slate-400">None assigned</span>
+                                  ) : (
+                                    assignedIds.map((oid) => (
+                                      <span
+                                        key={oid}
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"
+                                      >
+                                        <Building2 className="w-3 h-3 text-slate-400" strokeWidth={1.5} />
+                                        {orgMap.get(oid)?.name || "Unknown institution"}
+                                      </span>
+                                    ))
+                                  )}
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="py-3.5 align-top">
+                                <div className="flex flex-wrap gap-1">
+                                  {perms.length === 0 ? (
+                                    <span className="text-[11px] text-slate-400">No permissions</span>
+                                  ) : (
+                                    perms.map((p) => (
+                                      <span
+                                        key={p}
+                                        className="text-[11px] font-mono text-slate-600 bg-slate-50 border border-slate-200/80 px-1.5 py-0.5 rounded"
+                                      >
+                                        {p}
+                                      </span>
+                                    ))
+                                  )}
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="py-3.5 align-top">
+                                <StatusBadge status={member.status} />
+                              </TableCell>
+
+                              <TableCell className="text-right pr-6 py-3.5 align-top">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Switch
+                                    checked={member.status === "Active"}
+                                    disabled={member.status === "Pending"}
+                                    onCheckedChange={() => handleToggleStatus(member)}
+                                    title={
+                                      member.status === "Pending"
+                                        ? "Pending activation until member signs in"
+                                        : member.status === "Active"
+                                        ? "Suspend access"
+                                        : "Restore access"
+                                    }
+                                    className="scale-90"
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleOpenEdit(member)}
+                                    className="h-8 w-8 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                                    title="Edit organizations and permissions"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" strokeWidth={1.5} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setMemberToDelete(member)}
+                                    className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg transition-colors"
+                                    title="Revoke access"
+                                  >
+                                    <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile View */}
+                  <div className="block md:hidden divide-y divide-slate-100">
+                    {members.map((member) => {
+                      const assignedIds = getMemberOrgIds(member)
+                      const perms = member.permissions || []
+
+                      return (
+                        <div key={member.id} className="p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-xs font-mono text-slate-800 truncate">
                               {member.email}
                             </span>
-                          </TableCell>
+                            <StatusBadge status={member.status} />
+                          </div>
 
-                          <TableCell className="py-3.5">
-                            <div className="flex items-center gap-2">
-                              <Building2 className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.5} />
-                              <span className="text-xs font-medium text-slate-700">
-                                {orgs.find((o) => o.id === member.organizationId)?.name ||
-                                  "Unknown institution"}
-                              </span>
-                            </div>
-                          </TableCell>
-
-                          <TableCell className="py-3.5">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-600">
+                          <div className="flex flex-wrap gap-1.5">
+                            {assignedIds.map((oid) => (
                               <span
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  member.status === "Active" ? "bg-emerald-600" : "bg-slate-300"
-                                }`}
-                              />
-                              {member.status}
-                            </span>
-                          </TableCell>
-
-                          <TableCell className="text-right pr-6 py-3.5">
-                            <div className="flex items-center justify-end gap-3">
-                              <Switch
-                                checked={member.status === "Active"}
-                                onCheckedChange={() => toggleStatus(member)}
-                                className="scale-90"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setMemberToDelete(member)}
-                                className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg transition-colors"
+                                key={oid}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"
                               >
-                                <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                              </Button>
+                                <Building2 className="w-3 h-3 text-slate-400" strokeWidth={1.5} />
+                                {orgMap.get(oid)?.name || "Unknown institution"}
+                              </span>
+                            ))}
+                          </div>
+
+                          {perms.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {perms.map((p) => (
+                                <span
+                                  key={p}
+                                  className="text-[10px] font-mono text-slate-600 bg-slate-50 border border-slate-200/80 px-1.5 py-0.5 rounded"
+                                >
+                                  {p}
+                                </span>
+                              ))}
                             </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                          )}
 
-                {/* Mobile View */}
-                <div className="block md:hidden divide-y divide-slate-100">
-                  {members.map((member) => (
-                    <div key={member.id} className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="text-xs font-mono text-slate-800 truncate">
-                          {member.email}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-600 shrink-0">
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              member.status === "Active" ? "bg-emerald-600" : "bg-slate-300"
-                            }`}
-                          />
-                          {member.status}
-                        </span>
-                      </div>
+                          <div className="flex items-center justify-end gap-2 pt-1">
+                            <Switch
+                              checked={member.status === "Active"}
+                              disabled={member.status === "Pending"}
+                              onCheckedChange={() => handleToggleStatus(member)}
+                              className="scale-90"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenEdit(member)}
+                              className="h-8 w-8 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg"
+                            >
+                              <Pencil className="w-3.5 h-3.5" strokeWidth={1.5} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setMemberToDelete(member)}
+                              className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
+                            >
+                              <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
-                      <div className="flex items-center justify-between text-xs text-slate-600 pt-1">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" strokeWidth={1.5} />
-                          <span className="truncate">
-                            {orgs.find((o) => o.id === member.organizationId)?.name ||
-                              "Unknown institution"}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <Switch
-                            checked={member.status === "Active"}
-                            onCheckedChange={() => toggleStatus(member)}
-                            className="scale-90"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setMemberToDelete(member)}
-                            className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
-                          >
-                            <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {/* Edit access dialog */}
+        <Dialog open={!!memberToEdit} onOpenChange={(open) => !open && setMemberToEdit(null)}>
+          <DialogContent className="sm:max-w-lg rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
+            <DialogHeader className="p-6 pb-2">
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Edit member access
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 text-xs">
+                Update organization allocations and service permissions for{" "}
+                <span className="font-mono text-slate-800">{memberToEdit?.email}</span>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="p-6 pt-2">
+              {renderAccessCheckboxes(
+                editOrgIds,
+                setEditOrgIds,
+                editPermissions,
+                setEditPermissions,
+                "edit"
+              )}
+            </div>
+            <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setMemberToEdit(null)}
+                className="rounded-lg text-xs font-medium h-9 px-4"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={isSubmitting || editOrgIds.length === 0 || editPermissions.length === 0}
+                className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                ) : (
+                  "Save changes"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Revoke confirmation dialog */}
         <AlertDialog
@@ -521,12 +798,8 @@ export default function TeamManagementPage() {
               </AlertDialogTitle>
               <AlertDialogDescription className="text-slate-500 text-xs leading-relaxed">
                 Revoke administrative access for{" "}
-                <span className="font-mono text-slate-800">{memberToDelete?.email}</span> on{" "}
-                <span className="font-medium text-slate-800">
-                  {orgs.find((o) => o.id === memberToDelete?.organizationId)?.name ||
-                    "Unknown institution"}
-                </span>
-                ? They will immediately lose access to this organization.
+                <span className="font-mono text-slate-800">{memberToDelete?.email}</span> across all
+                assigned organizations? They will immediately lose access.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="gap-2 pt-4">

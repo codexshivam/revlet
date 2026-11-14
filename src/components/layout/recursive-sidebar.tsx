@@ -68,7 +68,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
 
   const bottomNavItems: NavItem[] = [
     { title: "Team Management", icon: Users, href: "/management/team" },
-    { title: "Settings", icon: Settings, href: "/management/settings" },
+    { title: "Account Settings", icon: Settings, href: "/management/settings" },
   ]
 
   const renderNavList = (items: NavItem[]) => (

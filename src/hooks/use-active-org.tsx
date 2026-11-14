@@ -1,8 +1,9 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react"
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useUser, useFirestore } from "@/firebase"
 import { collection, query, where, or, getDocs } from "firebase/firestore"
+import { checkAndClaimInvitations } from "@/app/actions/team"
 
 export interface Organization {
   id: string
@@ -17,6 +18,9 @@ export interface Organization {
   contactEmail?: string
   description?: string
   ownerId: string
+  ownerName?: string
+  memberEmails?: string[]
+  memberPermissions?: Record<string, string[]>
   status?: string
   dnsRequested?: boolean
   cloudflareZoneId?: string
@@ -67,16 +71,28 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     return ""
   })
   const [loading, setLoading] = useState(true)
+  const claimedUidRef = useRef<string | null>(null)
 
   const fetchOrgs = useCallback(async () => {
     if (!user) {
       setOrgs([])
       setActiveOrgId("")
       setLoading(false)
+      claimedUidRef.current = null
       return
     }
 
     try {
+      if (claimedUidRef.current !== user.uid) {
+        claimedUidRef.current = user.uid
+        try {
+          const idToken = await user.getIdToken()
+          await checkAndClaimInvitations(idToken)
+        } catch (claimErr) {
+          console.error("Failed to check invitations:", claimErr)
+        }
+      }
+
       const q = query(
         collection(db, "organizations"),
         or(

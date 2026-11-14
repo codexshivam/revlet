@@ -233,25 +233,10 @@ export default function SettingsPage() {
     <DashboardShell>
       <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
-              Settings
-            </h1>
-            <p className="text-xs text-slate-500">
-              Profile details, administrative credentials, and session management
-            </p>
-          </div>
-
-          <Button
-            variant="outline"
-            onClick={() => setIsSignOutOpen(true)}
-            disabled={isLoggingOut}
-            className="border-slate-200 text-slate-700 hover:text-destructive hover:bg-rose-50 hover:border-rose-200 text-xs font-medium h-9 px-4 rounded-lg transition-colors shrink-0"
-          >
-            <LogOut className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.5} />
-            <span>Sign Out</span>
-          </Button>
+        <div className="border-b border-slate-200/80 pb-5">
+          <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
+            Account Settings
+          </h1>
         </div>
 
         {/* 1. Profile Details */}

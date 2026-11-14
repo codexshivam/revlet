@@ -85,6 +85,7 @@ interface Organization {
   description: string
   code: string
   ownerId: string
+  ownerName?: string
   status?: string
   isEducation?: boolean
   cloudflareZoneId?: string
@@ -624,6 +625,11 @@ export default function AccountHomePage() {
                                       Education
                                     </span>
                                   )}
+                                  {org.ownerId !== user?.uid && (
+                                    <span className="text-[11px] text-slate-500">
+                                      Managed by {org.ownerName || org.contactName || "Organization Owner"}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -699,6 +705,11 @@ export default function AccountHomePage() {
                           <div>
                             <div className="text-xs font-medium text-slate-900">{org.name}</div>
                             <span className="font-mono text-[11px] text-slate-400">{org.code}</span>
+                            {org.ownerId !== user?.uid && (
+                              <div className="text-[11px] text-slate-500 mt-0.5">
+                                Managed by {org.ownerName || org.contactName || "Organization Owner"}
+                              </div>
+                            )}
                           </div>
                         </div>
 

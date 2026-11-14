@@ -129,15 +129,23 @@ export async function inviteTeamMember(
         ? [...ADMIN_ALL_PERMISSIONS]
         : Array.from(new Set((params.permissions || []).filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
 
-    // Build normalized per-organization permissions map
-    const resolvedOrgPermissions: Record<string, string[]> = {};
+    // Build normalized per-organization permissions map safely (prevents prototype/property injection)
+    const resolvedOrgPermMap = new Map<string, string[]>();
     for (const oid of orgIds) {
-      const rawPerms = params.orgPermissions?.[oid] || fallbackPermissions;
+      if (oid === '__proto__' || oid === 'constructor' || oid === 'prototype') continue;
+      const rawPerms =
+        params.orgPermissions && Object.prototype.hasOwnProperty.call(params.orgPermissions, oid)
+          ? params.orgPermissions[oid]
+          : fallbackPermissions;
       const isOrgAdmin = rawPerms.includes(ORG_ADMIN_PERMISSION);
-      resolvedOrgPermissions[oid] = isOrgAdmin
-        ? [...ADMIN_ALL_PERMISSIONS]
-        : Array.from(new Set(rawPerms.filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
+      resolvedOrgPermMap.set(
+        oid,
+        isOrgAdmin
+          ? [...ADMIN_ALL_PERMISSIONS]
+          : Array.from(new Set(rawPerms.filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)))
+      );
     }
+    const resolvedOrgPermissions: Record<string, string[]> = Object.fromEntries(resolvedOrgPermMap);
     const permissions = Array.from(new Set(Object.values(resolvedOrgPermissions).flat()));
     const accessMode: 'admin' | 'services' = permissions.includes(ORG_ADMIN_PERMISSION)
       ? 'admin'
@@ -389,14 +397,22 @@ export async function updateTeamMemberAccess(
         ? [...ADMIN_ALL_PERMISSIONS]
         : Array.from(new Set((params.permissions || []).filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
 
-    const resolvedOrgPermissions: Record<string, string[]> = {};
+    const resolvedOrgPermMap = new Map<string, string[]>();
     for (const oid of nextOrgIds) {
-      const rawPerms = params.orgPermissions?.[oid] || fallbackPermissions;
+      if (oid === '__proto__' || oid === 'constructor' || oid === 'prototype') continue;
+      const rawPerms =
+        params.orgPermissions && Object.prototype.hasOwnProperty.call(params.orgPermissions, oid)
+          ? params.orgPermissions[oid]
+          : fallbackPermissions;
       const isOrgAdmin = rawPerms.includes(ORG_ADMIN_PERMISSION);
-      resolvedOrgPermissions[oid] = isOrgAdmin
-        ? [...ADMIN_ALL_PERMISSIONS]
-        : Array.from(new Set(rawPerms.filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
+      resolvedOrgPermMap.set(
+        oid,
+        isOrgAdmin
+          ? [...ADMIN_ALL_PERMISSIONS]
+          : Array.from(new Set(rawPerms.filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)))
+      );
     }
+    const resolvedOrgPermissions: Record<string, string[]> = Object.fromEntries(resolvedOrgPermMap);
     const nextPermissions = Array.from(new Set(Object.values(resolvedOrgPermissions).flat()));
     const accessMode: 'admin' | 'services' = nextPermissions.includes(ORG_ADMIN_PERMISSION)
       ? 'admin'

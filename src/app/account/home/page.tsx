@@ -4,7 +4,6 @@ import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import {
   MoreVertical,
   Plus,
@@ -13,11 +12,8 @@ import {
   LogOut,
   Globe,
   Loader2,
-  Info,
   Trash2,
-  AlertTriangle,
   Settings,
-  Mail,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -48,7 +44,6 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { Switch } from "@/components/ui/switch"
 import { useState, useEffect, useCallback } from "react"
 import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore, syncUserOrganizations } from "@/firebase"

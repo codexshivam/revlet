@@ -5,15 +5,45 @@ import { adminDb } from '@/firebase/admin';
 
 const snsCertCache = new Map<string, string>();
 
-function isValidSnsCertUrl(certUrl: string): boolean {
+const AWS_SNS_HOSTS = new Map<string, string>([
+  ['sns.us-east-1.amazonaws.com', 'https://sns.us-east-1.amazonaws.com'],
+  ['sns.us-east-2.amazonaws.com', 'https://sns.us-east-2.amazonaws.com'],
+  ['sns.us-west-1.amazonaws.com', 'https://sns.us-west-1.amazonaws.com'],
+  ['sns.us-west-2.amazonaws.com', 'https://sns.us-west-2.amazonaws.com'],
+  ['sns.af-south-1.amazonaws.com', 'https://sns.af-south-1.amazonaws.com'],
+  ['sns.ap-east-1.amazonaws.com', 'https://sns.ap-east-1.amazonaws.com'],
+  ['sns.ap-south-1.amazonaws.com', 'https://sns.ap-south-1.amazonaws.com'],
+  ['sns.ap-south-2.amazonaws.com', 'https://sns.ap-south-2.amazonaws.com'],
+  ['sns.ap-southeast-1.amazonaws.com', 'https://sns.ap-southeast-1.amazonaws.com'],
+  ['sns.ap-southeast-2.amazonaws.com', 'https://sns.ap-southeast-2.amazonaws.com'],
+  ['sns.ap-southeast-3.amazonaws.com', 'https://sns.ap-southeast-3.amazonaws.com'],
+  ['sns.ap-northeast-1.amazonaws.com', 'https://sns.ap-northeast-1.amazonaws.com'],
+  ['sns.ap-northeast-2.amazonaws.com', 'https://sns.ap-northeast-2.amazonaws.com'],
+  ['sns.ap-northeast-3.amazonaws.com', 'https://sns.ap-northeast-3.amazonaws.com'],
+  ['sns.ca-central-1.amazonaws.com', 'https://sns.ca-central-1.amazonaws.com'],
+  ['sns.eu-central-1.amazonaws.com', 'https://sns.eu-central-1.amazonaws.com'],
+  ['sns.eu-central-2.amazonaws.com', 'https://sns.eu-central-2.amazonaws.com'],
+  ['sns.eu-west-1.amazonaws.com', 'https://sns.eu-west-1.amazonaws.com'],
+  ['sns.eu-west-2.amazonaws.com', 'https://sns.eu-west-2.amazonaws.com'],
+  ['sns.eu-west-3.amazonaws.com', 'https://sns.eu-west-3.amazonaws.com'],
+  ['sns.eu-south-1.amazonaws.com', 'https://sns.eu-south-1.amazonaws.com'],
+  ['sns.eu-north-1.amazonaws.com', 'https://sns.eu-north-1.amazonaws.com'],
+  ['sns.me-south-1.amazonaws.com', 'https://sns.me-south-1.amazonaws.com'],
+  ['sns.me-central-1.amazonaws.com', 'https://sns.me-central-1.amazonaws.com'],
+  ['sns.sa-east-1.amazonaws.com', 'https://sns.sa-east-1.amazonaws.com'],
+]);
+
+function resolveSafeSnsUrl(rawUrl: string, requirePem: boolean): string | null {
   try {
-    const parsed = new URL(certUrl);
-    if (parsed.protocol !== 'https:') return false;
-    if (!/^sns\.[a-z0-9-]+\.amazonaws\.com(\.cn)?$/i.test(parsed.hostname)) return false;
-    if (!parsed.pathname.endsWith('.pem')) return false;
-    return true;
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:') return null;
+    if (parsed.pathname.includes('..')) return null;
+    if (requirePem && !parsed.pathname.endsWith('.pem')) return null;
+    const safeOrigin = AWS_SNS_HOSTS.get(parsed.hostname.toLowerCase());
+    if (!safeOrigin) return null;
+    return new URL(`${parsed.pathname}${parsed.search}`, safeOrigin).toString();
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -40,9 +70,13 @@ async function verifyAwsSnsSignature(msg: Record<string, any>): Promise<boolean>
     !msg ||
     typeof msg.Type !== 'string' ||
     typeof msg.Signature !== 'string' ||
-    typeof msg.SigningCertURL !== 'string' ||
-    !isValidSnsCertUrl(msg.SigningCertURL)
+    typeof msg.SigningCertURL !== 'string'
   ) {
+    return false;
+  }
+
+  const safeCertUrl = resolveSafeSnsUrl(msg.SigningCertURL, true);
+  if (!safeCertUrl) {
     return false;
   }
 
@@ -51,14 +85,14 @@ async function verifyAwsSnsSignature(msg: Record<string, any>): Promise<boolean>
     return false;
   }
 
-  let pem = snsCertCache.get(msg.SigningCertURL);
+  let pem = snsCertCache.get(safeCertUrl);
   if (!pem) {
-    const certRes = await fetch(msg.SigningCertURL, { method: 'GET', cache: 'force-cache' });
+    const certRes = await fetch(safeCertUrl, { method: 'GET', cache: 'force-cache' });
     if (!certRes.ok) return false;
     pem = await certRes.text();
     if (!pem.includes('BEGIN CERTIFICATE')) return false;
     if (snsCertCache.size > 50) snsCertCache.clear();
-    snsCertCache.set(msg.SigningCertURL, pem);
+    snsCertCache.set(safeCertUrl, pem);
   }
 
   const algorithm = sigVersion === '2' ? 'RSA-SHA256' : 'RSA-SHA1';
@@ -83,17 +117,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Invalid or missing AWS SNS signature' }, { status: 403 });
     }
 
-    // 1. Handle AWS SNS SubscriptionConfirmation automatically (strictly validate amazonaws.com host)
+    // 1. Handle AWS SNS SubscriptionConfirmation automatically (strictly allowlisted SNS regional host)
     if (body.Type === 'SubscriptionConfirmation' && typeof body.SubscribeURL === 'string') {
-      try {
-        const subUrl = new URL(body.SubscribeURL);
-        if (subUrl.protocol === 'https:' && subUrl.hostname.endsWith('.amazonaws.com')) {
-          await fetch(subUrl.toString(), { method: 'GET', cache: 'no-store' });
-          return NextResponse.json({ ok: true, confirmed: true });
-        }
-      } catch {
+      const safeSubUrl = resolveSafeSnsUrl(body.SubscribeURL, false);
+      if (!safeSubUrl) {
         return NextResponse.json({ ok: false, error: 'Invalid SubscribeURL' }, { status: 400 });
       }
+      await fetch(safeSubUrl, { method: 'GET', cache: 'no-store' });
+      return NextResponse.json({ ok: true, confirmed: true });
     }
 
     // 2. Parse SNS Notification envelope or direct SES event payload

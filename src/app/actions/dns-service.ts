@@ -710,7 +710,7 @@ export async function getEmailRoutingStatus(idToken: string, orgId: string, zone
 export async function autoConfigureEmailDNS(idToken: string, orgId: string, zoneId: string, domainName: string) {
   if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
     
     // Automatically snapshot before auto-configuring email DNS
     try {
@@ -757,14 +757,15 @@ export async function autoConfigureEmailDNS(idToken: string, orgId: string, zone
 export async function removeEmailRoutingDNS(idToken: string, orgId: string, zoneId: string, domainName: string) {
   if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
     const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!recordsRes.success) throw new Error(recordsRes.error);
     
     const cfRecords = (recordsRes.data || []).filter((r: any) => {
       const isRoot = r.name === domainName || r.name === `@`;
       if (!isRoot) return false;
-      if (r.type === 'MX' && r.content.includes('.mx.cloudflare.net')) return true;
+      const cleanContent = String(r.content || '').toLowerCase().trim();
+      if (r.type === 'MX' && /^[a-z0-9-]+\.mx\.cloudflare\.net$/i.test(cleanContent)) return true;
       if (r.type === 'TXT' && r.content === 'v=spf1 include:_spf.mx.cloudflare.net ~all') return true;
       return false;
     });

@@ -4,10 +4,10 @@
  */
 
 // Patterns matching executable scripts and dangerous pseudo-protocols
-const SCRIPT_TAG_REGEX = /<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi;
-const GENERIC_HTML_TAG_REGEX = /<[^>]+>/g;
+const SCRIPT_TAG_REGEX = /<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\b[^>]*>/gi;
+const GENERIC_HTML_TAG_REGEX = /<[^>]*>?/g;
 const JAVASCRIPT_PROTOCOL_REGEX = /(?:javascript|vbscript|data\s*:\s*text\/html)\s*:/gi;
-const INLINE_EVENT_HANDLER_REGEX = /\bon[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
+const INLINE_EVENT_HANDLER_REGEX = /\bon[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
 const DANGEROUS_EXPRESSIONS_REGEX = /(?:eval|new\s+Function|document\s*\.\s*cookie|window\s*\.\s*localStorage|document\s*\.\s*location)\b/gi;
 
 /**
@@ -31,20 +31,20 @@ export function stripScripts(input: string, options?: { allowHtml?: boolean; max
   if (!input || typeof input !== 'string') return '';
 
   let sanitized = input;
+  let previous = '';
 
-  // 1. Remove script tags and their inner content
-  sanitized = sanitized.replace(SCRIPT_TAG_REGEX, '');
+  // Repeatedly strip until fixed point to prevent nested multi-character bypasses
+  do {
+    previous = sanitized;
+    sanitized = sanitized
+      .replace(SCRIPT_TAG_REGEX, '')
+      .replace(JAVASCRIPT_PROTOCOL_REGEX, '')
+      .replace(INLINE_EVENT_HANDLER_REGEX, '');
 
-  // 2. Remove dangerous protocol prefixes (javascript:, vbscript:, etc.)
-  sanitized = sanitized.replace(JAVASCRIPT_PROTOCOL_REGEX, '');
-
-  // 3. Remove inline event handlers (e.g. onclick=..., onerror=...)
-  sanitized = sanitized.replace(INLINE_EVENT_HANDLER_REGEX, '');
-
-  // 4. If HTML is not allowed, strip all HTML tags completely
-  if (!options?.allowHtml) {
-    sanitized = sanitized.replace(GENERIC_HTML_TAG_REGEX, '');
-  }
+    if (!options?.allowHtml) {
+      sanitized = sanitized.replace(GENERIC_HTML_TAG_REGEX, '');
+    }
+  } while (sanitized !== previous);
 
   // 5. Normalize null bytes and invisible control characters (preserve newlines/tabs)
   sanitized = sanitized.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');

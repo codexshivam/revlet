@@ -12,10 +12,7 @@ import {
 } from './dns-service';
 import { cfFetch } from './dns-client';
 import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
-import {
-  hashMailPassword,
-  buildCanonicalStalwartEmails,
-} from '@/lib/security/mail-crypto';
+import { hashMailPassword } from '@/lib/security/mail-crypto';
 
 const dnsPromises = dns.promises;
 
@@ -91,7 +88,6 @@ const MAX_ORG_UNITS_PER_ORG = 50;
 const MAX_ALIASES_PER_USER = 25;
 const MAX_MEMBERS_PER_GROUP = 500;
 const MAX_MAILBOXES_PER_ORG = 1000;
-const DEFAULT_MAILBOX_QUOTA_BYTES = 536870912; // 512 MB per mailbox default
 
 const MAIL_MX_HOST = (process.env.MAIL_MX_HOST || 'mx.revlet.me').toLowerCase().trim();
 const MAIL_SPF_INCLUDE = (process.env.MAIL_SPF_INCLUDE || '_spf.mx.revlet.me').toLowerCase().trim();
@@ -468,13 +464,14 @@ async function syncStalwartGroupPrincipal(params: {
     (m) => (m.emailAddress || '').toLowerCase() === cleanEmail
   );
 
-  const recipientsMap: Record<string, boolean> = {};
+  const recipientsEntries = new Map<string, boolean>();
   for (const member of params.memberEmails || []) {
     const cleanMem = member.toLowerCase().trim();
-    if (cleanMem) {
-      recipientsMap[cleanMem] = true;
+    if (cleanMem && cleanMem !== '__proto__' && cleanMem !== 'constructor' && cleanMem !== 'prototype') {
+      recipientsEntries.set(cleanMem, true);
     }
   }
+  const recipientsMap: Record<string, boolean> = Object.fromEntries(recipientsEntries);
 
   if (!existingMl) {
     await callStalwartJmap([
@@ -1082,19 +1079,21 @@ export async function calculateRollingQuota(orgData: any) {
   // 1. Calculate 24-hour rolling window from hourly buckets
   let dailySentCount = 0;
   const hourlyBuckets: Record<string, number> = orgData.mailHourlyBuckets || {};
-  const cleanedHourly: Record<string, number> = {};
+  const cleanedHourlyMap = new Map<string, number>();
   let hasHourlyChanges = false;
 
   for (const [key, count] of Object.entries(hourlyBuckets)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     const bucketTime = new Date(key + ':00:00.000Z').getTime();
     if (!isNaN(bucketTime) && bucketTime >= oneDayAgo) {
       const val = typeof count === 'number' ? count : 0;
       dailySentCount += val;
-      cleanedHourly[key] = val;
+      cleanedHourlyMap.set(key, val);
     } else {
       hasHourlyChanges = true;
     }
   }
+  const cleanedHourly: Record<string, number> = Object.fromEntries(cleanedHourlyMap);
 
   // Fallback for legacy format before hourly buckets
   if (Object.keys(hourlyBuckets).length === 0 && orgData.mailDailyBucket) {

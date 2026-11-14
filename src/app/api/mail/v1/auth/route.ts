@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { z } from 'zod';
 import { calculateRollingQuota } from '@/app/actions/email-service';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin';
@@ -41,21 +42,25 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const emailInput = (body.email || '').toLowerCase().trim();
-    const passwordInput = typeof body.password === 'string' ? body.password : '';
+    const rawBody = await req.json();
+    const parsed = z
+      .object({
+        email: z.string().trim().email().transform((v) => v.toLowerCase()),
+        password: z.string().min(1),
+      })
+      .safeParse(rawBody);
 
-    if (!emailInput || !emailInput.includes('@') || !passwordInput) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { ok: false, error: 'Email and password are required.' },
+        { ok: false, error: 'Valid email and password are required.' },
         { status: 400 }
       );
     }
 
-    const domain = emailInput.split('@')[1]?.toLowerCase().trim();
-    if (!domain) {
-      return NextResponse.json({ ok: false, error: 'Invalid email domain.' }, { status: 400 });
-    }
+    const emailInput = parsed.data.email;
+    const passwordInput = parsed.data.password;
+    const atIndex = emailInput.lastIndexOf('@');
+    const domain = emailInput.slice(atIndex + 1);
 
     const orgSnap = await adminDb
       .collection('organizations')

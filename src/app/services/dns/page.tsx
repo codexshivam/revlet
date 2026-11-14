@@ -10,7 +10,6 @@ import {
   Edit3,
   Trash2,
   Search,
-  ShieldCheck,
   Loader2,
   Server,
   Globe,
@@ -19,12 +18,9 @@ import {
   Download,
   Upload,
   FileText,
-  ArrowRight,
   ChevronDown,
   ChevronUp,
   ExternalLink,
-  Lock,
-  Shield,
   History,
   RotateCcw,
   Eye,
@@ -72,7 +68,6 @@ import {
   listZoneSnapshots,
   rollbackZoneSnapshot,
 } from "@/app/actions/dns-service"
-import Link from "next/link"
 import {
   Tooltip,
   TooltipContent,

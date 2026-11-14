@@ -1,7 +1,19 @@
-const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
+const CLOUDFLARE_API_ORIGIN = 'https://api.cloudflare.com';
+
+function buildSafeCloudflareUrl(path: string): string {
+  if (!path || !path.startsWith('/') || path.startsWith('//') || path.includes('..') || path.includes('\\')) {
+    throw new Error('Invalid DNS API path.');
+  }
+  const target = new URL(`/client/v4${path}`, CLOUDFLARE_API_ORIGIN);
+  if (target.origin !== CLOUDFLARE_API_ORIGIN) {
+    throw new Error('Invalid DNS API origin.');
+  }
+  return target.toString();
+}
 
 export async function cfFetch(path: string, options: RequestInit = {}, customToken?: string) {
   const dnsToken = customToken || process.env.CLOUDFLARE_DNS_TOKEN;
+  const safeLogPath = String(path || '').replace(/[\r\n\x00-\x1f\x7f]/g, '');
 
   const resolvedHeaders: Record<string, string> = {};
 
@@ -15,12 +27,13 @@ export async function cfFetch(path: string, options: RequestInit = {}, customTok
   if (cleanToken) {
     resolvedHeaders['Authorization'] = `Bearer ${cleanToken}`;
   } else {
-    console.error(`[DNS Action] Missing edge authorization for request: ${path}`);
+    console.error('[DNS Action] Missing edge authorization for request:', safeLogPath);
     throw new Error("Authorization failed. No active DNS authorization is configured for this organization.");
   }
 
   try {
-    const response = await fetch(`${CLOUDFLARE_API_URL}${path}`, {
+    const targetUrl = buildSafeCloudflareUrl(path);
+    const response = await fetch(targetUrl, {
       ...options,
       headers: {
         ...resolvedHeaders,
@@ -36,7 +49,7 @@ export async function cfFetch(path: string, options: RequestInit = {}, customTok
       data = await response.json();
     } else {
       await response.text().catch(() => '');
-      console.error(`[DNS Action] Unexpected response format (${response.status}) for ${path}`);
+      console.error('[DNS Action] Unexpected response format:', response.status, safeLogPath);
       throw new Error(`Edge network returned an unexpected response (${response.status}).`);
     }
 
@@ -49,7 +62,7 @@ export async function cfFetch(path: string, options: RequestInit = {}, customTok
     
     return data;
   } catch (error: any) {
-    console.error(`DNS action failure [${path}]: status=${error?.status || 'unknown'}`);
+    console.error('DNS action failure:', safeLogPath, 'status=', error?.status || 'unknown');
     
     // User-friendly network edge error translation (no internal tech/key details)
     let friendlyMessage = error.message || "An unexpected error occurred.";

@@ -7,9 +7,6 @@ import {
   LogIn,
   UserPlus,
   ArrowRight,
-  ShieldCheck,
-  Globe,
-  GraduationCap,
   FileCode2,
 } from 'lucide-react';
 

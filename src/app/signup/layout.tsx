@@ -1,46 +1,24 @@
 import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
+import { buildPageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: { absolute: 'Get Started | Revlet' },
-  description: 'Register your school or business on Revlet with zero-trust multi-tenancy and start deploying Anycast DNS in minutes.',
-  alternates: {
-    canonical: 'https://app.revlet.me/signup',
-  },
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Get Started | Revlet',
+  description: 'Create your Revlet organization to manage DNS records, launch custom domain email, and delegate team access in minutes.',
+  path: '/signup',
+  indexable: true,
   keywords: [
     'Revlet signup',
+    'get started with Revlet',
     'register organization',
-    'educational IT management',
-    'free IT control plane',
-    'Cloudflare DNS setup',
-    'DNS Management',
-    'Email Service',
+    'custom domain email setup',
+    'DNS Management setup',
+    'team IT control plane',
   ],
-  openGraph: {
-    title: 'Get Started | Revlet IT Management Control Plane',
-    description: "Start managing your organization's IT infrastructure in minutes with zero-trust tenancy.",
-    url: 'https://app.revlet.me/signup',
-    type: 'website',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'Revlet Get Started',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Get Started | Revlet IT Management Control Plane',
-    description: "Start managing your organization's IT infrastructure in minutes with zero-trust tenancy.",
-    images: ['/og-image.png'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  ogTitle: 'Get Started | Revlet',
+  ogDescription: 'Create your Revlet organization and launch DNS and Business Email Service in minutes.',
+  ogAlt: 'Get Started | Revlet',
+});
 
 export default function SignupLayout({ children }: { children: React.ReactNode }) {
   const breadcrumbLd = {

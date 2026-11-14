@@ -1,46 +1,24 @@
 import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
+import { buildPageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: { absolute: 'Login | Revlet' },
-  description: 'Use the console to manage everything powering your domain — DNS Management and Email Service.',
-  alternates: {
-    canonical: 'https://app.revlet.me/login',
-  },
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Login | Revlet',
+  description: 'Sign in to Revlet to manage your organization domains, DNS records, custom email service, and team access.',
+  path: '/login',
+  indexable: true,
   keywords: [
-    'Revlet console',
     'Revlet login',
-    'IT management sign in',
-    'Cloudflare DNS portal',
+    'Revlet console sign in',
     'DNS Management login',
     'Email Service login',
-    'school IT dashboard',
+    'business email admin console',
+    'team access control',
   ],
-  openGraph: {
-    title: 'Console | Revlet IT Management Control Plane',
-    description: "Access your organization's unified infrastructure management dashboard.",
-    url: 'https://app.revlet.me/login',
-    type: 'website',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'Revlet Console',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Console | Revlet IT Management Control Plane',
-    description: "Access your organization's unified infrastructure management dashboard.",
-    images: ['/og-image.png'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  ogTitle: 'Login | Revlet',
+  ogDescription: "Access your organization's unified DNS, Email, and Team Management console.",
+  ogAlt: 'Login | Revlet',
+});
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
   const breadcrumbLd = {

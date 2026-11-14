@@ -85,6 +85,7 @@ import { containsMaliciousScript } from "@/lib/security/sanitize"
 import { PageHeader } from "@/components/layout/page-header"
 import { EmptyOrgState } from "@/components/services/empty-org-state"
 import { ServiceActivationCard } from "@/components/services/service-activation-card"
+import { TablePagination } from "@/components/ui/table-pagination"
 
 const SUPPORTED_TYPES = [
   "A",
@@ -698,10 +699,24 @@ export default function DNSManagementPage() {
     }
   }
 
+  const [recordsPage, setRecordsPage] = useState(1)
+  const [recordsPageSize, setRecordsPageSize] = useState(25)
+
   const filteredRecords = records.filter(
     (r) =>
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.content.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  useEffect(() => {
+    setRecordsPage(1)
+  }, [searchQuery, selectedOrg?.id])
+
+  const totalRecordPages = Math.max(1, Math.ceil(filteredRecords.length / recordsPageSize))
+  const safeRecordsPage = Math.min(recordsPage, totalRecordPages)
+  const paginatedRecords = filteredRecords.slice(
+    (safeRecordsPage - 1) * recordsPageSize,
+    safeRecordsPage * recordsPageSize
   )
 
   const isProxyAllowed = (type: string) => PROXY_SUPPORTED_TYPES.includes(type)
@@ -1169,7 +1184,7 @@ export default function DNSManagementPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {filteredRecords.map((rec) => (
+                            {paginatedRecords.map((rec) => (
                               <TableRow
                                 key={rec.id}
                                 className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors"
@@ -1254,7 +1269,7 @@ export default function DNSManagementPage() {
 
                       {/* Mobile List View */}
                       <div className="block md:hidden divide-y divide-slate-100">
-                        {filteredRecords.map((rec) => (
+                        {paginatedRecords.map((rec) => (
                           <div key={rec.id} className="p-4 space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
@@ -1323,6 +1338,15 @@ export default function DNSManagementPage() {
                           </div>
                         ))}
                       </div>
+
+                      <TablePagination
+                        totalItems={filteredRecords.length}
+                        currentPage={safeRecordsPage}
+                        pageSize={recordsPageSize}
+                        onPageChange={setRecordsPage}
+                        onPageSizeChange={setRecordsPageSize}
+                        itemLabel="records"
+                      />
                     </>
                   )}
                 </TooltipProvider>

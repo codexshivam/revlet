@@ -192,11 +192,13 @@ async function logMailAuditEvent(params: {
 // ============================================================================
 
 function getStalwartConfig() {
-  const baseUrl = (process.env.STALWART_BASE_URL || 'https://mx.revlet.me').trim().replace(/\/+$/, '');
-  const adminUser = (process.env.STALWART_ADMIN_USER || 'admin@example.org').trim();
-  const adminToken = (process.env.STALWART_ADMIN_TOKEN || '8fWSeq9XjleYWnco').trim();
-  const enabled = Boolean(baseUrl && adminToken);
-  const authHeader = `Basic ${Buffer.from(`${adminUser}:${adminToken}`).toString('base64')}`;
+  const baseUrl = (process.env.STALWART_BASE_URL || process.env.STALWART_API_URL || '').trim().replace(/\/+$/, '');
+  const adminUser = (process.env.STALWART_ADMIN_USER || '').trim();
+  const adminToken = (process.env.STALWART_ADMIN_TOKEN || process.env.STALWART_ADMIN_PASS || '').trim();
+  const enabled = Boolean(baseUrl && adminUser && adminToken);
+  const authHeader = enabled
+    ? `Basic ${Buffer.from(`${adminUser}:${adminToken}`).toString('base64')}`
+    : '';
   return { baseUrl, adminUser, adminToken, authHeader, enabled };
 }
 
@@ -205,9 +207,6 @@ async function callStalwartJmap(
 ): Promise<any[]> {
   const { baseUrl, authHeader, enabled } = getStalwartConfig();
   if (!enabled) return [];
-
-  // mx.revlet.me uses internal TLS certificates
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 6000);
@@ -241,12 +240,34 @@ async function callStalwartJmap(
   }
 }
 
+async function findStalwartAccountByEmail(cleanEmail: string): Promise<any | null> {
+  const queryRes = await callStalwartJmap([
+    ['x:Account/query', { accountId: 'b', filter: { text: cleanEmail }, limit: 10 }, 'accQuery'],
+  ]);
+  const queriedIds: string[] = queryRes.find((r) => r[0] === 'x:Account/query')?.[1]?.ids || [];
+  if (queriedIds.length > 0) {
+    const getRes = await callStalwartJmap([
+      ['x:Account/get', { accountId: 'b', ids: queriedIds }, 'accGet'],
+    ]);
+    const list: any[] = getRes.find((r) => r[0] === 'x:Account/get')?.[1]?.list || [];
+    const matched = list.find((a) => (a.emailAddress || '').toLowerCase() === cleanEmail);
+    if (matched) return matched;
+  }
+
+  // Fallback for Stalwart versions where x:Account/query is unavailable
+  const fallbackRes = await callStalwartJmap([
+    ['x:Account/get', { accountId: 'b', ids: null, properties: ['id', 'emailAddress', 'name', 'aliases', 'description'] }, 'accList'],
+  ]);
+  const accList: any[] = fallbackRes.find((r) => r[0] === 'x:Account/get')?.[1]?.list || [];
+  return accList.find((a) => (a.emailAddress || '').toLowerCase() === cleanEmail) || null;
+}
+
 async function dispatchStalwartApi(
   method: 'POST' | 'PATCH' | 'DELETE' | 'GET',
   endpoint: string,
   body?: unknown
 ): Promise<{ ok: boolean; status: number }> {
-  const { baseUrl, adminToken, enabled } = getStalwartConfig();
+  const { enabled } = getStalwartConfig();
   if (!enabled) {
     return { ok: true, status: 200 };
   }
@@ -256,13 +277,7 @@ async function dispatchStalwartApi(
     const emailTarget = decodeURIComponent(endpoint.replace('/api/principal/', ''))
       .toLowerCase()
       .trim();
-    const responses = await callStalwartJmap([
-      ['x:Account/get', { accountId: 'b', ids: null }, 'acc'],
-    ]);
-    const list: any[] = responses.find((r) => r[0] === 'x:Account/get')?.[1]?.list || [];
-    const matched = list.find(
-      (a) => (a.emailAddress || '').toLowerCase() === emailTarget
-    );
+    const matched = await findStalwartAccountByEmail(emailTarget);
     if (matched?.id) {
       await callStalwartJmap([
         ['x:Account/set', { accountId: 'b', destroy: [matched.id] }, 'del'],
@@ -345,13 +360,7 @@ export async function syncStalwartUserPrincipal(params: {
   const domainId = await ensureStalwartDomainId(domainPart);
   if (!domainId) return;
 
-  const accResponses = await callStalwartJmap([
-    ['x:Account/get', { accountId: 'b', ids: null }, 'accList'],
-  ]);
-  const accList: any[] = accResponses.find((r) => r[0] === 'x:Account/get')?.[1]?.list || [];
-  const existingAcc = accList.find(
-    (a) => (a.emailAddress || '').toLowerCase() === cleanEmail
-  );
+  const existingAcc = await findStalwartAccountByEmail(cleanEmail);
 
   const aliasesMap: Record<string, unknown> = {};
   let aliasIdx = 0;
@@ -1167,7 +1176,7 @@ export async function resetOrgEmailQuota(
 export async function getMailServiceState(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Read', 'Email: Add', 'Email: Admin']);
     const domain = (orgData.domain || '').toLowerCase().trim();
     const dkimTokens = await ensureOrgDkimTokens(orgId, orgData);
 
@@ -1308,7 +1317,7 @@ export async function activateMailService(idToken: string, orgId: string) {
 export async function deactivateMailService(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    const { uid, email, isOwner, orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { uid, email, isOwner, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
     if (!isOwner) {
       return {
         success: false,
@@ -1717,7 +1726,7 @@ async function isEmailAddressTakenInOrg(
 export async function listMailUsers(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const { orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Read', 'Email: Add', 'Email: Admin']);
     const colRef = adminDb.collection('organizations').doc(orgId).collection('mailUsers');
     const snap = await colRef.get();
 
@@ -2825,16 +2834,19 @@ export async function purgeExpiredMailData(): Promise<{
   let purgedUsersCount = 0;
   let notificationsSent = 0;
 
-  const orgsSnap = await adminDb.collection('organizations').get();
+  // 1. Deactivated Email Service > 14 days -> targeted indexed query instead of full collection scan
+  const dueOrgsSnap = await adminDb
+    .collection('organizations')
+    .where('mailPurgeScheduledAt', '<=', nowIso)
+    .get();
 
-  for (const orgDoc of orgsSnap.docs) {
+  for (const orgDoc of dueOrgsSnap.docs) {
     const orgData = orgDoc.data();
     const orgId = orgDoc.id;
     const domain = (orgData.domain || '').toLowerCase().trim();
     const orgName = orgData.name || domain || orgId;
     const ownerEmail = await resolveOrganizationOwnerEmail(orgData);
 
-    // 1. Deactivated Email Service > 14 days -> purge entire organization mail data
     if (!orgData.mailServiceActive && orgData.mailPurgeScheduledAt) {
       const scheduledMs = new Date(orgData.mailPurgeScheduledAt).getTime();
       if (!Number.isNaN(scheduledMs) && scheduledMs <= nowMs) {
@@ -2936,11 +2948,24 @@ export async function purgeExpiredMailData(): Promise<{
         }
 
         purgedOrgsCount++;
-        continue;
       }
     }
+  }
 
-    // 2. Active organizations: purge individual soft-deleted accounts past 14-day recovery window
+  // 2. Active organizations: purge individual soft-deleted accounts past 14-day recovery window
+  const activeOrgsSnap = await adminDb
+    .collection('organizations')
+    .where('mailServiceActive', '==', true)
+    .select('domain', 'name', 'ownerId', 'ownerEmail')
+    .get();
+
+  for (const orgDoc of activeOrgsSnap.docs) {
+    const orgData = orgDoc.data();
+    const orgId = orgDoc.id;
+    const domain = (orgData.domain || '').toLowerCase().trim();
+    const orgName = orgData.name || domain || orgId;
+    const ownerEmail = await resolveOrganizationOwnerEmail(orgData);
+
     const deletedSnap = await orgDoc.ref
       .collection('mailUsers')
       .where('status', '==', 'deleted')

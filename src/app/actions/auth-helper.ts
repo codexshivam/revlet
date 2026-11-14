@@ -11,6 +11,16 @@ export type VerifiedUserOrg = {
   cfToken?: string;
 };
 
+export function hasOrgPermission(
+  permissions: string[],
+  required?: string | string[]
+): boolean {
+  if (!required) return true;
+  if (permissions.includes('*') || permissions.includes('Org: Admin')) return true;
+  const reqList = Array.isArray(required) ? required : [required];
+  return reqList.some((r) => permissions.includes(r));
+}
+
 /**
  * Validates the caller's Firebase session and asserts permissions for the target organization.
  * Prevents IDOR and privilege escalation across tenants.
@@ -18,7 +28,8 @@ export type VerifiedUserOrg = {
 export async function verifyUserOrgAccess(
   idToken: string,
   orgId: string,
-  expectedZoneId?: string
+  expectedZoneId?: string,
+  requiredPermissions?: string | string[]
 ): Promise<VerifiedUserOrg> {
   if (!idToken || !orgId) {
     throw new Error("Unauthorized: Missing credentials.");
@@ -52,9 +63,7 @@ export async function verifyUserOrgAccess(
 
   const orgData = orgDoc.data();
   const userEmail = decodedToken.email?.toLowerCase().trim();
-  const isSuperAdmin =
-    (decodedToken as any).admin === true ||
-    (decodedToken.email_verified === true && userEmail === 'shivam@revlet.me');
+  const isSuperAdmin = (decodedToken as any).admin === true;
   const isOwner = isSuperAdmin || orgData?.ownerId === decodedToken.uid;
 
   let isMember = isOwner;
@@ -105,6 +114,10 @@ export async function verifyUserOrgAccess(
 
   if (!isOwner && !isMember) {
     throw new Error("Unauthorized: Access denied to this organization.");
+  }
+
+  if (requiredPermissions && !hasOrgPermission(permissions, requiredPermissions)) {
+    throw new Error("Unauthorized: Insufficient organization permissions for this action.");
   }
 
   if (expectedZoneId && orgData?.cloudflareZoneId && orgData.cloudflareZoneId !== expectedZoneId) {

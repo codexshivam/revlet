@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { AuthFrame } from "@/components/layout/auth-frame"
 
 export const metadata: Metadata = {
-  title: "Resource Not Found",
+  title: { absolute: "Not Found Error" },
   description: "The requested page does not exist or has been relocated.",
   robots: {
     index: false,

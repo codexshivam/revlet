@@ -16,7 +16,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 export async function getZoneDetails(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Read', 'DNS: Edit', 'DNS: Admin']);
     const data = await cfFetch(`/zones/${zoneId}`, {}, verified.cfToken);
     return {
       success: true,
@@ -36,7 +36,7 @@ export async function getZoneDetails(idToken: string, orgId: string, zoneId: str
 export async function listDNSRecords(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Read', 'DNS: Edit', 'DNS: Admin']);
     let allRecords: any[] = [];
     let page = 1;
     let totalPages = 1;
@@ -75,7 +75,7 @@ export async function listDNSRecords(idToken: string, orgId: string, zoneId: str
 export async function createDNSRecord(idToken: string, orgId: string, zoneId: string, record: any) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
 
     const payload: any = {
       type: record.type,
@@ -104,7 +104,7 @@ export async function createDNSRecord(idToken: string, orgId: string, zoneId: st
 export async function updateDNSRecord(idToken: string, orgId: string, zoneId: string, recordId: string, record: any) {
   if (!zoneId || !recordId) return { success: false, error: 'Missing Zone ID or Record ID' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
 
     const payload: any = {
       type: record.type,
@@ -133,7 +133,7 @@ export async function updateDNSRecord(idToken: string, orgId: string, zoneId: st
 export async function deleteDNSRecord(idToken: string, orgId: string, zoneId: string, recordId: string) {
   if (!zoneId || !recordId) return { success: false, error: 'Missing Zone ID or Record ID' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
     const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {
       method: 'DELETE',
     }, verified.cfToken);

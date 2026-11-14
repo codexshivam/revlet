@@ -60,14 +60,20 @@ export async function listTeamManagementData(idToken: string) {
       return { success: true, data: { orgs: [], members: [] } };
     }
 
-    // Fetch teamMembers owned by caller OR referencing any manageable org
+    // Fetch teamMembers owned by caller OR referencing any manageable org (chunked to avoid 10-item limits)
     const memberDocsMap = new Map<string, any>();
-    const [byOwnerSnap, ...byOrgSnaps] = await Promise.all([
-      adminDb.collection('teamMembers').where('ownerId', '==', caller.uid).get(),
-      ...Array.from(manageableOrgIds).slice(0, 10).map((orgId) =>
-        adminDb.collection('teamMembers').where('organizationIds', 'array-contains', orgId).get()
-      ),
-    ]);
+    const orgIdList = Array.from(manageableOrgIds);
+    const orgIdChunks: string[][] = [];
+    for (let i = 0; i < orgIdList.length; i += 10) {
+      orgIdChunks.push(orgIdList.slice(i, i + 10));
+    }
+
+    const byOwnerSnap = await adminDb.collection('teamMembers').where('ownerId', '==', caller.uid).get();
+    const byOrgSnaps = await Promise.all(
+      orgIdChunks.map((chunk) =>
+        adminDb.collection('teamMembers').where('organizationIds', 'array-contains-any', chunk).get()
+      )
+    );
 
     for (const snap of [byOwnerSnap, ...byOrgSnaps]) {
       for (const doc of snap.docs) {

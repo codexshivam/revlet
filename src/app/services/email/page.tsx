@@ -79,6 +79,7 @@ import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/layout/page-header"
 import { EmptyOrgState } from "@/components/services/empty-org-state"
 import { ServiceActivationCard } from "@/components/services/service-activation-card"
+import { TablePagination } from "@/components/ui/table-pagination"
 import {
   getMailServiceState,
   activateMailService,
@@ -1283,6 +1284,52 @@ export default function EmailServiceAdminPage() {
     return Array.from(paths)
   }, [orgUnits])
 
+  const [usersPage, setUsersPage] = useState(1)
+  const [usersPageSize, setUsersPageSize] = useState(25)
+  const [groupsPage, setGroupsPage] = useState(1)
+  const [groupsPageSize, setGroupsPageSize] = useState(25)
+  const [suspendedPage, setSuspendedPage] = useState(1)
+  const [suspendedPageSize, setSuspendedPageSize] = useState(25)
+  const [deletedPage, setDeletedPage] = useState(1)
+  const [deletedPageSize, setDeletedPageSize] = useState(25)
+
+  useEffect(() => {
+    setUsersPage(1)
+  }, [userSearchQuery, selectedUserOu, selectedOrg?.id])
+
+  useEffect(() => {
+    setGroupsPage(1)
+  }, [groupSearchQuery, selectedGroupOu, selectedOrg?.id])
+
+  useEffect(() => {
+    setSuspendedPage(1)
+    setDeletedPage(1)
+  }, [suspendedSearchQuery, selectedOrg?.id])
+
+  const paginatedActiveUsers = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredActiveUsers.length / usersPageSize))
+    const safePage = Math.min(usersPage, totalPages)
+    return filteredActiveUsers.slice((safePage - 1) * usersPageSize, safePage * usersPageSize)
+  }, [filteredActiveUsers, usersPage, usersPageSize])
+
+  const paginatedGroups = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredGroups.length / groupsPageSize))
+    const safePage = Math.min(groupsPage, totalPages)
+    return filteredGroups.slice((safePage - 1) * groupsPageSize, safePage * groupsPageSize)
+  }, [filteredGroups, groupsPage, groupsPageSize])
+
+  const paginatedSuspendedUsers = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredSuspendedUsers.length / suspendedPageSize))
+    const safePage = Math.min(suspendedPage, totalPages)
+    return filteredSuspendedUsers.slice((safePage - 1) * suspendedPageSize, safePage * suspendedPageSize)
+  }, [filteredSuspendedUsers, suspendedPage, suspendedPageSize])
+
+  const paginatedDeletedUsers = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredDeletedUsers.length / deletedPageSize))
+    const safePage = Math.min(deletedPage, totalPages)
+    return filteredDeletedUsers.slice((safePage - 1) * deletedPageSize, safePage * deletedPageSize)
+  }, [filteredDeletedUsers, deletedPage, deletedPageSize])
+
   if (authLoading || (isLoadingOrgs && orgs.length === 0)) {
     return (
       <DashboardShell>
@@ -2078,7 +2125,7 @@ export default function EmailServiceAdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredActiveUsers.map((u) => (
+                    {paginatedActiveUsers.map((u) => (
                       <TableRow
                         key={u.id}
                         className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
@@ -2214,6 +2261,14 @@ export default function EmailServiceAdminPage() {
                   </TableBody>
                 </Table>
               )}
+              <TablePagination
+                totalItems={filteredActiveUsers.length}
+                currentPage={usersPage}
+                pageSize={usersPageSize}
+                onPageChange={setUsersPage}
+                onPageSizeChange={setUsersPageSize}
+                itemLabel="users"
+              />
             </div>
           </TabsContent>
 
@@ -2347,7 +2402,7 @@ export default function EmailServiceAdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredGroups.map((g) => (
+                    {paginatedGroups.map((g) => (
                       <TableRow
                         key={g.id}
                         className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
@@ -2442,6 +2497,14 @@ export default function EmailServiceAdminPage() {
                   </TableBody>
                 </Table>
               )}
+              <TablePagination
+                totalItems={filteredGroups.length}
+                currentPage={groupsPage}
+                pageSize={groupsPageSize}
+                onPageChange={setGroupsPage}
+                onPageSizeChange={setGroupsPageSize}
+                itemLabel="groups"
+              />
             </div>
           </TabsContent>
 
@@ -2500,7 +2563,7 @@ export default function EmailServiceAdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredSuspendedUsers.map((u) => (
+                    {paginatedSuspendedUsers.map((u) => (
                       <TableRow key={u.id} className="border-b border-slate-100 last:border-0">
                         <TableCell className="pl-6 py-3.5">
                           <div className="flex items-center gap-2.5">
@@ -2554,6 +2617,14 @@ export default function EmailServiceAdminPage() {
                   </TableBody>
                 </Table>
               )}
+              <TablePagination
+                totalItems={filteredSuspendedUsers.length}
+                currentPage={suspendedPage}
+                pageSize={suspendedPageSize}
+                onPageChange={setSuspendedPage}
+                onPageSizeChange={setSuspendedPageSize}
+                itemLabel="suspended accounts"
+              />
             </div>
 
             {/* Deleted accounts — 14-day recovery */}
@@ -2593,7 +2664,7 @@ export default function EmailServiceAdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredDeletedUsers.map((u) => {
+                    {paginatedDeletedUsers.map((u) => {
                       const daysLeft = getDaysRemaining(u.recoverableUntil)
                       return (
                         <TableRow key={u.id} className="border-b border-slate-100 last:border-0">
@@ -2627,6 +2698,14 @@ export default function EmailServiceAdminPage() {
                   </TableBody>
                 </Table>
               )}
+              <TablePagination
+                totalItems={filteredDeletedUsers.length}
+                currentPage={deletedPage}
+                pageSize={deletedPageSize}
+                onPageChange={setDeletedPage}
+                onPageSizeChange={setDeletedPageSize}
+                itemLabel="deleted accounts"
+              />
             </div>
           </TabsContent>
 

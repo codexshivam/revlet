@@ -9,7 +9,6 @@ import {
   listDNSRecords,
   createDNSRecord,
   deleteDNSRecord,
-  createZoneSnapshot,
 } from './cloudflare-dns';
 import { cfFetch } from './cf-fetch';
 import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
@@ -842,12 +841,6 @@ async function provisionRequiredDnsRecordsOnZone(
   dkimTokens: string[]
 ): Promise<{ success: boolean; addedCount: number; error?: string }> {
   try {
-    try {
-      await createZoneSnapshot(idToken, orgId, zoneId, 'Pre-Email Service DNS configuration backup');
-    } catch {
-      // Proceed even if snapshot logging encounters a non-fatal warning
-    }
-
     const existingRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!existingRes.success) {
       return {

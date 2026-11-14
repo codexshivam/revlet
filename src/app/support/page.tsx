@@ -61,7 +61,7 @@ export default function SupportPage() {
   const db = useFirestore()
 
   const [subject, setSubject] = useState("")
-  const [category, setCategory] = useState("Technical Support")
+  const [category, setCategory] = useState("DNS Management")
   const [message, setMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -178,7 +178,7 @@ export default function SupportPage() {
 
       setSubject("")
       setMessage("")
-      setCategory("Technical Support")
+      setCategory("DNS Management")
     } catch (error: any) {
       const permissionError = new FirestorePermissionError({
         path: "supportTickets",
@@ -257,14 +257,14 @@ export default function SupportPage() {
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg">
-                    <SelectItem value="Technical Support" className="text-xs">
-                      Technical Support
+                    <SelectItem value="DNS Management" className="text-xs">
+                      DNS Management
                     </SelectItem>
-                    <SelectItem value="Billing & Payments" className="text-xs">
-                      Billing & Payments
+                    <SelectItem value="Email Service" className="text-xs">
+                      Email Service
                     </SelectItem>
-                    <SelectItem value="DNS & Network" className="text-xs">
-                      DNS & Network
+                    <SelectItem value="Account & Team Access" className="text-xs">
+                      Account &amp; Team Access
                     </SelectItem>
                     <SelectItem value="Bug Report" className="text-xs">
                       Bug Report

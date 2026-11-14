@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Email Service Admin Center',
+  title: { absolute: 'Email Service | Revlet' },
   description: 'Manage custom domain email accounts, aliases, organizational units, groups, and domain routing.',
   robots: {
     index: false,

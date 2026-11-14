@@ -417,7 +417,7 @@ export default function SignupPage() {
                 </Label>
                 <Input
                   id="org-name"
-                  placeholder="Acme Academy or Apex Labs"
+                  placeholder="Example Company"
                   required
                   className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
                   value={orgFormData.name}
@@ -431,7 +431,7 @@ export default function SignupPage() {
                 </Label>
                 <Input
                   id="org-domain"
-                  placeholder="institution.edu"
+                  placeholder="example.com"
                   className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg font-mono"
                   value={orgFormData.domain}
                   onChange={(e) => setOrgFormData({ ...orgFormData, domain: e.target.value })}

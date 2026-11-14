@@ -151,21 +151,25 @@ export default function TeamManagementPage() {
 
     setIsLoading(true)
     try {
-      const [orgsSnap, membersSnap] = await Promise.all([
+      const [orgsResult, membersResult] = await Promise.allSettled([
         getDocs(query(collection(db, "organizations"), where("ownerId", "==", user.uid))),
-        getDocs(query(collection(db, "teamMembers"), where("invitedBy", "==", user.uid))),
+        getDocs(query(collection(db, "teamMembers"), where("ownerId", "==", user.uid))),
       ])
 
-      const ownedOrgs = orgsSnap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as Organization))
-        .filter((o) => o.status !== "Pending Deletion")
-      setOrgs(ownedOrgs)
+      if (orgsResult.status === "fulfilled") {
+        const ownedOrgs = orgsResult.value.docs
+          .map((d) => ({ id: d.id, ...d.data() } as Organization))
+          .filter((o) => o.status !== "Pending Deletion")
+        setOrgs(ownedOrgs)
+      }
 
-      const fetchedMembers = membersSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as TeamMember[]
-      setMembers(fetchedMembers)
+      if (membersResult.status === "fulfilled") {
+        const fetchedMembers = membersResult.value.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as TeamMember[]
+        setMembers(fetchedMembers)
+      }
     } catch (error: any) {
       console.error("Failed to fetch team data:", error)
     } finally {
@@ -430,14 +434,9 @@ export default function TeamManagementPage() {
       <div className="space-y-6 max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
-          <div>
-            <h1 className="text-2xl font-headline font-semibold tracking-tight text-slate-900">
-              Team Management
-            </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Invite members across multiple organizations with scoped service permissions.
-            </p>
-          </div>
+          <h1 className="text-2xl font-headline font-semibold tracking-tight text-slate-900">
+            Team Management
+          </h1>
 
           {orgs.length > 0 && (
             <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
@@ -511,43 +510,27 @@ export default function TeamManagementPage() {
           )}
         </div>
 
-        {!isLoading && orgs.length === 0 ? (
-          <Card className="bg-white border border-slate-200/80 shadow-none rounded-xl">
-            <CardContent className="py-16 text-center space-y-3 max-w-md mx-auto px-6">
-              <div className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center mx-auto text-slate-400">
-                <ShieldAlert className="w-5 h-5" strokeWidth={1.5} />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-headline font-semibold text-slate-900">
-                  Owner access required
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Only organization owners can invite or manage team members. Invited members with
-                  service-level permissions cannot add other team members.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="bg-white border border-slate-200/80 shadow-none overflow-hidden rounded-xl">
-            <CardContent className="p-0">
-              {isLoading ? (
-                <TeamTableSkeleton />
-              ) : members.length === 0 ? (
-                <div className="py-20 text-center space-y-3 px-4 max-w-sm mx-auto">
-                  <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center mx-auto text-slate-400">
-                    <Users className="w-5 h-5" strokeWidth={1.5} />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-headline font-semibold text-slate-900">
-                      No team members invited
-                    </h3>
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      Invite staff members to help manage your registered organizations.
-                    </p>
-                  </div>
+        <Card className="bg-white border border-slate-200/80 shadow-none overflow-hidden rounded-xl">
+          <CardContent className="p-0">
+            {isLoading ? (
+              <TeamTableSkeleton />
+            ) : members.length === 0 ? (
+              <div className="py-20 text-center space-y-3 px-4 max-w-sm mx-auto">
+                <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center mx-auto text-slate-400">
+                  <Users className="w-5 h-5" strokeWidth={1.5} />
                 </div>
-              ) : (
+                <div className="space-y-1">
+                  <h3 className="text-sm font-headline font-semibold text-slate-900">
+                    No team members invited
+                  </h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    {orgs.length > 0
+                      ? "Invite staff members to help manage your owned organizations."
+                      : "Register your own organization in Account Home to invite team members."}
+                  </p>
+                </div>
+              </div>
+            ) : (
                 <>
                   {/* Desktop View */}
                   <div className="hidden md:block">
@@ -738,9 +721,8 @@ export default function TeamManagementPage() {
                   </div>
                 </>
               )}
-            </CardContent>
-          </Card>
-        )}
+          </CardContent>
+        </Card>
 
         {/* Edit access dialog */}
         <Dialog open={!!memberToEdit} onOpenChange={(open) => !open && setMemberToEdit(null)}>

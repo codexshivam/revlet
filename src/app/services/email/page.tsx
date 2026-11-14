@@ -1183,27 +1183,27 @@ export default function EmailServiceAdminPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-xs">
                     <div className="space-y-1">
-                      <p className="font-semibold text-white">Custom Domain Mailboxes</p>
+                      <p className="font-semibold text-white">Custom Business Email</p>
                       <p className="text-white/85 leading-relaxed">
-                        Create and manage branded mailboxes, groups, and organizational units from one console.
+                        Build trust with professional addresses using your own domain name, like you@yourcompany.com.
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="font-semibold text-white">Authenticated Delivery</p>
+                      <p className="font-semibold text-white">Work From Anywhere</p>
                       <p className="text-white/85 leading-relaxed">
-                        Automatic MX, SPF, DKIM, and DMARC configuration keeps messages trusted and deliverable.
+                        Access your inbox, send replies, and stay connected across desktop and mobile webmail.
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="font-semibold text-white">Instant Webmail Access</p>
+                      <p className="font-semibold text-white">Team Groups &amp; Aliases</p>
                       <p className="text-white/85 leading-relaxed">
-                        Members can sign in immediately with full inbox, threading, and alias support.
+                        Create shared addresses like hello@ or support@ so inquiries always reach the right people.
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="font-semibold text-white">Built-in Abuse Protection</p>
+                      <p className="font-semibold text-white">Spam &amp; Delivery Protection</p>
                       <p className="text-white/85 leading-relaxed">
-                        Daily and monthly sending allowances with automated bounce monitoring protect domain reputation.
+                        Built-in authentication and sending safeguards keep your messages landing in primary inboxes.
                       </p>
                     </div>
                   </div>
@@ -1278,12 +1278,6 @@ export default function EmailServiceAdminPage() {
                       </div>
                     )}
                   </div>
-
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    {dnsServiceActive
-                      ? "A zone backup snapshot is created automatically before applying email records."
-                      : "You can verify DNS propagation at any time before or after activation."}
-                  </p>
                 </div>
               </div>
             </Card>
@@ -1360,7 +1354,28 @@ export default function EmailServiceAdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayDnsRecords.map((rec) => (
+                    {isLoadingQuota && requiredDnsRecords.length === 0 ? (
+                      [...Array(5)].map((_, idx) => (
+                        <TableRow key={idx} className="border-b border-slate-100 last:border-0">
+                          <TableCell className="pl-5 py-3">
+                            <Skeleton className="h-3.5 w-32 bg-slate-100" />
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Skeleton className="h-5 w-12 bg-slate-100" />
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Skeleton className="h-3.5 w-44 bg-slate-100" />
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Skeleton className="h-3.5 w-56 bg-slate-100" />
+                          </TableCell>
+                          <TableCell className="text-right pr-5 py-3">
+                            <Skeleton className="h-3.5 w-16 ml-auto bg-slate-100" />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      displayDnsRecords.map((rec) => (
                       <TableRow key={rec.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/40">
                         <TableCell className="pl-5 py-3 text-xs font-medium text-slate-800">
                           {rec.purpose}
@@ -1421,7 +1436,8 @@ export default function EmailServiceAdminPage() {
                           </span>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>

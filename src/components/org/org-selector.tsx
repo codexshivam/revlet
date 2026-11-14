@@ -250,9 +250,6 @@ export function OrgSelector({
                 Add Organization
               </DialogTitle>
             </div>
-            <DialogDescription className="text-xs text-slate-500 mt-1">
-              Register a new organization workspace to manage DNS, email routing, and services.
-            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleCreateOrg}>
@@ -269,7 +266,7 @@ export function OrgSelector({
                 </Label>
                 <Input
                   id="add-org-name"
-                  placeholder="e.g. Stanford University or Acme Inc"
+                  placeholder="Example Company"
                   value={newOrgName}
                   onChange={(e) => {
                     setNewOrgName(e.target.value)
@@ -286,7 +283,7 @@ export function OrgSelector({
                 </Label>
                 <Input
                   id="add-org-domain"
-                  placeholder="e.g. example.com or example.edu"
+                  placeholder="example.com"
                   value={newOrgDomain}
                   onChange={(e) => {
                     setNewOrgDomain(e.target.value)
@@ -296,7 +293,7 @@ export function OrgSelector({
                   required
                 />
                 <p className="text-[10px] text-slate-400">
-                  Root domain used for DNS Management and Email Service routing.
+                  Domain name cannot be edited again.
                 </p>
               </div>
             </div>

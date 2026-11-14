@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Team & Access Control',
+  title: { absolute: 'Team Management | Revlet' },
   description: 'Manage team member permissions, staff work emails, and role-based access control across organizations in Revlet.',
   robots: {
     index: false,

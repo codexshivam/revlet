@@ -513,15 +513,15 @@ export default function AccountHomePage() {
               >
                 <DropdownMenuItem
                   onSelect={() => setIsEditNameOpen(true)}
-                  className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                  className="group gap-2 py-2 text-xs cursor-pointer rounded-lg focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-400 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                 >
-                  <Edit2 className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.5} />
+                  <Edit2 className="w-3.5 h-3.5" strokeWidth={1.5} />
                   <span>Update Account Name</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => setIsSignOutOpen(true)}
-                  className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
+                  className="group gap-2 py-2 text-xs text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white cursor-pointer rounded-lg"
                 >
                   <LogOut className="w-3.5 h-3.5" strokeWidth={1.5} />
                   <span>Sign Out</span>

@@ -1152,29 +1152,31 @@ export default function EmailServiceAdminPage() {
   if (!isEffectiveServiceActive) {
     return (
       <DashboardShell>
-        <div className="space-y-6 animate-in fade-in duration-300">
+        <div className="space-y-6 animate-in fade-in duration-200">
           {/* Header Strip with Domain and DNS Infrastructure Status */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 border-b border-slate-200/80 pb-5">
             <div className="space-y-1">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
-                  Email Service Setup
+                <h1 className="text-2xl font-headline font-semibold text-slate-900 tracking-tight">
+                  Email service
                 </h1>
+                <span className="font-mono text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200/80">
+                  {selectedOrg.domain}
+                </span>
                 {dnsServiceActive ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Managed DNS Active (1-Click Setup)</span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200/80">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                    <span>Cloudflare managed</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs">
-                    <Globe className="w-3.5 h-3.5 text-slate-600" />
-                    <span>External DNS Registrar</span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200/80">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <span>External registrar</span>
                   </span>
                 )}
               </div>
               <p className="text-xs text-slate-500">
-                Custom domain mailboxes, send-as aliases, organizational units, and deliverability routing for{" "}
-                <span className="font-semibold text-slate-800 font-mono">{selectedOrg.domain}</span>
+                Inbound mail routing, 2048-bit cryptographic DKIM keys, and directory activation
               </p>
             </div>
 
@@ -1183,18 +1185,18 @@ export default function EmailServiceAdminPage() {
                 variant="outline"
                 size="sm"
                 onClick={handleCopyAllRecords}
-                className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors cursor-pointer"
+                className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-md transition-colors cursor-pointer"
                 title="Copy all required records to clipboard"
               >
                 {copiedKey === "all-records" ? (
                   <>
-                    <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-                    <span>All Records Copied</span>
+                    <Check className="w-3.5 h-3.5 mr-1.5 text-slate-900" strokeWidth={1.5} />
+                    <span>Records copied</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-                    <span>Copy All Records</span>
+                    <Copy className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
+                    <span>Copy all records</span>
                   </>
                 )}
               </Button>
@@ -1204,72 +1206,66 @@ export default function EmailServiceAdminPage() {
                 size="sm"
                 onClick={handleSyncDnsRecords}
                 disabled={isSyncingDns}
-                className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors cursor-pointer"
+                className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-md transition-colors cursor-pointer"
                 title="Verify DNS records on live resolvers"
               >
                 <RefreshCw
-                  className={cn("w-3.5 h-3.5 mr-1.5 text-slate-500", isSyncingDns && "animate-spin")}
+                  className={cn("w-3.5 h-3.5 mr-1.5 text-slate-400", isSyncingDns && "animate-spin")}
+                  strokeWidth={1.5}
                 />
-                <span>{isSyncingDns ? "Checking..." : "Refresh DNS"}</span>
+                <span>{isSyncingDns ? "Checking..." : "Verify DNS"}</span>
               </Button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Left Column: Activation Controller (4 cols on lg) */}
-            <div className="lg:col-span-4 rounded-xl border border-slate-200/80 bg-white p-6 space-y-6 shadow-xs">
-              <div className="space-y-3">
-                <h2 className="text-lg font-headline font-semibold text-slate-900 leading-snug">
-                  Activation Controller
+            <div className="lg:col-span-4 rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 space-y-5">
+              <div className="space-y-2">
+                <h2 className="text-base font-headline font-semibold text-slate-900">
+                  Activation
                 </h2>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Activate email services for <strong className="text-slate-900 font-semibold">{selectedOrg.domain}</strong> to sign in to Revlet Mail, create departmental aliases, and route incoming and outbound emails.
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Activating prepares the directory on Stalwart Mail Server and establishes outbound relaying with Amazon SES.
                 </p>
               </div>
 
-              {/* Mode-Specific Status Banner */}
+              {/* Mode-Specific Status Description */}
               {dnsServiceActive ? (
-                <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="text-xs font-semibold text-emerald-950">
-                      1-Click Automatic Provisioning
-                    </span>
+                <div className="rounded-lg bg-slate-50 border border-slate-200/80 p-3.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-slate-900">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                    <span>Automated DNS provisioning</span>
                   </div>
-                  <p className="text-[11px] text-emerald-800 leading-relaxed">
-                    Revlet manages your DNS zone on Cloudflare. Clicking activate creates a safety snapshot and automatically injects all required MX, SPF, DMARC, and DKIM records directly into your domain without manual copying.
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Revlet manages DNS for {selectedOrg.domain}. Clicking activate creates a zone backup snapshot and provisions the MX, SPF, DMARC, and DKIM records directly.
                   </p>
                 </div>
               ) : (
-                <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-4 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Globe className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-900">
-                        External DNS Setup
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-mono font-semibold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
-                      {verifiedDnsCount} / {displayDnsRecords.length} Verified
+                <div className="rounded-lg bg-slate-50 border border-slate-200/80 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-slate-900">DNS configuration</span>
+                    <span className="font-mono text-slate-500 tabular-nums">
+                      {verifiedDnsCount} of {displayDnsRecords.length} verified
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Add the DNS records from the table to your domain registrar (GoDaddy, Namecheap, Route53, etc.). Inbound receiving activates as soon as MX resolves to <code className="font-mono text-slate-900">mx.revlet.me</code>.
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Publish the records from the table at your DNS provider. Inbound receiving activates once the MX record resolves to <code className="font-mono text-slate-800">mx.revlet.me</code>.
                   </p>
                 </div>
               )}
 
               {/* Quota Strip */}
-              <div className="p-3.5 rounded-lg border border-slate-100 bg-slate-50/50 space-y-1.5">
+              <div className="p-3.5 rounded-lg border border-slate-100 bg-slate-50/50 space-y-2">
                 <div className="flex items-baseline justify-between text-xs">
-                  <span className="text-slate-500 font-medium">Outbound Allowance</span>
-                  <span className="font-mono text-slate-900 font-semibold tabular-nums">
-                    1,000 / Mo · 100 / Day
+                  <span className="text-slate-500">Outbound allowance</span>
+                  <span className="font-mono text-slate-800 tabular-nums">
+                    1,000 / month · 100 / day
                   </span>
                 </div>
-                <div className="flex items-baseline justify-between text-xs pt-1 border-t border-slate-200/60">
-                  <span className="text-slate-500 font-medium">Account Recovery</span>
-                  <span className="font-mono text-slate-900 font-semibold">14-Day Purge Recovery</span>
+                <div className="flex items-baseline justify-between text-xs pt-1.5 border-t border-slate-200/60">
+                  <span className="text-slate-500">Purge recovery</span>
+                  <span className="font-mono text-slate-800">14-day window</span>
                 </div>
               </div>
 
@@ -1279,18 +1275,15 @@ export default function EmailServiceAdminPage() {
                   <Button
                     onClick={handleActivateService}
                     disabled={isActivating}
-                    className="w-full bg-primary hover:bg-primary/95 !text-white text-white font-medium h-10 px-5 rounded-lg text-xs transition-colors shadow-xs cursor-pointer"
+                    className="w-full bg-slate-900 hover:bg-slate-800 !text-white text-white font-medium h-9 px-4 rounded-md text-xs transition-colors cursor-pointer"
                   >
                     {isActivating ? (
                       <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
-                        Auto-Configuring DNS & Activating...
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin text-white" strokeWidth={1.5} />
+                        Configuring DNS and activating...
                       </>
                     ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 mr-2" strokeWidth={1.5} />
-                        Activate & Auto-Configure DNS
-                      </>
+                      "Activate and configure DNS"
                     )}
                   </Button>
                 ) : (
@@ -1298,23 +1291,17 @@ export default function EmailServiceAdminPage() {
                     <Button
                       onClick={handleActivateService}
                       disabled={isActivating}
-                      className="w-full bg-primary hover:bg-primary/95 !text-white text-white font-medium h-10 px-5 rounded-lg text-xs transition-colors shadow-xs cursor-pointer"
+                      className="w-full bg-slate-900 hover:bg-slate-800 !text-white text-white font-medium h-9 px-4 rounded-md text-xs transition-colors cursor-pointer"
                     >
                       {isActivating ? (
                         <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
-                          Activating Email Service...
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin text-white" strokeWidth={1.5} />
+                          Activating service...
                         </>
                       ) : isMxVerified ? (
-                        <>
-                          <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-300" strokeWidth={1.5} />
-                          Activate Email Service (MX Detected)
-                        </>
+                        "Activate email service"
                       ) : (
-                        <>
-                          <Globe className="w-4 h-4 mr-2" strokeWidth={1.5} />
-                          Check DNS & Activate Service
-                        </>
+                        "Verify DNS and activate"
                       )}
                     </Button>
 
@@ -1322,142 +1309,125 @@ export default function EmailServiceAdminPage() {
                       variant="outline"
                       onClick={handleSyncDnsRecords}
                       disabled={isSyncingDns}
-                      className="w-full h-9 px-4 rounded-lg text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
+                      className="w-full h-8 px-3 rounded-md text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
                     >
                       <RefreshCw
-                        className={cn("w-3.5 h-3.5 mr-2 text-slate-500", isSyncingDns && "animate-spin")}
+                        className={cn("w-3.5 h-3.5 mr-2 text-slate-400", isSyncingDns && "animate-spin")}
+                        strokeWidth={1.5}
                       />
-                      <span>{isSyncingDns ? "Testing Live Resolvers..." : "Verify DNS Propagation"}</span>
+                      <span>{isSyncingDns ? "Testing resolvers..." : "Check DNS propagation"}</span>
                     </Button>
                   </>
                 )}
 
-                <p className="text-[11px] text-slate-500 text-center leading-relaxed pt-1">
+                <p className="text-[11px] text-slate-400 text-center leading-relaxed pt-1">
                   {dnsServiceActive
-                    ? "Safe configuration: existing web/app records remain untouched."
-                    : "You can activate immediately to set up users and mailboxes while DNS propagates."}
+                    ? "Existing website and application records remain untouched."
+                    : "Accounts and aliases can be configured while DNS propagation finishes."}
                 </p>
               </div>
             </div>
 
-            {/* Right Column: Complete Required DNS Records Table (8 cols on lg) */}
-            <div className="lg:col-span-8 rounded-xl border border-slate-200/80 bg-white overflow-hidden shadow-xs">
-              <div className="p-5 sm:p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/40">
+            {/* Right Column: Required DNS Records Table (8 cols on lg) */}
+            <div className="lg:col-span-8 rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+              <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-headline font-semibold text-slate-900">
-                    Required DNS Deliverability Records
+                    Required deliverability records
                   </h3>
                   <p className="text-xs text-slate-500">
                     Routing, sender authentication, and DKIM cryptographic keys for {selectedOrg.domain}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-semibold bg-white border border-slate-200 text-slate-700">
-                    <span
-                      className={cn(
-                        "w-2 h-2 rounded-full",
-                        verifiedDnsCount === displayDnsRecords.length
-                          ? "bg-emerald-500"
-                          : verifiedDnsCount > 0
-                          ? "bg-blue-500"
-                          : "bg-amber-500"
-                      )}
-                    />
-                    <span>
-                      {verifiedDnsCount} of {displayDnsRecords.length} Verified
-                    </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-slate-500 tabular-nums">
+                    {verifiedDnsCount} of {displayDnsRecords.length} verified
                   </span>
                 </div>
               </div>
 
-              {/* Responsive Table */}
+              {/* Records Table with un-truncated, readable values */}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-50/60 hover:bg-slate-50/60 border-b border-slate-200/80">
-                      <TableHead className="text-xs font-semibold py-3 pl-6 text-slate-600">
+                    <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200/80">
+                      <TableHead className="text-xs font-medium py-2.5 pl-5 text-slate-500 w-[140px]">
                         Purpose
                       </TableHead>
-                      <TableHead className="text-xs font-semibold py-3 text-slate-600">
+                      <TableHead className="text-xs font-medium py-2.5 text-slate-500 w-[80px]">
                         Type
                       </TableHead>
-                      <TableHead className="text-xs font-semibold py-3 text-slate-600">
+                      <TableHead className="text-xs font-medium py-2.5 text-slate-500 min-w-[200px]">
                         Host / Name
                       </TableHead>
-                      <TableHead className="text-xs font-semibold py-3 text-slate-600">
+                      <TableHead className="text-xs font-medium py-2.5 text-slate-500 min-w-[260px]">
                         Target / Value
                       </TableHead>
-                      <TableHead className="text-xs font-semibold py-3 text-right pr-6 text-slate-600">
+                      <TableHead className="text-xs font-medium py-2.5 text-right pr-5 text-slate-500 w-[90px]">
                         Status
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {displayDnsRecords.map((rec) => (
-                      <TableRow key={rec.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                        <TableCell className="pl-6 py-3.5 text-xs font-medium text-slate-900">
+                      <TableRow key={rec.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/40">
+                        <TableCell className="pl-5 py-3 text-xs font-medium text-slate-800">
                           {rec.purpose}
                         </TableCell>
-                        <TableCell className="py-3.5">
-                          <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        <TableCell className="py-3">
+                          <span className="font-mono text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
                             {rec.type}
                             {rec.priority !== undefined ? ` ${rec.priority}` : ""}
                           </span>
                         </TableCell>
-                        <TableCell className="py-3.5">
-                          <div className="flex items-center gap-2 max-w-[200px]">
-                            <span className="text-xs font-mono text-slate-800 truncate" title={rec.name}>
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-1.5 group">
+                            <span className="font-mono text-xs text-slate-700 break-all select-all">
                               {rec.name}
                             </span>
                             <button
                               type="button"
                               onClick={() => copyToClipboard(rec.name, `${rec.id}-pre-name`)}
-                              className="text-slate-400 hover:text-slate-800 shrink-0 transition-colors p-1 rounded hover:bg-slate-100 cursor-pointer"
-                              title="Copy Host"
+                              className="text-slate-400 hover:text-slate-700 shrink-0 p-1 rounded transition-colors cursor-pointer"
+                              title="Copy host"
                             >
                               {copiedKey === `${rec.id}-pre-name` ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.5} />
+                                <Check className="w-3.5 h-3.5 text-slate-900" strokeWidth={1.5} />
                               ) : (
                                 <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
                               )}
                             </button>
                           </div>
                         </TableCell>
-                        <TableCell className="py-3.5">
-                          <div className="flex items-center gap-2 max-w-[240px]">
-                            <span className="text-xs font-mono text-slate-800 truncate" title={rec.content}>
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-1.5 group">
+                            <span className="font-mono text-xs text-slate-700 break-all select-all">
                               {rec.content}
                             </span>
                             <button
                               type="button"
                               onClick={() => copyToClipboard(rec.content, `${rec.id}-pre-val`)}
-                              className="text-slate-400 hover:text-slate-800 shrink-0 transition-colors p-1 rounded hover:bg-slate-100 cursor-pointer"
-                              title="Copy Value"
+                              className="text-slate-400 hover:text-slate-700 shrink-0 p-1 rounded transition-colors cursor-pointer"
+                              title="Copy value"
                             >
                               {copiedKey === `${rec.id}-pre-val` ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.5} />
+                                <Check className="w-3.5 h-3.5 text-slate-900" strokeWidth={1.5} />
                               ) : (
                                 <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
                               )}
                             </button>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right pr-6 py-3.5">
-                          <span className="inline-flex items-center justify-end gap-1.5 text-xs font-mono text-slate-600">
+                        <TableCell className="text-right pr-5 py-3">
+                          <span className="inline-flex items-center justify-end gap-1.5 font-mono text-xs text-slate-600">
                             <span
                               className={cn(
-                                "h-2 w-2 rounded-full",
+                                "h-1.5 w-1.5 rounded-full",
                                 rec.verified ? "bg-emerald-600" : "bg-amber-500"
                               )}
                             />
-                            {rec.verified ? (
-                              <span className="text-emerald-700 font-semibold">Verified</span>
-                            ) : dnsServiceActive ? (
-                              <span className="text-slate-500">Auto-Apply</span>
-                            ) : (
-                              <span className="text-amber-700 font-medium">Pending</span>
-                            )}
+                            <span>{rec.verified ? "Verified" : dnsServiceActive ? "Auto-apply" : "Pending"}</span>
                           </span>
                         </TableCell>
                       </TableRow>
@@ -1467,16 +1437,13 @@ export default function EmailServiceAdminPage() {
               </div>
 
               {/* Bottom Deliverability Guidance */}
-              <div className="p-4 bg-slate-50/60 border-t border-slate-200/80 text-xs text-slate-600 flex items-start gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" strokeWidth={1.5} />
-                <div className="space-y-1 text-[11px] leading-relaxed">
-                  <p>
-                    <strong className="text-slate-900 font-semibold">Inbound MX:</strong> Routes incoming emails directly to Stalwart Mail Server.
-                  </p>
-                  <p>
-                    <strong className="text-slate-900 font-semibold">SPF, DKIM & DMARC:</strong> Cryptographically sign your outbound emails so Gmail, Outlook, and Apple Mail accept them into the Inbox with zero spam classification.
-                  </p>
-                </div>
+              <div className="p-4 bg-slate-50/40 border-t border-slate-200/80 text-xs text-slate-500 space-y-1">
+                <p>
+                  <span className="font-medium text-slate-700">Inbound MX:</span> Directs domain traffic to Stalwart Mail Server.
+                </p>
+                <p>
+                  <span className="font-medium text-slate-700">SPF, DKIM, and DMARC:</span> Sign outbound messages to satisfy RFC 7208 and RFC 6376 sender verification.
+                </p>
               </div>
             </div>
           </div>

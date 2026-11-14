@@ -601,9 +601,12 @@ async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | n
     if (tokens.length === 3) return tokens;
   }
 
-  // 2. Otherwise create the domain identity in AWS SES v2 automatically
+  // 2. Otherwise create the domain identity in AWS SES v2 automatically with 2048-bit RSA DKIM
   const createRes = await callAwsSesV2Api('POST', '/v2/email/identities', {
     EmailIdentity: cleanDomain,
+    DkimSigningAttributes: {
+      NextSigningKeyLength: 'RSA_2048_BIT',
+    },
   });
   if (createRes.ok && Array.isArray(createRes.data?.DkimAttributes?.Tokens)) {
     const tokens = createRes.data.DkimAttributes.Tokens.filter(Boolean);
@@ -1040,6 +1043,35 @@ export async function getMailServiceState(idToken: string, orgId: string) {
     const requiredDnsRecords = buildRequiredDnsRecords(domain, dkimTokens, liveRecords);
     const rolling = await calculateRollingQuota(orgData);
 
+    // Google Workspace-style 1-step MX activation:
+    // If organization is not yet active, but public DNS (or Cloudflare) resolves MX to mx.revlet.me,
+    // automatically activate domain in Stalwart and mark mailServiceActive = true!
+    let effectiveMailServiceActive = Boolean(orgData.mailServiceActive);
+    if (!effectiveMailServiceActive && domain) {
+      const hasRevletMx = liveRecords.some((r) => {
+        if (r.type?.toUpperCase() !== 'MX') return false;
+        const c = (r.content || '').toLowerCase().replace(/\.$/, '').trim();
+        return c.includes('mx.revlet.me');
+      });
+
+      if (hasRevletMx) {
+        await syncStalwartDomainPrincipal(domain);
+        await adminDb.collection('organizations').doc(orgId).update({
+          mailServiceActive: true,
+          emailForwardingActive: false,
+          emailRoutingActive: false,
+          emailServiceActive: false,
+          mailMonthlyLimit: orgData.mailMonthlyLimit ?? 1000,
+          mailDailyLimit: orgData.mailDailyLimit ?? 100,
+          mailMonthlySent: orgData.mailMonthlySent ?? 0,
+          mailDailySent: orgData.mailDailySent ?? 0,
+          mailActivatedAt: FieldValue.serverTimestamp(),
+          updatedAt: new Date().toISOString(),
+        });
+        effectiveMailServiceActive = true;
+      }
+    }
+
     // Self-healing writeback if quota values rolled over or self-healed
     if (
       rolling.monthlySentCount !== orgData.mailMonthlySent ||
@@ -1060,7 +1092,7 @@ export async function getMailServiceState(idToken: string, orgId: string) {
     return {
       success: true,
       data: {
-        mailServiceActive: Boolean(orgData.mailServiceActive),
+        mailServiceActive: effectiveMailServiceActive,
         dnsServiceActive,
         domain,
         monthlyOutboundLimit: orgData.mailMonthlyLimit ?? 1000,

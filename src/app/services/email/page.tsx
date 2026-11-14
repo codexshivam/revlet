@@ -57,6 +57,7 @@ import {
   X,
   Edit2,
   Users,
+  ShieldCheck,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { toast } from "@/hooks/use-toast"
@@ -1157,52 +1158,105 @@ export default function EmailServiceAdminPage() {
                 </div>
               </div>
 
-              {/* Right column: real routing & DNS ledger preview for this domain */}
+              {/* Right column: Single MX Routing Record for Activation (Google Workspace-style) */}
               <div className="lg:col-span-7 bg-slate-50/50 p-6 sm:p-8 flex flex-col justify-between gap-6">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-700">
-                    Required Routing Records for {selectedOrg.domain}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-900">
+                      Required Activation Record for {selectedOrg.domain}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                      1 Record to Activate
+                    </span>
+                  </div>
                   <span className="text-xs font-mono text-slate-500 tabular-nums">
-                    {displayDnsRecords.length || 6} Records
+                    1 Record
                   </span>
                 </div>
 
-                {displayDnsRecords.length === 0 ? (
-                  <div className="rounded-lg border border-slate-200/80 bg-white divide-y divide-slate-100 p-2 space-y-2">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <Skeleton className="h-4 w-12" />
-                          <Skeleton className="h-4 w-36" />
-                        </div>
-                        <Skeleton className="h-4 w-48" />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-slate-200/80 bg-white divide-y divide-slate-100">
-                    {displayDnsRecords.map((rec) => (
-                      <div
-                        key={rec.id}
-                        className="px-4 py-3 flex items-center justify-between gap-4 text-xs"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="font-mono text-[11px] font-semibold text-slate-500 w-14 shrink-0">
-                            {rec.type}
-                          </span>
-                          <span className="font-mono text-slate-800 truncate">{rec.name}</span>
-                        </div>
-                        <span className="font-mono text-slate-500 truncate max-w-[220px]">
-                          {rec.content}
+                {/* Primary MX Record Card */}
+                <div className="rounded-xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="font-mono text-xs font-bold px-2.5 py-1 rounded bg-slate-900 text-white shadow-xs">
+                        MX
+                      </span>
+                      <div>
+                        <span className="text-xs font-semibold text-slate-900 block">
+                          Inbound Mail Routing
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          Routes domain incoming mail to Stalwart Mail Server
                         </span>
                       </div>
-                    ))}
+                    </div>
+                    <span className="text-[11px] font-mono font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                      Priority: 10
+                    </span>
                   </div>
-                )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-slate-500">Host / Name</span>
+                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+                        <span className="font-mono text-slate-900 truncate">
+                          {selectedOrg.domain}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(selectedOrg.domain, 'mx-host')}
+                          className="text-slate-400 hover:text-slate-700 ml-2 transition-colors cursor-pointer"
+                          title="Copy host"
+                        >
+                          {copiedKey === 'mx-host' ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-slate-500">Target Server</span>
+                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+                        <span className="font-mono text-slate-900 font-semibold truncate">
+                          mx.revlet.me
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard('mx.revlet.me', 'mx-target')}
+                          className="text-slate-400 hover:text-slate-700 ml-2 transition-colors cursor-pointer"
+                          title="Copy target"
+                        >
+                          {copiedKey === 'mx-target' ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Post-activation notice for SPF, DKIM, DMARC */}
+                <div className="rounded-lg bg-blue-50/70 border border-blue-200/70 p-3.5 flex items-start gap-2.5 text-xs text-blue-950">
+                  <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+                  <div className="space-y-0.5 leading-relaxed text-[11px]">
+                    <span className="font-semibold block text-blue-900">
+                      Deliverability Settings (SPF, 2048-bit DKIM, DMARC)
+                    </span>
+                    <span className="text-blue-800">
+                      Adding <span className="font-mono font-medium">mx.revlet.me</span> activates your service immediately. Your SPF authorization, 2048-bit DKIM cryptographic keys, and DMARC quarantine policy are managed in Email Service Settings after activation.
+                    </span>
+                  </div>
+                </div>
 
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Activating Email Service snapshots your zone and writes these {displayDnsRecords.length || 6} records to {selectedOrg.domain} immediately.
+                  {dnsServiceActive
+                    ? `Activating Email Service snapshots your zone and writes mx.revlet.me to ${selectedOrg.domain} immediately.`
+                    : `Add this MX record to your DNS provider (Cloudflare, GoDaddy, Namecheap) to activate Email Service immediately.`}
                 </p>
               </div>
             </div>
@@ -2199,13 +2253,13 @@ export default function EmailServiceAdminPage() {
               </div>
             </div>
 
-            {/* Required DNS Records */}
+            {/* Authentication & Deliverability Records (SPF, DKIM, DMARC) */}
             <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
               <div className="p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
                     <h2 className="text-sm font-headline font-semibold text-slate-900">
-                      Required DNS Records
+                      Authentication & Deliverability (SPF, DKIM, DMARC)
                     </h2>
                     <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500 tabular-nums">
                       <span
@@ -2221,7 +2275,7 @@ export default function EmailServiceAdminPage() {
                     </span>
                   </div>
                   <p className="text-xs text-slate-500">
-                    DNS records required for inbound delivery and outbound domain signing on{" "}
+                    DNS records for MX inbound routing, SPF authorization, 2048-bit DKIM cryptographic signing, and DMARC policy on{" "}
                     <span className="font-mono text-slate-700">{selectedOrg.domain}</span>
                   </p>
                 </div>
@@ -2235,12 +2289,12 @@ export default function EmailServiceAdminPage() {
                   {isSyncingDns ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
-                      {dnsServiceActive ? "Syncing DNS Records" : "Verifying DNS Records"}
+                      {dnsServiceActive ? "Syncing Deliverability Records" : "Verifying Deliverability"}
                     </>
                   ) : dnsServiceActive ? (
-                    "Sync DNS Records"
+                    "Sync Deliverability Records"
                   ) : (
-                    "Verify DNS Records"
+                    "Verify Deliverability"
                   )}
                 </Button>
               </div>

@@ -59,13 +59,10 @@ export async function syncUserOrganizations(
     invitedOrgs.forEach(org => allOrgsMap.set(org.id, org))
     const uniqueOrgs = Array.from(allOrgsMap.values())
 
-    // 4. Update the user's document with separated Email Forwarding and Email Service metadata
+    // 4. Update the user's document with Email Service metadata
     const userRef = doc(db, "users", userId)
     const hasMailService = ownedSnap.docs.some(d => Boolean(d.data().mailServiceActive))
     const mailServiceOrgIds = ownedSnap.docs.filter(d => Boolean(d.data().mailServiceActive)).map(d => d.id)
-
-    const hasEmailForwarding = ownedSnap.docs.some(d => Boolean(d.data().emailForwardingActive || d.data().emailServiceActive))
-    const forwardingOrgIds = ownedSnap.docs.filter(d => Boolean(d.data().emailForwardingActive || d.data().emailServiceActive)).map(d => d.id)
 
     await setDoc(userRef, {
       email: userEmail,
@@ -76,10 +73,6 @@ export async function syncUserOrganizations(
       emailService: {
         enabled: hasMailService,
         activeOrgIds: mailServiceOrgIds,
-      },
-      emailForwarding: {
-        enabled: hasEmailForwarding,
-        activeOrgIds: forwardingOrgIds,
       },
       updatedAt: serverTimestamp()
     }, { merge: true })

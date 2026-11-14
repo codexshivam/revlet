@@ -9,12 +9,10 @@ import {
   Settings,
   LayoutDashboard,
   Mail,
-  ArrowRightLeft,
   GraduationCap,
   HardDrive,
   UserMinus,
   Library,
-  Server,
   ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -49,9 +47,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
 
   const serviceItems: NavItem[] = [
     { title: "DNS Management", icon: Globe, href: "/services/dns" },
-    { title: "Email Forwarding", icon: ArrowRightLeft, href: "/services/email-forwarding" },
     { title: "Email Service", icon: Mail, href: "/services/email" },
-    { title: "Infrastructure", icon: Server, href: "/services/infrastructure" },
   ]
 
   const workspaceItems: NavItem[] = [

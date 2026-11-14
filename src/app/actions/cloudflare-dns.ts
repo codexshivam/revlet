@@ -167,11 +167,31 @@ export async function createZone(idToken: string, orgId: string, domainName: str
       throw new Error("No Cloudflare account found. Ensure CLOUDFLARE_ACCOUNT_ID is set in your environment.");
     }
 
-    // 2. Create the zone
+    // 2. Idempotency check: reuse existing zone if already registered on this Cloudflare account
+    const cleanDomain = domainName.toLowerCase().trim();
+    try {
+      const existingRes = await cfFetch(`/zones?name=${encodeURIComponent(cleanDomain)}`, {}, verified.cfToken);
+      const existingZone = Array.isArray(existingRes.result)
+        ? existingRes.result.find((z: any) => z.name?.toLowerCase().trim() === cleanDomain)
+        : null;
+      if (existingZone) {
+        return {
+          success: true,
+          data: {
+            id: existingZone.id,
+            nameServers: existingZone.name_servers || [],
+          },
+        };
+      }
+    } catch {
+      // Proceed to zone creation if lookup fails
+    }
+
+    // 3. Create the zone
     const zoneData = await cfFetch('/zones', {
       method: 'POST',
       body: JSON.stringify({
-        name: domainName,
+        name: cleanDomain,
         account: { id: accountId },
         type: 'full'
       }),
@@ -224,19 +244,22 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
     }
     const expiresOn = verifyRes.result?.expires_on || null;
 
-    // Step 2: Query accessible zones via GET /zones to audit scope & confirm domain match
-    const zonesRes = await cfFetch('/zones', {}, cleanToken);
-    const zones: any[] = Array.isArray(zonesRes.result) ? zonesRes.result : [];
+    // Step 2: Query matching zone via GET /zones?name=... (avoids 20-zone default pagination miss)
+    const zonesRes = await cfFetch(`/zones?name=${encodeURIComponent(domain)}&per_page=50`, {}, cleanToken);
+    let zones: any[] = Array.isArray(zonesRes.result) ? zonesRes.result : [];
+    let matchedZone = zones.find((z: any) => z.name?.toLowerCase().trim() === domain);
 
-    if (zones.length === 0) {
-      return {
-        success: false,
-        error: 'The provided token has no Zone access. Please ensure "Zone: Zone (Read)" and "Zone: DNS (Edit)" permissions are assigned to your zone.'
-      };
+    if (!matchedZone) {
+      const fallbackRes = await cfFetch('/zones?per_page=50', {}, cleanToken);
+      zones = Array.isArray(fallbackRes.result) ? fallbackRes.result : [];
+      if (zones.length === 0) {
+        return {
+          success: false,
+          error: 'The provided token has no Zone access. Please ensure "Zone: Zone (Read)" and "Zone: DNS (Edit)" permissions are assigned to your zone.'
+        };
+      }
+      matchedZone = zones.find((z: any) => z.name?.toLowerCase().trim() === domain);
     }
-
-    // Find the zone matching the organization's root domain
-    const matchedZone = zones.find((z: any) => z.name?.toLowerCase().trim() === domain);
 
     if (!matchedZone) {
       const accessibleNames = zones.map((z: any) => z.name).slice(0, 3).join(', ');

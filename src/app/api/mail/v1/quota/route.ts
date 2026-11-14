@@ -139,12 +139,7 @@ export async function POST(req: NextRequest) {
       let currentMonthlySent = 0;
 
       if (!isNewMonth) {
-        let recordedMonthly = d.mailMonthlySent ?? 0;
-        // Self-heal: if recordedMonthly was erroneously overwritten by quota bug to equal rollingDailySent,
-        // restore the baseline of previous month usage (12 emails) + rollingDailySent
-        if (recordedMonthly <= rollingDailySent && rollingDailySent > 0 && recordedMonthly < 12) {
-          recordedMonthly = 12 + rollingDailySent;
-        }
+        const recordedMonthly = d.mailMonthlySent ?? 0;
         currentMonthlySent = Math.max(recordedMonthly, rollingDailySent);
       }
 

@@ -26,8 +26,6 @@ export interface Organization {
   cloudflareTokenExpiresOn?: string | null
   cloudflareTokenScopedZone?: string
   emailServiceActive?: boolean
-  emailForwardingActive?: boolean
-  emailRoutingActive?: boolean
   mailServiceActive?: boolean
   mailMonthlyLimit?: number
   mailDailyLimit?: number

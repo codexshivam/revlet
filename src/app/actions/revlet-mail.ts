@@ -954,12 +954,7 @@ export async function calculateRollingQuota(orgData: any) {
   const isCurrentMonth = !orgData.mailMonthlyBucket || orgData.mailMonthlyBucket === currentMonthKey;
 
   if (isCurrentMonth) {
-    let recordedMonthly = orgData.mailMonthlySent ?? 0;
-    // Self-heal: if recordedMonthly was erroneously overwritten to equal dailySentCount by the quota bug,
-    // restore the baseline of previous month usage (12 emails) + dailySentCount
-    if (recordedMonthly <= dailySentCount && dailySentCount > 0 && recordedMonthly < 12) {
-      recordedMonthly = 12 + dailySentCount;
-    }
+    const recordedMonthly = orgData.mailMonthlySent ?? 0;
     // Monthly count must accumulate and never drop below recorded monthly or daily sent
     monthlySentCount = Math.max(recordedMonthly, dailySentCount);
   } else {
@@ -1046,34 +1041,8 @@ export async function getMailServiceState(idToken: string, orgId: string) {
     const requiredDnsRecords = buildRequiredDnsRecords(domain, dkimTokens, liveRecords);
     const rolling = await calculateRollingQuota(orgData);
 
-    // Google Workspace-style 1-step MX activation:
-    // If organization is not yet active, but public DNS (or Cloudflare) resolves MX to mx.revlet.me,
-    // automatically activate domain in Stalwart and mark mailServiceActive = true!
-    let effectiveMailServiceActive = Boolean(orgData.mailServiceActive);
-    if (!effectiveMailServiceActive && domain) {
-      const hasRevletMx = liveRecords.some((r) => {
-        if (r.type?.toUpperCase() !== 'MX') return false;
-        const c = (r.content || '').toLowerCase().replace(/\.$/, '').trim();
-        return c.includes('mx.revlet.me');
-      });
-
-      if (hasRevletMx) {
-        await syncStalwartDomainPrincipal(domain);
-        await adminDb.collection('organizations').doc(orgId).update({
-          mailServiceActive: true,
-          emailForwardingActive: false,
-          emailRoutingActive: false,
-          emailServiceActive: false,
-          mailMonthlyLimit: orgData.mailMonthlyLimit ?? 1000,
-          mailDailyLimit: orgData.mailDailyLimit ?? 100,
-          mailMonthlySent: orgData.mailMonthlySent ?? 0,
-          mailDailySent: orgData.mailDailySent ?? 0,
-          mailActivatedAt: FieldValue.serverTimestamp(),
-          updatedAt: new Date().toISOString(),
-        });
-        effectiveMailServiceActive = true;
-      }
-    }
+    // Do NOT silently auto-activate organizations on read; require explicit activation via Email Service page.
+    const effectiveMailServiceActive = Boolean(orgData.mailServiceActive);
 
     // Self-healing writeback if quota values rolled over or self-healed
     if (

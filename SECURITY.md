@@ -28,7 +28,7 @@ Please disclose vulnerabilities privately using one of the following methods:
 To help us triage and resolve the issue quickly, please provide:
 * A clear description of the vulnerability and its potential impact.
 * Step-by-step reproduction instructions or a minimal Proof of Concept (PoC).
-* Any affected components, endpoints, or Server Actions (e.g., `verifyUserOrgAccess`, `cloudflare-dns.ts`, `google-workspace.ts`).
+* Any affected components, endpoints, or Server Actions (e.g., `verifyUserOrgAccess`, `dns-service.ts`, `email-service.ts`, `sns-bounce/route.ts`).
 * Remediation suggestions, if known.
 
 ### Response Timelines & SLA
@@ -44,12 +44,12 @@ To help us triage and resolve the issue quickly, please provide:
 Revlet enforces strict Defense-in-Depth principles across multiple operational boundaries:
 
 ### 1. Multi-Tenant Isolation & Anti-IDOR Protections
-* Every Server Action interacting with upstream cloud providers (Cloudflare API v4, Google Workspace Admin SDK) must pass through `verifyUserOrgAccess`.
-* Tenancy checks cryptographically verify the caller's Firebase session and assert resource ownership (`ownerId == uid`) or active team membership before authorizing mutations.
+* Every Server Action interacting with upstream cloud providers (DNS APIs, Stalwart Mail, Amazon SES) must pass through `verifyUserOrgAccess`.
+* Tenancy checks cryptographically verify the caller's Firebase session and assert resource ownership (`ownerId == uid`) or active, non-suspended team membership with matching granular permissions before authorizing mutations.
 * Zone hijacking protections prevent an authenticated tenant from passing an arbitrary `zoneId` belonging to another organization.
 
 ### 2. Upstream Credential Quarantine
-* Upstream API credentials (Cloudflare DNS bearer tokens, Google Workspace Service Account keys, Firebase Admin credentials) are restricted to server-side runtimes.
+* Upstream API credentials (DNS bearer tokens, AWS SES keys, Stalwart admin tokens, Firebase Admin credentials) are restricted to server-side runtimes.
 * They are never exposed to browser clients, bundled in JavaScript outputs, or included in client hydration state.
 
 ### 3. Database & Storage Rules

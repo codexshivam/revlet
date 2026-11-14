@@ -6,527 +6,118 @@
 
 ---
 
-## Executive Overview & Architectural Mission
+## Run Your Organization's DNS, Email & Team Access from One Place
 
-**Revlet** is an open, sovereign, multi-tenant **Enterprise IT Management Control Plane** engineered specifically for educational institutions, academies, and distributed organizations. Designed to eliminate the operational friction of toggling between disparate third-party vendor dashboards, Revlet bridges the **Cloudflare v4 Network API**, the **Google Workspace Directory & Admin SDK**, and **Firebase Zero-Trust Security Infrastructure** into a unified, high-assurance single pane of glass.
+**Revlet** (`app.revlet.me`) is a unified, multi-tenant **Cloud IT & Communications Control Plane** built for growing businesses, educational institutions, and distributed teams. Instead of juggling separate registrar dashboards, DNS panels, mail server tools, and spreadsheet-based permission lists, Revlet brings **Custom Domain Email**, **Authoritative DNS Management**, and **Granular Team Delegation** together in one fast, intuitive workspace.
 
-Modern educational institutions and enterprises face severe operational fragmentation. Routine administrative tasks—such as provisioning student emails, verifying SPF/DKIM/DMARC compliance, updating root apex DNS records, configuring edge SSL/TLS encryption, and tracking institutional Google Drive storage quotas—require IT personnel to navigate multiple distinct, permission-heavy administrative portals (Cloudflare Dashboard, Google Admin Console, Google Cloud Console, Registrar Portals, and internal ticket queues). This fragmentation introduces:
-1. **Critical Configuration Drift**: Discrepancies between DNS MX routing records and email forwarders, resulting in silent message drops.
-2. **Privilege Escalation Exposure**: Granting staff broad super-administrator permissions in upstream dashboards due to the lack of granular, organization-scoped role delegation.
-3. **Storage Quota Blowouts**: Inability to proactively identify students or departments consuming massive Google Drive storage until domain-wide limits are enforced by Google.
+Modern organizations lose hours every week switching between disconnected infrastructure portals. A single misconfigured `MX` or `TXT` record can silently disrupt company email, while sharing root credentials across IT staff introduces unnecessary security risk. Revlet solves both problems by giving administrators one clean control center:
 
-Revlet resolves this architectural paradox. By enforcing **Zero-Trust Server Actions Tenancy (`verifyUserOrgAccess`)**, **Domain-Wide Delegation (DWD)**, and **real-time edge telemetry**, administrative teams manage their entire network, email routing, and user directory fleet in seconds without ever sharing root credentials or navigating third-party consoles.
+1. **Professional Email on Your Own Domain**: Launch `@yourdomain.com` mailboxes in minutes with automated SPF, DKIM, and DMARC configuration, bulk CSV onboarding, organizational units, groups, and built-in 14-day recovery protection.
+2. **Effortless DNS Control**: Manage every domain record with instant search, filtering, pagination, proxy control, and point-in-time zone snapshots so changes are always reversible.
+3. **Confident Team Delegation**: Invite colleagues as organization admins or scope their access strictly to DNS or Email per organization—without ever sharing upstream API keys or root passwords.
 
 ---
 
-## Ingestion & Control Engine
+## Core Platform Capabilities
 
-Revlet coordinates edge network updates and directory provisioning through a resilient, non-blocking asynchronous pipeline:
+| Capability | Designed for Teams | Powered Under the Hood |
+| :--- | :--- | :--- |
+| **Business Email Service** | Custom `@domain` mailboxes, aliases, mailing groups, catch-all routing, and Organizational Units | Hybrid **Stalwart Mail** (IMAP/JMAP directory) + **Amazon SES v2** outbound relay with 2048-bit RSA DKIM signing |
+| **Deliverability & Protection** | Automated DNS health checks with one-click record repair and proactive reputation protection | Live SPF/DKIM/DMARC verification, cryptographically signed **AWS SNS** bounce/complaint webhooks, and auto-pause thresholds |
+| **Data Retention & Recovery** | Safe 14-day recovery window for deleted accounts and deactivated domains, with automated owner alerts | Scheduled purge pipeline (`purgeExpiredMailData`) with branded notifications sent from `alerts@revlet.me` |
+| **Authoritative DNS Management** | Clean record management (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, `SRV`, `NS`) with search, pagination, and proxy toggles | Authenticated server actions (`dns-service.ts`) with multi-page sync, conflict cleanup, and zone snapshot rollbacks |
+| **Bulk User Operations** | Onboard or audit hundreds of mailboxes in seconds with downloadable CSV templates and password support | Validated CSV batch ingestion (`bulkCreateMailUsers`) and one-click CSV directory export |
+| **Granular Team Management** | Assign `Org: Admin` or service-specific roles (`DNS: Read/Edit/Admin`, `Email: Read/Add/Admin`) per organization | Zero-trust server-side enforcement via `verifyUserOrgAccess` and scoped Firestore team memberships |
+| **Multi-Organization Workspace** | Switch seamlessly across multiple domains and client organizations from a single account | Persistent `OrgProvider` / `useActiveOrg` state engine with real-time tenant synchronization |
+
+---
+
+## How Revlet Works
+
+Revlet coordinates identity verification, DNS automation, and mail provisioning through a resilient server-side pipeline:
 
 ```text
-[ CLIENT ACTION / API TRIGGER ]
+[ AUTHENTICATED USER ACTION ]
        │
-       ├──► STAGE 1: TENANCY & IDENTITY VALIDATION (auth-helper.ts)
-       │      ├── Verify Firebase Auth ID token (Cryptographic signature check)
-       │      ├── Fetch target organization document from Firestore ('organizations/{orgId}')
-       │      ├── Assert Caller is Resource Owner (ownerId == uid) OR verified Team Member
-       │      └── Guard against IDOR: Reject cross-tenant Cloudflare zone manipulation
+       ├──► STAGE 1: ZERO-TRUST TENANCY & PERMISSION CHECK (auth-helper.ts)
+       │      ├── Verify Firebase Auth ID token cryptographically
+       │      ├── Confirm organization ownership or active, non-suspended team membership
+       │      └── Enforce per-organization service scopes (Org: Admin, DNS:*, Email:*)
        │
-       ├──► STAGE 2: NETWORK INFRASTRUCTURE ORCHESTRATION (cloudflare-*.ts)
-       │      ├── Cloudflare API v4 connection with per-tenant zone isolation
-       │      ├── DNS Management: Atomic CRUD for A, AAAA, CNAME, MX, TXT records
-       │      ├── Edge Infrastructure: Real-time Cache Purge, SSL/TLS Mode, DDoS Sensitivity
-       │      └── Custom Email Routing: Destination validation & Forwarding Rules sync
+       ├──► STAGE 2: DNS & DOMAIN ORCHESTRATION (dns-service.ts)
+       │      ├── Connect organization-isolated DNS zones (platform-managed or BYOT encrypted keys)
+       │      ├── Manage A, AAAA, CNAME, MX, TXT, and SRV records with snapshot protection
+       │      └── Automatically clean conflicting MX records and sync Email Service DNS records
        │
-       ├──► STAGE 3: GOOGLE WORKSPACE DIRECTORY & DWD (google-workspace.ts)
-       │      ├── Decrypt and parse Service Account credentials with Domain-Wide Delegation
-       │      ├── Impersonate designated institutional Super Admin email
-       │      ├── Directory API: User provisioning, OU reassignment, account suspension
-       │      ├── Storage API: Aggregate drive pool tracking and user quota reports
-       │      └── Alert Center API: Ingestion of security threats and device compromise logs
+       ├──► STAGE 3: EMAIL & DIRECTORY PROVISIONING (email-service.ts)
+       │      ├── Provision domain identity & 2048-bit RSA DKIM keys in Amazon SES v2
+       │      ├── Synchronize mailboxes, aliases, groups, and passwords with Stalwart Mail via JMAP
+       │      └── Monitor bounce/complaint rates via signed AWS SNS webhooks (/api/mail/v1/sns-bounce)
        │
-       └──► STAGE 4: AUDIT LEDGER & CLIENT STREAMING
-              ├── Commit mutation to Firestore audit trail with actor metadata
-              ├── Invalidate Next.js cache tags (revalidatePath)
-              └── Return structured type-safe response to client state stores
+       └──► STAGE 4: AUDIT TRAIL & OWNER ALERTS
+              ├── Record administrative mutations with actor metadata in Firestore
+              └── Deliver branded lifecycle notifications from alerts@revlet.me
 ```
 
 ---
 
-## System Implementation
+## Security & Zero-Trust Architecture
 
-| Name | Core Functionality | Current Implementation |
-| :--- | :--- | :--- |
-| **Authoritative Edge DNS** | Direct Cloudflare API v4 management, auto-pagination up to 1,000 records, proxy toggling | Implemented via `cloudflare-dns.ts` using `cfFetch` bearer tokens, full schema validation, and multi-tenant zone isolation. |
-| **Email Routing & Compliance** | Email forwarder alias creation, SPF/DKIM verification, and DMARC enforcement scoring | Implemented via `cloudflare-email.ts`; features live DNS record matching and real-time security parameter calculation. |
-| **Infrastructure Edge Security** | Cache purging (everything/files), SSL mode switching, and DDoS sensitivity configuration | Implemented in `cloudflare-infrastructure.ts`; supports `off`, `flexible`, `full`, `strict` SSL and `essentially_off` to `under_attack` DDoS levels. |
-| **Workspace User Lifecycle** | User creation, suspension, restoration, password reset, and permanent directory deletion | Implemented in `google-workspace.ts` using Google Admin SDK (`admin.directory_v1`) via Domain-Wide Delegation service account. |
-| **Batch User Ingestion** | High-throughput CSV parsing, chunked array batching, and directory bulk updates | Implemented with concurrency limiting and detailed error categorization to prevent Google API rate-limit saturation. |
-| **Storage & Security Audits** | Google Drive storage pool monitoring, Alert Center threat alerts, and admin audit logs | Implemented via Reports API (`admin.reports_v1`) and Alert Center API (`alertcenter.alerts_v1`). |
-| **Multi-Tenancy State Engine** | Global organization selector, persistent `localStorage` sync, and cross-tab event bus | Implemented via `OrgProvider` and `useActiveOrg` hook; resilient fallback against stale closures and deletion sync. |
-| **Enterprise Security Hardening** | Server Actions tenancy guard, strict Firestore rules, CSP headers, Storage access policies | Implemented via `verifyUserOrgAccess`, `firestore.rules`, `storage.rules`, and `next.config.ts`. |
-
----
-
-## Security Architecture & Zero-Trust Tenancy Model
-
-Revlet implements a multi-layer **Defense-in-Depth** security model designed to eliminate cross-tenant data leakage, privilege escalation, and unauthorized infrastructure tampering.
+Revlet is engineered with **Defense-in-Depth** so every organization's domains, mailboxes, and credentials remain strictly isolated:
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                          REVLET ZERO-TRUST SECURITY ENVELOPE                           │
 ├────────────────────────┬─────────────────────────────┬─────────────────────────────────┤
-│ LAYER                  │ MECHANISM                   │ SECURITY GUARANTEE              │
+│ LAYER                  │ MECHANISM                   │ PROTECTION                      │
 ├────────────────────────┼─────────────────────────────┼─────────────────────────────────┤
 │ 1. Edge & Transport    │ HSTS + CSP + Framing Guards │ Strict-Transport-Security (2yr) │
-│                        │ (next.config.ts)            │ Disallows clickjacking/framing  │
+│                        │ (next.config.ts)            │ Clickjacking & MIME protection  │
 ├────────────────────────┼─────────────────────────────┼─────────────────────────────────┤
-│ 2. Server Tenancy      │ verifyUserOrgAccess         │ Cryptographic ID token check;   │
-│                        │ (Server Actions)            │ verifies caller owns target org │
+│ 2. Server Tenancy      │ verifyUserOrgAccess         │ Cryptographic token checks,     │
+│                        │ (Server Actions)            │ anti-IDOR & granular RBAC       │
 ├────────────────────────┼─────────────────────────────┼─────────────────────────────────┤
-│ 3. Database Integrity  │ Granular Firestore Rules    │ Disallows client-side elevation │
-│                        │ (firestore.rules)           │ of zoneId, status, or plan      │
+│ 3. Webhook Security    │ AWS SNS Signature Verifier  │ RSA-SHA1 / RSA-SHA256 check on  │
+│                        │ (sns-bounce/route.ts)       │ verified amazonaws.com certs    │
 ├────────────────────────┼─────────────────────────────┼─────────────────────────────────┤
-│ 4. Storage Quarantine  │ Granular Storage Rules      │ Scoped to owner/user ID; strict │
-│                        │ (storage.rules)             │ MIME & 10MB size verification   │
+│ 4. Database Integrity  │ Granular Firestore Rules    │ Blocks client-side elevation of │
+│                        │ (firestore.rules)           │ ownerId, zoneId, or service state│
 ├────────────────────────┼─────────────────────────────┼─────────────────────────────────┤
-│ 5. Third-Party Auth    │ Domain-Wide Delegation (DWD)│ Service account scopes gated;   │
-│                        │ Google & Cloudflare APIs    │ individual admin impersonation  │
+│ 5. Secret Quarantine   │ Server-Only Credentials     │ AES-GCM encrypted BYOT tokens & │
+│                        │                             │ server-side SES/Stalwart keys   │
 └────────────────────────┴─────────────────────────────┴─────────────────────────────────┘
 ```
 
-### Key Security Safeguards:
-1. **IDOR & Zone Tampering Prevention**: Before executing any Cloudflare API request, `verifyUserOrgAccess` fetches the organization's verified Firestore record and asserts that the `expectedZoneId` matches the caller's authorized organization.
-2. **Immutable System Fields**: Firestore rules disallow direct client modification of sensitive infrastructure pointers (`cloudflareZoneId`, `plan`, `workspaceStatus`, `ownerId`).
-3. **No Hardcoded Superadmin Privileges**: Authorization evaluates Firebase Custom Claims (`request.auth.token.admin == true`) rather than hardcoded email strings.
-4. **Pointer-Events Deadlock Guard**: Client layout incorporates a mutation observer (`pointer-events-guard.tsx`) that automatically cleans stuck backdrop styles on dialog dismissals, preventing interface freezes.
+---
+
+## Product Modules
+
+### 1. Business Email Service (`/services/email`)
+* **Everything Teams Expect from Modern Email**: Create `@yourdomain.com` accounts, manage display names and aliases, organize teams with Organizational Units, and configure mailing groups or catch-all routing.
+* **Built-In Deliverability Guardrails**: Missing DNS records are surfaced automatically with one-click repair for managed DNS zones, while Amazon SES DKIM and signed SNS bounce monitoring protect your domain reputation.
+* **Safe Recovery & Automated Retention**: Deleted accounts and deactivated email services enter a 14-day recovery window before permanent removal, with clear alerts sent to the organization owner.
+
+### 2. Authoritative DNS Management (`/services/dns`)
+* **Fast, Clean Record Control**: Search, filter, paginate, and update DNS records across desktop and mobile without navigating complex legacy screens.
+* **Snapshots & Confidence**: Capture zone snapshots before major changes and roll back if needed.
+
+### 3. Team Management (`/management/team`)
+* **Right-Sized Access Per Organization**: Grant trusted colleagues `Org: Admin` access or assign only the specific DNS or Email permissions they need for each organization they manage.
+* **Zero Credential Sharing**: Team members sign in with their own Revlet accounts—never with your registrar, Cloudflare, AWS, or mail server root credentials.
+
+### 4. Account Home & Organization Management (`/account/home`)
+* **Multi-Organization Hub**: Register new organizations, manage domain settings, and switch active workspaces instantaneously.
 
 ---
 
-## Multi-Platform Ecosystem & Unified Control Plane
-
-Revlet provides a comprehensive administrative ecosystem organized into logical service modules:
-
-```text
-========================================================================================================
-                                REVLET 4-TIER UNIFIED IT ECOSYSTEM
-========================================================================================================
-
- ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
- │  1. NETWORK & DNS    │  │   2. EMAIL ROUTING   │  │   3. WORKSPACE EDU   │  │  4. TENANCY & TEAMS  │
- │  (Cloudflare API v4) │  │  (Cloudflare Email)  │  │  (Google Admin SDK)  │  │  (Firebase Admin RLS)│
- ├──────────────────────┤  ├──────────────────────┤  ├──────────────────────┤  ├──────────────────────┤
- │ • A/AAAA/CNAME/MX    │  │ • Custom Aliases     │  │ • User Provisioning  │  │ • Role Delegation    │
- │ • Proxy Status (CDN) │  │ • Destination Inboxes│  │ • OU Category Trees  │  │ • Member Invitations │
- │ • TTL Adjustments    │  │ • SPF/DKIM Auditor   │  │ • Storage Tracking   │  │ • Audit Event Log    │
- │ • Edge Cache Purge   │  │ • DMARC Enforcement  │  │ • Security Alerts    │  │ • Safe Decommission │
- │ • SSL & DDoS Modes   │  │ • Catch-all Routing  │  │ • Batch CSV Ingest   │  │ • Access Directory   │
- └──────────────────────┘  └──────────────────────┘  └──────────────────────┘  └──────────────────────┘
-```
-
-### 1. Network & DNS Infrastructure Portal (`/services/dns`)
-* **Real-time DNS Records Table**: Search, filter, and inspect records by type, name, content, and proxy status.
-* **Inline Record Form**: Create or edit DNS records with validation against IP address formats (IPv4/IPv6), target domain syntax, and priority values for `MX`/`SRV`.
-* **Edge Status Badge**: Direct feedback reflecting whether records are actively proxied through Cloudflare CDN or operating in DNS-only bypass mode.
-
-### 2. Custom Email Service & Compliance Center (`/services/email`)
-* **Routing Rules Manager**: Define forwarding rules mapping domain aliases (e.g., `contact@example.com`) to verified external destinations.
-* **Protocol Inspector**: Visual verification cards assessing the health of SPF records, DKIM selectors, and DMARC enforcement.
-
-### 3. Google Workspace for Education Administration (`/services/workspace`)
-* **User Directory**: View full names, primary emails, organizational unit assignments, and account statuses (Active, Suspended, Archived).
-* **Storage Dashboard**: Real-time aggregate storage capacity visualization, tracking total consumed bytes, individual outliers, and projected pool exhaustion.
-* **Security & Alert Center**: Ingestion of Google Workspace domain alerts (phishing spikes, suspicious logins, revoked OAuth tokens).
-
-### 4. Organization Tenancy & Team Management (`/management/team`)
-* **Access Directory**: View team members, assign institution roles, and revoke staff access across organizations.
-* **Multi-Org Switching**: Unified organization dropdown persisting the active tenant across sessions and views.
-
----
-
-## Institutional Onboarding
-
-Revlet streamlines the end-to-end setup of institutional tenants through a verified 5-step operational workflow:
-
-```text
-[ NEW INSTITUTIONAL TENANT ]
-       │
-       ├──► STEP 1: ORGANIZATION REGISTRATION & TENANCY INITIALIZATION
-       │      • Navigate to Account Home (/account/home) and click "Add Organization".
-       │      • Specify Institution Legal Name, Apex Domain (e.g., example.edu), Contact Email, and Phone.
-       │      • Check the "Educational Institution" toggle to unlock Google Workspace for Education modules.
-       │      • Revlet initializes a dedicated tenant document in Firestore with isolated collection security.
-       │
-       ├──► STEP 2: CLOUDFLARE EDGE & AUTHORITATIVE NAMESERVER BINDING
-       │      • Add the apex domain to your Cloudflare account to obtain your unique Cloudflare Zone ID.
-       │      • Update authoritative nameservers at your domain registrar to point to Cloudflare Anycast nameservers.
-       │      • In Revlet DNS Portal (/services/dns), link the Zone ID.
-       │      • Revlet verifies ownership, synchronizes existing records, and activates edge DNS management.
-       │
-       ├──► STEP 3: GOOGLE WORKSPACE DOMAIN-WIDE DELEGATION (DWD) AUTHORIZATION
-       │      • Log in to the Google Admin Console (admin.google.com) as a Super Administrator.
-       │      • Navigate to: Security > Access and data control > API controls > Manage Domain Wide Delegation.
-       │      • Click "Add new" and input the Revlet Service Account Client ID.
-       │      • Authorize the required OAuth Scopes:
-       │          - https://www.googleapis.com/auth/admin.directory.user
-       │          - https://www.googleapis.com/auth/admin.directory.orgunit
-       │          - https://www.googleapis.com/auth/admin.reports.usage.readonly
-       │          - https://www.googleapis.com/auth/admin.reports.audit.readonly
-       │          - https://www.googleapis.com/auth/apps.alerts
-       │      • In Revlet Workspace Portal (/services/workspace), click "Connect Google Workspace Account"
-       │        and submit your domain's Super Admin email to verify the delegation handshake.
-       │
-       ├──► STEP 4: EMAIL ROUTING & DOMAIN SECURITY PROTOCOL ACTIVATION
-       │      • Access the Email Routing tab (/services/email).
-       │      • Deploy Cloudflare Email Routing MX records and verification TXT records.
-       │      • Create institutional aliases (e.g., admissions@example.edu) forwarded to administrative staff inboxes.
-       │      • Verify automated SPF (`v=spf1 include:_spf.mx.cloudflare.net ~all`), DKIM, and DMARC parameters.
-       │
-       └──► STEP 5: DIRECTORY HIERARCHY, USER IMPORT & TEAM ACCESS DELEGATION
-              • Define Organizational Units (/Students, /Faculty, /Staff) under Academics Management.
-              • Perform bulk student onboarding via CSV batch ingestion with automated email format validation.
-              • Invite IT staff and departmental administrators under Team Management (/management/team),
-                assigning granular institutional access without sharing upstream root credentials.
-```
-
----
-
-## Public & Server Actions API Specification
-
-Revlet exposes type-safe authenticated Server Actions for programmatic integration and internal control flows:
-
-### Server Action: `listDNSRecords(idToken, orgId, zoneId)`
-*Retrieves all active DNS records for an authorized tenant zone from Cloudflare API v4.*
-
-#### Request Parameters
-| Parameter | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `idToken` | `string` | Yes | Valid Firebase Auth bearer ID token of the authenticated user. |
-| `orgId` | `string` | Yes | Firestore document ID of the target organization tenant. |
-| `zoneId` | `string` | Yes | Authoritative Cloudflare Zone ID bound to the verified organization. |
-
-#### Response Schema (`200 OK`)
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "rec_01h8x49ab21m098234",
-      "type": "A",
-      "name": "example.com",
-      "content": "192.0.2.1",
-      "proxiable": true,
-      "proxied": true,
-      "ttl": 1,
-      "created_on": "2026-09-01T10:00:00Z",
-      "modified_on": "2026-11-01T14:30:00Z"
-    },
-    {
-      "id": "rec_01h8x49ab21m098235",
-      "type": "MX",
-      "name": "example.com",
-      "content": "route1.mx.cloudflare.net",
-      "priority": 10,
-      "ttl": 300,
-      "proxied": false
-    }
-  ]
-}
-```
-
----
-
-## Production Implementation Deep-Dives
-
-<details>
-<summary><b>1. Cryptographic Tenancy & Anti-IDOR Verification Guard (TypeScript)</b></summary>
-
-```typescript
-// src/app/actions/auth-helper.ts
-import { adminAuth, adminDb } from '@/firebase/admin';
-
-export type VerifiedUserOrg = {
-  uid: string;
-  email?: string;
-  isOwner: boolean;
-  isMember: boolean;
-  orgData: any;
-};
-
-/**
- * Validates the caller's Firebase session and asserts permissions for the target organization.
- * Prevents IDOR and privilege escalation across tenants.
- */
-export async function verifyUserOrgAccess(
-  idToken: string,
-  orgId: string,
-  expectedZoneId?: string
-): Promise<VerifiedUserOrg> {
-  if (!idToken || !orgId) {
-    throw new Error("Unauthorized: Missing credentials.");
-  }
-
-  const decodedToken = await adminAuth.verifyIdToken(idToken);
-  const orgDoc = await adminDb.collection('organizations').doc(orgId).get();
-  
-  if (!orgDoc.exists) {
-    throw new Error("Organization not found.");
-  }
-
-  const orgData = orgDoc.data();
-  const userEmail = decodedToken.email?.toLowerCase().trim();
-  const isSuperAdmin = (decodedToken as any).admin === true;
-  const isOwner = isSuperAdmin || orgData?.ownerId === decodedToken.uid;
-
-  let isMember = isOwner;
-  if (!isMember && userEmail) {
-    if (Array.isArray(orgData?.memberEmails) && orgData.memberEmails.map((e: string) => e.toLowerCase().trim()).includes(userEmail)) {
-      isMember = true;
-    } else {
-      const memberQuery = await adminDb.collection('teamMembers')
-        .where('organizationId', '==', orgId)
-        .where('ownerId', '==', orgData?.ownerId)
-        .where('email', '==', userEmail)
-        .where('status', '==', 'Active')
-        .limit(1)
-        .get();
-      if (!memberQuery.empty) isMember = true;
-    }
-  }
-
-  if (!isMember) {
-    throw new Error("Forbidden: You do not have access to this organization.");
-  }
-
-  if (expectedZoneId && orgData?.cloudflareZoneId && orgData.cloudflareZoneId !== expectedZoneId) {
-    throw new Error("Forbidden: Cloudflare zone mismatch for this organization.");
-  }
-
-  return {
-    uid: decodedToken.uid,
-    email: userEmail,
-    isOwner,
-    isMember,
-    orgData,
-  };
-}
-```
-</details>
-
-<details>
-<summary><b>2. Authoritative Cloudflare DNS Pagination & Ingestion (TypeScript)</b></summary>
-
-```typescript
-// src/app/actions/cloudflare-dns.ts
-'use server';
-
-import { verifyUserOrgAccess } from './auth-helper';
-import { cfFetch } from './cf-fetch';
-
-export async function listDNSRecords(idToken: string, orgId: string, zoneId: string) {
-  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
-  try {
-    await verifyUserOrgAccess(idToken, orgId, zoneId);
-    let allRecords: any[] = [];
-    let page = 1;
-    let totalPages = 1;
-
-    // Safety cap at 1,000 records (10 pages x 100 records)
-    while (page <= totalPages && page <= 10) {
-      const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100&page=${page}`);
-      if (Array.isArray(data.result)) {
-        allRecords.push(...data.result);
-      }
-      totalPages = data.result_info?.total_pages || 1;
-      page++;
-    }
-
-    return {
-      success: true,
-      data: allRecords.map((r: any) => ({
-        id: r.id,
-        type: r.type,
-        name: r.name,
-        content: r.content,
-        proxiable: r.proxiable,
-        proxied: r.proxied,
-        ttl: r.ttl,
-        comment: r.comment,
-        priority: r.priority,
-      }))
-    };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to fetch DNS records' };
-  }
-}
-```
-</details>
-
-<details>
-<summary><b>3. Google Workspace Service Account Impersonation via Domain-Wide Delegation (TypeScript)</b></summary>
-
-```typescript
-// src/app/actions/google-workspace.ts
-'use server';
-
-import { google } from 'googleapis';
-
-const WORKSPACE_SCOPES = [
-  'https://www.googleapis.com/auth/admin.directory.user',
-  'https://www.googleapis.com/auth/admin.directory.orgunit',
-  'https://www.googleapis.com/auth/admin.reports.usage.readonly',
-  'https://www.googleapis.com/auth/admin.reports.audit.readonly',
-  'https://www.googleapis.com/auth/apps.alerts',
-];
-
-function getServiceAccountCredentials() {
-  const raw = process.env.GOOGLE_WORKSPACE_SERVICE_ACCOUNT_KEY;
-  if (!raw) {
-    throw new Error('GOOGLE_WORKSPACE_SERVICE_ACCOUNT_KEY environment variable is not set');
-  }
-  return JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
-}
-
-export async function getImpersonatedClient(adminEmail: string) {
-  const creds = getServiceAccountCredentials();
-  const auth = new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key,
-    scopes: WORKSPACE_SCOPES,
-    subject: adminEmail, // Domain-Wide Delegation impersonation target
-  });
-
-  await auth.authorize();
-  return auth;
-}
-```
-</details>
-
-<details>
-<summary><b>4. Atomic Organization Decommissioning Server Action (TypeScript)</b></summary>
-
-```typescript
-// src/app/actions/organization.ts
-'use server';
-
-import { adminAuth, adminDb } from '@/firebase/admin';
-
-export async function deleteOrganization(idToken: string, orgId: string) {
-  if (!idToken || !orgId) {
-    return { success: false, error: 'Unauthorized: Missing credentials.' };
-  }
-
-  const decodedToken = await adminAuth.verifyIdToken(idToken);
-  const orgRef = adminDb.collection('organizations').doc(orgId);
-  const orgDoc = await orgRef.get();
-
-  if (!orgDoc.exists) {
-    return { success: false, error: 'Organization not found.' };
-  }
-
-  const orgData = orgDoc.data();
-  const isSuperAdmin = (decodedToken as any).admin === true;
-  const isOwner = isSuperAdmin || orgData?.ownerId === decodedToken.uid;
-
-  if (!isOwner) {
-    return { success: false, error: 'Forbidden: Only the owner can permanently delete this organization.' };
-  }
-
-  // Atomically clean associated team members
-  const teamSnap = await adminDb.collection('teamMembers')
-    .where('organizationId', '==', orgId)
-    .get();
-
-  const batch = adminDb.batch();
-  teamSnap.docs.forEach((doc) => batch.delete(doc.ref));
-  batch.delete(orgRef);
-
-  await batch.commit();
-  return { success: true };
-}
-```
-</details>
-
----
-
-## Tools Used & Technology Matrix
-
-| Domain | Technology / Tool | Architectural Role & Purpose |
-| :--- | :--- | :--- |
-| **Web Framework** | **Next.js (App Router)** | Full-stack React server framework with Server Actions, Turbopack, and SSR. |
-| **UI Library** | **React** | High-performance component rendering with concurrent mode and form actions. |
-| **Component Primitives** | **Radix UI** | Accessible, headless UI foundations (`alert-dialog`, `dialog`, `dropdown-menu`, `tabs`). |
-| **Styling & Design** | **Tailwind CSS** | Utility-first CSS framework configured with custom headline and brand tokens. |
-| **Iconography** | **Lucide React** | Comprehensive enterprise SVG vector icon library. |
-| **Edge API Gateway** | **Cloudflare API v4** | Direct network interactions for DNS records, SSL encryption, and email forwarders. |
-| **Directory SDK** | **Google Admin SDK** | Direct administration for Workspace Users, OUs, Reports, and Alert Center. |
-| **Database & Auth** | **Firebase Web SDK** | Client-side reactive authentication, real-time Firestore listeners, and Storage uploads. |
-| **Admin Backend** | **Firebase Admin SDK** | Privileged token verification, IDOR prevention, and atomic Firestore batch commits. |
-| **AI Framework** | **Google Genkit** | Structured AI workflows, tool calling, and Gemini integration (`@genkit-ai/google-genai`). |
-| **Schema Validation** | **Zod** | Runtime type safety and schema validation for API payloads and form inputs. |
-| **Date Management** | **date-fns** | Modular date formatting and audit timestamp derivation. |
-
----
-
-## Official Documents and Resources
-
-<table width="100%">
-  <thead>
-    <tr>
-      <th width="28%" align="left">Document / Resource</th>
-      <th width="48%" align="left">Scope, Architecture & Purpose</th>
-      <th width="24%" align="left">Link / Location</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>🛡️ Security Policy</strong></td>
-      <td>Vulnerability disclosure guidelines, multi-tenant threat model, IDOR protection, and security response SLAs.</td>
-      <td><a href="SECURITY.md"><strong>SECURITY.md</strong></a></td>
-    </tr>
-    <tr>
-      <td><strong>🤝 Contributing Guidelines</strong></td>
-      <td>Contribution workflows, coding standards, Conventional Commits specification, and local testing instructions.</td>
-      <td><a href="CONTRIBUTING.md"><strong>CONTRIBUTING.md</strong></a></td>
-    </tr>
-    <tr>
-      <td><strong>📜 Code of Conduct</strong></td>
-      <td>Community standards, pledge, and enforcement responsibilities based on Contributor Covenant 2.1.</td>
-      <td><a href="CODE_OF_CONDUCT.md"><strong>CODE_OF_CONDUCT.md</strong></a></td>
-    </tr>
-    <tr>
-      <td><strong>🔒 Firestore Security Rules</strong></td>
-      <td>Granular security rules governing collection access, tenant isolation, owner mutations, and role-based access control.</td>
-      <td><a href="firestore.rules"><strong>firestore.rules</strong></a></td>
-    </tr>
-    <tr>
-      <td><strong>📦 Storage Security Rules</strong></td>
-      <td>Object storage access policies enforcing authenticated tenancy, strict file size limits (&lt;10MB), and verified MIME types.</td>
-      <td><a href="storage.rules"><strong>storage.rules</strong></a></td>
-    </tr>
-    <tr>
-      <td><strong>⚙️ Environment Configuration</strong></td>
-      <td>Sanitized template of required client and server environment variables for Firebase, Cloudflare, and Google Workspace.</td>
-      <td><a href=".env.example"><strong>.env.example</strong></a></td>
-    </tr>
-    <tr>
-      <td><strong>🛡️ Security Headers Configuration</strong></td>
-      <td>Enterprise HTTP header configuration enforcing strict Content Security Policy (CSP), HSTS, and frame protections.</td>
-      <td><a href="next.config.ts"><strong>next.config.ts</strong></a></td>
-    </tr>
-  </tbody>
-</table>
-
----
-
-## Getting Started
+## Getting Started (Self-Hosting & Local Development)
 
 ### Prerequisites
 * **Node.js**: `v20.x` or later (LTS recommended)
 * **npm**: `v10.x` or later
-* **Firebase Project**: Authentication, Firestore, and Storage provisioned
-* **Cloudflare API Token**: Requires `Zone.DNS (Edit)`, `Zone.Email Routing Rules (Edit)`, and `Account.Email Routing (Read)`
-* **Google Cloud Project**: Service account with Domain-Wide Delegation authorized for Workspace scopes
+* **Firebase Project**: Authentication, Firestore, and Storage enabled
+* **DNS Provider Token**: Cloudflare API token (if using platform-managed DNS)
+* **Mail Stack (for Email Service)**: Amazon SES v2 credentials and a Stalwart Mail server endpoint
 
 ### 1. Clone & Install Dependencies
 ```bash
@@ -539,62 +130,45 @@ npm install
 ```bash
 cp .env.example .env.local
 ```
-Populate `.env.local` with your credentials:
-```env
-# Firebase Client SDK
-FIREBASE_API_KEY="AIzaSy..."
-FIREBASE_AUTH_DOMAIN="your-app.firebaseapp.com"
-FIREBASE_PROJECT_ID="your-project-id"
-FIREBASE_STORAGE_BUCKET="your-app.appspot.com"
-FIREBASE_MESSAGING_SENDER_ID="123456789"
-FIREBASE_APP_ID="1:123456789:web:abcdef"
-
-# Cloudflare Credentials (Server-side)
-CLOUDFLARE_DNS_TOKEN="your-cf-bearer-token"
-CLOUDFLARE_ACCOUNT_ID="your-cf-account-id"
-
-# Google Workspace Admin SDK (Base64 Service Account JSON Key)
-GOOGLE_WORKSPACE_SERVICE_ACCOUNT_KEY="eyJrZXlfaWQiOi..."
-
-# Firebase Admin SDK (Base64 Service Account JSON Key)
-FIREBASE_SERVICE_ACCOUNT_KEY="eyJwcm9qZWN0X2lk..."
-```
+Review [`.env.example`](.env.example) and populate `.env.local` with your own credentials for Firebase, Cloudflare, Stalwart Mail, Amazon SES, `REVLET_ALERTS_FROM`, `REVLET_MAIL_INTERNAL_SECRET`, and `CRON_SECRET`. Never commit `.env.local` or any private keys.
 
 ### 3. Launch Development Server
 ```bash
 npm run dev
 ```
-Navigate to [http://localhost:9002](http://localhost:9002) in your browser.
+Open [http://localhost:9002](http://localhost:9002) in your browser.
 
-### 4. Build for Production
+### 4. Verify & Build for Production
 ```bash
-# Type check TypeScript codebase
 npm run typecheck
-
-# Lint Next.js code
 npm run lint
-
-# Production compilation
 npm run build
 ```
 
 ---
 
-## License & Open-Source Adoption
+## Official Documents & Governance
 
-Revlet is open-source software licensed under the **Apache License, Version 2.0**.
-See the [LICENSE](LICENSE) file for complete details.
+| Document | Purpose | Location |
+| :--- | :--- | :--- |
+| **Security Policy** | Vulnerability disclosure SLAs, threat model, and reporting process | [SECURITY.md](SECURITY.md) |
+| **Contributing Guidelines** | Development setup, coding standards, and pull request workflow | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| **Code of Conduct** | Community standards and respectful collaboration guidelines | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+| **Environment Template** | Required environment variables for local and production deployments | [.env.example](.env.example) |
+| **Firestore Security Rules** | Tenant isolation and role-based database access rules | [firestore.rules](firestore.rules) |
+| **Storage Security Rules** | Authenticated object upload and MIME/size policies | [storage.rules](storage.rules) |
 
-```text
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+---
 
-    http://www.apache.org/licenses/LICENSE-2.0
+## License, Trademarks & Legal Notice
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
+Revlet is open-source software licensed under the **Apache License, Version 2.0**. See the [LICENSE](LICENSE) file for the complete legal text.
+
+### Trademarks & Brand Assets
+The **Revlet** name, logo, domain (`revlet.me`, `app.revlet.me`), and associated brand assets are trademarks of Revlet. The Apache-2.0 license grants rights to the source code only and does not grant permission to use Revlet trademarks or branding in a manner that suggests endorsement or official affiliation without prior written consent.
+
+### Third-Party Services & Trademarks
+References to third-party platforms and technologies (such as Cloudflare, Amazon SES, Firebase, Next.js, and Stalwart Mail) are for compatibility and descriptive purposes only. All third-party trademarks remain the property of their respective owners, and use of those services is governed by their own terms and privacy policies.
+
+### No Warranty & Limitation of Liability
+As set forth in Sections 7 and 8 of the [Apache License, Version 2.0](LICENSE), this software is provided on an **"AS IS"** basis without warranties or conditions of any kind, either express or implied, and neither the copyright holders nor contributors shall be liable for any damages arising from its use, to the fullest extent permitted by applicable law.

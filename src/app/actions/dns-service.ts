@@ -8,7 +8,7 @@
  */
 
 import { verifyUserOrgAccess } from './auth-helper';
-import { cfFetch } from './cf-fetch';
+import { cfFetch } from './dns-client';
 import { adminDb } from '@/firebase/admin';
 import { encryptToken } from '@/lib/security/encryption';
 import { FieldValue } from 'firebase-admin/firestore';

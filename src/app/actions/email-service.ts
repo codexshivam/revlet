@@ -9,8 +9,8 @@ import {
   listDNSRecords,
   createDNSRecord,
   deleteDNSRecord,
-} from './cloudflare-dns';
-import { cfFetch } from './cf-fetch';
+} from './dns-service';
+import { cfFetch } from './dns-client';
 import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
 import {
   hashMailPassword,

@@ -5,7 +5,7 @@ import {
   verifyMailPasswordHash,
   hashMailPassword,
 } from '@/lib/security/mail-crypto';
-import { syncStalwartUserPrincipal } from '@/app/actions/revlet-mail';
+import { syncStalwartUserPrincipal } from '@/app/actions/email-service';
 
 function verifyInternalServiceSecret(req: NextRequest): boolean {
   const configuredSecret = (process.env.REVLET_MAIL_INTERNAL_SECRET || '').trim();

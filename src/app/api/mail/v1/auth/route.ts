@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { calculateRollingQuota } from '@/app/actions/revlet-mail';
+import { calculateRollingQuota } from '@/app/actions/email-service';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin';
 import {

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
+import { PageHeader } from "@/components/layout/page-header"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { useUser } from "@/firebase"
 import {
   listTeamManagementData,
@@ -81,22 +83,6 @@ interface Organization {
   name: string
   domain?: string
   ownerId: string
-}
-
-function TeamTableSkeleton() {
-  return (
-    <div className="divide-y divide-slate-100">
-      {[...Array(4)].map((_, i) => (
-        <div key={i} className="flex items-center justify-between px-6 py-4 animate-pulse">
-          <div className="h-3.5 w-44 rounded bg-slate-100" />
-          <div className="h-3.5 w-40 rounded bg-slate-100" />
-          <div className="h-3.5 w-32 rounded bg-slate-100" />
-          <div className="h-3.5 w-16 rounded bg-slate-100" />
-          <div className="h-6 w-20 rounded bg-slate-100" />
-        </div>
-      ))}
-    </div>
-  )
 }
 
 function getMemberOrgIds(member: TeamMember): string[] {
@@ -548,89 +534,89 @@ export default function TeamManagementPage() {
     <DashboardShell>
       <div className="space-y-6 max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
-          <h1 className="text-2xl font-headline font-semibold tracking-tight text-slate-900">
-            Team Management
-          </h1>
-
-          {orgs.length > 0 && (
-            <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  onClick={handleOpenInvite}
-                  className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0"
-                >
-                  <UserPlus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                  Invite member
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-2xl rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
-                <DialogHeader className="p-6 pb-2">
-                  <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                    Invite Team Member
-                  </DialogTitle>
-                  <DialogDescription className="text-slate-500 text-xs">
-                    Assign organizations and choose between Admin or service-level permissions.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="p-6 pt-2 space-y-5 max-h-[75vh] overflow-y-auto">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="member-email" className="text-xs font-medium text-slate-700">
-                      Email Address
-                    </Label>
-                    <Input
-                      id="member-email"
-                      type="email"
-                      placeholder="member@example.com"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      className="h-9 text-xs border-slate-200 bg-white rounded-lg"
-                    />
-                  </div>
-                  {renderAccessForm(
-                    inviteOrgIds,
-                    setInviteOrgIds,
-                    inviteAccessMode,
-                    setInviteAccessMode,
-                    invitePermissions,
-                    setInvitePermissions,
-                    "invite"
-                  )}
-                </div>
-                <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+        <PageHeader
+          title="Team Management"
+          className="pb-6"
+          actions={
+            orgs.length > 0 ? (
+              <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+                <DialogTrigger asChild>
                   <Button
-                    variant="outline"
-                    onClick={() => setIsInviteOpen(false)}
-                    className="rounded-lg text-xs font-medium h-9 px-4"
+                    onClick={handleOpenInvite}
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0"
                   >
-                    Cancel
+                    <UserPlus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
+                    Invite member
                   </Button>
-                  <Button
-                    onClick={handleInvite}
-                    disabled={
-                      isSubmitting ||
-                      !inviteEmail.trim() ||
-                      inviteOrgIds.length === 0 ||
-                      (inviteAccessMode === "services" && invitePermissions.length === 0)
-                    }
-                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
-                  >
-                    {isSubmitting ? (
-                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
-                    ) : (
-                      "Send invitation"
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-2xl rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
+                  <DialogHeader className="p-6 pb-2">
+                    <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                      Invite Team Member
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-500 text-xs">
+                      Assign organizations and choose between Admin or service-level permissions.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="p-6 pt-2 space-y-5 max-h-[75vh] overflow-y-auto">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="member-email" className="text-xs font-medium text-slate-700">
+                        Email Address
+                      </Label>
+                      <Input
+                        id="member-email"
+                        type="email"
+                        placeholder="member@example.com"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        className="h-9 text-xs border-slate-200 bg-white rounded-lg"
+                      />
+                    </div>
+                    {renderAccessForm(
+                      inviteOrgIds,
+                      setInviteOrgIds,
+                      inviteAccessMode,
+                      setInviteAccessMode,
+                      invitePermissions,
+                      setInvitePermissions,
+                      "invite"
                     )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
+                  </div>
+                  <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsInviteOpen(false)}
+                      className="rounded-lg text-xs font-medium h-9 px-4"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleInvite}
+                      disabled={
+                        isSubmitting ||
+                        !inviteEmail.trim() ||
+                        inviteOrgIds.length === 0 ||
+                        (inviteAccessMode === "services" && invitePermissions.length === 0)
+                      }
+                      className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
+                    >
+                      {isSubmitting ? (
+                        <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
+                      ) : (
+                        "Send invitation"
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            ) : undefined
+          }
+        />
 
         <Card className="bg-white border border-slate-200/80 shadow-none overflow-hidden rounded-xl">
           <CardContent className="p-0">
             {isLoading ? (
-              <TeamTableSkeleton />
+              <TableSkeleton rows={4} cols={5} />
             ) : members.length === 0 ? (
               <div className="py-20 text-center space-y-3 px-4 max-w-sm mx-auto">
                 <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center mx-auto text-slate-400">

@@ -70,6 +70,7 @@ import { errorEmitter } from "@/firebase/error-emitter"
 import { FirestorePermissionError } from "@/firebase/errors"
 import { cn } from "@/lib/utils"
 import { useActiveOrg } from "@/hooks/use-active-org"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
 
 interface Organization {
   id: string
@@ -93,26 +94,6 @@ interface Organization {
   mailMonthlySent?: number
   mailDailySent?: number
   createdAt: any
-}
-
-function TableSkeleton() {
-  return (
-    <div className="w-full divide-y divide-slate-100 animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center justify-between py-4 px-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-slate-100 rounded-lg" />
-            <div className="space-y-1.5">
-              <div className="h-3.5 w-32 bg-slate-200 rounded" />
-              <div className="h-2.5 w-16 bg-slate-100 rounded" />
-            </div>
-          </div>
-          <div className="h-3.5 w-28 bg-slate-100 rounded hidden md:block" />
-          <div className="h-8 w-20 bg-slate-100 rounded-lg" />
-        </div>
-      ))}
-    </div>
-  )
 }
 
 export default function AccountHomePage() {

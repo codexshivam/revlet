@@ -71,7 +71,7 @@ import {
   createZoneSnapshot,
   listZoneSnapshots,
   rollbackZoneSnapshot,
-} from "@/app/actions/cloudflare-dns"
+} from "@/app/actions/dns-service"
 import Link from "next/link"
 import {
   Tooltip,
@@ -82,6 +82,9 @@ import {
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { Skeleton } from "@/components/ui/skeleton"
 import { containsMaliciousScript } from "@/lib/security/sanitize"
+import { PageHeader } from "@/components/layout/page-header"
+import { EmptyOrgState } from "@/components/services/empty-org-state"
+import { ServiceActivationCard } from "@/components/services/service-activation-card"
 
 const SUPPORTED_TYPES = [
   "A",
@@ -728,15 +731,10 @@ export default function DNSManagementPage() {
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-300">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200 pb-5">
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
-              DNS Management
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {selectedOrg && zoneId && (
+        <PageHeader
+          title="DNS Management"
+          actions={
+            selectedOrg && zoneId ? (
               <>
                 <Button
                   disabled={Boolean(permissionWarning)}
@@ -799,144 +797,110 @@ export default function DNSManagementPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>
-            )}
-          </div>
-        </div>
+            ) : null
+          }
+        />
 
         {/* STATE 1: No organizations */}
         {orgs.length === 0 ? (
-          <Card className="bg-white border-slate-200 border-dashed shadow-none rounded-xl py-12">
-            <CardContent className="flex flex-col items-center text-center gap-4 max-w-md mx-auto">
-              <div className="p-3 bg-slate-50 rounded-full border border-slate-100 text-slate-400">
-                <Globe className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-slate-900">No Organizations Registered</h3>
-                <p className="text-xs text-slate-500">
-                  Register an organization to manage DNS zones and record routing.
-                </p>
-              </div>
-              <Link href="/account/home">
-                <Button className="h-9 px-4 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none">
-                  Go to Account Home
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+          <EmptyOrgState
+            icon={<Globe className="w-6 h-6" />}
+            description="Register an organization to manage DNS zones and record routing."
+          />
         ) : selectedOrg && !zoneId ? (
           /* STATE 2: DNS Activation & BYOT Guideline */
           <div className="w-full space-y-6">
             {/* Widget 1: DNS Activation Widget (65% Blue Features / 35% Activation Types) */}
-            <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
-              <div className="flex flex-col lg:flex-row">
-                {/* 65% Blue Container with White Text */}
-                <div className="w-full lg:w-[65%] bg-primary text-white p-6 sm:p-8 flex flex-col justify-between space-y-6">
-                  <div className="space-y-2">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/80">
-                      <Globe className="w-3.5 h-3.5 text-white" />
-                      Domain: {selectedOrg.domain}
-                    </span>
-                    <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
-                      DNS Management Service
-                    </h2>
-                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
-                      Centralized authoritative DNS control for your organization with automated safety snapshots and multi-record propagation.
-                    </p>
+            <ServiceActivationCard
+              domain={selectedOrg.domain}
+              domainIcon={<Globe className="w-3.5 h-3.5 text-white" />}
+              title="DNS Management Service"
+              description="Centralized authoritative DNS control for your organization with automated safety snapshots and multi-record propagation."
+              features={[
+                {
+                  title: "Full Record Coverage",
+                  description:
+                    "Manage A, AAAA, CNAME, MX, TXT, SRV, CAA, TLSA, HTTPS, PTR, and more from one console.",
+                },
+                {
+                  title: "Snapshots & Rollback",
+                  description:
+                    "Automatic point-in-time zone backups let you restore prior states in one click.",
+                },
+                {
+                  title: "Updated in under a minute",
+                  description:
+                    "DNS changes propagate and update globally in under a minute on average.",
+                },
+                {
+                  title: "Zero Billing Access",
+                  description:
+                    "Least-privilege scoped access keeps root domain ownership and billing under your control.",
+                },
+              ]}
+              rightPanel={
+                <div className="space-y-5">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-slate-900">Activation Types</h3>
+                    <p className="text-xs text-slate-500">Choose how you want to manage {selectedOrg.domain}.</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-white">
+                  {/* Option 1: Revlet Platform Managed */}
+                  <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
                     <div className="space-y-1">
-                      <p className="font-semibold text-white">Full Record Coverage</p>
-                      <p className="text-white/85 leading-relaxed">
-                        Manage A, AAAA, CNAME, MX, TXT, SRV, CAA, TLSA, HTTPS, PTR, and more from one console.
+                      <p className="text-xs font-semibold text-slate-900">Managed by Revlet Platform</p>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Nameservers and complete DNS service managed by Revlet Platform.
                       </p>
                     </div>
+                    <Button
+                      onClick={handleRequestDNS}
+                      disabled={isRequesting}
+                      className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+                    >
+                      {isRequesting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      {isRequesting ? "Activating..." : "Activate"}
+                    </Button>
+                  </div>
+
+                  {/* Option 2: Bring Your Own Token */}
+                  <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
                     <div className="space-y-1">
-                      <p className="font-semibold text-white">Snapshots &amp; Rollback</p>
-                      <p className="text-white/85 leading-relaxed">
-                        Automatic point-in-time zone backups let you restore prior states in one click.
+                      <p className="text-xs font-semibold text-slate-900">Bring Your Own Token</p>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Verify scoped access and connect your existing zone if you need your own Cloudflare control.
                       </p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="font-semibold text-white">Updated in under a minute</p>
-                      <p className="text-white/85 leading-relaxed">
-                        DNS changes propagate and update globally in under a minute on average.
-                      </p>
+                    <div className="relative">
+                      <Input
+                        id="token"
+                        type={showTokenSecret ? "text" : "password"}
+                        placeholder="Paste scoped API token"
+                        value={apiTokenInput}
+                        onChange={(e) => setApiTokenInput(e.target.value)}
+                        className="h-9 font-mono text-xs pr-9 border-slate-200 bg-white rounded-lg focus-visible:ring-primary/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTokenSecret(!showTokenSecret)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                        title={showTokenSecret ? "Hide secret" : "Reveal secret"}
+                      >
+                        {showTokenSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
                     </div>
-                    <div className="space-y-1">
-                      <p className="font-semibold text-white">Zero Billing Access</p>
-                      <p className="text-white/85 leading-relaxed">
-                        Least-privilege scoped access keeps root domain ownership and billing under your control.
-                      </p>
-                    </div>
+                    <Button
+                      onClick={handleConnectToken}
+                      disabled={isConnectingToken || !apiTokenInput.trim()}
+                      className="w-full h-9 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+                    >
+                      {isConnectingToken && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      {isConnectingToken ? "Verifying Access..." : "Activate with Cloudflare"}
+                    </Button>
                   </div>
                 </div>
-
-                {/* 35% Activation Types */}
-                <div className="w-full lg:w-[35%] p-6 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between gap-5">
-                  <div className="space-y-5">
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold text-slate-900">Activation Types</h3>
-                      <p className="text-xs text-slate-500">Choose how you want to manage {selectedOrg.domain}.</p>
-                    </div>
-
-                    {/* Option 1: Revlet Platform Managed */}
-                    <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold text-slate-900">Managed by Revlet Platform</p>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Nameservers and complete DNS service managed by Revlet Platform.
-                        </p>
-                      </div>
-                      <Button
-                        onClick={handleRequestDNS}
-                        disabled={isRequesting}
-                        className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
-                      >
-                        {isRequesting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        {isRequesting ? "Activating..." : "Activate"}
-                      </Button>
-                    </div>
-
-                    {/* Option 2: Bring Your Own Token */}
-                    <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold text-slate-900">Bring Your Own Token</p>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Verify scoped access and connect your existing zone if you need your own Cloudflare control.
-                        </p>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          id="token"
-                          type={showTokenSecret ? "text" : "password"}
-                          placeholder="Paste scoped API token"
-                          value={apiTokenInput}
-                          onChange={(e) => setApiTokenInput(e.target.value)}
-                          className="h-9 font-mono text-xs pr-9 border-slate-200 bg-white rounded-lg focus-visible:ring-primary/20"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowTokenSecret(!showTokenSecret)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                          title={showTokenSecret ? "Hide secret" : "Reveal secret"}
-                        >
-                          {showTokenSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                      <Button
-                        onClick={handleConnectToken}
-                        disabled={isConnectingToken || !apiTokenInput.trim()}
-                        className="w-full h-9 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
-                      >
-                        {isConnectingToken && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        {isConnectingToken ? "Verifying Access..." : "Activate with Cloudflare"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
+              }
+            />
 
             {/* Widget 2: Bring Your Own Token Guideline Widget */}
             <Card className="bg-white border-slate-200 shadow-none rounded-xl">

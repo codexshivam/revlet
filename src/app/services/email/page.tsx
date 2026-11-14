@@ -72,6 +72,9 @@ import { toast } from "@/hooks/use-toast"
 import { useUser } from "@/firebase"
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { cn } from "@/lib/utils"
+import { PageHeader } from "@/components/layout/page-header"
+import { EmptyOrgState } from "@/components/services/empty-org-state"
+import { ServiceActivationCard } from "@/components/services/service-activation-card"
 import {
   getMailServiceState,
   activateMailService,
@@ -97,7 +100,7 @@ import {
   type MailOrgUnit,
   type MailUserRecord,
   type MailGroupRecord,
-} from "@/app/actions/revlet-mail"
+} from "@/app/actions/email-service"
 
 function getDaysRemaining(recoverableUntil: string | null): number {
   if (!recoverableUntil) return 14
@@ -1136,14 +1139,11 @@ export default function EmailServiceAdminPage() {
   if (orgs.length === 0 || !selectedOrg) {
     return (
       <DashboardShell>
-        <div className="py-20 text-center max-w-sm mx-auto space-y-2">
-          <h2 className="text-base font-headline font-semibold text-slate-900">
-            No Organization Selected
-          </h2>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Register or select an organization on Account Home to configure domain email accounts and routing.
-          </p>
-        </div>
+        <EmptyOrgState
+          icon={<Mail className="w-6 h-6" />}
+          title="No Organization Selected"
+          description="Register or select an organization on Account Home to configure domain email accounts and routing."
+        />
       </DashboardShell>
     )
   }
@@ -1156,132 +1156,107 @@ export default function EmailServiceAdminPage() {
     return (
       <DashboardShell>
         <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
-            <h1 className="text-2xl font-headline font-semibold text-slate-900 tracking-tight">
-              Email Service
-            </h1>
-          </div>
+          <PageHeader title="Email Service" />
 
           <div className="w-full space-y-6">
             {/* Widget 1: Email Service Activation Widget (65% Blue Features / 35% Activation) */}
-            <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
-              <div className="flex flex-col lg:flex-row">
-                {/* 65% Blue Container with White Text */}
-                <div className="w-full lg:w-[65%] bg-primary text-white p-6 sm:p-8 flex flex-col justify-between space-y-6">
-                  <div className="space-y-2">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/80">
-                      <Mail className="w-3.5 h-3.5 text-white" />
-                      Domain: {selectedOrg.domain}
-                    </span>
-                    <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
-                      Revlet Email Service
-                    </h2>
-                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
-                      Dedicated business email hosting for your organization with automated deliverability and centralized directory control.
+            <ServiceActivationCard
+              domain={selectedOrg.domain}
+              domainIcon={<Mail className="w-3.5 h-3.5 text-white" />}
+              title="Revlet Email Service"
+              description="Dedicated business email hosting for your organization with automated deliverability and centralized directory control."
+              features={[
+                {
+                  title: "Custom Business Email",
+                  description:
+                    "Build trust with professional addresses using your own domain name, like you@yourcompany.com.",
+                },
+                {
+                  title: "Work From Anywhere",
+                  description:
+                    "Access your inbox, send replies, and stay connected across desktop and mobile webmail.",
+                },
+                {
+                  title: "Team Groups & Aliases",
+                  description:
+                    "Create shared addresses like hello@ or support@ so inquiries always reach the right people.",
+                },
+                {
+                  title: "Spam & Delivery Protection",
+                  description:
+                    "Built-in authentication and sending safeguards keep your messages landing in primary inboxes.",
+                },
+              ]}
+              rightPanel={
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-slate-900">Activation</h3>
+                    <p className="text-xs text-slate-500">
+                      Enable email hosting for {selectedOrg.domain}.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-xs">
-                    <div className="space-y-1">
-                      <p className="font-semibold text-white">Custom Business Email</p>
-                      <p className="text-white/85 leading-relaxed">
-                        Build trust with professional addresses using your own domain name, like you@yourcompany.com.
-                      </p>
+                  {dnsServiceActive ? (
+                    <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-slate-900">Managed by Revlet Platform</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Required MX, SPF, DKIM, and DMARC records will be configured automatically without affecting existing website records.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={handleActivateService}
+                        disabled={isActivating}
+                        className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+                      >
+                        {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {isActivating ? "Activating..." : "Activate"}
+                      </Button>
                     </div>
-                    <div className="space-y-1">
-                      <p className="font-semibold text-white">Work From Anywhere</p>
-                      <p className="text-white/85 leading-relaxed">
-                        Access your inbox, send replies, and stay connected across desktop and mobile webmail.
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="font-semibold text-white">Team Groups &amp; Aliases</p>
-                      <p className="text-white/85 leading-relaxed">
-                        Create shared addresses like hello@ or support@ so inquiries always reach the right people.
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="font-semibold text-white">Spam &amp; Delivery Protection</p>
-                      <p className="text-white/85 leading-relaxed">
-                        Built-in authentication and sending safeguards keep your messages landing in primary inboxes.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 35% Activation Controls */}
-                <div className="w-full lg:w-[35%] p-6 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between gap-5">
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold text-slate-900">Activation</h3>
-                      <p className="text-xs text-slate-500">
-                        Enable email hosting for {selectedOrg.domain}.
-                      </p>
-                    </div>
-
-                    {dnsServiceActive ? (
-                      <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
-                        <div className="space-y-1">
-                          <p className="text-xs font-semibold text-slate-900">Managed by Revlet Platform</p>
-                          <p className="text-xs text-slate-500 leading-relaxed">
-                            Required MX, SPF, DKIM, and DMARC records will be configured automatically without affecting existing website records.
-                          </p>
+                  ) : (
+                    <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-slate-900">External DNS Setup</p>
+                          <span className="font-mono text-[11px] text-slate-500 tabular-nums">
+                            {verifiedDnsCount}/{displayDnsRecords.length} verified
+                          </span>
                         </div>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Add the required DNS records below at your domain provider, then verify and activate.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
                         <Button
                           onClick={handleActivateService}
                           disabled={isActivating}
                           className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
                         >
                           {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                          {isActivating ? "Activating..." : "Activate"}
+                          {isActivating
+                            ? "Activating..."
+                            : isMxVerified
+                            ? "Activate"
+                            : "Verify & Activate"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleSyncDnsRecords}
+                          disabled={isSyncingDns}
+                          className="w-full h-9 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none flex items-center justify-center gap-2"
+                        >
+                          <RefreshCw
+                            className={cn("w-3.5 h-3.5 text-slate-400", isSyncingDns && "animate-spin")}
+                            strokeWidth={1.5}
+                          />
+                          {isSyncingDns ? "Checking..." : "Check DNS Propagation"}
                         </Button>
                       </div>
-                    ) : (
-                      <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-semibold text-slate-900">External DNS Setup</p>
-                            <span className="font-mono text-[11px] text-slate-500 tabular-nums">
-                              {verifiedDnsCount}/{displayDnsRecords.length} verified
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 leading-relaxed">
-                            Add the required DNS records below at your domain provider, then verify and activate.
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          <Button
-                            onClick={handleActivateService}
-                            disabled={isActivating}
-                            className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
-                          >
-                            {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            {isActivating
-                              ? "Activating..."
-                              : isMxVerified
-                              ? "Activate"
-                              : "Verify & Activate"}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            onClick={handleSyncDnsRecords}
-                            disabled={isSyncingDns}
-                            className="w-full h-9 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none flex items-center justify-center gap-2"
-                          >
-                            <RefreshCw
-                              className={cn("w-3.5 h-3.5 text-slate-400", isSyncingDns && "animate-spin")}
-                              strokeWidth={1.5}
-                            />
-                            {isSyncingDns ? "Checking..." : "Check DNS Propagation"}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </Card>
+              }
+            />
 
             {/* Widget 2: Required DNS Records */}
             <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
@@ -1454,74 +1429,73 @@ export default function EmailServiceAdminPage() {
     <DashboardShell>
       <div className="space-y-6 animate-in fade-in duration-300">
         {/* Page header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
-          <h1 className="text-2xl font-headline font-semibold text-slate-900 tracking-tight">
-            Email Service
-          </h1>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => loadAllMailData(true)}
-              disabled={isRefreshing}
-              className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
-            >
-              <RefreshCw
-                className={cn("w-3.5 h-3.5 mr-2 text-slate-400", isRefreshing && "animate-spin")}
-                strokeWidth={1.5}
-              />
-              Refresh
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsOuModalOpen(true)}
-              className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
-            >
-              Organizational Units
-              <span className="ml-2 font-mono text-slate-400 tabular-nums">
-                {orgUnits.length + 1}
-              </span>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors gap-1.5"
-                >
-                  <MoreVertical className="w-3.5 h-3.5 text-slate-500" />
-                  More Actions
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 bg-white border border-slate-200 shadow-md rounded-xl p-1">
-                <DropdownMenuItem
-                  onSelect={() => handleSyncDnsRecords()}
-                  className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} />
-                  <span>Verify DNS Propagation</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => window.open("https://mail.revlet.me", "_blank", "noopener,noreferrer")}
-                  className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" strokeWidth={1.5} />
-                  <span>Open RevletMail</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => setIsDeactivateConfirmOpen(true)}
-                  className="group gap-2 py-2 text-xs text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white cursor-pointer rounded-md"
-                >
-                  <PowerOff className="w-3.5 h-3.5" strokeWidth={1.5} />
-                  <span>Disable Email Service</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+        <PageHeader
+          title="Email Service"
+          actions={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadAllMailData(true)}
+                disabled={isRefreshing}
+                className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
+              >
+                <RefreshCw
+                  className={cn("w-3.5 h-3.5 mr-2 text-slate-400", isRefreshing && "animate-spin")}
+                  strokeWidth={1.5}
+                />
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsOuModalOpen(true)}
+                className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
+              >
+                Organizational Units
+                <span className="ml-2 font-mono text-slate-400 tabular-nums">
+                  {orgUnits.length + 1}
+                </span>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors gap-1.5"
+                  >
+                    <MoreVertical className="w-3.5 h-3.5 text-slate-500" />
+                    More Actions
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52 bg-white border border-slate-200 shadow-md rounded-xl p-1">
+                  <DropdownMenuItem
+                    onSelect={() => handleSyncDnsRecords()}
+                    className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span>Verify DNS Propagation</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => window.open("https://mail.revlet.me", "_blank", "noopener,noreferrer")}
+                    className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span>Open RevletMail</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => setIsDeactivateConfirmOpen(true)}
+                    className="group gap-2 py-2 text-xs text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white cursor-pointer rounded-md"
+                  >
+                    <PowerOff className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span>Disable Email Service</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          }
+        />
 
         {/* Moment: Live domain routing & outbound quota ledger strip */}
         <div className="rounded-xl border border-slate-200/80 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">

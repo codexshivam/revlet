@@ -182,18 +182,18 @@ export function PublicSupportView() {
                 <FileCode2 className="w-4 h-4" />
               </div>
               <h3 className="text-sm font-headline font-bold text-slate-900">
-                Platform Documentation
+                Open Source &amp; Docs
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Explore service guides, DNS configuration references, and security standards for your organization.
+                Inspect architecture documentation, security rules, and submit code contributions on GitHub.
               </p>
               <a
-                href="https://revlet.me/support"
+                href="https://github.com/codexshivam/revlet"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs font-bold text-blue-600 hover:underline pt-2 block"
               >
-                Visit Revlet Support ↗
+                GitHub Repository ↗
               </a>
             </div>
           </div>
@@ -226,17 +226,17 @@ export function PublicSupportView() {
       {/* Footer */}
       <footer className="w-full bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>Revlet — Enterprise IT Management Control Plane</p>
+          <p>Revlet — Open-Source Enterprise IT Management Control Plane</p>
           <div className="flex items-center gap-4 font-medium text-slate-600">
             <Link href="/login" className="hover:text-slate-900 transition-colors">Console</Link>
             <Link href="/support" className="hover:text-slate-900 transition-colors">Support</Link>
             <a
-              href="https://revlet.me"
+              href="https://github.com/codexshivam/revlet"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-slate-900 transition-colors"
             >
-              revlet.me
+              GitHub
             </a>
           </div>
         </div>

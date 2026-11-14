@@ -1,9 +1,8 @@
 {
   "name": "revlet-it-manager",
   "version": "0.1.0",
-  "private": true,
-  "description": "Enterprise multi-tenant IT management control plane for DNS Management, Email Service, and Institutional Identity.",
-  "license": "UNLICENSED",
+  "description": "Open-source enterprise multi-tenant IT management control plane for Cloudflare DNS, Email Routing, and Google Workspace for Education.",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/codexshivam/revlet.git"

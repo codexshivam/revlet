@@ -275,7 +275,7 @@ export default function SignupPage() {
 
   return (
     <AuthFrame>
-      <div className="w-full max-w-[400px] bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6 shadow-sm animate-in fade-in duration-300">
+      <div className="w-full max-w-[520px] bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6 shadow-sm animate-in fade-in duration-300">
         {/* Step Indicator */}
         <div className="flex items-center justify-between text-xs text-slate-500 border-b border-slate-100 pb-3">
           <span className="font-medium text-slate-900">

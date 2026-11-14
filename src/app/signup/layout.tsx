@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
 
 export const metadata: Metadata = {
-  title: 'Get Started & Organization Registration',
+  title: { absolute: 'Get Started | Revlet' },
   description: 'Register your school or business on Revlet with zero-trust multi-tenancy and start deploying Anycast DNS in minutes.',
   alternates: {
     canonical: 'https://app.revlet.me/signup',

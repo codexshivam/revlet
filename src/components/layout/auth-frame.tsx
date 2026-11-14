@@ -21,12 +21,14 @@ export function AuthFrame({ children, className }: AuthFrameProps) {
         </Link>
 
         <nav className="flex items-center gap-4 sm:gap-6 text-xs">
-          <Link
-            href="/support"
+          <a
+            href="https://revlet.me/contact"
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-slate-500 hover:text-slate-900 transition-colors"
           >
             Support
-          </Link>
+          </a>
           <a
             href="https://revlet.me"
             target="_blank"

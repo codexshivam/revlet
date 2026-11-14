@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
 
 export const metadata: Metadata = {
-  title: 'Console',
+  title: { absolute: 'Login | Revlet' },
   description: 'Use the console to manage everything powering your domain — DNS Management and Email Service.',
   alternates: {
     canonical: 'https://app.revlet.me/login',

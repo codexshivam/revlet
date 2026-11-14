@@ -20,7 +20,13 @@ interface NavItem {
   badge?: React.ReactNode
 }
 
-export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
+export function RecursiveSidebar({
+  mobile = false,
+  onNavigate,
+}: {
+  mobile?: boolean
+  onNavigate?: () => void
+}) {
   const pathname = usePathname()
 
   const isItemActive = (href: string) => {
@@ -53,6 +59,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
           <Link
             key={idx}
             href={item.href}
+            onClick={onNavigate}
             className={cn(
               "w-full flex items-center justify-between px-2.5 h-[34px] rounded-lg text-xs transition-colors group",
               isActive
@@ -120,6 +127,7 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
             <Link
               key={idx}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
                 "w-full flex items-center gap-2.5 px-2.5 h-[34px] rounded-lg text-xs transition-colors group",
                 isActive

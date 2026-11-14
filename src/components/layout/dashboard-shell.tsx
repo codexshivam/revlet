@@ -34,18 +34,18 @@ export function DashboardShell({
   }
 
   return (
-    <div className="h-screen w-full flex bg-slate-50 overflow-hidden">
+    <div className="h-[100dvh] w-full flex bg-slate-50 overflow-hidden">
       <RecursiveSidebar />
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-50 h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-slate-50 h-[100dvh] overflow-hidden">
         <TopHeader />
         <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
           <div
             className={cn(
-              "p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-8 min-h-[calc(100vh-3.5rem)] flex flex-col",
+              "p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 sm:space-y-8 min-h-[calc(100dvh-3.5rem)] flex flex-col",
               className
             )}
           >
-            <div className="space-y-8 flex-1">{children}</div>
+            <div className="space-y-6 sm:space-y-8 flex-1">{children}</div>
           </div>
         </main>
       </div>

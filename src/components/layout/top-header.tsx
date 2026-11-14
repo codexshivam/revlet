@@ -9,30 +9,33 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/s
 import Link from "next/link"
 
 export function TopHeader() {
+  const [mobileOpen, setMobileOpen] = React.useState(false)
+
   return (
-    <header className="h-14 border-b border-slate-200 bg-white flex items-center justify-between px-4 sm:px-6 shrink-0 relative z-30">
+    <header className="h-14 border-b border-slate-200 bg-white flex items-center justify-between gap-2 px-3 sm:px-6 shrink-0 relative z-30">
       {/* 1. Mobile Menu + Brand & Organization Selector */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        <Sheet>
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden h-8 w-8 text-slate-500 hover:bg-slate-100 rounded-lg shrink-0"
+              className="lg:hidden h-9 w-9 text-slate-500 hover:bg-slate-100 rounded-lg shrink-0"
+              aria-label="Open navigation menu"
             >
               <Menu className="w-4 h-4" />
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="p-0 w-64 border-r border-slate-200 bg-slate-50">
             <SheetTitle className="sr-only">Navigation menu</SheetTitle>
-            <RecursiveSidebar mobile />
+            <RecursiveSidebar mobile onNavigate={() => setMobileOpen(false)} />
           </SheetContent>
         </Sheet>
 
         {/* Mobile brand mark */}
         <Link
           href="/account/home"
-          className="lg:hidden flex items-center pr-2 hover:opacity-85 transition-opacity"
+          className="lg:hidden flex items-center pr-1 sm:pr-2 shrink-0 hover:opacity-85 transition-opacity"
         >
           <span className="font-bold text-[18px] tracking-tight text-slate-950 font-headline">
             Revlet
@@ -43,7 +46,7 @@ export function TopHeader() {
       </div>
 
       {/* 2. Platform Actions */}
-      <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <Link href="/support">
           <Button
             variant="ghost"

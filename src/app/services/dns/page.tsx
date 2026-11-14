@@ -1387,7 +1387,7 @@ export default function DNSManagementPage() {
             if (!open) setFormErrors({})
           }}
         >
-          <DialogContent className="w-full sm:max-w-2xl p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
+          <DialogContent className="sm:max-w-2xl p-5 sm:p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
                 {editingRecord ? "Edit DNS Record" : "Add DNS Record"}

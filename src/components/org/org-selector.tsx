@@ -133,7 +133,7 @@ export function OrgSelector({
           disabled={loading}
           className={cn(
             "justify-between h-9 text-xs font-bold border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 hover:text-black transition-all shadow-sm rounded-lg text-slate-800",
-            compact ? "w-auto min-w-[180px] max-w-[280px]" : "w-[450px]"
+            compact ? "w-auto min-w-0 max-w-[155px] sm:min-w-[180px] sm:max-w-[280px]" : "w-full max-w-[450px]"
           )}
         >
           <div className="flex items-center gap-2 truncate">
@@ -152,7 +152,7 @@ export function OrgSelector({
       <PopoverContent 
         className={cn(
           "p-0 shadow-xl border-slate-200 bg-white overflow-hidden rounded-lg", 
-          compact ? "w-[260px] sm:w-[280px]" : "w-[450px]"
+          compact ? "w-[260px] sm:w-[280px]" : "w-[calc(100vw-2rem)] sm:w-[450px]"
         )}
         align="start"
       >

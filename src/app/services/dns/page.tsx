@@ -825,7 +825,7 @@ export default function DNSManagementPage() {
           </Card>
         ) : selectedOrg && !zoneId ? (
           /* STATE 2: DNS Activation & BYOT Guideline */
-          <div className="max-w-5xl mx-auto space-y-6">
+          <div className="w-full space-y-6">
             {/* Widget 1: DNS Activation Widget (65% Blue Features / 35% Activation Types) */}
             <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
               <div className="flex flex-col lg:flex-row">

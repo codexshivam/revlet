@@ -1,6 +1,7 @@
 "use client"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -41,6 +42,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
+  Mail,
   Plus,
   MoreVertical,
   Search,
@@ -1148,206 +1150,194 @@ export default function EmailServiceAdminPage() {
   const verifiedDnsCount = displayDnsRecords.filter((r) => r.verified).length
   const isMxVerified = displayDnsRecords.find((r) => r.type === "MX")?.verified
 
-  // Pre-activation screen: full deliverability records preview & controller
+  // Pre-activation screen: matches DNS Management layout & style
   if (!isEffectiveServiceActive) {
     return (
       <DashboardShell>
         <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Header Strip with Domain and DNS Infrastructure Status */}
-          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 border-b border-slate-200/80 pb-5">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-2xl font-headline font-semibold text-slate-900 tracking-tight">
-                  Email service
-                </h1>
-                <span className="font-mono text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200/80">
-                  {selectedOrg.domain}
-                </span>
-                {dnsServiceActive ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200/80">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                    <span>Cloudflare managed</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200/80">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    <span>External registrar</span>
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500">
-                Inbound mail routing, 2048-bit cryptographic DKIM keys, and directory activation
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyAllRecords}
-                className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-md transition-colors cursor-pointer"
-                title="Copy all required records to clipboard"
-              >
-                {copiedKey === "all-records" ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 mr-1.5 text-slate-900" strokeWidth={1.5} />
-                    <span>Records copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
-                    <span>Copy all records</span>
-                  </>
-                )}
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSyncDnsRecords}
-                disabled={isSyncingDns}
-                className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-md transition-colors cursor-pointer"
-                title="Verify DNS records on live resolvers"
-              >
-                <RefreshCw
-                  className={cn("w-3.5 h-3.5 mr-1.5 text-slate-400", isSyncingDns && "animate-spin")}
-                  strokeWidth={1.5}
-                />
-                <span>{isSyncingDns ? "Checking..." : "Verify DNS"}</span>
-              </Button>
-            </div>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+            <h1 className="text-2xl font-headline font-semibold text-slate-900 tracking-tight">
+              Email Service
+            </h1>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left Column: Activation Controller (4 cols on lg) */}
-            <div className="lg:col-span-4 rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 space-y-5">
-              <div className="space-y-2">
-                <h2 className="text-base font-headline font-semibold text-slate-900">
-                  Activation
-                </h2>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Activating prepares the directory on Stalwart Mail Server and establishes outbound relaying with Amazon SES.
-                </p>
-              </div>
-
-              {/* Mode-Specific Status Description */}
-              {dnsServiceActive ? (
-                <div className="rounded-lg bg-slate-50 border border-slate-200/80 p-3.5 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-slate-900">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                    <span>Automated DNS provisioning</span>
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Revlet manages DNS for {selectedOrg.domain}. Clicking activate creates a zone backup snapshot and provisions the MX, SPF, DMARC, and DKIM records directly.
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-lg bg-slate-50 border border-slate-200/80 p-3.5 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-slate-900">DNS configuration</span>
-                    <span className="font-mono text-slate-500 tabular-nums">
-                      {verifiedDnsCount} of {displayDnsRecords.length} verified
+          <div className="w-full space-y-6">
+            {/* Widget 1: Email Service Activation Widget (65% Blue Features / 35% Activation) */}
+            <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
+              <div className="flex flex-col lg:flex-row">
+                {/* 65% Blue Container with White Text */}
+                <div className="w-full lg:w-[65%] bg-primary text-white p-6 sm:p-8 flex flex-col justify-between space-y-6">
+                  <div className="space-y-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/80">
+                      <Mail className="w-3.5 h-3.5 text-white" />
+                      Domain: {selectedOrg.domain}
                     </span>
+                    <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
+                      Revlet Email Service
+                    </h2>
+                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
+                      Dedicated business email hosting for your organization with automated deliverability and centralized directory control.
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Publish the records from the table at your DNS provider. Inbound receiving activates once the MX record resolves to <code className="font-mono text-slate-800">mx.revlet.me</code>.
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-xs">
+                    <div className="space-y-1">
+                      <p className="font-semibold text-white">Custom Domain Mailboxes</p>
+                      <p className="text-white/85 leading-relaxed">
+                        Create and manage branded mailboxes, groups, and organizational units from one console.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-white">Authenticated Delivery</p>
+                      <p className="text-white/85 leading-relaxed">
+                        Automatic MX, SPF, DKIM, and DMARC configuration keeps messages trusted and deliverable.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-white">Instant Webmail Access</p>
+                      <p className="text-white/85 leading-relaxed">
+                        Members can sign in immediately with full inbox, threading, and alias support.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-white">Built-in Abuse Protection</p>
+                      <p className="text-white/85 leading-relaxed">
+                        Daily and monthly sending allowances with automated bounce monitoring protect domain reputation.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 35% Activation Controls */}
+                <div className="w-full lg:w-[35%] p-6 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between gap-5">
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-slate-900">Activation</h3>
+                      <p className="text-xs text-slate-500">
+                        Enable email hosting for {selectedOrg.domain}.
+                      </p>
+                    </div>
+
+                    {dnsServiceActive ? (
+                      <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold text-slate-900">Managed by Revlet Platform</p>
+                          <p className="text-xs text-slate-500 leading-relaxed">
+                            Required MX, SPF, DKIM, and DMARC records will be configured automatically without affecting existing website records.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={handleActivateService}
+                          disabled={isActivating}
+                          className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+                        >
+                          {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          {isActivating ? "Activating..." : "Activate"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold text-slate-900">External DNS Setup</p>
+                            <span className="font-mono text-[11px] text-slate-500 tabular-nums">
+                              {verifiedDnsCount}/{displayDnsRecords.length} verified
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 leading-relaxed">
+                            Add the required DNS records below at your domain provider, then verify and activate.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Button
+                            onClick={handleActivateService}
+                            disabled={isActivating}
+                            className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+                          >
+                            {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            {isActivating
+                              ? "Activating..."
+                              : isMxVerified
+                              ? "Activate"
+                              : "Verify & Activate"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={handleSyncDnsRecords}
+                            disabled={isSyncingDns}
+                            className="w-full h-9 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none flex items-center justify-center gap-2"
+                          >
+                            <RefreshCw
+                              className={cn("w-3.5 h-3.5 text-slate-400", isSyncingDns && "animate-spin")}
+                              strokeWidth={1.5}
+                            />
+                            {isSyncingDns ? "Checking..." : "Check DNS Propagation"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    {dnsServiceActive
+                      ? "A zone backup snapshot is created automatically before applying email records."
+                      : "You can verify DNS propagation at any time before or after activation."}
                   </p>
                 </div>
-              )}
-
-              {/* Quota Strip */}
-              <div className="p-3.5 rounded-lg border border-slate-100 bg-slate-50/50 space-y-2">
-                <div className="flex items-baseline justify-between text-xs">
-                  <span className="text-slate-500">Outbound allowance</span>
-                  <span className="font-mono text-slate-800 tabular-nums">
-                    1,000 / month · 100 / day
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between text-xs pt-1.5 border-t border-slate-200/60">
-                  <span className="text-slate-500">Purge recovery</span>
-                  <span className="font-mono text-slate-800">14-day window</span>
-                </div>
               </div>
+            </Card>
 
-              {/* Action Buttons */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                {dnsServiceActive ? (
-                  <Button
-                    onClick={handleActivateService}
-                    disabled={isActivating}
-                    className="w-full bg-slate-900 hover:bg-slate-800 !text-white text-white font-medium h-9 px-4 rounded-md text-xs transition-colors cursor-pointer"
-                  >
-                    {isActivating ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin text-white" strokeWidth={1.5} />
-                        Configuring DNS and activating...
-                      </>
-                    ) : (
-                      "Activate and configure DNS"
-                    )}
-                  </Button>
-                ) : (
-                  <>
-                    <Button
-                      onClick={handleActivateService}
-                      disabled={isActivating}
-                      className="w-full bg-slate-900 hover:bg-slate-800 !text-white text-white font-medium h-9 px-4 rounded-md text-xs transition-colors cursor-pointer"
-                    >
-                      {isActivating ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin text-white" strokeWidth={1.5} />
-                          Activating service...
-                        </>
-                      ) : isMxVerified ? (
-                        "Activate email service"
-                      ) : (
-                        "Verify DNS and activate"
-                      )}
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      onClick={handleSyncDnsRecords}
-                      disabled={isSyncingDns}
-                      className="w-full h-8 px-3 rounded-md text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
-                    >
-                      <RefreshCw
-                        className={cn("w-3.5 h-3.5 mr-2 text-slate-400", isSyncingDns && "animate-spin")}
-                        strokeWidth={1.5}
-                      />
-                      <span>{isSyncingDns ? "Testing resolvers..." : "Check DNS propagation"}</span>
-                    </Button>
-                  </>
-                )}
-
-                <p className="text-[11px] text-slate-400 text-center leading-relaxed pt-1">
-                  {dnsServiceActive
-                    ? "Existing website and application records remain untouched."
-                    : "Accounts and aliases can be configured while DNS propagation finishes."}
-                </p>
-              </div>
-            </div>
-
-            {/* Right Column: Required DNS Records Table (8 cols on lg) */}
-            <div className="lg:col-span-8 rounded-xl border border-slate-200/80 bg-white overflow-hidden">
-              <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-headline font-semibold text-slate-900">
-                    Required deliverability records
+            {/* Widget 2: Required DNS Records */}
+            <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
+              <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Required DNS Records
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Routing, sender authentication, and DKIM cryptographic keys for {selectedOrg.domain}
+                    Mail routing and sender authentication records for {selectedOrg.domain}.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-slate-500 tabular-nums">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs text-slate-500 tabular-nums mr-1">
                     {verifiedDnsCount} of {displayDnsRecords.length} verified
                   </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyAllRecords}
+                    className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none"
+                  >
+                    {copiedKey === "all-records" ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 mr-1.5 text-slate-900" strokeWidth={1.5} />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
+                        Copy All
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncDnsRecords}
+                    disabled={isSyncingDns}
+                    className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none"
+                  >
+                    <RefreshCw
+                      className={cn("w-3.5 h-3.5 mr-1.5 text-slate-400", isSyncingDns && "animate-spin")}
+                      strokeWidth={1.5}
+                    />
+                    {isSyncingDns ? "Checking..." : "Verify DNS"}
+                  </Button>
                 </div>
               </div>
 
-              {/* Records Table with un-truncated, readable values */}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -1382,7 +1372,7 @@ export default function EmailServiceAdminPage() {
                           </span>
                         </TableCell>
                         <TableCell className="py-3">
-                          <div className="flex items-center gap-1.5 group">
+                          <div className="flex items-center gap-1.5">
                             <span className="font-mono text-xs text-slate-700 break-all select-all">
                               {rec.name}
                             </span>
@@ -1401,7 +1391,7 @@ export default function EmailServiceAdminPage() {
                           </div>
                         </TableCell>
                         <TableCell className="py-3">
-                          <div className="flex items-center gap-1.5 group">
+                          <div className="flex items-center gap-1.5">
                             <span className="font-mono text-xs text-slate-700 break-all select-all">
                               {rec.content}
                             </span>
@@ -1435,17 +1425,7 @@ export default function EmailServiceAdminPage() {
                   </TableBody>
                 </Table>
               </div>
-
-              {/* Bottom Deliverability Guidance */}
-              <div className="p-4 bg-slate-50/40 border-t border-slate-200/80 text-xs text-slate-500 space-y-1">
-                <p>
-                  <span className="font-medium text-slate-700">Inbound MX:</span> Directs domain traffic to Stalwart Mail Server.
-                </p>
-                <p>
-                  <span className="font-medium text-slate-700">SPF, DKIM, and DMARC:</span> Sign outbound messages to satisfy RFC 7208 and RFC 6376 sender verification.
-                </p>
-              </div>
-            </div>
+            </Card>
           </div>
         </div>
       </DashboardShell>

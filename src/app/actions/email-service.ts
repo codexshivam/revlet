@@ -3,7 +3,7 @@
 import crypto from 'crypto';
 import dns from 'dns';
 import { FieldValue } from 'firebase-admin/firestore';
-import { adminDb } from '@/firebase/admin';
+import { adminAuth, adminDb } from '@/firebase/admin';
 import { verifyUserOrgAccess } from './auth-helper';
 import {
   listDNSRecords,
@@ -336,6 +336,7 @@ export async function syncStalwartUserPrincipal(params: {
   isCatchAllTarget: boolean;
   plainPassword?: string;
   isCreate?: boolean;
+  disabled?: boolean;
 }) {
   const cleanEmail = params.primaryEmail.toLowerCase().trim();
   const [localPart, domainPart] = cleanEmail.split('@');
@@ -412,7 +413,9 @@ export async function syncStalwartUserPrincipal(params: {
     description: params.displayName || existingAcc.description || localPart,
     aliases: aliasesMap,
   };
-  if (params.plainPassword) {
+  if (params.disabled) {
+    updateFields.credentials = {};
+  } else if (params.plainPassword) {
     updateFields.credentials = {
       '0': {
         '@type': 'Password',
@@ -614,6 +617,136 @@ async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | n
   }
 
   return null;
+}
+
+function escapeHtml(str: string): string {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function resolveOrganizationOwnerEmail(orgData: Record<string, any>): Promise<string | null> {
+  const candidates = [orgData.contactEmail, orgData.currentEmail]
+    .map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''))
+    .filter((v) => v.includes('@'));
+  if (candidates.length > 0) return candidates[0];
+
+  if (orgData.ownerId) {
+    try {
+      const ownerRecord = await adminAuth.getUser(orgData.ownerId);
+      if (ownerRecord.email) return ownerRecord.email.toLowerCase().trim();
+    } catch {
+      // Fallback to users collection
+    }
+    try {
+      const userSnap = await adminDb.collection('users').doc(orgData.ownerId).get();
+      const userEmail = userSnap.data()?.email;
+      if (typeof userEmail === 'string' && userEmail.includes('@')) {
+        return userEmail.toLowerCase().trim();
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  return null;
+}
+
+/**
+ * Sends a branded blue/black Revlet alert email from alerts@revlet.me via AWS SES v2.
+ */
+async function sendRevletAlertEmail(params: {
+  to: string;
+  subject: string;
+  title: string;
+  subtitle: string;
+  summaryLines: string[];
+  details: Array<{ label: string; value: string }>;
+}): Promise<boolean> {
+  const fromAddress = (process.env.REVLET_ALERTS_FROM || 'Revlet Alerts <alerts@revlet.me>').trim();
+  const detailRowsHtml = params.details
+    .map(
+      (d) => `
+      <tr>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b;width:38%;">${escapeHtml(d.label)}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#0f172a;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${escapeHtml(d.value)}</td>
+      </tr>`
+    )
+    .join('');
+
+  const summaryHtml = params.summaryLines
+    .map(
+      (line) =>
+        `<p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#334155;">${escapeHtml(line)}</p>`
+    )
+    .join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:580px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+          <tr>
+            <td style="background-color:#0f172a;padding:24px 28px;border-bottom:3px solid #2563eb;">
+              <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#ffffff;">Revlet</div>
+              <div style="margin-top:6px;font-size:12px;color:#94a3b8;">${escapeHtml(params.subtitle)}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px;">
+              <h1 style="margin:0 0 16px 0;font-size:18px;font-weight:700;color:#0f172a;letter-spacing:-0.01em;">${escapeHtml(params.title)}</h1>
+              ${summaryHtml}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background-color:#f8fafc;">
+                ${detailRowsHtml}
+              </table>
+              <div style="margin-top:24px;">
+                <a href="https://console.revlet.me/services/email" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 18px;border-radius:8px;">Open Revlet Console</a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 28px;font-size:11px;color:#64748b;">
+              Sent by Revlet Platform Alerts (<span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">alerts@revlet.me</span>).
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = [
+    `Revlet — ${params.title}`,
+    '',
+    ...params.summaryLines,
+    '',
+    ...params.details.map((d) => `${d.label}: ${d.value}`),
+    '',
+    'Open Revlet Console: https://console.revlet.me/services/email',
+  ].join('\n');
+
+  const res = await callAwsSesV2Api('POST', '/v2/email/outbound-emails', {
+    FromEmailAddress: fromAddress,
+    Destination: {
+      ToAddresses: [params.to],
+    },
+    Content: {
+      Simple: {
+        Subject: { Data: params.subject, Charset: 'UTF-8' },
+        Body: {
+          Html: { Data: html, Charset: 'UTF-8' },
+          Text: { Data: text, Charset: 'UTF-8' },
+        },
+      },
+    },
+  });
+
+  return res.ok;
 }
 
 // ============================================================================
@@ -1088,6 +1221,8 @@ export async function getMailServiceState(idToken: string, orgId: string) {
         dailySentCount: rolling.dailySentCount,
         catchAllUserId: orgData.mailCatchAllUserId || null,
         catchAllEmail: orgData.mailCatchAllEmail || null,
+        mailDeactivatedAt: orgData.mailDeactivatedAt || null,
+        mailPurgeScheduledAt: orgData.mailPurgeScheduledAt || null,
         requiredDnsRecords,
       },
     };
@@ -1142,6 +1277,8 @@ export async function activateMailService(idToken: string, orgId: string) {
       mailDailySent: orgData.mailDailySent ?? 0,
       mailCatchAllUserId: orgData.mailCatchAllUserId ?? null,
       mailCatchAllEmail: orgData.mailCatchAllEmail ?? null,
+      mailDeactivatedAt: null,
+      mailPurgeScheduledAt: null,
       mailActivatedAt: FieldValue.serverTimestamp(),
       updatedAt: new Date().toISOString(),
     });
@@ -1179,8 +1316,15 @@ export async function deactivateMailService(idToken: string, orgId: string) {
       };
     }
 
+    const nowMs = Date.now();
+    const deactivatedAt = new Date(nowMs).toISOString();
+    const purgeScheduledAt = new Date(nowMs + FOURTEEN_DAYS_MS).toISOString();
+
     await adminDb.collection('organizations').doc(orgId).update({
       mailServiceActive: false,
+      mailDeactivatedAt: deactivatedAt,
+      mailPurgeScheduledAt: purgeScheduledAt,
+      mailPurgeCompletedAt: null,
       updatedAt: FieldValue.serverTimestamp(),
     });
 
@@ -1190,9 +1334,10 @@ export async function deactivateMailService(idToken: string, orgId: string) {
       actorEmail: email,
       action: 'MAIL_SERVICE_DEACTIVATED',
       target: orgData.domain || orgId,
+      metadata: { deactivatedAt, purgeScheduledAt },
     });
 
-    return { success: true };
+    return { success: true, data: { deactivatedAt, purgeScheduledAt } };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to deactivate Email Service.' };
   }
@@ -1572,7 +1717,7 @@ async function isEmailAddressTakenInOrg(
 export async function listMailUsers(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId);
+    const { orgData } = await verifyUserOrgAccess(idToken, orgId);
     const colRef = adminDb.collection('organizations').doc(orgId).collection('mailUsers');
     const snap = await colRef.get();
 
@@ -1611,13 +1756,31 @@ export async function listMailUsers(idToken: string, orgId: string) {
       expiredDocs.forEach((item) => batch.delete(item.ref));
       await batch.commit();
 
-      // Purge expired principals from Stalwart Mail Server
+      // Purge expired principals from Stalwart Mail Server and notify organization owner
+      const ownerEmail = await resolveOrganizationOwnerEmail(orgData);
       for (const item of expiredDocs) {
         if (item.email) {
           await dispatchStalwartApi(
             'DELETE',
             `/api/principal/${encodeURIComponent(item.email.toLowerCase().trim())}`
           );
+          if (ownerEmail) {
+            await sendRevletAlertEmail({
+              to: ownerEmail,
+              subject: `Email account permanently deleted: ${item.email}`,
+              title: 'Email Account Permanently Deleted',
+              subtitle: '14-Day Retention Policy Notice',
+              summaryLines: [
+                `The email account ${item.email} for ${orgData.name || orgData.domain} has reached the end of its 14-day recovery window and has been permanently deleted from Revlet mail servers.`,
+                'All mailbox credentials and associated messages have been removed and cannot be recovered.',
+              ],
+              details: [
+                { label: 'Organization', value: orgData.name || orgData.domain || orgId },
+                { label: 'Deleted Account', value: item.email },
+                { label: 'Completed At', value: new Date().toISOString() },
+              ],
+            }).catch(() => {});
+          }
         }
       }
     }
@@ -2044,6 +2207,7 @@ export async function toggleMailUserSuspend(
       aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
       domain: (orgData.domain || '').toLowerCase().trim(),
       isCatchAllTarget: !suspend && wasCatchAll,
+      disabled: suspend,
     });
 
     await logMailAuditEvent({
@@ -2108,6 +2272,7 @@ export async function deleteMailUserAccount(idToken: string, orgId: string, user
       aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
       domain: (orgData.domain || '').toLowerCase().trim(),
       isCatchAllTarget: false,
+      disabled: true,
     });
 
     await logMailAuditEvent({
@@ -2487,4 +2652,346 @@ export async function deleteMailGroup(idToken: string, orgId: string, groupId: s
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to delete group.' };
   }
+}
+
+export interface BulkImportUserRow {
+  firstName: string;
+  lastName: string;
+  emailPrefix: string;
+  password: string;
+  orgUnitPath?: string;
+}
+
+export async function bulkCreateMailUsers(
+  idToken: string,
+  orgId: string,
+  rows: BulkImportUserRow[]
+) {
+  if (!orgId) return { success: false, error: 'Missing organization ID.' };
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { success: false, error: 'No user rows provided for import.' };
+  }
+  if (rows.length > 200) {
+    return { success: false, error: 'Bulk import is limited to 200 accounts per batch.' };
+  }
+
+  try {
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId);
+    const domain = (orgData.domain || '').toLowerCase().trim();
+    if (!domain) {
+      return { success: false, error: 'Organization domain is not configured.' };
+    }
+
+    const colRef = adminDb.collection('organizations').doc(orgId).collection('mailUsers');
+    const existingCountSnap = await colRef.count().get();
+    let currentCount = existingCountSnap.data().count;
+
+    const createdUsers: MailUserRecord[] = [];
+    const errors: string[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowLabel = `Row ${i + 1}`;
+      if (currentCount >= MAX_MAILBOXES_PER_ORG) {
+        errors.push(`${rowLabel}: Organization mailbox limit (${MAX_MAILBOXES_PER_ORG}) reached.`);
+        break;
+      }
+
+      const firstCheck = validateAndSanitizeInput(row.firstName || '', 'First name', {
+        required: true,
+        maxLength: 64,
+      });
+      if (!firstCheck.isValid) {
+        errors.push(`${rowLabel}: ${firstCheck.error}`);
+        continue;
+      }
+
+      const lastCheck = validateAndSanitizeInput(row.lastName || '', 'Last name', {
+        required: false,
+        maxLength: 64,
+      });
+      if (!lastCheck.isValid) {
+        errors.push(`${rowLabel}: ${lastCheck.error}`);
+        continue;
+      }
+
+      const prefixCheck = validateEmailLocalPart(row.emailPrefix || '', 'Email username');
+      if (!prefixCheck.valid) {
+        errors.push(`${rowLabel}: ${prefixCheck.error}`);
+        continue;
+      }
+
+      const passwordError = validateMailPassword(row.password || '');
+      if (passwordError) {
+        errors.push(`${rowLabel} (${prefixCheck.prefix}): ${passwordError}`);
+        continue;
+      }
+
+      const primaryEmail = `${prefixCheck.prefix}@${domain}`;
+      const conflictError = await isEmailAddressTakenInOrg(orgId, primaryEmail);
+      if (conflictError) {
+        errors.push(`${rowLabel} (${primaryEmail}): ${conflictError}`);
+        continue;
+      }
+
+      const firstName = firstCheck.sanitized;
+      const lastName = lastCheck.sanitized;
+      const displayName = `${firstName} ${lastName}`.trim();
+      const orgUnitPath = stripScripts(row.orgUnitPath || '/', { maxLength: 64 }) || '/';
+      const now = new Date().toISOString();
+
+      const docRef = await colRef.add({
+        firstName,
+        lastName,
+        displayName,
+        primaryEmail,
+        passwordHash: hashMailPassword(row.password),
+        aliases: [],
+        orgUnitPath,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+        recoverableUntil: null,
+      });
+
+      await syncStalwartUserPrincipal({
+        primaryEmail,
+        displayName,
+        orgUnitPath,
+        aliases: [],
+        domain,
+        isCatchAllTarget: false,
+        plainPassword: row.password,
+        isCreate: true,
+      });
+
+      createdUsers.push({
+        id: docRef.id,
+        firstName,
+        lastName,
+        displayName,
+        primaryEmail,
+        aliases: [],
+        orgUnitPath,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+        recoverableUntil: null,
+      });
+      currentCount++;
+    }
+
+    if (createdUsers.length > 0) {
+      await logMailAuditEvent({
+        orgId,
+        actorUid: uid,
+        actorEmail: email,
+        action: 'MAIL_USERS_BULK_IMPORTED',
+        target: domain,
+        metadata: { createdCount: createdUsers.length, skippedCount: errors.length },
+      });
+    }
+
+    return {
+      success: true,
+      data: {
+        createdUsers,
+        createdCount: createdUsers.length,
+        skippedCount: errors.length,
+        errors,
+      },
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to import email accounts.' };
+  }
+}
+
+/**
+ * Purges:
+ * 1) All Email Service data for organizations deactivated > 14 days ago.
+ * 2) All soft-deleted email user accounts whose 14-day recovery window has expired.
+ * Sends branded Revlet Alerts emails from alerts@revlet.me to organization owners.
+ */
+export async function purgeExpiredMailData(): Promise<{
+  purgedOrgsCount: number;
+  purgedUsersCount: number;
+  notificationsSent: number;
+}> {
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  let purgedOrgsCount = 0;
+  let purgedUsersCount = 0;
+  let notificationsSent = 0;
+
+  const orgsSnap = await adminDb.collection('organizations').get();
+
+  for (const orgDoc of orgsSnap.docs) {
+    const orgData = orgDoc.data();
+    const orgId = orgDoc.id;
+    const domain = (orgData.domain || '').toLowerCase().trim();
+    const orgName = orgData.name || domain || orgId;
+    const ownerEmail = await resolveOrganizationOwnerEmail(orgData);
+
+    // 1. Deactivated Email Service > 14 days -> purge entire organization mail data
+    if (!orgData.mailServiceActive && orgData.mailPurgeScheduledAt) {
+      const scheduledMs = new Date(orgData.mailPurgeScheduledAt).getTime();
+      if (!Number.isNaN(scheduledMs) && scheduledMs <= nowMs) {
+        const usersSnap = await orgDoc.ref.collection('mailUsers').get();
+        const groupsSnap = await orgDoc.ref.collection('mailGroups').get();
+        const ousSnap = await orgDoc.ref.collection('mailOrgUnits').get();
+
+        // Remove user principals from Stalwart
+        for (const uDoc of usersSnap.docs) {
+          const primaryEmail = (uDoc.data().primaryEmail || '').toLowerCase().trim();
+          if (primaryEmail) {
+            await dispatchStalwartApi('DELETE', `/api/principal/${encodeURIComponent(primaryEmail)}`);
+          }
+        }
+
+        // Remove mailing lists & domain from Stalwart
+        if (domain) {
+          try {
+            const mlRes = await callStalwartJmap([
+              ['x:MailingList/get', { accountId: 'b', ids: null }, 'mlList'],
+            ]);
+            const mlList: any[] = mlRes.find((r) => r[0] === 'x:MailingList/get')?.[1]?.list || [];
+            const domainMls = mlList
+              .filter((m) => (m.emailAddress || '').toLowerCase().endsWith(`@${domain}`))
+              .map((m) => m.id)
+              .filter(Boolean);
+            if (domainMls.length > 0) {
+              await callStalwartJmap([
+                ['x:MailingList/set', { accountId: 'b', destroy: domainMls }, 'delMls'],
+              ]);
+            }
+            const domRes = await callStalwartJmap([
+              ['x:Domain/get', { accountId: 'b', ids: null }, 'domList'],
+            ]);
+            const domList: any[] = domRes.find((r) => r[0] === 'x:Domain/get')?.[1]?.list || [];
+            const matchedDom = domList.find((d) => (d.name || '').toLowerCase() === domain);
+            if (matchedDom?.id) {
+              await callStalwartJmap([
+                ['x:Domain/set', { accountId: 'b', destroy: [matchedDom.id] }, 'delDom'],
+              ]);
+            }
+          } catch (stalwartErr) {
+            console.warn('[Stalwart Purge] Domain cleanup warning:', stalwartErr);
+          }
+        }
+
+        // Delete Firestore subcollections in batches
+        const allRefs = [
+          ...usersSnap.docs.map((d) => d.ref),
+          ...groupsSnap.docs.map((d) => d.ref),
+          ...ousSnap.docs.map((d) => d.ref),
+        ];
+        for (let i = 0; i < allRefs.length; i += 400) {
+          const batch = adminDb.batch();
+          allRefs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+          await batch.commit();
+        }
+
+        await orgDoc.ref.update({
+          mailPurgeScheduledAt: null,
+          mailPurgeCompletedAt: nowIso,
+          mailCatchAllUserId: null,
+          mailCatchAllEmail: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        await logMailAuditEvent({
+          orgId,
+          actorUid: 'system-retention-purge',
+          actorEmail: 'alerts@revlet.me',
+          action: 'MAIL_SERVICE_PURGED_14D',
+          target: domain || orgId,
+          metadata: {
+            deletedUsersCount: usersSnap.size,
+            deletedGroupsCount: groupsSnap.size,
+            deletedOusCount: ousSnap.size,
+          },
+        });
+
+        if (ownerEmail) {
+          const sent = await sendRevletAlertEmail({
+            to: ownerEmail,
+            subject: `Email Service data permanently deleted for ${domain || orgName}`,
+            title: 'Email Service Data Permanently Deleted',
+            subtitle: '14-Day Deactivation Retention Completed',
+            summaryLines: [
+              `Your 14-day retention period following Email Service deactivation for ${orgName} (${domain}) has ended.`,
+              'All mailboxes, aliases, groups, organizational units, and stored email data have been permanently deleted from Revlet mail servers.',
+            ],
+            details: [
+              { label: 'Organization', value: orgName },
+              { label: 'Domain', value: domain || '—' },
+              { label: 'Removed Accounts', value: String(usersSnap.size) },
+              { label: 'Removed Groups', value: String(groupsSnap.size) },
+              { label: 'Completed At', value: nowIso },
+            ],
+          }).catch(() => false);
+          if (sent) notificationsSent++;
+        }
+
+        purgedOrgsCount++;
+        continue;
+      }
+    }
+
+    // 2. Active organizations: purge individual soft-deleted accounts past 14-day recovery window
+    const deletedSnap = await orgDoc.ref
+      .collection('mailUsers')
+      .where('status', '==', 'deleted')
+      .get();
+
+    for (const uDoc of deletedSnap.docs) {
+      const uData = uDoc.data();
+      if (!uData.recoverableUntil) continue;
+      const expiryMs = new Date(uData.recoverableUntil).getTime();
+      if (Number.isNaN(expiryMs) || expiryMs > nowMs) continue;
+
+      const userEmail = (uData.primaryEmail || '').toLowerCase().trim();
+      await uDoc.ref.delete();
+      if (userEmail) {
+        await dispatchStalwartApi('DELETE', `/api/principal/${encodeURIComponent(userEmail)}`);
+      }
+
+      await logMailAuditEvent({
+        orgId,
+        actorUid: 'system-retention-purge',
+        actorEmail: 'alerts@revlet.me',
+        action: 'MAIL_USER_PURGED_14D',
+        target: userEmail || uDoc.id,
+      });
+
+      if (ownerEmail && userEmail) {
+        const sent = await sendRevletAlertEmail({
+          to: ownerEmail,
+          subject: `Email account permanently deleted: ${userEmail}`,
+          title: 'Email Account Permanently Deleted',
+          subtitle: '14-Day Recovery Window Expired',
+          summaryLines: [
+            `The deleted email account ${userEmail} in ${orgName} has passed its 14-day recovery window and has been permanently removed from Revlet mail servers.`,
+            'All mailbox credentials and associated messages have been erased and cannot be recovered.',
+          ],
+          details: [
+            { label: 'Organization', value: orgName },
+            { label: 'Deleted Account', value: userEmail },
+            { label: 'Completed At', value: nowIso },
+          ],
+        }).catch(() => false);
+        if (sent) notificationsSent++;
+      }
+
+      purgedUsersCount++;
+    }
+  }
+
+  return {
+    purgedOrgsCount,
+    purgedUsersCount,
+    notificationsSent,
+  };
 }

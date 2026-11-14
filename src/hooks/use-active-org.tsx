@@ -53,7 +53,7 @@ interface OrgContextType {
 const OrgContext = createContext<OrgContextType | null>(null)
 
 export function OrgProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useUser()
+  const { user, loading: userLoading } = useUser()
   const db = useFirestore()
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [activeOrgId, setActiveOrgId] = useState<string>(() => {
@@ -66,6 +66,11 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   const claimedUidRef = useRef<string | null>(null)
 
   const fetchOrgs = useCallback(async () => {
+    if (userLoading) {
+      setLoading(true)
+      return
+    }
+
     if (!user) {
       setOrgs([])
       setActiveOrgId("")
@@ -74,6 +79,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
+    setLoading(true)
     try {
       if (claimedUidRef.current !== user.uid) {
         claimedUidRef.current = user.uid
@@ -120,7 +126,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [user, db])
+  }, [user, userLoading, db])
 
   useEffect(() => {
     fetchOrgs()

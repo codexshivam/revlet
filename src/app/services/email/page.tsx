@@ -66,6 +66,10 @@ import {
   Sparkles,
   Clock,
   ExternalLink,
+  Filter,
+  Upload,
+  Download,
+  AlertTriangle,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { toast } from "@/hooks/use-toast"
@@ -96,10 +100,12 @@ import {
   createMailGroup,
   updateMailGroup,
   deleteMailGroup,
+  bulkCreateMailUsers,
   type MailRequiredDnsRecord,
   type MailOrgUnit,
   type MailUserRecord,
   type MailGroupRecord,
+  type BulkImportUserRow,
 } from "@/app/actions/email-service"
 
 function getDaysRemaining(recoverableUntil: string | null): number {
@@ -294,6 +300,13 @@ export default function EmailServiceAdminPage() {
 
   const [isUpdatingCatchAll, setIsUpdatingCatchAll] = useState(false)
   const [isDeactivateConfirmOpen, setIsDeactivateConfirmOpen] = useState(false)
+  const [mailPurgeScheduledAt, setMailPurgeScheduledAt] = useState<string | null>(null)
+
+  // Bulk Import Users state
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false)
+  const [bulkCsvText, setBulkCsvText] = useState("")
+  const [bulkImportErrors, setBulkImportErrors] = useState<string[]>([])
+  const [isBulkImporting, setIsBulkImporting] = useState(false)
 
   useEffect(() => {
     const anyOpen =
@@ -307,7 +320,8 @@ export default function EmailServiceAdminPage() {
       Boolean(editingGroup) ||
       Boolean(membersTargetGroup) ||
       Boolean(deletingGroup) ||
-      isDeactivateConfirmOpen
+      isDeactivateConfirmOpen ||
+      isBulkImportOpen
     if (!anyOpen && typeof document !== "undefined") {
       document.body.style.pointerEvents = ""
     }
@@ -323,10 +337,27 @@ export default function EmailServiceAdminPage() {
     membersTargetGroup,
     deletingGroup,
     isDeactivateConfirmOpen,
+    isBulkImportOpen,
   ])
+
+  // Reset directory and DNS state immediately when switching organizations so stale or empty states never flash
+  useEffect(() => {
+    if (!selectedOrgId) return
+    setUsers([])
+    setOrgUnits([])
+    setGroups([])
+    setRequiredDnsRecords([])
+    setMailPurgeScheduledAt(null)
+    setSelectedUserOu("ALL")
+    setIsLoadingDirectory(true)
+    setIsLoadingQuota(true)
+  }, [selectedOrgId])
 
   const loadAllMailData = useCallback(
     async (silent = false) => {
+      if (authLoading || isLoadingOrgs) {
+        return
+      }
       if (!user || !selectedOrgId) {
         setIsLoadingQuota(false)
         setIsLoadingDirectory(false)
@@ -377,6 +408,7 @@ export default function EmailServiceAdminPage() {
               setDailySentCount(stateRes.data.dailySentCount)
               setCatchAllUserId(stateRes.data.catchAllUserId)
               setCatchAllEmail(stateRes.data.catchAllEmail)
+              setMailPurgeScheduledAt(stateRes.data.mailPurgeScheduledAt || null)
               setRequiredDnsRecords(stateRes.data.requiredDnsRecords)
             }
           })
@@ -398,8 +430,135 @@ export default function EmailServiceAdminPage() {
         setIsRefreshing(false)
       }
     },
-    [user, selectedOrgId]
+    [user, selectedOrgId, authLoading, isLoadingOrgs]
   )
+
+  const parsedBulkRows = useMemo<BulkImportUserRow[]>(() => {
+    const lines = bulkCsvText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+    if (lines.length === 0) return []
+
+    const startIdx = lines[0].toLowerCase().includes("emailprefix") ? 1 : 0
+    const rows: BulkImportUserRow[] = []
+    for (let i = startIdx; i < lines.length; i++) {
+      const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""))
+      if (cols.length < 4) continue
+      rows.push({
+        firstName: cols[0] || "",
+        lastName: cols[1] || "",
+        emailPrefix: (cols[2] || "").replace(/@.*$/, "").toLowerCase(),
+        password: cols[3] || "",
+        orgUnitPath: cols[4] || "/",
+      })
+    }
+    return rows
+  }, [bulkCsvText])
+
+  const handleDownloadCsvTemplate = () => {
+    const csvContent = [
+      "firstName,lastName,emailPrefix,password,orgUnitPath",
+      "Alex,Morgan,alex,TempPass123!,/",
+      "Jordan,Lee,jordan,TempPass456!,/",
+    ].join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "revlet-email-users-template.csv"
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportUsersCsv = () => {
+    if (!selectedOrg) return
+    const header = "firstName,lastName,primaryEmail,orgUnitPath,aliases,status"
+    const escapeCsv = (val: string) => `"${String(val || "").replace(/"/g, '""')}"`
+    const lines = users.map((u) =>
+      [
+        escapeCsv(u.firstName),
+        escapeCsv(u.lastName),
+        escapeCsv(u.primaryEmail),
+        escapeCsv(u.orgUnitPath),
+        escapeCsv((u.aliases || []).join(";")),
+        escapeCsv(u.status),
+      ].join(",")
+    )
+    const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${selectedOrg.domain || "organization"}-email-users.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast({
+      title: "Users exported",
+      description: `Exported ${users.length} email account${users.length === 1 ? "" : "s"} to CSV.`,
+    })
+  }
+
+  const handleBulkCsvFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      setBulkCsvText(String(reader.result || ""))
+      setBulkImportErrors([])
+    }
+    reader.readAsText(file)
+    e.target.value = ""
+  }
+
+  const handleBulkImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !selectedOrgId) return
+    if (parsedBulkRows.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No valid rows found",
+        description: "Upload or paste CSV rows using the template format with a password column.",
+      })
+      return
+    }
+    setIsBulkImporting(true)
+    setBulkImportErrors([])
+    try {
+      const idToken = await user.getIdToken()
+      const res = await bulkCreateMailUsers(idToken, selectedOrgId, parsedBulkRows)
+      if (!res.success || !res.data) {
+        throw new Error(res.error || "Bulk import failed.")
+      }
+      if (res.data.createdUsers.length > 0) {
+        setUsers((prev) =>
+          [...prev, ...res.data!.createdUsers].sort((a, b) =>
+            a.displayName.localeCompare(b.displayName)
+          )
+        )
+      }
+      if (res.data.errors.length > 0) {
+        setBulkImportErrors(res.data.errors)
+      }
+      toast({
+        title: "Bulk import completed",
+        description: `Created ${res.data.createdCount} account(s)${
+          res.data.skippedCount > 0 ? `, skipped ${res.data.skippedCount}` : ""
+        }.`,
+      })
+      if (res.data.errors.length === 0) {
+        setIsBulkImportOpen(false)
+        setBulkCsvText("")
+      }
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Import failed",
+        description: err.message || "Could not import email accounts.",
+      })
+    } finally {
+      setIsBulkImporting(false)
+    }
+  }
 
   useEffect(() => {
     if (!authLoading && !isLoadingOrgs) {
@@ -1150,6 +1309,14 @@ export default function EmailServiceAdminPage() {
 
   const verifiedDnsCount = displayDnsRecords.filter((r) => r.verified).length
   const isMxVerified = displayDnsRecords.find((r) => r.type === "MX")?.verified
+  const missingDnsRecords = requiredDnsRecords.filter((r) => !r.verified)
+  const purgeDateLabel = mailPurgeScheduledAt
+    ? new Date(mailPurgeScheduledAt).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : null
 
   // Pre-activation screen: matches DNS Management layout & style
   if (!isEffectiveServiceActive) {
@@ -1157,6 +1324,23 @@ export default function EmailServiceAdminPage() {
       <DashboardShell>
         <div className="space-y-6 animate-in fade-in duration-200">
           <PageHeader title="Email Service" />
+
+          {mailPurgeScheduledAt && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.75} />
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-amber-950">
+                    Email Service Deactivated — Permanent Deletion Scheduled for {purgeDateLabel}
+                  </p>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    All mailboxes, aliases, groups, and stored email data for{" "}
+                    <span className="font-mono font-semibold">{selectedOrg.domain}</span> will be permanently deleted from our servers after the 14-day retention period. Reactivate Email Service to cancel deletion and preserve your data.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="w-full space-y-6">
             {/* Widget 1: Email Service Activation Widget (65% Blue Features / 35% Activation) */}
@@ -1330,7 +1514,7 @@ export default function EmailServiceAdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isLoadingQuota && requiredDnsRecords.length === 0 ? (
+                    {isLoadingQuota || isSyncingDns ? (
                       [...Array(5)].map((_, idx) => (
                         <TableRow key={idx} className="border-b border-slate-100 last:border-0">
                           <TableCell className="pl-5 py-3">
@@ -1405,7 +1589,7 @@ export default function EmailServiceAdminPage() {
                             <span
                               className={cn(
                                 "h-1.5 w-1.5 rounded-full",
-                                rec.verified ? "bg-emerald-600" : "bg-amber-500"
+                                rec.verified ? "bg-slate-900" : "bg-amber-500"
                               )}
                             />
                             <span>{rec.verified ? "Verified" : dnsServiceActive ? "Auto-apply" : "Pending"}</span>
@@ -1477,25 +1661,103 @@ export default function EmailServiceAdminPage() {
                     <span>Verify DNS Propagation</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onSelect={() => window.open("https://mail.revlet.me", "_blank", "noopener,noreferrer")}
+                    onSelect={() => {
+                      setBulkImportErrors([])
+                      setIsBulkImportOpen(true)
+                    }}
                     className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span>Open RevletMail</span>
+                    <Upload className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span>Bulk Import Users</span>
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onSelect={() => setIsDeactivateConfirmOpen(true)}
-                    className="group gap-2 py-2 text-xs text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white cursor-pointer rounded-md"
+                    onSelect={handleExportUsersCsv}
+                    className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                   >
-                    <PowerOff className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span>Disable Email Service</span>
+                    <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span>Export Users (CSV)</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
           }
         />
+
+        {/* Missing DNS Records Warning Banner */}
+        {!isLoadingQuota && missingDnsRecords.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 sm:p-5 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.75} />
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-amber-950">
+                    Missing DNS Records ({missingDnsRecords.length} of {requiredDnsRecords.length} unverified)
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    Mail delivery and authentication may fail for {selectedOrg.domain} until these records are published.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {dnsServiceActive ? (
+                  <Button
+                    size="sm"
+                    onClick={handleSyncDnsRecords}
+                    disabled={isSyncingDns}
+                    className="h-8 px-3 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none"
+                  >
+                    {isSyncingDns && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                    Add Missing Records
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSyncDnsRecords}
+                    disabled={isSyncingDns}
+                    className="h-8 px-3 border-amber-300 bg-white hover:bg-amber-50 text-amber-900 text-xs font-medium rounded-lg shadow-none"
+                  >
+                    {isSyncingDns && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                    Verify DNS
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+              {missingDnsRecords.map((rec) => (
+                <div
+                  key={rec.id}
+                  className="bg-white/90 border border-amber-200/80 rounded-lg px-3 py-2 flex items-center justify-between gap-2 text-xs"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[11px] font-semibold text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded">
+                        {rec.type}
+                      </span>
+                      <span className="font-medium text-slate-800 truncate">{rec.purpose}</span>
+                    </div>
+                    <p className="font-mono text-[11px] text-slate-500 truncate mt-0.5">
+                      {rec.name} → {rec.content}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(rec.content, `warn-${rec.id}`)}
+                    className="text-slate-400 hover:text-slate-700 p-1 rounded shrink-0"
+                    title="Copy value"
+                  >
+                    {copiedKey === `warn-${rec.id}` ? (
+                      <Check className="w-3.5 h-3.5 text-slate-900" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Moment: Live domain routing & outbound quota ledger strip */}
         <div className="rounded-xl border border-slate-200/80 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -1572,14 +1834,6 @@ export default function EmailServiceAdminPage() {
             ) : (
               <>
                 <div className="flex items-center gap-2 pt-0.5">
-                  <span
-                    className={cn(
-                      "h-1.5 w-1.5 rounded-full shrink-0",
-                      verifiedDnsCount === requiredDnsRecords.length && requiredDnsRecords.length > 0
-                        ? "bg-emerald-600"
-                        : "bg-amber-500"
-                    )}
-                  />
                   <span className="text-base font-medium text-slate-900 tabular-nums">
                     {verifiedDnsCount} of {requiredDnsRecords.length} DNS Verified
                   </span>
@@ -1641,56 +1895,9 @@ export default function EmailServiceAdminPage() {
           <TabsContent value="users" className="mt-0">
             <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
               {/* Unified filter & action bar */}
-              <div className="p-4 border-b border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/40">
-                <div className="flex items-center gap-1 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedUserOu("ALL")}
-                    className={cn(
-                      "h-8 px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
-                      selectedUserOu === "ALL"
-                        ? "bg-white text-slate-900 border border-slate-200/90 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
-                    )}
-                  >
-                    <span>All units</span>
-                    <span className="font-mono text-slate-400 tabular-nums">
-                      {activeUsers.length}
-                    </span>
-                  </button>
-
-                  {allOuOptions.map((ouPath) => {
-                    const count = activeUsers.filter((u) => u.orgUnitPath === ouPath).length
-                    return (
-                      <button
-                        key={ouPath}
-                        type="button"
-                        onClick={() => setSelectedUserOu(ouPath)}
-                        className={cn(
-                          "h-8 px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
-                          selectedUserOu === ouPath
-                            ? "bg-white text-slate-900 border border-slate-200/90 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
-                        )}
-                      >
-                        <span className="font-mono">{ouPath}</span>
-                        <span className="font-mono text-slate-400 tabular-nums">{count}</span>
-                      </button>
-                    )
-                  })}
-
-                  <button
-                    type="button"
-                    onClick={() => setIsOuModalOpen(true)}
-                    className="h-8 px-2.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 transition-colors flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span>New Unit</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1 sm:w-56">
+              <div className="p-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/40">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="relative flex-1 sm:max-w-xs">
                     <Search
                       className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
                       strokeWidth={1.5}
@@ -1702,6 +1909,97 @@ export default function EmailServiceAdminPage() {
                       className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
                     />
                   </div>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "h-9 px-3 text-xs font-medium rounded-lg shrink-0 gap-1.5",
+                          selectedUserOu !== "ALL"
+                            ? "border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        )}
+                        title="Filter by Organizational Unit"
+                      >
+                        <Filter className="w-3.5 h-3.5" strokeWidth={1.5} />
+                        <span className="hidden sm:inline">
+                          {selectedUserOu === "ALL" ? "Filter Unit" : selectedUserOu}
+                        </span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56 bg-white border border-slate-200 shadow-md rounded-xl p-1">
+                      <DropdownMenuItem
+                        onSelect={() => setSelectedUserOu("ALL")}
+                        className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white"
+                      >
+                        <Check className={cn("w-3.5 h-3.5", selectedUserOu === "ALL" ? "opacity-100" : "opacity-0")} />
+                        <span className="flex-1">All Organizational Units</span>
+                        <span className="font-mono text-[11px] opacity-70">{activeUsers.length}</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {allOuOptions.map((ouPath) => {
+                        const count = activeUsers.filter((u) => u.orgUnitPath === ouPath).length
+                        return (
+                          <DropdownMenuItem
+                            key={ouPath}
+                            onSelect={() => setSelectedUserOu(ouPath)}
+                            className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white"
+                          >
+                            <Check className={cn("w-3.5 h-3.5", selectedUserOu === ouPath ? "opacity-100" : "opacity-0")} />
+                            <span className="font-mono flex-1 truncate">{ouPath}</span>
+                            <span className="font-mono text-[11px] opacity-70">{count}</span>
+                          </DropdownMenuItem>
+                        )
+                      })}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => setIsOuModalOpen(true)}
+                        className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Manage Units</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {selectedUserOu !== "ALL" && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserOu("ALL")}
+                      className="inline-flex items-center gap-1 text-[11px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-md shrink-0"
+                      title="Clear filter"
+                    >
+                      <span>{selectedUserOu}</span>
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setBulkImportErrors([])
+                      setIsBulkImportOpen(true)
+                    }}
+                    className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shrink-0"
+                  >
+                    <Upload className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
+                    Import
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportUsersCsv}
+                    disabled={users.length === 0}
+                    className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shrink-0"
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
+                    Export
+                  </Button>
                   <Button
                     onClick={() => {
                       setCreateUserForm({
@@ -1824,12 +2122,9 @@ export default function EmailServiceAdminPage() {
                         className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
                       >
                         <TableCell className="pl-6 py-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 shrink-0" />
-                            <span className="text-xs font-medium text-slate-900">
-                              {u.displayName}
-                            </span>
-                          </div>
+                          <span className="text-xs font-medium text-slate-900">
+                            {u.displayName}
+                          </span>
                         </TableCell>
 
                         <TableCell className="py-3.5">
@@ -2096,10 +2391,7 @@ export default function EmailServiceAdminPage() {
                         className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
                       >
                         <TableCell className="pl-6 py-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 shrink-0" />
-                            <span className="text-xs font-medium text-slate-900">{g.name}</span>
-                          </div>
+                          <span className="text-xs font-medium text-slate-900">{g.name}</span>
                         </TableCell>
 
                         <TableCell className="py-3.5">
@@ -2450,15 +2742,6 @@ export default function EmailServiceAdminPage() {
                       Authentication & Deliverability (SPF, DKIM, DMARC)
                     </h2>
                     <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500 tabular-nums">
-                      <span
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full",
-                          verifiedDnsCount === requiredDnsRecords.length &&
-                            requiredDnsRecords.length > 0
-                            ? "bg-emerald-600"
-                            : "bg-amber-500"
-                        )}
-                      />
                       {verifiedDnsCount} of {requiredDnsRecords.length} Verified
                     </span>
                   </div>
@@ -2508,7 +2791,28 @@ export default function EmailServiceAdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {requiredDnsRecords.map((rec) => (
+                  {isLoadingQuota || isSyncingDns ? (
+                    [...Array(5)].map((_, idx) => (
+                      <TableRow key={idx} className="border-b border-slate-100 last:border-0">
+                        <TableCell className="pl-6 py-3.5">
+                          <Skeleton className="h-3.5 w-36 bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-3.5">
+                          <Skeleton className="h-4 w-12 bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-3.5">
+                          <Skeleton className="h-3.5 w-44 bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="py-3.5">
+                          <Skeleton className="h-3.5 w-56 bg-slate-100" />
+                        </TableCell>
+                        <TableCell className="text-right pr-6 py-3.5">
+                          <Skeleton className="h-3.5 w-16 ml-auto bg-slate-100" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    requiredDnsRecords.map((rec) => (
                     <TableRow key={rec.id} className="border-b border-slate-100 last:border-0">
                       <TableCell className="pl-6 py-3.5 text-xs font-medium text-slate-800">
                         {rec.purpose}
@@ -2531,7 +2835,7 @@ export default function EmailServiceAdminPage() {
                             title="Copy host"
                           >
                             {copiedKey === `${rec.id}-name` ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.5} />
+                              <Check className="w-3.5 h-3.5 text-slate-900" strokeWidth={1.5} />
                             ) : (
                               <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
                             )}
@@ -2550,7 +2854,7 @@ export default function EmailServiceAdminPage() {
                             title="Copy value"
                           >
                             {copiedKey === `${rec.id}-content` ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.5} />
+                              <Check className="w-3.5 h-3.5 text-slate-900" strokeWidth={1.5} />
                             ) : (
                               <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
                             )}
@@ -2562,7 +2866,7 @@ export default function EmailServiceAdminPage() {
                           <span
                             className={cn(
                               "h-1.5 w-1.5 rounded-full",
-                              rec.verified ? "bg-emerald-600" : "bg-amber-500"
+                              rec.verified ? "bg-slate-900" : "bg-amber-500"
                             )}
                           />
                           {rec.verified
@@ -2573,7 +2877,7 @@ export default function EmailServiceAdminPage() {
                         </span>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )))}
                 </TableBody>
               </Table>
             </div>
@@ -3549,9 +3853,8 @@ export default function EmailServiceAdminPage() {
                 Deactivate Email Service
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
-                Deactivate Email Service for{" "}
-                <span className="font-mono text-slate-800">{selectedOrg.domain}</span>? Existing
-                directory records will remain saved.
+                Deactivating Email Service for{" "}
+                <span className="font-mono text-slate-800">{selectedOrg.domain}</span> will immediately pause mail delivery and schedule all mailboxes, aliases, groups, and stored email data for permanent deletion after 14 days. You can reactivate within 14 days to cancel deletion.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -3574,6 +3877,107 @@ export default function EmailServiceAdminPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* 12. Bulk Import Users Dialog */}
+        <Dialog open={isBulkImportOpen} onOpenChange={setIsBulkImportOpen}>
+          <DialogContent className="sm:max-w-xl bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-6 border-b border-slate-100">
+              <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Bulk Import Email Accounts
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Upload or paste a CSV file with columns:{" "}
+                <span className="font-mono text-slate-700">
+                  firstName,lastName,emailPrefix,password,orgUnitPath
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleBulkImportSubmit} className="p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200/80">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-medium text-slate-800">CSV Template</p>
+                  <p className="text-[11px] text-slate-500">
+                    Includes required <span className="font-mono">password</span> field (min 8 chars, letter + number/symbol).
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadCsvTemplate}
+                  className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 rounded-lg shrink-0"
+                >
+                  <Download className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
+                  Download Template
+                </Button>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="bulk-csv-file" className="text-xs font-medium text-slate-700">
+                  Upload CSV File
+                </Label>
+                <Input
+                  id="bulk-csv-file"
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleBulkCsvFileUpload}
+                  className="h-9 text-xs border-slate-200 bg-white rounded-lg cursor-pointer"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="bulk-csv-text" className="text-xs font-medium text-slate-700">
+                    CSV Data
+                  </Label>
+                  <span className="text-[11px] font-mono text-slate-500 tabular-nums">
+                    {parsedBulkRows.length} {parsedBulkRows.length === 1 ? "account" : "accounts"} detected
+                  </span>
+                </div>
+                <textarea
+                  id="bulk-csv-text"
+                  value={bulkCsvText}
+                  onChange={(e) => setBulkCsvText(e.target.value)}
+                  placeholder={"firstName,lastName,emailPrefix,password,orgUnitPath\nAlex,Morgan,alex,TempPass123!,/"}
+                  className="w-full min-h-[140px] rounded-lg border border-slate-200 bg-white p-3 font-mono text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              {bulkImportErrors.length > 0 && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50/70 p-3 space-y-1 max-h-32 overflow-y-auto">
+                  <p className="text-xs font-semibold text-rose-900">
+                    Skipped Rows ({bulkImportErrors.length})
+                  </p>
+                  {bulkImportErrors.map((err, idx) => (
+                    <p key={idx} className="text-[11px] text-rose-800 font-mono">
+                      {err}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <DialogFooter className="pt-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsBulkImportOpen(false)}
+                  className="h-9 text-xs font-medium rounded-lg"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isBulkImporting || parsedBulkRows.length === 0}
+                  className="h-9 px-4 bg-primary hover:bg-primary/95 text-white text-xs font-medium rounded-lg"
+                >
+                  {isBulkImporting && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                  {isBulkImporting ? "Importing..." : `Import ${parsedBulkRows.length || ""} Accounts`}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardShell>
   )

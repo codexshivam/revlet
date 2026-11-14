@@ -21,13 +21,13 @@ service firebase.storage {
       return isAuthenticated() && (
         isSuperAdmin() ||
         (
-          firestore.exists(/databases/itmanager/documents/organizations/$(orgId)) &&
+          firestore.exists(/databases/(default)/documents/organizations/$(orgId)) &&
           (
-            firestore.get(/databases/itmanager/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
             (
-              'memberEmails' in firestore.get(/databases/itmanager/documents/organizations/$(orgId)).data &&
+              'memberEmails' in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data &&
               request.auth.token.email != null &&
-              request.auth.token.email.lower() in firestore.get(/databases/itmanager/documents/organizations/$(orgId)).data.memberEmails
+              request.auth.token.email.lower() in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data.memberEmails
             )
           )
         )

@@ -86,7 +86,7 @@ export default function LoginPage() {
       // Reactive Sync: Keep user profile index up to date
       try {
         const { getFirestore } = await import("firebase/firestore")
-        const db = getFirestore(auth.app, "itmanager")
+        const db = getFirestore(auth.app)
         const { syncUserOrganizations } = await import("@/firebase")
         await syncUserOrganizations(
           db,

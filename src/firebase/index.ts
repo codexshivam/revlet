@@ -11,7 +11,7 @@ export function initializeFirebase(): {
 } {
   const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   const auth = getAuth(app);
-  const db = getFirestore(app, "itmanager");
+  const db = getFirestore(app);
 
   return { app, auth, db };
 }

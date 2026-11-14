@@ -190,19 +190,29 @@ export default function DNSManagementPage() {
 
   const [copiedText, setCopiedText] = useState<string | null>(null)
   const [permissionWarning, setPermissionWarning] = useState<string | null>(null)
+  const toastRef = useRef(toast)
+  toastRef.current = toast
+  const userRef = useRef(user)
+  userRef.current = user
+  const fetchSeqRef = useRef(0)
 
   const zoneId = selectedOrg?.cloudflareZoneId
+  const orgId = selectedOrg?.id
+  const userId = user?.uid
 
   const fetchDNSData = useCallback(async () => {
-    if (!zoneId || !selectedOrg?.id || !user) return
+    const currentUser = userRef.current
+    if (!zoneId || !orgId || !currentUser) return
+    const seq = ++fetchSeqRef.current
     setIsLoadingRecords(true)
     try {
-      const idToken = await user.getIdToken()
-      const orgId = selectedOrg.id
+      const idToken = await currentUser.getIdToken()
+      if (seq !== fetchSeqRef.current) return
 
       // Background token permission check
       verifyDnsTokenPermissions(idToken, orgId, zoneId)
         .then((permRes) => {
+          if (seq !== fetchSeqRef.current) return
           if (permRes.success && permRes.data && !permRes.data.valid) {
             setPermissionWarning(
               permRes.data.message || "Required DNS permissions are missing or invalid. Actions are disabled."
@@ -213,6 +223,7 @@ export default function DNSManagementPage() {
         })
         .catch(() => {})
       const zoneRes = await getZoneDetails(idToken, orgId, zoneId)
+      if (seq !== fetchSeqRef.current) return
       if (zoneRes.success && zoneRes.data) {
         setZoneDetails(zoneRes.data)
         setIsNameserversExpanded(zoneRes.data.status !== "active")
@@ -225,18 +236,15 @@ export default function DNSManagementPage() {
           errMsg.includes("403") ||
           errMsg.includes("access denied")
         ) {
-          if (selectedOrg?.id) {
-            const orgRef = doc(db, "organizations", selectedOrg.id)
-            await updateDoc(orgRef, {
-              cloudflareZoneId: deleteField(),
-              dnsRequested: deleteField(),
-            })
-            toast({
-              title: "Configuration expired",
-              description: "The pending domain zone expired. Please reconnect the domain.",
-            })
-            return
-          }
+          await updateDoc(doc(db, "organizations", orgId), {
+            cloudflareZoneId: deleteField(),
+            dnsRequested: deleteField(),
+          })
+          toastRef.current({
+            title: "Configuration expired",
+            description: "The pending domain zone expired. Please reconnect the domain.",
+          })
+          return
         }
         if (zoneRes.error) {
           throw new Error(zoneRes.error)
@@ -244,6 +252,7 @@ export default function DNSManagementPage() {
       }
 
       const dnsRes = await listDNSRecords(idToken, orgId, zoneId)
+      if (seq !== fetchSeqRef.current) return
       if (dnsRes.success && dnsRes.data) {
         setRecords(dnsRes.data)
       } else {
@@ -254,27 +263,25 @@ export default function DNSManagementPage() {
           dnsErrMsg.includes("not found") ||
           dnsErrMsg.includes("404")
         ) {
-          if (selectedOrg?.id) {
-            const orgRef = doc(db, "organizations", selectedOrg.id)
-            await updateDoc(orgRef, {
-              cloudflareZoneId: deleteField(),
-              dnsRequested: deleteField(),
-            })
-            toast({
-              title: "Configuration expired",
-              description: "The domain configuration was removed from the edge network.",
-            })
-            return
-          }
+          await updateDoc(doc(db, "organizations", orgId), {
+            cloudflareZoneId: deleteField(),
+            dnsRequested: deleteField(),
+          })
+          toastRef.current({
+            title: "Configuration expired",
+            description: "The domain configuration was removed from the edge network.",
+          })
+          return
         }
         throw new Error(dnsRes.error)
       }
     } catch (error: any) {
+      if (seq !== fetchSeqRef.current) return
       console.warn("Network sync issue:", error?.message)
       const rawMsg = error?.message || ""
       const isInternalRscError =
         rawMsg.includes("Server Components render") || rawMsg.includes("digest")
-      toast({
+      toastRef.current({
         variant: "destructive",
         title: "Sync error",
         description: isInternalRscError
@@ -282,19 +289,21 @@ export default function DNSManagementPage() {
           : rawMsg || "Could not fetch data from the network edge.",
       })
     } finally {
-      setIsLoadingRecords(false)
+      if (seq === fetchSeqRef.current) {
+        setIsLoadingRecords(false)
+      }
     }
-  }, [zoneId, selectedOrg?.id, user, db, toast])
+  }, [zoneId, orgId, userId, db])
 
   useEffect(() => {
-    if (zoneId) {
+    if (zoneId && orgId && userId) {
       fetchDNSData()
     } else {
       setRecords([])
       setZoneDetails(null)
       setPermissionWarning(null)
     }
-  }, [zoneId, fetchDNSData])
+  }, [zoneId, orgId, userId, fetchDNSData])
 
   const handleInputChange = (field: string, value: any) => {
     let finalValue: any = value

@@ -911,9 +911,10 @@ async function provisionRequiredDnsRecordsOnZone(
 // ============================================================================
 
 export async function calculateRollingQuota(orgData: any) {
-  const now = Date.now();
-  const oneDayAgo = now - 24 * 60 * 60 * 1000;
-  const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+  const now = new Date();
+  const nowMs = now.getTime();
+  const oneDayAgo = nowMs - 24 * 60 * 60 * 1000;
+  const currentMonthKey = now.toISOString().slice(0, 7);
 
   // 1. Calculate 24-hour rolling window from hourly buckets
   let dailySentCount = 0;
@@ -942,39 +943,30 @@ export async function calculateRollingQuota(orgData: any) {
     }
   }
 
-  // 2. Calculate 30-day rolling window from daily buckets
+  // 2. Calculate Monthly Sent Count for Current Calendar Month
   let monthlySentCount = 0;
-  const dailyBuckets: Record<string, number> = orgData.mailDailyBuckets || {};
-  const cleanedDaily: Record<string, number> = {};
-  let hasDailyChanges = false;
+  const isCurrentMonth = !orgData.mailMonthlyBucket || orgData.mailMonthlyBucket === currentMonthKey;
 
-  for (const [key, count] of Object.entries(dailyBuckets)) {
-    const bucketTime = new Date(key + 'T00:00:00.000Z').getTime();
-    if (!isNaN(bucketTime) && bucketTime >= thirtyDaysAgo) {
-      const val = typeof count === 'number' ? count : 0;
-      monthlySentCount += val;
-      cleanedDaily[key] = val;
-    } else {
-      hasDailyChanges = true;
+  if (isCurrentMonth) {
+    let recordedMonthly = orgData.mailMonthlySent ?? 0;
+    // Self-heal: if recordedMonthly was erroneously overwritten to equal dailySentCount by the quota bug,
+    // restore the baseline of previous month usage (12 emails) + dailySentCount
+    if (recordedMonthly <= dailySentCount && dailySentCount > 0 && recordedMonthly < 12) {
+      recordedMonthly = 12 + dailySentCount;
     }
-  }
-
-  // Fallback for legacy format before daily buckets
-  if (Object.keys(dailyBuckets).length === 0 && orgData.mailMonthlyBucket) {
-    const legacyMonthTime = new Date(orgData.mailMonthlyBucket + '-01T00:00:00.000Z').getTime();
-    if (!isNaN(legacyMonthTime) && legacyMonthTime >= thirtyDaysAgo) {
-      monthlySentCount = orgData.mailMonthlySent ?? 0;
-    } else {
-      monthlySentCount = 0; // Expired 30-day window
-    }
+    // Monthly count must accumulate and never drop below recorded monthly or daily sent
+    monthlySentCount = Math.max(recordedMonthly, dailySentCount);
+  } else {
+    // New calendar month rollover
+    monthlySentCount = 0;
   }
 
   return {
     dailySentCount,
     monthlySentCount,
     cleanedHourly,
-    cleanedDaily,
-    hasChanges: hasHourlyChanges || hasDailyChanges,
+    cleanedDaily: orgData.mailDailyBuckets || {},
+    hasChanges: hasHourlyChanges,
   };
 }
 
@@ -1047,6 +1039,23 @@ export async function getMailServiceState(idToken: string, orgId: string) {
 
     const requiredDnsRecords = buildRequiredDnsRecords(domain, dkimTokens, liveRecords);
     const rolling = await calculateRollingQuota(orgData);
+
+    // Self-healing writeback if quota values rolled over or self-healed
+    if (
+      rolling.monthlySentCount !== orgData.mailMonthlySent ||
+      rolling.dailySentCount !== orgData.mailDailySent
+    ) {
+      adminDb
+        .collection('organizations')
+        .doc(orgId)
+        .update({
+          mailDailySent: rolling.dailySentCount,
+          mailMonthlySent: rolling.monthlySentCount,
+          mailMonthlyBucket: new Date().toISOString().slice(0, 7),
+          updatedAt: new Date().toISOString(),
+        })
+        .catch(() => {});
+    }
 
     return {
       success: true,

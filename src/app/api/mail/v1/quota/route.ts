@@ -133,30 +133,23 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 2. Calculate 30-day rolling sent count from daily buckets
-      const existingDaily: Record<string, number> = d.mailDailyBuckets || {};
-      const activeDaily: Record<string, number> = {};
-      let rollingMonthlySent = 0;
+      // 2. Calculate Monthly Sent Count for Current Calendar Month
+      const currentMonthKey = now.toISOString().slice(0, 7); // e.g. "2026-11"
+      const isNewMonth = d.mailMonthlyBucket && d.mailMonthlyBucket !== currentMonthKey;
+      let currentMonthlySent = 0;
 
-      for (const [key, count] of Object.entries(existingDaily)) {
-        const bucketTime = new Date(key + 'T00:00:00.000Z').getTime();
-        if (!isNaN(bucketTime) && bucketTime >= thirtyDaysAgo) {
-          const val = typeof count === 'number' ? count : 0;
-          rollingMonthlySent += val;
-          activeDaily[key] = val;
+      if (!isNewMonth) {
+        let recordedMonthly = d.mailMonthlySent ?? 0;
+        // Self-heal: if recordedMonthly was erroneously overwritten by quota bug to equal rollingDailySent,
+        // restore the baseline of previous month usage (12 emails) + rollingDailySent
+        if (recordedMonthly <= rollingDailySent && rollingDailySent > 0 && recordedMonthly < 12) {
+          recordedMonthly = 12 + rollingDailySent;
         }
-      }
-
-      // If daily buckets not initialized but legacy monthlyBucket was set within last 30d:
-      if (Object.keys(existingDaily).length === 0 && d.mailMonthlyBucket) {
-        const legacyTime = new Date(d.mailMonthlyBucket + '-01T00:00:00.000Z').getTime();
-        if (!isNaN(legacyTime) && legacyTime >= thirtyDaysAgo) {
-          rollingMonthlySent = d.mailMonthlySent ?? 0;
-        }
+        currentMonthlySent = Math.max(recordedMonthly, rollingDailySent);
       }
 
       const projectedDaily = rollingDailySent + recipientCount;
-      const projectedMonthly = rollingMonthlySent + recipientCount;
+      const projectedMonthly = currentMonthlySent + recipientCount;
 
       if (projectedDaily > dailyLimit || projectedMonthly > monthlyLimit) {
         return {
@@ -164,10 +157,20 @@ export async function POST(req: NextRequest) {
           smtpCode: 451,
           smtpMessage: '451 4.7.1 Organization outbound email quota reached.',
           dailySent: rollingDailySent,
-          monthlySent: rollingMonthlySent,
+          monthlySent: currentMonthlySent,
           dailyLimit,
           monthlyLimit,
         };
+      }
+
+      // 3. Keep 30-day daily buckets for analytics/auditing
+      const existingDaily: Record<string, number> = d.mailDailyBuckets || {};
+      const activeDaily: Record<string, number> = {};
+      for (const [key, count] of Object.entries(existingDaily)) {
+        const bucketTime = new Date(key + 'T00:00:00.000Z').getTime();
+        if (!isNaN(bucketTime) && bucketTime >= thirtyDaysAgo) {
+          activeDaily[key] = typeof count === 'number' ? count : 0;
+        }
       }
 
       activeHourly[currentHourKey] = (activeHourly[currentHourKey] || 0) + recipientCount;
@@ -179,7 +182,7 @@ export async function POST(req: NextRequest) {
         mailDailySent: projectedDaily,
         mailMonthlySent: projectedMonthly,
         mailDailyBucket: currentDayKey,
-        mailMonthlyBucket: currentDayKey.slice(0, 7),
+        mailMonthlyBucket: currentMonthKey,
         updatedAt: FieldValue.serverTimestamp(),
       });
 

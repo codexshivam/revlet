@@ -15,8 +15,8 @@ export async function cfFetch(path: string, options: RequestInit = {}, customTok
   if (cleanToken) {
     resolvedHeaders['Authorization'] = `Bearer ${cleanToken}`;
   } else {
-    console.error(`[Infrastructure Action] Missing Cloudflare API Token for request: ${path}`);
-    throw new Error("Authentication failed. No active Cloudflare API Token found for this organization.");
+    console.error(`[DNS Action] Missing edge authorization for request: ${path}`);
+    throw new Error("Authorization failed. No active DNS authorization is configured for this organization.");
   }
 
   try {
@@ -35,13 +35,13 @@ export async function cfFetch(path: string, options: RequestInit = {}, customTok
     if (contentType && contentType.includes('application/json')) {
       data = await response.json();
     } else {
-      const text = await response.text();
-      console.error(`[Infrastructure Action] Expected JSON from Cloudflare but received: ${text.substring(0, 100)}`);
-      throw new Error(`Cloudflare API returned an unexpected format (${response.status}).`);
+      await response.text().catch(() => '');
+      console.error(`[DNS Action] Unexpected response format (${response.status}) for ${path}`);
+      throw new Error(`Edge network returned an unexpected response (${response.status}).`);
     }
 
     if (!response.ok) {
-      const message = data.errors?.[0]?.message || data.message || `Cloudflare API error (${response.status})`;
+      const message = data.errors?.[0]?.message || data.message || `Edge request error (${response.status})`;
       const err = new Error(message);
       (err as any).status = response.status;
       throw err;
@@ -49,28 +49,22 @@ export async function cfFetch(path: string, options: RequestInit = {}, customTok
     
     return data;
   } catch (error: any) {
-    console.error(`Infrastructure API failure [${path}]:`, error.message);
+    console.error(`DNS action failure [${path}]: status=${error?.status || 'unknown'}`);
     
-    // User-friendly network edge error translation
+    // User-friendly network edge error translation (no internal tech/key details)
     let friendlyMessage = error.message || "An unexpected error occurred.";
     if (friendlyMessage.includes("fetch failed") || friendlyMessage.includes("ENOTFOUND")) {
-      friendlyMessage = "Connection failed. Failed to reach the Cloudflare network edge. Please check your internet connection.";
+      friendlyMessage = "Connection failed. Unable to reach the edge network. Please check your internet connection.";
     } else if (error.status === 403 || error.status === 401 || friendlyMessage.includes("Unauthorized") || friendlyMessage.toLowerCase().includes("token")) {
-      if (path.includes('/purge_cache')) {
-        friendlyMessage = "Missing Cloudflare permission: 'Zone > Cache Purge > Purge'. Please grant this in Cloudflare API Tokens.";
-      } else if (path.includes('/settings/')) {
-        friendlyMessage = "Missing Cloudflare permission: 'Zone > Zone Settings > Edit'. Please grant this in Cloudflare API Tokens.";
-      } else if (path.includes('/email/')) {
-        friendlyMessage = "Missing Cloudflare permission: 'Zone > Email Routing > Edit'. Please grant this in Cloudflare API Tokens.";
-      } else if (path.includes('/dns_records')) {
-        friendlyMessage = "Missing Cloudflare permission: 'Zone > DNS > Edit'. Please grant this in Cloudflare API Tokens.";
+      if (path.includes('/dns_records')) {
+        friendlyMessage = "Missing required DNS edit permissions. Please update your access permissions and try again.";
       } else {
-        friendlyMessage = "Authentication failed. The configured Cloudflare API token is invalid or has insufficient permissions.";
+        friendlyMessage = "Authorization failed. The configured access credentials are invalid or have insufficient permissions.";
       }
     } else if (error.status === 404 || friendlyMessage.includes("not found")) {
-      friendlyMessage = `Resource not found (404).`;
+      friendlyMessage = "Requested DNS resource was not found.";
     } else if (error.status === 429 || friendlyMessage.includes("Too Many Requests")) {
-      friendlyMessage = "Request rate limit reached at the edge. Please wait a moment before trying again.";
+      friendlyMessage = "Rate limit reached. Please wait a moment before trying again.";
     }
     
     throw new Error(friendlyMessage);

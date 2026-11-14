@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'DNS Management',
-  description: 'Authoritative Cloudflare API v4 DNS records management.',
+  title: { absolute: 'DNS Management | Relvet' },
+  description: 'Authoritative DNS records management.',
   robots: {
     index: false,
     follow: false,

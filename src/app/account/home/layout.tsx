@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Account Overview',
+  title: { absolute: 'Account Home | Revlet' },
   description: 'Manage institutional tenants, active organizations, and platform overview in Revlet.',
   robots: {
     index: false,

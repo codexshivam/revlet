@@ -67,6 +67,7 @@ import {
   createZone,
   verifyAndConnectCloudflareToken,
   disconnectCloudflareToken,
+  verifyDnsTokenPermissions,
   createZoneSnapshot,
   listZoneSnapshots,
   rollbackZoneSnapshot,
@@ -82,7 +83,24 @@ import { useActiveOrg } from "@/hooks/use-active-org"
 import { Skeleton } from "@/components/ui/skeleton"
 import { containsMaliciousScript } from "@/lib/security/sanitize"
 
-const SUPPORTED_TYPES = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA", "PTR", "NAPTR"]
+const SUPPORTED_TYPES = [
+  "A",
+  "AAAA",
+  "CNAME",
+  "MX",
+  "TXT",
+  "NS",
+  "SRV",
+  "CAA",
+  "PTR",
+  "SPF",
+  "TLSA",
+  "HTTPS",
+  "SVCB",
+  "URI",
+  "LOC",
+  "NAPTR",
+]
 const PROXY_SUPPORTED_TYPES = ["A", "AAAA", "CNAME"]
 
 type DNSRecord = {
@@ -172,6 +190,7 @@ export default function DNSManagementPage() {
   const [isRollingBack, setIsRollingBack] = useState(false)
 
   const [copiedText, setCopiedText] = useState<string | null>(null)
+  const [permissionWarning, setPermissionWarning] = useState<string | null>(null)
 
   const zoneId = selectedOrg?.cloudflareZoneId
 
@@ -181,6 +200,19 @@ export default function DNSManagementPage() {
     try {
       const idToken = await user.getIdToken()
       const orgId = selectedOrg.id
+
+      // Background token permission check
+      verifyDnsTokenPermissions(idToken, orgId, zoneId)
+        .then((permRes) => {
+          if (permRes.success && permRes.data && !permRes.data.valid) {
+            setPermissionWarning(
+              permRes.data.message || "Required DNS permissions are missing or invalid. Actions are disabled."
+            )
+          } else {
+            setPermissionWarning(null)
+          }
+        })
+        .catch(() => {})
       const zoneRes = await getZoneDetails(idToken, orgId, zoneId)
       if (zoneRes.success && zoneRes.data) {
         setZoneDetails(zoneRes.data)
@@ -261,6 +293,7 @@ export default function DNSManagementPage() {
     } else {
       setRecords([])
       setZoneDetails(null)
+      setPermissionWarning(null)
     }
   }, [zoneId, fetchDNSData])
 
@@ -414,10 +447,20 @@ export default function DNSManagementPage() {
     try {
       const idToken = await user.getIdToken()
       const res = await createZone(idToken, selectedOrg.id, selectedOrg.domain)
-      if (res.success) {
+      if (res.success && res.data?.id) {
+        const orgRef = doc(db, "organizations", selectedOrg.id)
+        await updateDoc(orgRef, {
+          cloudflareZoneId: res.data.id,
+          dnsMode: "managed",
+          dnsRequested: true,
+          updatedAt: new Date().toISOString(),
+        })
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("revlet-orgs-refresh"))
+        }
         toast({
-          title: "DNS initialized",
-          description: "Assigned edge nameservers to your domain.",
+          title: "DNS management activated",
+          description: "Assigned managed nameservers to your domain.",
         })
       } else {
         throw new Error(res.error)
@@ -425,8 +468,8 @@ export default function DNSManagementPage() {
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Initialization failed",
-        description: error.message || "Could not request DNS edge zone.",
+        title: "Activation failed",
+        description: error.message || "Could not activate managed DNS service.",
       })
     } finally {
       setIsRequesting(false)
@@ -441,10 +484,13 @@ export default function DNSManagementPage() {
       const res = await verifyAndConnectCloudflareToken(idToken, selectedOrg.id, apiTokenInput.trim())
       if (res.success && res.data) {
         toast({
-          title: "Domain connected",
-          description: `Connected to Cloudflare zone ${res.data.zoneName}.`,
+          title: "DNS management activated",
+          description: `Connected domain ${res.data.zoneName}.`,
         })
         setApiTokenInput("")
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("revlet-orgs-refresh"))
+        }
         fetchDNSData()
       } else {
         throw new Error(res.error)
@@ -452,8 +498,8 @@ export default function DNSManagementPage() {
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Connection failed",
-        description: err.message || "Failed to verify Cloudflare API token.",
+        title: "Verification failed",
+        description: err.message || "Failed to verify access permissions.",
       })
     } finally {
       setIsConnectingToken(false)
@@ -469,11 +515,16 @@ export default function DNSManagementPage() {
       if (res.success) {
         toast({
           title: "DNS service disabled",
-          description: "Domain credentials and zone connection removed from Revlet.",
+          description: "All DNS snapshots, credentials, and domain routing data have been removed.",
         })
         setIsDisableDialogOpen(false)
         setRecords([])
         setZoneDetails(null)
+        setSnapshots([])
+        setPermissionWarning(null)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("revlet-orgs-refresh"))
+        }
       } else {
         throw new Error(res.error)
       }
@@ -682,21 +733,19 @@ export default function DNSManagementPage() {
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
               DNS Management
             </h1>
-            <p className="text-sm text-slate-500">
-              Authoritative DNS records and edge routing for {selectedOrg?.domain || "your domain"}.
-            </p>
           </div>
 
           <div className="flex items-center gap-2">
             {selectedOrg && zoneId && (
               <>
                 <Button
+                  disabled={Boolean(permissionWarning)}
                   onClick={() => {
                     setEditingRecord(null)
                     setFormData({ type: "A", name: "", content: "", ttl: "Auto", proxied: true, priority: 10 })
                     setIsDialogOpen(true)
                   }}
-                  className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-1.5"
+                  className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Record</span>
@@ -712,35 +761,37 @@ export default function DNSManagementPage() {
                       <MoreVertical className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52 rounded-lg">
+                  <DropdownMenuContent align="end" className="w-56 rounded-lg p-1">
                     <DropdownMenuItem
+                      disabled={Boolean(permissionWarning)}
                       onClick={() => {
                         loadSnapshots()
                         setIsSnapshotsOpen(true)
                       }}
-                      className="gap-2 text-xs cursor-pointer"
+                      className="group gap-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                     >
-                      <History className="w-4 h-4 text-slate-500" />
+                      <History className="w-4 h-4" />
                       <span>Snapshots and Rollback</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
+                      disabled={Boolean(permissionWarning)}
                       onClick={() => setIsImportDialogOpen(true)}
-                      className="gap-2 text-xs cursor-pointer"
+                      className="group gap-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                     >
-                      <Upload className="w-4 h-4 text-slate-500" />
-                      <span>Import BIND Zone</span>
+                      <Upload className="w-4 h-4" />
+                      <span>Import Zone File</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={handleExportBIND}
-                      className="gap-2 text-xs cursor-pointer"
+                      className="group gap-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                     >
-                      <Download className="w-4 h-4 text-slate-500" />
-                      <span>Export BIND Zone</span>
+                      <Download className="w-4 h-4" />
+                      <span>Export Zone File</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => setIsDisableDialogOpen(true)}
-                      className="gap-2 text-destructive focus:text-destructive focus:bg-red-50 text-xs cursor-pointer"
+                      className="group gap-2 text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white text-xs cursor-pointer rounded-md"
                     >
                       <ShieldAlert className="w-4 h-4" />
                       <span>Disable DNS Service</span>
@@ -773,29 +824,129 @@ export default function DNSManagementPage() {
             </CardContent>
           </Card>
         ) : selectedOrg && !zoneId ? (
-          /* STATE 2: Scoped Cloudflare Authorization / Onboarding */
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="text-center space-y-2 max-w-2xl mx-auto">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-medium">
-                <Shield className="w-3.5 h-3.5 text-slate-500" /> Bring Your Own Cloudflare Token
-              </span>
-              <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
-                Connect Your Domain with Zero Delegation Handover
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                Retain root domain ownership in your own Cloudflare account. Revlet functions as your high-speed operations console with least-privilege scoping and zero billing access.
-              </p>
-            </div>
+          /* STATE 2: DNS Activation & BYOT Guideline */
+          <div className="max-w-5xl mx-auto space-y-6">
+            {/* Widget 1: DNS Activation Widget (65% Blue Features / 35% Activation Types) */}
+            <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
+              <div className="flex flex-col lg:flex-row">
+                {/* 65% Blue Container with White Text */}
+                <div className="w-full lg:w-[65%] bg-primary text-white p-6 sm:p-8 flex flex-col justify-between space-y-6">
+                  <div className="space-y-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/80">
+                      <Globe className="w-3.5 h-3.5 text-white" />
+                      Domain: {selectedOrg.domain}
+                    </span>
+                    <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
+                      DNS Management Service
+                    </h2>
+                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
+                      Centralized authoritative DNS control for your organization with automated safety snapshots and multi-record propagation.
+                    </p>
+                  </div>
 
-            {/* Token Generation Guide Card */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-white">
+                    <div className="space-y-1">
+                      <p className="font-semibold text-white">Full Record Coverage</p>
+                      <p className="text-white/85 leading-relaxed">
+                        Manage A, AAAA, CNAME, MX, TXT, SRV, CAA, TLSA, HTTPS, PTR, and more from one console.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-white">Snapshots &amp; Rollback</p>
+                      <p className="text-white/85 leading-relaxed">
+                        Automatic point-in-time zone backups let you restore prior states in one click.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-white">Automated Email DNS</p>
+                      <p className="text-white/85 leading-relaxed">
+                        One-click MX, SPF, DKIM, and DMARC provisioning when activating Revlet Email Service.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-white">Zero Billing Access</p>
+                      <p className="text-white/85 leading-relaxed">
+                        Least-privilege scoped access keeps root domain ownership and billing under your control.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 35% Activation Types */}
+                <div className="w-full lg:w-[35%] p-6 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between gap-5">
+                  <div className="space-y-5">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-slate-900">Activation Types</h3>
+                      <p className="text-xs text-slate-500">Choose how you want to manage {selectedOrg.domain}.</p>
+                    </div>
+
+                    {/* Option 1: Revlet Platform Managed */}
+                    <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-slate-900">Managed by Revlet Platform</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Nameservers and complete DNS service managed by Revlet Platform.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={handleRequestDNS}
+                        disabled={isRequesting}
+                        className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+                      >
+                        {isRequesting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {isRequesting ? "Activating..." : "Activate"}
+                      </Button>
+                    </div>
+
+                    {/* Option 2: Bring Your Own Token */}
+                    <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-slate-900">Bring Your Own Token</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Verify scoped access and connect your existing zone.
+                        </p>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          id="token"
+                          type={showTokenSecret ? "text" : "password"}
+                          placeholder="Paste scoped API token"
+                          value={apiTokenInput}
+                          onChange={(e) => setApiTokenInput(e.target.value)}
+                          className="h-9 font-mono text-xs pr-9 border-slate-200 bg-white rounded-lg focus-visible:ring-primary/20"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowTokenSecret(!showTokenSecret)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                          title={showTokenSecret ? "Hide secret" : "Reveal secret"}
+                        >
+                          {showTokenSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <Button
+                        onClick={handleConnectToken}
+                        disabled={isConnectingToken || !apiTokenInput.trim()}
+                        className="w-full h-9 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+                      >
+                        {isConnectingToken && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {isConnectingToken ? "Verifying Access..." : "Activate with Cloudflare"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Widget 2: Bring Your Own Token Guideline Widget */}
             <Card className="bg-white border-slate-200 shadow-none rounded-xl">
               <CardHeader className="border-b border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <CardTitle className="text-sm font-semibold text-slate-900">
-                    Scoped API Authorization
+                    Bring Your Own Token Guidelines
                   </CardTitle>
-                  <CardDescription className="text-xs text-slate-500 font-mono">
-                    Domain: {selectedOrg.domain}
+                  <CardDescription className="text-xs text-slate-500">
+                    Follow these steps to generate a scoped token for {selectedOrg.domain}.
                   </CardDescription>
                 </div>
                 <a
@@ -807,133 +958,59 @@ export default function DNSManagementPage() {
                     variant="outline"
                     className="h-9 px-3.5 text-xs font-medium border-slate-200 hover:bg-slate-50 rounded-lg flex items-center gap-1.5"
                   >
-                    <span>Generate Token on Cloudflare</span>
+                    <span>Go to Cloudflare</span>
                     <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                   </Button>
                 </a>
               </CardHeader>
 
-              <CardContent className="p-6 space-y-6">
+              <CardContent className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                   <div className="p-4 rounded-lg bg-slate-50/60 border border-slate-200/80 space-y-1.5">
-                    <p className="font-mono text-xs text-slate-500">01. Scoped Template</p>
-                    <p className="font-medium text-slate-900">Pre-Configured Permissions</p>
+                    <p className="font-mono text-xs text-slate-500">Step 01</p>
+                    <p className="font-medium text-slate-900">Select Required Permissions</p>
                     <p className="text-slate-500 leading-relaxed">
-                      Opens Cloudflare with <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: DNS (Edit)</code> and <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: Zone (Read)</code> pre-selected.
+                      Click <strong>Go to Cloudflare</strong> to open the token template with <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: DNS (Edit)</code> and <code className="font-mono text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">Zone: Zone (Read)</code> pre-selected.
                     </p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-slate-50/60 border border-slate-200/80 space-y-1.5">
-                    <p className="font-mono text-xs text-slate-500">02. Domain Restrict</p>
-                    <p className="font-medium text-slate-900">Zone Isolation</p>
+                    <p className="font-mono text-xs text-slate-500">Step 02</p>
+                    <p className="font-medium text-slate-900">Scope to Your Domain</p>
                     <p className="text-slate-500 leading-relaxed">
-                      Under <strong>Zone Resources</strong>, select <span className="text-slate-800">Include → Specific zone → {selectedOrg.domain}</span> to ensure the token cannot access other domains.
+                      Under <strong>Zone Resources</strong>, select <span className="text-slate-800">Include → Specific zone → {selectedOrg.domain}</span> so access is strictly isolated to this domain.
                     </p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-slate-50/60 border border-slate-200/80 space-y-1.5">
-                    <p className="font-mono text-xs text-slate-500">03. Connect</p>
-                    <p className="font-medium text-slate-900">Encrypted Token Storage</p>
+                    <p className="font-mono text-xs text-slate-500">Step 03</p>
+                    <p className="font-medium text-slate-900">Verify &amp; Activate</p>
                     <p className="text-slate-500 leading-relaxed">
-                      Copy the generated token and paste it below. Credentials are encrypted at rest with AES-256-GCM.
+                      Copy the token, paste it under <strong>Bring Your Own Token</strong> above, and click <strong>Activate with Cloudflare</strong>.
                     </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <Label htmlFor="token" className="text-xs font-medium text-slate-700 flex items-center justify-between">
-                    <span>Cloudflare API Token</span>
-                    <span className="text-slate-400 font-normal">Scoped Tokens Only</span>
-                  </Label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="relative flex-1">
-                      <Input
-                        id="token"
-                        type={showTokenSecret ? "text" : "password"}
-                        placeholder="Paste scoped token"
-                        value={apiTokenInput}
-                        onChange={(e) => setApiTokenInput(e.target.value)}
-                        className="h-10 font-mono text-xs pr-10 border-slate-200 bg-white rounded-lg focus-visible:ring-primary/20"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowTokenSecret(!showTokenSecret)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                        title={showTokenSecret ? "Hide secret" : "Reveal secret"}
-                      >
-                        {showTokenSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <Button
-                      onClick={handleConnectToken}
-                      disabled={isConnectingToken || !apiTokenInput.trim()}
-                      className="h-10 px-5 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none shrink-0 flex items-center gap-2"
-                    >
-                      {isConnectingToken && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      {isConnectingToken ? "Verifying Scope..." : "Verify and Connect"}
-                    </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
-
-            {/* Architecture Highlights */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-1">
-                <div className="flex items-center gap-2 font-medium text-slate-900">
-                  <Lock className="w-4 h-4 text-slate-500" />
-                  <span>Zero Billing Access</span>
-                </div>
-                <p className="text-slate-500 leading-relaxed">
-                  Tokens cannot access payment methods, invoices, or non-scoped domains in your Cloudflare account.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-1">
-                <div className="flex items-center gap-2 font-medium text-slate-900">
-                  <ShieldCheck className="w-4 h-4 text-slate-500" />
-                  <span>Envelope Encryption</span>
-                </div>
-                <p className="text-slate-500 leading-relaxed">
-                  Tokens are encrypted with AES-256-GCM authenticated cipher prior to storage and never exposed back to the client.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-1">
-                <div className="flex items-center gap-2 font-medium text-slate-900">
-                  <Globe className="w-4 h-4 text-slate-500" />
-                  <span>100% Domain Ownership</span>
-                </div>
-                <p className="text-slate-500 leading-relaxed">
-                  No registrar transfer needed. Nameservers remain under your own account with zero root hijack risk.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-1">
-                <div className="flex items-center gap-2 font-medium text-slate-900">
-                  <History className="w-4 h-4 text-slate-500" />
-                  <span>Point-in-Time Snapshots</span>
-                </div>
-                <p className="text-slate-500 leading-relaxed">
-                  Automatic zone snapshots before modifications allow one-click rollback to prior configurations.
-                </p>
-              </div>
-            </div>
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={handleRequestDNS}
-                disabled={isRequesting}
-                className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                {isRequesting ? "Provisioning..." : "Don't have a Cloudflare account? Provision Revlet managed nameservers"}
-              </button>
-            </div>
           </div>
         ) : (
           /* STATE 3: Active DNS Workspace */
           <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Background Token Permission Warning Widget */}
+            {permissionWarning && (
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5 text-xs">
+                  <p className="font-semibold text-amber-900">
+                    Missing or Invalid Access Permissions
+                  </p>
+                  <p className="text-amber-800 leading-relaxed">
+                    {permissionWarning} DNS modifications are temporarily disabled until valid permissions are restored.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Nameservers Card */}
             <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
               <CardHeader
@@ -947,16 +1024,20 @@ export default function DNSManagementPage() {
                   </CardTitle>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span
-                    className={cn(
-                      "px-2 py-0.5 rounded text-xs font-medium border",
-                      zoneDetails?.status === "active"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
-                        : "bg-amber-50 text-amber-700 border-amber-200/60"
-                    )}
-                  >
-                    {zoneDetails?.status ? zoneDetails.status.charAt(0).toUpperCase() + zoneDetails.status.slice(1) : "Pending"}
-                  </span>
+                  {isLoadingRecords && !zoneDetails ? (
+                    <Skeleton className="h-5 w-16 rounded" />
+                  ) : (
+                    <span
+                      className={cn(
+                        "px-2 py-0.5 rounded text-xs font-medium border",
+                        zoneDetails?.status === "active"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                          : "bg-amber-50 text-amber-700 border-amber-200/60"
+                      )}
+                    >
+                      {zoneDetails?.status ? zoneDetails.status.charAt(0).toUpperCase() + zoneDetails.status.slice(1) : "Pending"}
+                    </span>
+                  )}
                   {isNameserversExpanded ? (
                     <ChevronUp className="w-4 h-4 text-slate-400" />
                   ) : (
@@ -967,6 +1048,20 @@ export default function DNSManagementPage() {
 
               {isNameserversExpanded && (
                 <CardContent className="p-6">
+                  {isLoadingRecords && !zoneDetails ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <Skeleton className="h-3.5 w-36" />
+                        <Skeleton className="h-10 w-full rounded-lg" />
+                        <Skeleton className="h-10 w-full rounded-lg" />
+                      </div>
+                      <div className="border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 pl-0 md:pl-6 space-y-3">
+                        <Skeleton className="h-3.5 w-32" />
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-16 w-full rounded-lg" />
+                      </div>
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
                       <p className="text-xs font-medium text-slate-500">Assigned Nameservers</p>
@@ -1030,6 +1125,7 @@ export default function DNSManagementPage() {
                       </div>
                     )}
                   </div>
+                  )}
                 </CardContent>
               )}
             </Card>
@@ -1159,7 +1255,8 @@ export default function DNSManagementPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-7 w-7 text-slate-400 hover:text-slate-900 transition-colors rounded-lg"
+                                      disabled={Boolean(permissionWarning)}
+                                      className="h-7 w-7 text-slate-400 hover:text-slate-900 transition-colors rounded-lg disabled:opacity-40"
                                       onClick={() => {
                                         setEditingRecord(rec)
                                         setFormData({
@@ -1174,7 +1271,8 @@ export default function DNSManagementPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-7 w-7 text-slate-400 hover:text-red-600 transition-colors rounded-lg"
+                                      disabled={Boolean(permissionWarning)}
+                                      className="h-7 w-7 text-slate-400 hover:text-red-600 transition-colors rounded-lg disabled:opacity-40"
                                       onClick={() => {
                                         setDeletingRecordId(rec.id)
                                         setIsDeleteOpen(true)
@@ -1325,7 +1423,7 @@ export default function DNSManagementPage() {
             if (!open) setFormErrors({})
           }}
         >
-          <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
+          <DialogContent className="w-full sm:max-w-2xl p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1 text-left">
               <DialogTitle className="text-base font-semibold text-slate-900">
                 {editingRecord ? "Edit DNS Record" : "Add DNS Record"}
@@ -1712,15 +1810,21 @@ export default function DNSManagementPage() {
         <Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
           <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
             <DialogHeader className="space-y-1.5 text-left">
-              <DialogTitle className="text-base font-semibold text-slate-900">
+              <DialogTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-destructive" />
                 Disable DNS Service
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Disconnects {selectedOrg?.domain} and clears stored credentials.
+                Warning: This action will permanently disconnect {selectedOrg?.domain} from Revlet DNS Management.
               </DialogDescription>
             </DialogHeader>
-            <div className="py-2 text-xs text-slate-600 leading-relaxed">
-              Records and nameservers in your own Cloudflare account will remain intact. Revlet will simply remove its local management link.
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200/80 text-xs text-red-900 leading-relaxed space-y-1">
+              <p className="font-semibold">All associated DNS data in Revlet will be permanently deleted:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-red-800">
+                <li>All saved zone snapshots and rollback history</li>
+                <li>Stored access credentials and zone bindings</li>
+                <li>DNS configuration metadata for this organization</li>
+              </ul>
             </div>
             <DialogFooter className="pt-4 gap-2">
               <Button

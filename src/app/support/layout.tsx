@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { JsonLd } from '@/components/seo/json-ld';
 
 export const metadata: Metadata = {
-  title: 'Documentation & Support',
+  title: { absolute: 'Help & Support | Revlet' },
   description: 'Access technical documentation, step-by-step onboarding guides, FAQs, and submit priority infrastructure support tickets.',
   alternates: {
     canonical: 'https://app.revlet.me/support',

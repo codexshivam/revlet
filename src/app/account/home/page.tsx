@@ -87,6 +87,7 @@ interface Organization {
   ownerId: string
   status?: string
   isEducation?: boolean
+  cloudflareZoneId?: string
   mailServiceActive?: boolean
   mailMonthlyLimit?: number
   mailDailyLimit?: number
@@ -500,9 +501,6 @@ export default function AccountHomePage() {
             <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
               {localDisplayName}
             </h1>
-            <p className="text-xs text-slate-500">
-              Manage registered organizations, custom domains, and service allowances
-            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -591,7 +589,7 @@ export default function AccountHomePage() {
                           Managed Domain
                         </TableHead>
                         <TableHead className="text-xs font-medium py-3 text-slate-500">
-                          Email Quota
+                          Activated Services
                         </TableHead>
                         <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                           Actions
@@ -641,23 +639,26 @@ export default function AccountHomePage() {
                           </TableCell>
 
                           <TableCell className="py-4">
-                            {org.mailServiceActive ? (
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-1.5">
-                                  <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" strokeWidth={1.5} />
-                                  <span className="text-xs font-mono text-slate-800 tabular-nums">
-                                    {(org.mailMonthlySent ?? 0).toLocaleString()} /{" "}
-                                    {(org.mailMonthlyLimit ?? 1000).toLocaleString()} mo
-                                  </span>
+                            {(() => {
+                              const services: string[] = []
+                              if (org.cloudflareZoneId) services.push("DNS Management")
+                              if (org.mailServiceActive) services.push("Email Service")
+                              if (org.workspaceStatus === "active") services.push("Google Workspace")
+                              return services.length > 0 ? (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {services.map((svc) => (
+                                    <span
+                                      key={svc}
+                                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200/80"
+                                    >
+                                      {svc}
+                                    </span>
+                                  ))}
                                 </div>
-                                <span className="text-[11px] font-mono text-slate-400 pl-5 tabular-nums">
-                                  {(org.mailDailySent ?? 0).toLocaleString()} /{" "}
-                                  {(org.mailDailyLimit ?? 100).toLocaleString()} day
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-xs font-mono text-slate-400">—</span>
-                            )}
+                              ) : (
+                                <span className="text-xs font-mono text-slate-400">—</span>
+                              )
+                            })()}
                           </TableCell>
 
                           <TableCell className="text-right pr-6 py-4">
@@ -727,17 +728,25 @@ export default function AccountHomePage() {
                         )}
                       </div>
 
-                      {org.mailServiceActive && (
-                        <div className="flex items-center justify-between text-xs font-mono bg-slate-50 p-2.5 rounded-lg text-slate-700 tabular-nums">
-                          <span className="text-slate-500 flex items-center gap-1.5">
-                            <Mail className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.5} />
-                            Quota
-                          </span>
-                          <span>
-                            {(org.mailMonthlySent ?? 0).toLocaleString()} / {(org.mailMonthlyLimit ?? 1000).toLocaleString()} mo
-                          </span>
-                        </div>
-                      )}
+                      {(() => {
+                        const services: string[] = []
+                        if (org.cloudflareZoneId) services.push("DNS Management")
+                        if (org.mailServiceActive) services.push("Email Service")
+                        if (org.workspaceStatus === "active") services.push("Google Workspace")
+                        if (services.length === 0) return null
+                        return (
+                          <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-2.5 rounded-lg">
+                            {services.map((svc) => (
+                              <span
+                                key={svc}
+                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-white border border-slate-200 text-slate-700"
+                              >
+                                {svc}
+                              </span>
+                            ))}
+                          </div>
+                        )
+                      })()}
                     </div>
                   ))}
                 </div>

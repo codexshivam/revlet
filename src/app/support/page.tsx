@@ -210,13 +210,10 @@ export default function SupportPage() {
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
               Support
             </h1>
-            <p className="text-sm text-slate-500">
-              Submit inquiries to Network Operations and review existing tickets.
-            </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shrink-0">
             <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <span className="text-slate-500">Direct inquiries:</span>
+            <span className="text-slate-500">Mail us on</span>
             <a
               href="mailto:hello@revlet.me"
               className="font-medium text-slate-900 hover:text-primary transition-colors"
@@ -293,10 +290,7 @@ export default function SupportPage() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-slate-100">
-              <p className="text-xs text-slate-400">
-                Response priority is based on account tier and ticket category.
-              </p>
+            <div className="flex justify-end pt-4 border-t border-slate-100">
               <Button
                 onClick={handleSubmitTicket}
                 disabled={isSubmitting}
@@ -334,11 +328,8 @@ export default function SupportPage() {
                 <p className="text-xs text-slate-500">Loading support history...</p>
               </div>
             ) : tickets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center gap-1.5 px-4">
+              <div className="flex flex-col items-center justify-center py-16 text-center px-4">
                 <p className="text-sm font-medium text-slate-700">No Support Tickets Found</p>
-                <p className="text-xs text-slate-400 max-w-sm">
-                  Use the form above to reach the Revlet engineering and operations desk.
-                </p>
               </div>
             ) : (
               <>

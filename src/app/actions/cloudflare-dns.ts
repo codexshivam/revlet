@@ -327,26 +327,95 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
 }
 
 /**
- * Disconnects the organization's custom Cloudflare token.
+ * Disables DNS management for the organization and completely removes all snapshots
+ * and associated DNS/token metadata from Firestore.
  */
 export async function disconnectCloudflareToken(idToken: string, orgId: string) {
   try {
     const verified = await verifyUserOrgAccess(idToken, orgId);
     if (!verified.isOwner) {
-      return { success: false, error: 'Only organization owners can disconnect an edge token.' };
+      return { success: false, error: 'Only organization owners can disable DNS management.' };
     }
 
-    await adminDb.collection('organizations').doc(orgId).update({
+    const orgRef = adminDb.collection('organizations').doc(orgId);
+
+    // 1. Delete all DNS snapshots in subcollection
+    const snapCol = orgRef.collection('dns_snapshots');
+    while (true) {
+      const batchSnap = await snapCol.limit(400).get();
+      if (batchSnap.empty) break;
+      const batch = adminDb.batch();
+      batchSnap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      if (batchSnap.size < 400) break;
+    }
+
+    // 2. Remove all DNS & token fields from the organization document
+    await orgRef.update({
       cloudflareTokenEncrypted: FieldValue.delete(),
       cloudflareZoneId: FieldValue.delete(),
+      cloudflareTokenVerifiedAt: FieldValue.delete(),
+      cloudflareTokenExpiresOn: FieldValue.delete(),
+      cloudflareTokenScopedZone: FieldValue.delete(),
       dnsMode: FieldValue.delete(),
       dnsRequested: FieldValue.delete(),
+      nameservers: FieldValue.delete(),
+      dnsSnapshots: FieldValue.delete(),
       updatedAt: new Date().toISOString()
     });
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to disconnect token.' };
+    return { success: false, error: error.message || 'Failed to disable DNS service.' };
+  }
+}
+
+/**
+ * Background check verifying that the active DNS token (platform or BYOT) is still valid
+ * and retains the required Zone & DNS permissions for the organization.
+ */
+export async function verifyDnsTokenPermissions(idToken: string, orgId: string, zoneId: string) {
+  if (!zoneId) return { success: true, data: { valid: false, message: 'No active zone configured.' } };
+  try {
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const token = verified.cfToken;
+    if (!token) {
+      return {
+        success: true,
+        data: {
+          valid: false,
+          message: 'No active access credentials found. Please reconnect your DNS service.',
+        },
+      };
+    }
+
+    // 1. Verify token is active and not expired
+    const verifyRes = await cfFetch('/user/tokens/verify', {}, token);
+    if (!verifyRes?.result || verifyRes.result.status !== 'active') {
+      return {
+        success: true,
+        data: {
+          valid: false,
+          message: 'Access credentials are inactive or expired. DNS modifications have been disabled.',
+        },
+      };
+    }
+
+    // 2. Verify Zone Read and DNS Records access
+    await Promise.all([
+      cfFetch(`/zones/${zoneId}`, {}, token),
+      cfFetch(`/zones/${zoneId}/dns_records?per_page=1`, {}, token),
+    ]);
+
+    return { success: true, data: { valid: true } };
+  } catch (error: any) {
+    return {
+      success: true,
+      data: {
+        valid: false,
+        message: error?.message || 'Required DNS permissions are missing or invalid. Actions are disabled.',
+      },
+    };
   }
 }
 

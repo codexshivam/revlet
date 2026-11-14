@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
+import {
+  resolveOrganizationOwnerEmail,
+  sendRevletAlertEmail,
+} from '@/lib/revlet-alerts';
 
 const snsCertCache = new Map<string, string>();
 
@@ -183,6 +187,8 @@ export async function POST(req: NextRequest) {
 
       const shouldAutoPause = (bounces >= 5 && bounceRate > 5.0) || (complaints >= 2 && complaintRate > 0.1);
 
+      const wasAlreadyPaused = Boolean(d.mailOutboundPaused);
+
       tx.update(orgRef, {
         mailBounceCount: bounces,
         mailComplaintCount: complaints,
@@ -193,10 +199,53 @@ export async function POST(req: NextRequest) {
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      return { domain, bounces, complaints, bounceRate, complaintRate, autoPaused: shouldAutoPause };
+      return {
+        domain,
+        bounces,
+        complaints,
+        bounceRate,
+        complaintRate,
+        autoPaused: shouldAutoPause,
+        wasAlreadyPaused,
+        orgData: d,
+      };
     });
 
-    return NextResponse.json({ ok: true, ...result });
+    if (result.autoPaused && !result.wasAlreadyPaused) {
+      try {
+        const ownerEmail = await resolveOrganizationOwnerEmail(result.orgData);
+        if (ownerEmail) {
+          const triggerReason =
+            result.complaintRate > 0.1 && result.complaints >= 2
+              ? `Complaint rate (${result.complaintRate}%) exceeded 0.1%`
+              : `Hard bounce rate (${result.bounceRate}%) exceeded 5.0%`;
+
+          await sendRevletAlertEmail({
+            to: ownerEmail,
+            subject: `[Revlet Alert] Outbound Mail Auto-Paused for ${result.domain}`,
+            title: 'Outbound Mail Auto-Paused',
+            subtitle: 'Deliverability & Abuse Protection',
+            summaryLines: [
+              `Outbound mail for ${result.domain} has been automatically paused to protect your domain reputation.`,
+              'Review recent recipient lists and bounced addresses before resuming outbound mail in the Revlet Console.',
+            ],
+            details: [
+              { label: 'Domain', value: result.domain },
+              { label: 'Trigger', value: triggerReason },
+              { label: 'Bounce Rate', value: `${result.bounceRate}% (${result.bounces} permanent)` },
+              { label: 'Complaint Rate', value: `${result.complaintRate}% (${result.complaints} complaints)` },
+            ],
+            ctaUrl: 'https://app.revlet.me/services/email',
+            ctaLabel: 'Review Email Service',
+          });
+        }
+      } catch {
+        // Non-blocking alert failure
+      }
+    }
+
+    const { orgData: _orgData, wasAlreadyPaused: _wasAlreadyPaused, ...publicResult } = result;
+    return NextResponse.json({ ok: true, ...publicResult });
   } catch (err: any) {
     return NextResponse.json(
       { ok: false, error: err?.message || 'Failed to process SNS bounce webhook' },

@@ -2,6 +2,10 @@
 
 import { verifyUserOrgAccess } from './auth-helper';
 import { adminDb } from '@/firebase/admin';
+import {
+  resolveOrganizationOwnerEmail,
+  sendRevletAlertEmail,
+} from '@/lib/revlet-alerts';
 
 export async function deleteOrganization(idToken: string, orgId: string) {
   if (!idToken || !orgId) {
@@ -15,6 +19,13 @@ export async function deleteOrganization(idToken: string, orgId: string) {
     }
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
+    const orgSnap = await orgRef.get();
+    const orgData = orgSnap.data() || {};
+    const orgName = String(orgData.name || orgData.domain || orgId);
+    const orgDomain = String(orgData.domain || 'N/A');
+    const ownerEmail =
+      (authResult.email ? authResult.email.toLowerCase().trim() : null) ||
+      (await resolveOrganizationOwnerEmail(orgData));
 
     // 1. Delete associated team members and Email Service subcollections
     const [membersSnap, mailUsersSnap, mailGroupsSnap, mailOusSnap, mailLogsSnap] = await Promise.all([
@@ -36,6 +47,30 @@ export async function deleteOrganization(idToken: string, orgId: string) {
     batch.delete(orgRef);
 
     await batch.commit();
+
+    if (ownerEmail) {
+      try {
+        await sendRevletAlertEmail({
+          to: ownerEmail,
+          subject: `[Revlet] Organization Deleted: ${orgName}`,
+          title: 'Organization Deleted',
+          subtitle: 'Account & Organization Activity',
+          summaryLines: [
+            `Your organization "${orgName}" and its associated team memberships and mail directory records have been permanently deleted.`,
+          ],
+          details: [
+            { label: 'Organization', value: orgName },
+            { label: 'Domain', value: orgDomain },
+            { label: 'Actioned By', value: ownerEmail },
+            { label: 'Timestamp', value: new Date().toISOString() },
+          ],
+          ctaUrl: 'https://app.revlet.me/account/home',
+          ctaLabel: 'Open Account Home',
+        });
+      } catch {
+        // Non-blocking confirmation email
+      }
+    }
 
     return { success: true };
   } catch (error: any) {

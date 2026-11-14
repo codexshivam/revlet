@@ -20,6 +20,7 @@ import { errorEmitter } from "@/firebase/error-emitter"
 import { FirestorePermissionError } from "@/firebase/errors"
 import { cn } from "@/lib/utils"
 import { PublicSupportView } from "@/components/public/public-support-view"
+import { notifySupportTicketEvent } from "@/app/actions/support"
 
 interface SupportTicket {
   id: string
@@ -170,6 +171,19 @@ export default function SupportPage() {
       }
 
       setTickets((prev) => [newTicket, ...prev])
+
+      try {
+        const idToken = await user.getIdToken()
+        await notifySupportTicketEvent(idToken, {
+          ticketId: docRef.id,
+          event: "created",
+          subject: cleanSubject,
+          category: category.trim(),
+          messagePreview: cleanMessage,
+        })
+      } catch {
+        // Non-blocking email notification
+      }
 
       toast({
         title: "Ticket created",

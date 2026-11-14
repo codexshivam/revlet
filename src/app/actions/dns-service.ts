@@ -12,6 +12,10 @@ import { cfFetch } from './dns-client';
 import { adminDb } from '@/firebase/admin';
 import { encryptToken } from '@/lib/security/encryption';
 import { FieldValue } from 'firebase-admin/firestore';
+import {
+  resolveOrganizationOwnerEmail,
+  sendRevletAlertEmail,
+} from '@/lib/revlet-alerts';
 
 export async function getZoneDetails(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
@@ -134,9 +138,68 @@ export async function deleteDNSRecord(idToken: string, orgId: string, zoneId: st
   if (!zoneId || !recordId) return { success: false, error: 'Missing Zone ID or Record ID' };
   try {
     const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
+
+    // Fetch record metadata prior to deletion to detect critical mail/root records
+    let deletedRecord: { type?: string; name?: string; content?: string } | null = null;
+    try {
+      const existing = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, { method: 'GET' }, verified.cfToken);
+      deletedRecord = existing?.result || null;
+    } catch {
+      // Proceed with deletion even if pre-fetch fails
+    }
+
     const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {
       method: 'DELETE',
     }, verified.cfToken);
+
+    if (deletedRecord) {
+      const recType = String(deletedRecord.type || '').toUpperCase();
+      const recName = String(deletedRecord.name || '').toLowerCase();
+      const recContent = String(deletedRecord.content || '').toLowerCase();
+      const orgDomain = String(verified.orgData?.domain || '').toLowerCase().trim();
+
+      const isCriticalMail =
+        recType === 'MX' ||
+        (recType === 'TXT' &&
+          (recContent.includes('v=spf1') || recName.includes('_dmarc') || recName.includes('_domainkey'))) ||
+        (recType === 'CNAME' && recName.includes('_domainkey'));
+      const isRootHost =
+        Boolean(orgDomain) &&
+        (recType === 'A' || recType === 'AAAA' || recType === 'CNAME') &&
+        recName === orgDomain;
+
+      if (isCriticalMail || isRootHost) {
+        try {
+          const ownerEmail =
+            (await resolveOrganizationOwnerEmail(verified.orgData || {})) ||
+            (verified.email ? verified.email.toLowerCase().trim() : null);
+          if (ownerEmail) {
+            await sendRevletAlertEmail({
+              to: ownerEmail,
+              subject: `[Revlet Warning] Critical ${recType} DNS Record Removed (${orgDomain || recName})`,
+              title: 'Critical DNS Record Removed',
+              subtitle: 'DNS Security & Deliverability Warning',
+              summaryLines: [
+                `A critical ${recType} record was removed from your domain DNS zone. Removing mail or root records can disrupt email delivery or website availability.`,
+                'If this was unintended, you can restore a previous zone snapshot from DNS Management.',
+              ],
+              details: [
+                { label: 'Domain', value: orgDomain || recName },
+                { label: 'Record Type', value: recType },
+                { label: 'Host', value: deletedRecord.name || '@' },
+                { label: 'Removed Value', value: String(deletedRecord.content || '').slice(0, 120) },
+                { label: 'Removed By', value: verified.email || 'Authorized User' },
+              ],
+              ctaUrl: 'https://app.revlet.me/services/dns',
+              ctaLabel: 'Review DNS Records',
+            });
+          }
+        } catch {
+          // Non-blocking warning email
+        }
+      }
+    }
+
     return { success: true, data: data.result };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to remove domain setting' };

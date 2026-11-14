@@ -3,6 +3,7 @@
 import { adminAuth, adminDb } from '@/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { ORG_ADMIN_PERMISSION, ADMIN_ALL_PERMISSIONS } from '@/lib/team-permissions';
+import { sendRevletAlertEmail } from '@/lib/revlet-alerts';
 
 async function verifyCaller(idToken: string) {
   if (!idToken) throw new Error('Unauthorized: Missing credentials.');
@@ -273,6 +274,37 @@ export async function inviteTeamMember(
     }
     await batch.commit();
 
+    try {
+      const orgNames = orgDocs
+        .map((d) => String(d.data()?.name || d.data()?.domain || d.id))
+        .join(', ');
+      await sendRevletAlertEmail({
+        to: targetEmail,
+        subject: `You've been invited to ${orgNames} on Revlet`,
+        title: 'Team Invitation',
+        subtitle: 'Workspace Access & Team Invitations',
+        summaryLines: [
+          `${ownerDisplayName} (${caller.email}) invited you to collaborate on Revlet.`,
+          initialStatus === 'Pending'
+            ? 'Create or sign in to your Revlet account using this email address to activate access.'
+            : 'Your workspace access is active now.',
+        ],
+        details: [
+          { label: 'Organizations', value: orgNames },
+          { label: 'Invited By', value: caller.email },
+          { label: 'Access Mode', value: accessMode === 'admin' ? 'Administrator' : 'Scoped Services' },
+          { label: 'Status', value: initialStatus },
+        ],
+        ctaUrl:
+          initialStatus === 'Pending'
+            ? 'https://app.revlet.me/signup'
+            : 'https://app.revlet.me/account/home',
+        ctaLabel: initialStatus === 'Pending' ? 'Accept Invitation' : 'Open Revlet Console',
+      });
+    } catch {
+      // Non-blocking invitation email
+    }
+
     return {
       success: true,
       data: {
@@ -355,6 +387,36 @@ export async function updateTeamMemberStatus(
       }
     }
     await batch.commit();
+
+    if (targetEmail) {
+      try {
+        const orgNames = orgDocs
+          .filter((d) => d.exists)
+          .map((d) => String(d.data()?.name || d.data()?.domain || d.id))
+          .join(', ') || 'Revlet Workspace';
+        const isSuspended = resolvedStatus === 'Suspended';
+        await sendRevletAlertEmail({
+          to: targetEmail,
+          subject: `Your Revlet workspace access has been ${isSuspended ? 'suspended' : 'restored'}`,
+          title: isSuspended ? 'Team Access Suspended' : 'Team Access Restored',
+          subtitle: 'Workspace Access & Security',
+          summaryLines: [
+            isSuspended
+              ? `Your access to ${orgNames} has been suspended by an organization administrator.`
+              : `Your access to ${orgNames} has been restored.`,
+          ],
+          details: [
+            { label: 'Organizations', value: orgNames },
+            { label: 'Status', value: resolvedStatus },
+            { label: 'Updated By', value: caller.email || caller.name },
+          ],
+          ctaUrl: 'https://app.revlet.me/account/home',
+          ctaLabel: 'Open Revlet Console',
+        });
+      } catch {
+        // Non-blocking status notification
+      }
+    }
 
     return { success: true, data: { status: resolvedStatus } };
   } catch (err: any) {
@@ -471,6 +533,33 @@ export async function updateTeamMemberAccess(
     }
     await batch.commit();
 
+    if (targetEmail) {
+      try {
+        const orgNames = nextOrgDocs
+          .filter((d) => d.exists)
+          .map((d) => String(d.data()?.name || d.data()?.domain || d.id))
+          .join(', ');
+        await sendRevletAlertEmail({
+          to: targetEmail,
+          subject: 'Your Revlet workspace permissions have been updated',
+          title: 'Workspace Access Updated',
+          subtitle: 'Team Permissions & Access',
+          summaryLines: [
+            'An administrator updated your organization assignments and permissions on Revlet.',
+          ],
+          details: [
+            { label: 'Organizations', value: orgNames || 'Assigned Workspaces' },
+            { label: 'Access Mode', value: accessMode === 'admin' ? 'Administrator' : 'Scoped Services' },
+            { label: 'Updated By', value: caller.email || caller.name },
+          ],
+          ctaUrl: 'https://app.revlet.me/account/home',
+          ctaLabel: 'View Workspaces',
+        });
+      } catch {
+        // Non-blocking access update email
+      }
+    }
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to update member access.' };
@@ -520,6 +609,32 @@ export async function deleteTeamMember(idToken: string, memberId: string) {
       });
     }
     await batch.commit();
+
+    if (targetEmail) {
+      try {
+        const orgNames = orgDocs
+          .filter((d) => d.exists)
+          .map((d) => String(d.data()?.name || d.data()?.domain || d.id))
+          .join(', ') || 'Revlet Workspace';
+        await sendRevletAlertEmail({
+          to: targetEmail,
+          subject: 'Your Revlet workspace access has been revoked',
+          title: 'Workspace Access Revoked',
+          subtitle: 'Team Access & Security',
+          summaryLines: [
+            `Your team access to ${orgNames} has been removed by an organization administrator.`,
+          ],
+          details: [
+            { label: 'Organizations', value: orgNames },
+            { label: 'Actioned By', value: caller.email || caller.name },
+          ],
+          ctaUrl: 'https://app.revlet.me/support',
+          ctaLabel: 'Contact Support',
+        });
+      } catch {
+        // Non-blocking revocation email
+      }
+    }
 
     return { success: true };
   } catch (err: any) {

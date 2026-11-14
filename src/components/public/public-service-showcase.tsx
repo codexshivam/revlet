@@ -68,17 +68,7 @@ export function PublicServiceShowcase({
                   : 'hover:text-slate-900 transition-colors'
               }
             >
-              Email Routing
-            </Link>
-            <Link
-              href="/services/workspace"
-              className={
-                currentPath === '/services/workspace'
-                  ? 'text-blue-600 font-bold'
-                  : 'hover:text-slate-900 transition-colors'
-              }
-            >
-              Google Workspace
+              Email Service
             </Link>
             <Link
               href="/support"
@@ -190,10 +180,10 @@ export function PublicServiceShowcase({
         {/* Cross-Service Navigation */}
         <section className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm text-center space-y-4 max-w-4xl mx-auto">
           <h2 className="text-lg font-headline font-bold text-slate-900">
-            Explore Revlet Infrastructure Control Plane
+            Explore Revlet Control Plane
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 max-w-xl mx-auto">
-            Revlet unifies Cloudflare DNS, Custom Email Routing, and Google Workspace for Education into a single zero-trust administrative interface.
+            Revlet unifies DNS Management and Email Service into a single zero-trust administrative interface.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <Link
@@ -206,13 +196,7 @@ export function PublicServiceShowcase({
               href="/services/email"
               className="px-3.5 py-2 text-xs font-semibold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
             >
-              Email Routing ↗
-            </Link>
-            <Link
-              href="/services/workspace"
-              className="px-3.5 py-2 text-xs font-semibold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
-            >
-              Google Workspace ↗
+              Email Service ↗
             </Link>
             <Link
               href="/support"

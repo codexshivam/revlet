@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { useUser, useFirestore } from "@/firebase"
 import { useToast } from "@/hooks/use-toast"
@@ -51,7 +50,6 @@ export function OrgSelector({
   const [isAddOrgOpen, setIsAddOrgOpen] = React.useState(false)
   const [newOrgName, setNewOrgName] = React.useState("")
   const [newOrgDomain, setNewOrgDomain] = React.useState("")
-  const [isEducation, setIsEducation] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [formError, setFormError] = React.useState("")
 
@@ -99,7 +97,6 @@ export function OrgSelector({
       const newDoc = await addDoc(orgsRef, {
         name: cleanName,
         domain: cleanDomain,
-        isEducation: !!isEducation,
         code: orgCode,
         ownerId: user.uid,
         status: "Active",
@@ -111,7 +108,6 @@ export function OrgSelector({
       setIsAddOrgOpen(false)
       setNewOrgName("")
       setNewOrgDomain("")
-      setIsEducation(false)
       toast({
         title: "Organization Registered",
         description: `${cleanName} has been created and set as the active organization.`
@@ -300,24 +296,8 @@ export function OrgSelector({
                   required
                 />
                 <p className="text-[10px] text-slate-400">
-                  Root domain used for Cloudflare DNS edge routing and Google Workspace.
+                  Root domain used for DNS Management and Email Service routing.
                 </p>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/70">
-                <div className="space-y-0.5">
-                  <Label htmlFor="add-org-edu" className="text-xs font-bold text-slate-700 cursor-pointer">
-                    Educational Institution
-                  </Label>
-                  <p className="text-[10px] text-slate-400">
-                    Enable academic services and Google Workspace for Education features.
-                  </p>
-                </div>
-                <Switch
-                  id="add-org-edu"
-                  checked={isEducation}
-                  onCheckedChange={setIsEducation}
-                />
               </div>
             </div>
 

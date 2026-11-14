@@ -152,8 +152,6 @@ function cleanToastMessage(msg: any): any {
   cleaned = cleaned.replace(/^FirebaseError:\s*/i, "")
   cleaned = cleaned.replace(/^Error:\s*/i, "")
   cleaned = cleaned.replace(/^Cloudflare API error:\s*/i, "")
-  cleaned = cleaned.replace(/^Google Workspace API error:\s*/i, "")
-  cleaned = cleaned.replace(/^gapi:\s*/i, "")
 
   // Normalize common auth codes into human-readable messages
   if (/auth\/email-already-in-use/i.test(cleaned)) {

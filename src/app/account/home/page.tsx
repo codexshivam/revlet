@@ -9,7 +9,6 @@ import {
   MoreVertical,
   Plus,
   Building2,
-  GraduationCap,
   Edit2,
   LogOut,
   Globe,
@@ -87,14 +86,12 @@ interface Organization {
   ownerId: string
   ownerName?: string
   status?: string
-  isEducation?: boolean
   cloudflareZoneId?: string
   mailServiceActive?: boolean
   mailMonthlyLimit?: number
   mailDailyLimit?: number
   mailMonthlySent?: number
   mailDailySent?: number
-  workspaceStatus?: "none" | "applied" | "pending" | "active"
   createdAt: any
 }
 
@@ -148,7 +145,6 @@ export default function AccountHomePage() {
     contactPhone: "",
     contactEmail: "",
     description: "",
-    isEducation: false,
   })
 
   const [accountName, setAccountName] = useState("")
@@ -289,7 +285,6 @@ export default function AccountHomePage() {
       contactPhone: org.contactPhone || "",
       contactEmail: org.contactEmail || "",
       description: org.description || "",
-      isEducation: !!org.isEducation,
     })
     setIsDialogOpen(true)
   }
@@ -307,7 +302,6 @@ export default function AccountHomePage() {
       contactPhone: "",
       contactEmail: "",
       description: "",
-      isEducation: false,
     })
     setIsDialogOpen(true)
   }
@@ -337,7 +331,6 @@ export default function AccountHomePage() {
           contactPhone: formData.contactPhone.trim(),
           contactEmail: formData.contactEmail.trim(),
           description: formData.description.trim(),
-          isEducation: !!formData.isEducation,
           updatedAt: serverTimestamp(),
         })
         toast({
@@ -359,7 +352,6 @@ export default function AccountHomePage() {
           contactPhone: formData.contactPhone.trim(),
           contactEmail: formData.contactEmail.trim(),
           description: formData.description.trim(),
-          isEducation: !!formData.isEducation,
           code: orgCode,
           ownerId: user.uid,
           status: "Active",
@@ -606,11 +598,7 @@ export default function AccountHomePage() {
                           <TableCell className="pl-6 py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center text-slate-500 shrink-0">
-                                {org.isEducation ? (
-                                  <GraduationCap className="w-4 h-4" strokeWidth={1.5} />
-                                ) : (
-                                  <Building2 className="w-4 h-4" strokeWidth={1.5} />
-                                )}
+                                <Building2 className="w-4 h-4" strokeWidth={1.5} />
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-xs font-medium text-slate-900">
@@ -620,11 +608,6 @@ export default function AccountHomePage() {
                                   <span className="font-mono text-[11px] text-slate-400">
                                     {org.code}
                                   </span>
-                                  {org.isEducation && (
-                                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                                      Education
-                                    </span>
-                                  )}
                                   {org.ownerId !== user?.uid && (
                                     <span className="text-[11px] text-slate-500">
                                       Managed by {org.ownerName || org.contactName || "Organization Owner"}
@@ -649,7 +632,6 @@ export default function AccountHomePage() {
                               const services: string[] = []
                               if (org.cloudflareZoneId) services.push("DNS Management")
                               if (org.mailServiceActive) services.push("Email Service")
-                              if (org.workspaceStatus === "active") services.push("Google Workspace")
                               return services.length > 0 ? (
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   {services.map((svc) => (
@@ -696,11 +678,7 @@ export default function AccountHomePage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center text-slate-500 shrink-0">
-                            {org.isEducation ? (
-                              <GraduationCap className="w-4 h-4" strokeWidth={1.5} />
-                            ) : (
-                              <Building2 className="w-4 h-4" strokeWidth={1.5} />
-                            )}
+                            <Building2 className="w-4 h-4" strokeWidth={1.5} />
                           </div>
                           <div>
                             <div className="text-xs font-medium text-slate-900">{org.name}</div>
@@ -732,18 +710,12 @@ export default function AccountHomePage() {
                           <Globe className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.5} />
                           {org.domain}
                         </span>
-                        {org.isEducation && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
-                            Education
-                          </span>
-                        )}
                       </div>
 
                       {(() => {
                         const services: string[] = []
                         if (org.cloudflareZoneId) services.push("DNS Management")
                         if (org.mailServiceActive) services.push("Email Service")
-                        if (org.workspaceStatus === "active") services.push("Google Workspace")
                         if (services.length === 0) return null
                         return (
                           <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-2.5 rounded-lg">
@@ -922,25 +894,6 @@ export default function AccountHomePage() {
                           className="h-9 border-slate-200 bg-white rounded-lg text-xs"
                         />
                       </div>
-                    </div>
-
-                    {/* Educational toggle */}
-                    <div className="flex items-center justify-between p-4 border border-slate-200/80 rounded-lg bg-slate-50/50">
-                      <div className="space-y-0.5 pr-4">
-                        <Label htmlFor="org-is-edu" className="text-xs font-medium text-slate-800 cursor-pointer">
-                          Educational Institution
-                        </Label>
-                        <span className="text-xs text-slate-500 block leading-relaxed">
-                          Toggle on if this organization represents a school, college, or academic body.
-                        </span>
-                      </div>
-                      <Switch
-                        id="org-is-edu"
-                        checked={formData.isEducation}
-                        onCheckedChange={(checked) =>
-                          setFormData((prev) => ({ ...prev, isEducation: checked }))
-                        }
-                      />
                     </div>
                   </div>
 

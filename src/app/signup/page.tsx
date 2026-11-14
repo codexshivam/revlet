@@ -238,7 +238,6 @@ export default function SignupPage() {
         contactEmail: activeUser.email,
         contactPhone: orgFormData.phone.trim(),
         description: "",
-        isEducation: false,
         code: orgCode,
         ownerId: activeUser.uid,
         status: "Active",

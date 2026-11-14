@@ -17,15 +17,15 @@ export function PublicSupportView() {
   const faqs = [
     {
       q: 'What is Revlet?',
-      a: 'Revlet is an open-source, multi-tenant Enterprise IT Management Control Plane designed for educational institutions and distributed organizations. It unifies Cloudflare DNS, Email Routing, and Google Workspace for Education administration into a single pane of glass.',
+      a: 'Revlet is a multi-tenant IT Management Control Plane designed for distributed organizations. It unifies DNS Management and Email Service administration into a single pane of glass.',
     },
     {
-      q: 'How does Revlet manage Google Workspace for Education?',
-      a: 'Revlet integrates with the Google Workspace Admin SDK using a Google Cloud Service Account configured with Domain-Wide Delegation (DWD). It enables administrators to provision users, manage Organizational Units (OUs), monitor Google Drive storage quotas, and ingest security alerts directly.',
+      q: 'How does Revlet manage Email Service?',
+      a: 'Revlet provisions custom domain mailboxes, groups, organizational units, and automated SPF, DKIM, and DMARC authentication with daily and monthly quota enforcement.',
     },
     {
-      q: 'How does Revlet interact with Cloudflare DNS and Email Routing?',
-      a: 'Revlet uses Cloudflare API v4 with organization-scoped bearer tokens to execute atomic CRUD operations on DNS records (A, AAAA, CNAME, MX, TXT, SRV), toggle CDN proxying, purge edge caches, and configure custom domain email forwarding aliases.',
+      q: 'How does Revlet interact with DNS Management?',
+      a: 'Revlet executes atomic CRUD operations on DNS records (A, AAAA, CNAME, MX, TXT, SRV, CAA, PTR, NS), supports point-in-time zone snapshots, and allows either managed or Bring-Your-Own-Token zones.',
     },
     {
       q: 'Is Revlet secure for multi-tenant organizations?',
@@ -71,13 +71,7 @@ export function PublicSupportView() {
               href="/services/email"
               className="hover:text-slate-900 transition-colors"
             >
-              Email Routing
-            </Link>
-            <Link
-              href="/services/workspace"
-              className="hover:text-slate-900 transition-colors"
-            >
-              Google Workspace
+              Email Service
             </Link>
             <Link
               href="/support"

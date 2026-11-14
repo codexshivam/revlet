@@ -13,7 +13,8 @@ export const metadata: Metadata = {
     'educational IT management',
     'free IT control plane',
     'Cloudflare DNS setup',
-    'Google Workspace onboarding',
+    'DNS Management',
+    'Email Service',
   ],
   openGraph: {
     title: 'Get Started | Revlet IT Management Control Plane',

@@ -82,7 +82,7 @@ export default function Image() {
             marginBottom: '40px',
           }}
         >
-          Unified orchestration for Cloudflare DNS, Custom Email Routing, and Google Workspace for Education.
+          Unified orchestration for DNS Management and Enterprise Email Service.
         </div>
         <div
           style={{
@@ -90,7 +90,7 @@ export default function Image() {
             gap: '16px',
           }}
         >
-          {['Cloudflare API v4', 'Google Workspace SDK', 'SPF/DKIM/DMARC', 'Zero-Trust Tenancy'].map(
+          {['DNS Management', 'Email Service', 'SPF/DKIM/DMARC', 'Zero-Trust Tenancy'].map(
             (tag) => (
               <div
                 key={tag}

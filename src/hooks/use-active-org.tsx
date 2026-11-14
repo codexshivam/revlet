@@ -38,14 +38,6 @@ export interface Organization {
   mailCatchAllUserId?: string | null
   mailCatchAllEmail?: string | null
   mailDkimTokens?: string[]
-  isEducation?: boolean
-  // Google Workspace fields
-  workspaceStatus?: 'none' | 'applied' | 'pending' | 'active'
-  workspaceAdminEmail?: string
-  workspaceCustomerId?: string
-  workspaceDomain?: string
-  workspaceAppliedAt?: any
-  workspaceActivatedAt?: any
   createdAt?: any
   updatedAt?: any
 }

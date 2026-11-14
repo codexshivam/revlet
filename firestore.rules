@@ -1,4 +1,3 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -28,8 +27,8 @@ service cloud.firestore {
     }
 
     // ─── Organizations ────────────────────────────────────────────────────────
-    // Owners can manage their organization details. Sensitive infrastructure &
-    // workspace fields are protected against direct client-side escalation.
+    // Owners can manage their organization details. Sensitive service activation
+    // and quota fields are mutated exclusively via Admin SDK Server Actions.
     match /organizations/{orgId} {
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
@@ -38,21 +37,21 @@ service cloud.firestore {
         && request.resource.data.contactName is string
         && request.resource.data.contactEmail is string;
       allow read: if isResourceOwner() || isSuperAdmin() || (
-        isAuthenticated() && 
-        request.auth.token.email != null && 
-        'memberEmails' in resource.data && 
+        isAuthenticated() &&
+        request.auth.token.email != null &&
+        'memberEmails' in resource.data &&
         request.auth.token.email.lower() in resource.data.memberEmails
       );
-      allow update: if (isResourceOwner() || isSuperAdmin()) 
+      allow update: if (isResourceOwner() || isSuperAdmin())
         && request.resource.data.ownerId == resource.data.ownerId
         && (
           isSuperAdmin() ||
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'memberEmails', 'updatedAt', 'emailForwardingActive', 'emailRoutingActive', 'serviceType'])
+            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'memberEmails', 'updatedAt'])
         );
       allow delete: if isResourceOwner() || isSuperAdmin();
 
-      // Revlet Mail Service subcollections (accessed & mutated exclusively via hardened Server Actions
+      // Revlet Mail Service subcollections (accessed & mutated exclusively via Server Actions
       // using Firebase Admin SDK so passwordHash and internal routing state are never exposed to client SDKs)
       match /mailUsers/{mailUserId} {
         allow read, write: if false;
@@ -69,17 +68,6 @@ service cloud.firestore {
       match /mailAuditLogs/{logId} {
         allow read, write: if false;
       }
-    }
-
-    // ─── Payment Vouchers ─────────────────────────────────────────────────────
-    // Users can submit and view their own vouchers; records are immutable.
-    match /paymentVouchers/{voucherId} {
-      allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.amount is number
-        && request.resource.data.amount > 0;
-      allow read: if isResourceOwner();
-      allow update, delete: if false; // Immutable audit trail
     }
 
     // ─── Team Members ─────────────────────────────────────────────────────────
@@ -106,19 +94,10 @@ service cloud.firestore {
     match /dnsRecords/{recordId} {
       allow create: if isAuthenticated()
         && (request.resource.data.ownerId == request.auth.uid || isSuperAdmin())
-        && request.resource.data.type in ['A', 'CNAME', 'MX', 'TXT']
+        && request.resource.data.type in ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'CAA', 'PTR', 'NS']
         && request.resource.data.name is string
         && request.resource.data.content is string;
       allow read, update, delete: if isResourceOwner() || isSuperAdmin();
-    }
-
-    // ─── Site Modifications ───────────────────────────────────────────────────
-    // Owners can create and read modification requests; updates are admin-only.
-    match /siteModifications/{modId} {
-      allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid;
-      allow read: if isResourceOwner();
-      allow update, delete: if false; // Managed by admin backend only
     }
 
     // ─── Support Tickets ──────────────────────────────────────────────────────
@@ -136,85 +115,10 @@ service cloud.firestore {
       allow delete: if false; // Immutable audit trail
     }
 
-    // ─── Email Routing Configs ─────────────────────────────────────────────────
-    // Stores per-org email routing activation state and domain security parameters.
-    match /emailRoutingConfigs/{configId} {
-      allow create: if isAuthenticated()
-        && (request.resource.data.ownerId == request.auth.uid || isSuperAdmin())
-        && request.resource.data.organizationId is string
-        && request.resource.data.domainName is string
-        && request.resource.data.isServiceActive is bool;
-      allow read: if isAuthenticated() && (resource == null || isResourceOwner() || isSuperAdmin());
-      allow update: if isResourceOwner() || isSuperAdmin();
-      allow delete: if false; // Prevent accidental service deactivation
-    }
-
-    // ─── Forwarding Rules ─────────────────────────────────────────────────────
-    // Email forwarding rules separation: alias routing rules are distinct from mailboxes.
-    match /forwardingRules/{ruleId} {
-      allow create: if isAuthenticated()
-        && (request.resource.data.ownerId == request.auth.uid || isSuperAdmin())
-        && request.resource.data.organizationId is string
-        && (
-          ('aliasEmail' in request.resource.data && request.resource.data.aliasEmail is string) ||
-          ('aliasPrefix' in request.resource.data && request.resource.data.aliasPrefix is string)
-        )
-        && request.resource.data.destinationEmail is string;
-      allow read, delete: if isResourceOwner() || isSuperAdmin();
-      allow update: if false; // Immutable audit trail — delete and recreate
-    }
-
     // ─── User Profiles ────────────────────────────────────────────────────────
     // Users can only read/write their own profile document.
     match /users/{userId} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
-    }
-
-    // ─── Workspace Storage Policies ──────────────────────────────────────────
-    // Per-org storage quota tracking. Owners can create, read, and update.
-    match /workspaceStoragePolicies/{policyId} {
-      allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.orgId is string;
-      allow read, update: if isResourceOwner();
-      allow delete: if false;
-    }
-
-    // ─── Workspace Archive Logs ──────────────────────────────────────────────
-    // Immutable audit trail for user suspension/deletion actions.
-    match /workspaceArchiveLogs/{logId} {
-      allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.orgId is string
-        && request.resource.data.userEmail is string
-        && request.resource.data.action is string;
-      allow read: if isResourceOwner();
-      allow update, delete: if false;
-    }
-
-    // ─── Workspace Alumni ────────────────────────────────────────────────────
-    // Tracks active workspace users marked as Alumni.
-    match /workspaceAlumni/{alumniId} {
-      allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.orgId is string
-        && request.resource.data.email is string;
-      allow read: if isResourceOwner();
-      allow update: if isResourceOwner();
-      allow delete: if isResourceOwner();
-    }
-
-    // ─── Workspace Custom OUs ────────────────────────────────────────────────
-    // Custom organizational unit types (up to 5 per org, enforced client-side).
-    match /workspaceCustomOUs/{ouId} {
-      allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.orgId is string
-        && request.resource.data.name is string
-        && request.resource.data.ouPath is string;
-      allow read: if isResourceOwner();
-      allow update: if isResourceOwner();
-      allow delete: if isResourceOwner();
     }
   }
 }

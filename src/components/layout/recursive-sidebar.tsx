@@ -9,14 +9,9 @@ import {
   Settings,
   LayoutDashboard,
   Mail,
-  GraduationCap,
-  HardDrive,
-  UserMinus,
-  Library,
   ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useActiveOrg } from "@/hooks/use-active-org"
 
 interface NavItem {
   title: string
@@ -27,16 +22,10 @@ interface NavItem {
 
 export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname()
-  const { activeOrg } = useActiveOrg()
-
-  const isWorkspaceActive = activeOrg?.workspaceStatus === "active"
 
   const isItemActive = (href: string) => {
     if (href === "/account/home") {
       return pathname === "/account/home" || pathname === "/"
-    }
-    if (href === "/services/workspace") {
-      return pathname === "/services/workspace"
     }
     return pathname === href || pathname.startsWith(href + "/")
   }
@@ -48,22 +37,6 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
   const serviceItems: NavItem[] = [
     { title: "DNS Management", icon: Globe, href: "/services/dns" },
     { title: "Email Service", icon: Mail, href: "/services/email" },
-  ]
-
-  const workspaceItems: NavItem[] = [
-    ...(activeOrg?.isEducation && !isWorkspaceActive
-      ? [{ title: "Google Workspace", icon: GraduationCap, href: "/services/workspace" }]
-      : []),
-    ...(isWorkspaceActive && activeOrg?.isEducation
-      ? [
-          { title: "Workspace Overview", icon: GraduationCap, href: "/services/workspace" },
-          { title: "Users", icon: Users, href: "/services/workspace/users" },
-          { title: "Classes & Sections", icon: Library, href: "/management/academics" },
-          { title: "Storage", icon: HardDrive, href: "/services/workspace/storage" },
-          { title: "Deactivated Users", icon: UserMinus, href: "/services/workspace/deactivated" },
-          { title: "Alumni Manager", icon: GraduationCap, href: "/services/workspace/alumni" },
-        ]
-      : []),
   ]
 
   const bottomNavItems: NavItem[] = [
@@ -136,16 +109,6 @@ export function RecursiveSidebar({ mobile = false }: { mobile?: boolean }) {
           </div>
           {renderNavList(serviceItems)}
         </div>
-
-        {/* Workspace (Education only) */}
-        {workspaceItems.length > 0 && (
-          <div className="pt-2 border-t border-slate-200/80">
-            <div className="px-2.5 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Workspace
-            </div>
-            {renderNavList(workspaceItems)}
-          </div>
-        )}
       </nav>
 
       {/* Bottom Pinned Items */}

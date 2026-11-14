@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     default: 'Revlet Console | Enterprise IT Management & Cloud Infrastructure',
     template: '%s | Revlet Console',
   },
-  description: 'Official administrative console for Revlet. Unified multi-tenant control plane for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
+  description: 'Official administrative console for Revlet. Unified multi-tenant control plane for DNS Management, Email Service, and Institutional Identity.',
   applicationName: 'Revlet Console',
   keywords: [
     'Revlet Console',
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     'IT Management Platform',
     'Cloudflare DNS Management',
     'Cloudflare API v4',
-    'Google Workspace for Education',
+    'Enterprise Email Service',
     'Google Admin SDK',
     'Domain-Wide Delegation',
     'Custom Email Routing',
@@ -85,7 +85,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'Revlet Console | Enterprise IT Management & Cloud Infrastructure',
-    description: 'Official administrative console for Revlet. Unified multi-tenant control plane for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
+    description: 'Official administrative console for Revlet. Unified multi-tenant control plane for DNS Management, Email Service, and Institutional Identity.',
     type: 'website',
     url: 'https://app.revlet.me',
     locale: 'en_US',
@@ -102,7 +102,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Revlet Console | Enterprise IT Management & Cloud Infrastructure',
-    description: 'Official administrative console for Revlet. Unified multi-tenant control plane for Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity.',
+    description: 'Official administrative console for Revlet. Unified multi-tenant control plane for DNS Management, Email Service, and Institutional Identity.',
     creator: '@revlet',
     images: ['/og-image.png'],
   },
@@ -122,8 +122,8 @@ export const metadata: Metadata = {
     'geo.region': 'Global',
     'geo.placename': 'Worldwide',
     'DC.title': 'Revlet Console - Enterprise IT Management & Cloud Infrastructure Control Plane',
-    'DC.description': 'Official administrative console for Cloudflare DNS, Email Routing, and Google Workspace for Education.',
-    'DC.subject': 'Cloudflare DNS, Google Workspace Admin SDK, Email Routing, Multi-Tenant IT Platform',
+    'DC.description': 'Official administrative console for DNS Management and Enterprise Email Service.',
+    'DC.subject': 'DNS Management, Email Service, Multi-Tenant IT Platform',
   },
 };
 
@@ -149,7 +149,7 @@ const knowledgeGraphSchema = {
       image: {
         '@id': 'https://revlet.me/#logo',
       },
-      description: 'Open-source enterprise multi-tenant IT management control plane for Cloudflare DNS, Email Routing, and Google Workspace for Education.',
+      description: 'Multi-tenant IT management control plane for DNS Management and Enterprise Email Service.',
       foundingDate: '2024',
       founder: {
         '@type': 'Person',
@@ -172,7 +172,7 @@ const knowledgeGraphSchema = {
       },
       knowsAbout: [
         'Cloudflare DNS & Edge Infrastructure',
-        'Google Workspace for Education',
+        'Enterprise Email Service',
         'Google Admin SDK',
         'Domain-Wide Delegation',
         'Email Routing Protocols',
@@ -222,7 +222,7 @@ const knowledgeGraphSchema = {
       ],
       knowsAbout: [
         'Cloudflare DNS & Edge Infrastructure',
-        'Google Workspace for Education',
+        'Enterprise Email Service',
         'Google Admin SDK',
         'Next.js & TypeScript Architecture',
         'Zero-Trust Multi-Tenancy',
@@ -268,7 +268,7 @@ const knowledgeGraphSchema = {
       downloadUrl: 'https://github.com/codexshivam/revlet',
       screenshot: 'https://app.revlet.me/og-image.png',
       isAccessibleForFree: true,
-      description: 'Official cloud console for Revlet. Manage Cloudflare DNS, Email Routing, Google Workspace for Education, and Institutional Identity from one unified dashboard.',
+      description: 'Official cloud console for Revlet. Manage DNS Management, Email Service, and Institutional Identity from one unified dashboard.',
       offers: {
         '@type': 'Offer',
         price: '0',
@@ -291,7 +291,7 @@ const knowledgeGraphSchema = {
         'Authoritative Cloudflare DNS Management',
         'Cloudflare Email Forwarding & Routing',
         'SPF, DKIM, and DMARC Compliance Auditing',
-        'Google Workspace for Education User & OU Lifecycle Management',
+        'Enterprise Email Service & Mailbox Lifecycle Management',
         'Google Drive Institutional Storage Pool Monitoring',
         'Google Alert Center Security Event Ingestion',
         'Batch CSV User Ingestion',
@@ -322,7 +322,7 @@ const knowledgeGraphSchema = {
           '@id': 'https://app.revlet.me/login#webpage',
           url: 'https://app.revlet.me/login',
           name: 'Console Sign In',
-          description: 'Sign in to the Revlet Console to manage DNS, email routing, and Google Workspace.',
+          description: 'Sign in to the Revlet Console to manage DNS and Email Service.',
         },
         {
           '@type': 'WebPage',
@@ -351,7 +351,7 @@ const knowledgeGraphSchema = {
           '@type': 'SiteNavigationElement',
           position: 1,
           name: 'Console',
-          description: 'Use the console to manage everything powering your domain — DNS records, custom email routing, and Google Workspace users.',
+          description: 'Use the console to manage everything powering your domain — DNS records and enterprise email service.',
           url: 'https://app.revlet.me/login',
         },
         {
@@ -411,7 +411,7 @@ const knowledgeGraphSchema = {
           name: 'What is the Revlet Console?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'The Revlet Console is the centralized cloud management portal located at app.revlet.me. It provides authorized administrators with unified control over Cloudflare DNS, Email Routing, and Google Workspace for Education.',
+            text: 'The Revlet Console is the centralized cloud management portal located at app.revlet.me. It provides authorized administrators with unified control over DNS Management and Enterprise Email Service.',
           },
         },
         {
@@ -424,18 +424,18 @@ const knowledgeGraphSchema = {
         },
         {
           '@type': 'Question',
-          name: 'How does Revlet manage Google Workspace for Education?',
+          name: 'How does Revlet manage Email Service?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Revlet integrates with the Google Workspace Admin SDK using a Google Cloud Service Account configured with Domain-Wide Delegation (DWD). It enables administrators to provision users, manage Organizational Units (OUs), monitor Google Drive storage quotas, and ingest security alerts directly without logging into the Google Admin Console.',
+            text: 'Revlet provisions custom domain mailboxes, groups, and organizational units with automated SPF, DKIM, and DMARC authentication and per-organization quota enforcement.',
           },
         },
         {
           '@type': 'Question',
-          name: 'How does Revlet interact with Cloudflare DNS and Email Routing?',
+          name: 'How does Revlet manage DNS?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Revlet uses Cloudflare API v4 with organization-scoped bearer tokens to execute atomic CRUD operations on DNS records (A, AAAA, CNAME, MX, TXT, SRV), toggle CDN proxying, purge edge caches, configure SSL/TLS encryption, and manage custom email forwarding aliases.',
+            text: 'Revlet executes atomic CRUD operations on DNS records (A, AAAA, CNAME, MX, TXT, SRV, CAA, PTR, NS), supports point-in-time zone snapshots, and allows managed or Bring-Your-Own-Token zones.',
           },
         },
         {

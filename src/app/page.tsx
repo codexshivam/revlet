@@ -26,7 +26,7 @@ export default function RootPage() {
           Revlet Console
         </h1>
         <p className="text-xs text-slate-600 leading-relaxed">
-          Unified administrative cloud control plane for Cloudflare DNS, Custom Email Routing, and Google Workspace for Education.
+          Unified administrative cloud control plane for DNS Management and Enterprise Email Service.
         </p>
 
         <div className="pt-2 flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-primary">

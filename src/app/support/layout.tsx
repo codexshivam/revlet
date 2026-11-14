@@ -11,7 +11,8 @@ export const metadata: Metadata = {
     'Revlet support',
     'IT help desk',
     'Cloudflare DNS troubleshooting',
-    'Google Workspace delegation help',
+    'DNS Management help',
+    'Email Service help',
     'SPF DKIM assistance',
   ],
   openGraph: {

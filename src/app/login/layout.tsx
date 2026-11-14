@@ -3,7 +3,7 @@ import { JsonLd } from '@/components/seo/json-ld';
 
 export const metadata: Metadata = {
   title: 'Console',
-  description: 'Use the console to manage everything powering your domain — DNS records, custom email routing, and Google Workspace users.',
+  description: 'Use the console to manage everything powering your domain — DNS Management and Email Service.',
   alternates: {
     canonical: 'https://app.revlet.me/login',
   },
@@ -12,7 +12,8 @@ export const metadata: Metadata = {
     'Revlet login',
     'IT management sign in',
     'Cloudflare DNS portal',
-    'Google Workspace admin login',
+    'DNS Management login',
+    'Email Service login',
     'school IT dashboard',
   ],
   openGraph: {

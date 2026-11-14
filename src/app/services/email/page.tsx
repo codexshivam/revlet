@@ -1387,7 +1387,7 @@ export default function EmailServiceAdminPage() {
             <ServiceActivationCard
               domain={selectedOrg.domain}
               domainIcon={<Mail className="w-3.5 h-3.5 text-white" />}
-              title="Revlet Email Service"
+              title="RevletMail Service"
               description="Dedicated business email hosting for your organization with automated deliverability and centralized directory control."
               features={[
                 {

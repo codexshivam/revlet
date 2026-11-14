@@ -155,7 +155,7 @@ export function PublicSupportView() {
             </div>
 
             <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm space-y-2">
-              <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
                 <FileCode2 className="w-4 h-4" />
               </div>
               <h3 className="text-sm font-headline font-bold text-slate-900">

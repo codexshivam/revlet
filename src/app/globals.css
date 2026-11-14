@@ -38,6 +38,9 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-headline;
   }
+  code, kbd, samp, pre {
+    font-family: inherit;
+  }
 }
 
 .custom-scrollbar::-webkit-scrollbar {

@@ -135,10 +135,9 @@ export default function EmailServiceAdminPage() {
 
   // Pre-computed fallback DNS records for immediate display before network resolution
   const fallbackDnsRecords = useMemo<MailRequiredDnsRecord[]>(() => {
-    if (!selectedOrg?.domain) return []
-    const domain = selectedOrg.domain.toLowerCase().trim()
+    const domain = (selectedOrg?.domain || "revlet.me").toLowerCase().trim()
     const tokens =
-      selectedOrg.mailDkimTokens &&
+      selectedOrg?.mailDkimTokens &&
       Array.isArray(selectedOrg.mailDkimTokens) &&
       selectedOrg.mailDkimTokens.length === 3
         ? selectedOrg.mailDkimTokens
@@ -1165,11 +1164,11 @@ export default function EmailServiceAdminPage() {
                     Required Routing Records for {selectedOrg.domain}
                   </span>
                   <span className="text-xs font-mono text-slate-500 tabular-nums">
-                    {displayDnsRecords.length} {displayDnsRecords.length === 1 ? "Record" : "Records"}
+                    {displayDnsRecords.length || 6} Records
                   </span>
                 </div>
 
-                {isLoadingQuota && requiredDnsRecords.length === 0 && displayDnsRecords.length === 0 ? (
+                {displayDnsRecords.length === 0 ? (
                   <div className="rounded-lg border border-slate-200/80 bg-white divide-y divide-slate-100 p-2 space-y-2">
                     {[1, 2, 3, 4, 5, 6].map((i) => (
                       <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-4">
@@ -1203,9 +1202,7 @@ export default function EmailServiceAdminPage() {
                 )}
 
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  {dnsServiceActive
-                    ? `Activating Email Service snapshots your zone and writes these ${displayDnsRecords.length} records to ${selectedOrg.domain} immediately.`
-                    : `After activation, copy these ${displayDnsRecords.length} records from Settings into your domain registrar/DNS provider for ${selectedOrg.domain}.`}
+                  Activating Email Service snapshots your zone and writes these {displayDnsRecords.length || 6} records to {selectedOrg.domain} immediately.
                 </p>
               </div>
             </div>
@@ -1600,7 +1597,7 @@ export default function EmailServiceAdminPage() {
                         </TableCell>
 
                         <TableCell className="py-3.5">
-                          {u.aliases.length === 0 ? (
+                          {(u.aliases || []).length === 0 ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -1624,8 +1621,8 @@ export default function EmailServiceAdminPage() {
                               }}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 hover:bg-slate-200/80 text-slate-700 transition-colors cursor-pointer"
                             >
-                              <span className="font-mono tabular-nums font-semibold">{u.aliases.length}</span>
-                              <span>{u.aliases.length === 1 ? "Alias" : "Aliases"}</span>
+                              <span className="font-mono tabular-nums font-semibold">{(u.aliases || []).length}</span>
+                              <span>{(u.aliases || []).length === 1 ? "Alias" : "Aliases"}</span>
                             </button>
                           )}
                         </TableCell>

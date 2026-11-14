@@ -16,14 +16,7 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.admin == true ||
-        (
-          request.auth.token.email != null &&
-          request.auth.token.email_verified == true &&
-          request.auth.token.email.lower() == 'shivam@revlet.me'
-        )
-      );
+      return isAuthenticated() && request.auth.token.admin == true;
     }
 
     // ─── Organizations ────────────────────────────────────────────────────────
@@ -89,16 +82,7 @@ service cloud.firestore {
       allow delete: if isResourceOwner();
     }
 
-    // ─── DNS Records ─────────────────────────────────────────────────────────
-    // Owners of the associated organization can manage DNS records.
-    match /dnsRecords/{recordId} {
-      allow create: if isAuthenticated()
-        && (request.resource.data.ownerId == request.auth.uid || isSuperAdmin())
-        && request.resource.data.type in ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'CAA', 'PTR', 'NS']
-        && request.resource.data.name is string
-        && request.resource.data.content is string;
-      allow read, update, delete: if isResourceOwner() || isSuperAdmin();
-    }
+
 
     // ─── Support Tickets ──────────────────────────────────────────────────────
     // Authenticated users can submit support tickets and view their own.

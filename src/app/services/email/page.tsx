@@ -45,6 +45,7 @@ import {
   Mail,
   Plus,
   MoreVertical,
+  PowerOff,
   Search,
   KeyRound,
   UserPen,
@@ -427,7 +428,7 @@ export default function EmailServiceAdminPage() {
     const full =
       `Required DNS Records for ${selectedOrg.domain}:\n\n` +
       text +
-      `\n\nAdd these records at your DNS registrar (GoDaddy, Namecheap, Cloudflare, Route53, etc.) to activate Email Service.`
+      `\n\nAdd these records at your DNS provider to activate Email Service.`
 
     navigator.clipboard.writeText(full)
     setCopiedKey("all-records")
@@ -1453,15 +1454,10 @@ export default function EmailServiceAdminPage() {
     <DashboardShell>
       <div className="space-y-6 animate-in fade-in duration-300">
         {/* Page header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-headline font-semibold text-slate-900 tracking-tight">
-              Email Service
-            </h1>
-            <p className="text-xs text-slate-500">
-              Directory, aliases, organizational units, distribution groups, and domain routing
-            </p>
-          </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+          <h1 className="text-2xl font-headline font-semibold text-slate-900 tracking-tight">
+            Email Service
+          </h1>
 
           <div className="flex items-center gap-2 flex-wrap">
             <Button
@@ -1472,7 +1468,7 @@ export default function EmailServiceAdminPage() {
               className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
             >
               <RefreshCw
-                className={cn("w-4 h-4 mr-2 text-slate-400", isRefreshing && "animate-spin")}
+                className={cn("w-3.5 h-3.5 mr-2 text-slate-400", isRefreshing && "animate-spin")}
                 strokeWidth={1.5}
               />
               Refresh
@@ -1488,6 +1484,42 @@ export default function EmailServiceAdminPage() {
                 {orgUnits.length + 1}
               </span>
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors gap-1.5"
+                >
+                  <MoreVertical className="w-3.5 h-3.5 text-slate-500" />
+                  More Actions
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 bg-white border border-slate-200 shadow-md rounded-xl p-1">
+                <DropdownMenuItem
+                  onSelect={() => handleSyncDnsRecords()}
+                  className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <span>Verify DNS Propagation</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => window.open("https://mail.revlet.me", "_blank", "noopener,noreferrer")}
+                  className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <span>Open RevletMail</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => setIsDeactivateConfirmOpen(true)}
+                  className="group gap-2 py-2 text-xs text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white cursor-pointer rounded-md"
+                >
+                  <PowerOff className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <span>Disable Email Service</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -1893,9 +1925,9 @@ export default function EmailServiceAdminPage() {
                                     orgUnitPath: u.orgUnitPath || "/",
                                   })
                                 }}
-                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-400 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                               >
-                                <UserPen className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <UserPen className="w-4 h-4" strokeWidth={1.5} />
                                 <span>Update Account Name</span>
                               </DropdownMenuItem>
 
@@ -1904,9 +1936,9 @@ export default function EmailServiceAdminPage() {
                                   setPasswordTargetUser(u)
                                   setNewPasswordValue("")
                                 }}
-                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-400 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                               >
-                                <KeyRound className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <KeyRound className="w-4 h-4" strokeWidth={1.5} />
                                 <span>Reset Password</span>
                               </DropdownMenuItem>
 
@@ -1917,11 +1949,11 @@ export default function EmailServiceAdminPage() {
                                   setEditingAliasOriginal(null)
                                   setEditingAliasPrefix("")
                                 }}
-                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-400 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                               >
-                                <AtSign className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <AtSign className="w-4 h-4" strokeWidth={1.5} />
                                 <span className="flex-1">Manage Email Aliases</span>
-                                <span className="font-mono text-slate-400 tabular-nums">
+                                <span className="font-mono text-slate-400 group-focus:text-white/80 group-data-[highlighted]:text-white/80 tabular-nums">
                                   {u.aliases.length}
                                 </span>
                               </DropdownMenuItem>
@@ -1930,7 +1962,7 @@ export default function EmailServiceAdminPage() {
 
                               <DropdownMenuItem
                                 onSelect={() => handleSuspendOrReactivateUser(u, true)}
-                                className="gap-2 py-2 text-xs text-amber-700 focus:text-amber-800 cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs text-amber-700 focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white cursor-pointer rounded-md"
                               >
                                 <Ban className="w-4 h-4" strokeWidth={1.5} />
                                 <span>Suspend Account</span>
@@ -1938,7 +1970,7 @@ export default function EmailServiceAdminPage() {
 
                               <DropdownMenuItem
                                 onSelect={() => setDeletingUser(u)}
-                                className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white cursor-pointer rounded-md"
                               >
                                 <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                                 <span>Delete Email Account</span>
@@ -2145,9 +2177,9 @@ export default function EmailServiceAdminPage() {
                                     orgUnitPath: g.orgUnitPath || "/",
                                   })
                                 }}
-                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-400 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                               >
-                                <Edit2 className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <Edit2 className="w-4 h-4" strokeWidth={1.5} />
                                 <span>Update Group Name</span>
                               </DropdownMenuItem>
 
@@ -2156,11 +2188,11 @@ export default function EmailServiceAdminPage() {
                                   setMembersTargetGroup(g)
                                   setGroupMemberInput("")
                                 }}
-                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-400 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                               >
-                                <Users className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <Users className="w-4 h-4" strokeWidth={1.5} />
                                 <span className="flex-1">Manage Members</span>
-                                <span className="font-mono text-slate-400 tabular-nums">
+                                <span className="font-mono text-slate-400 group-focus:text-white/80 group-data-[highlighted]:text-white/80 tabular-nums">
                                   {g.memberEmails.length}
                                 </span>
                               </DropdownMenuItem>
@@ -2169,7 +2201,7 @@ export default function EmailServiceAdminPage() {
 
                               <DropdownMenuItem
                                 onSelect={() => setDeletingGroup(g)}
-                                className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white cursor-pointer rounded-md"
                               >
                                 <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                                 <span>Delete Group</span>
@@ -2273,15 +2305,15 @@ export default function EmailServiceAdminPage() {
                             >
                               <DropdownMenuItem
                                 onSelect={() => handleSuspendOrReactivateUser(u, false)}
-                                className="gap-2 py-2 text-xs cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-400 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                               >
-                                <RotateCcw className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <RotateCcw className="w-4 h-4" strokeWidth={1.5} />
                                 <span>Reactivate Account</span>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onSelect={() => setDeletingUser(u)}
-                                className="gap-2 py-2 text-xs text-destructive focus:text-destructive cursor-pointer rounded-lg"
+                                className="group gap-2 py-2 text-xs text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white cursor-pointer rounded-md"
                               >
                                 <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                                 <span>Delete Email Account</span>

@@ -985,9 +985,6 @@ export default function AccountHomePage() {
                       <div className="p-4 bg-rose-50/50 border border-rose-200/80 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-0.5">
                           <p className="text-xs font-medium text-rose-900">Delete Organization</p>
-                          <p className="text-xs text-rose-700/80 leading-relaxed">
-                            Permanently decommission DNS configurations, website data, and access for {editingOrg.name}.
-                          </p>
                         </div>
                         <Button
                           variant="destructive"
@@ -1085,7 +1082,7 @@ export default function AccountHomePage() {
                 <AlertDialogDescription asChild>
                   <div className="space-y-3 text-xs text-slate-500 pt-1">
                     <p className="leading-relaxed">
-                      Permanently delete <span className="font-medium text-slate-900">&quot;{editingOrg?.name}&quot;</span>. All DNS records, website configurations, and team access will be decommissioned. This action cannot be undone.
+                      permanently delete <span className="font-medium text-slate-900">&quot;{editingOrg?.name}&quot;</span>. All DNS records, website configurations, and team access will be decommissioned. This action cannot be undone.
                     </p>
                     <div className="space-y-1.5 pt-1">
                       <Label className="text-xs font-medium text-slate-700">

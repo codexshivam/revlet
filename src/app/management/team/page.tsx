@@ -74,9 +74,12 @@ interface TeamMember {
   organizationIds?: string[]
   accessMode?: "admin" | "services"
   permissions?: string[]
+  orgPermissions?: Record<string, string[]>
   status: "Active" | "Pending" | "Suspended"
   invitedBy?: string
 }
+
+type OrgAccessMap = Record<string, { mode: "admin" | "services"; permissions: string[] }>
 
 interface Organization {
   id: string
@@ -131,14 +134,12 @@ export default function TeamManagementPage() {
   const [isInviteOpen, setIsInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteOrgIds, setInviteOrgIds] = useState<string[]>([])
-  const [inviteAccessMode, setInviteAccessMode] = useState<"admin" | "services">("services")
-  const [invitePermissions, setInvitePermissions] = useState<string[]>(["DNS: Read", "Email: Read"])
+  const [inviteOrgAccess, setInviteOrgAccess] = useState<OrgAccessMap>({})
 
   // Edit modal state
   const [memberToEdit, setMemberToEdit] = useState<TeamMember | null>(null)
   const [editOrgIds, setEditOrgIds] = useState<string[]>([])
-  const [editAccessMode, setEditAccessMode] = useState<"admin" | "services">("services")
-  const [editPermissions, setEditPermissions] = useState<string[]>([])
+  const [editOrgAccess, setEditOrgAccess] = useState<OrgAccessMap>({})
 
   // Delete modal state
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null)
@@ -177,29 +178,52 @@ export default function TeamManagementPage() {
   const toggleSelection = (list: string[], value: string): string[] =>
     list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
 
+  const buildOrgPermissionsPayload = (orgIds: string[], accessMap: OrgAccessMap): Record<string, string[]> => {
+    const out: Record<string, string[]> = {}
+    for (const oid of orgIds) {
+      const cfg = accessMap[oid] || { mode: "services", permissions: ["DNS: Read", "Email: Read"] }
+      out[oid] = cfg.mode === "admin" ? [...ADMIN_ALL_PERMISSIONS] : cfg.permissions
+    }
+    return out
+  }
+
+  const isAccessMapValid = (orgIds: string[], accessMap: OrgAccessMap): boolean => {
+    if (orgIds.length === 0) return false
+    return orgIds.every((oid) => {
+      const cfg = accessMap[oid]
+      if (!cfg) return false
+      return cfg.mode === "admin" || cfg.permissions.length > 0
+    })
+  }
+
   const handleOpenInvite = () => {
     setInviteEmail("")
-    setInviteOrgIds(orgs.length > 0 ? [orgs[0].id] : [])
-    setInviteAccessMode("services")
-    setInvitePermissions(["DNS: Read", "Email: Read"])
+    const initialIds = orgs.length > 0 ? [orgs[0].id] : []
+    setInviteOrgIds(initialIds)
+    const initialMap: OrgAccessMap = {}
+    for (const oid of initialIds) {
+      initialMap[oid] = { mode: "services", permissions: ["DNS: Read", "Email: Read"] }
+    }
+    setInviteOrgAccess(initialMap)
     setIsInviteOpen(true)
   }
 
   const handleInvite = async () => {
-    if (!user || !inviteEmail.trim() || inviteOrgIds.length === 0) return
-    if (inviteAccessMode === "services" && invitePermissions.length === 0) return
+    if (!user || !inviteEmail.trim() || !isAccessMapValid(inviteOrgIds, inviteOrgAccess)) return
 
     setIsSubmitting(true)
     try {
       const idToken = await user.getIdToken()
-      const effectivePermissions =
-        inviteAccessMode === "admin" ? [...ADMIN_ALL_PERMISSIONS] : invitePermissions
+      const orgPermissions = buildOrgPermissionsPayload(inviteOrgIds, inviteOrgAccess)
+      const flatPerms = Array.from(new Set(Object.values(orgPermissions).flat()))
+      const hasAnyAdmin = flatPerms.includes(ORG_ADMIN_PERMISSION)
 
       const res = await inviteTeamMember(idToken, {
         email: inviteEmail.trim().toLowerCase(),
         organizationIds: inviteOrgIds,
-        accessMode: inviteAccessMode,
-        permissions: effectivePermissions,
+        accessMode: hasAnyAdmin ? "admin" : "services",
+        permissions: flatPerms,
+        orgPermissions,
       })
 
       if (!res.success) {
@@ -234,27 +258,47 @@ export default function TeamManagementPage() {
 
   const handleOpenEdit = (member: TeamMember) => {
     setMemberToEdit(member)
-    setEditOrgIds(getMemberOrgIds(member))
-    const admin = isMemberAdmin(member)
-    setEditAccessMode(admin ? "admin" : "services")
-    const servicePerms = (member.permissions || []).filter((p) => p !== ORG_ADMIN_PERMISSION)
-    setEditPermissions(servicePerms.length > 0 ? servicePerms : ["DNS: Read", "Email: Read"])
+    const assignedIds = getMemberOrgIds(member)
+    setEditOrgIds(assignedIds)
+    const initialMap: OrgAccessMap = {}
+    const fallbackAdmin = isMemberAdmin(member)
+    const fallbackServicePerms = (member.permissions || []).filter((p) => p !== ORG_ADMIN_PERMISSION)
+    for (const oid of assignedIds) {
+      const rawPerms = member.orgPermissions?.[oid] || member.permissions || []
+      const isOrgAdmin = member.orgPermissions?.[oid]
+        ? rawPerms.includes(ORG_ADMIN_PERMISSION)
+        : fallbackAdmin
+      const servicePerms = rawPerms.filter((p) => p !== ORG_ADMIN_PERMISSION)
+      initialMap[oid] = isOrgAdmin
+        ? { mode: "admin", permissions: [...ADMIN_ALL_PERMISSIONS] }
+        : {
+            mode: "services",
+            permissions:
+              servicePerms.length > 0
+                ? servicePerms
+                : fallbackServicePerms.length > 0
+                ? fallbackServicePerms
+                : ["DNS: Read", "Email: Read"],
+          }
+    }
+    setEditOrgAccess(initialMap)
   }
 
   const handleSaveEdit = async () => {
-    if (!user || !memberToEdit || editOrgIds.length === 0) return
-    if (editAccessMode === "services" && editPermissions.length === 0) return
+    if (!user || !memberToEdit || !isAccessMapValid(editOrgIds, editOrgAccess)) return
 
     setIsSubmitting(true)
     try {
       const idToken = await user.getIdToken()
-      const effectivePermissions =
-        editAccessMode === "admin" ? [...ADMIN_ALL_PERMISSIONS] : editPermissions
+      const orgPermissions = buildOrgPermissionsPayload(editOrgIds, editOrgAccess)
+      const flatPerms = Array.from(new Set(Object.values(orgPermissions).flat()))
+      const hasAnyAdmin = flatPerms.includes(ORG_ADMIN_PERMISSION)
 
       const res = await updateTeamMemberAccess(idToken, memberToEdit.id, {
         organizationIds: editOrgIds,
-        accessMode: editAccessMode,
-        permissions: effectivePermissions,
+        accessMode: hasAnyAdmin ? "admin" : "services",
+        permissions: flatPerms,
+        orgPermissions,
       })
 
       if (!res.success) {
@@ -352,183 +396,230 @@ export default function TeamManagementPage() {
   const renderAccessForm = (
     selectedOrgIds: string[],
     setSelectedOrgIds: (ids: string[]) => void,
-    accessMode: "admin" | "services",
-    setAccessMode: (mode: "admin" | "services") => void,
-    selectedPermissions: string[],
-    setSelectedPermissions: (perms: string[]) => void,
+    orgAccessMap: OrgAccessMap,
+    setOrgAccessMap: React.Dispatch<React.SetStateAction<OrgAccessMap>>,
     idPrefix: string
-  ) => (
-    <div className="space-y-5">
-      {/* Organizations */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs font-medium text-slate-700">
-            Organizations ({selectedOrgIds.length} selected)
-          </Label>
-          {orgs.length > 1 && (
-            <button
-              type="button"
-              onClick={() =>
-                setSelectedOrgIds(
-                  selectedOrgIds.length === orgs.length ? [] : orgs.map((o) => o.id)
-                )
-              }
-              className="text-[11px] font-medium text-primary hover:underline"
-            >
-              {selectedOrgIds.length === orgs.length ? "Clear all" : "Select all"}
-            </button>
-          )}
-        </div>
-        <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100 bg-white">
-          {orgs.map((org) => {
-            const checked = selectedOrgIds.includes(org.id)
-            return (
-              <label
-                key={org.id}
-                htmlFor={`${idPrefix}-org-${org.id}`}
-                className="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-slate-50 cursor-pointer"
-              >
-                <Checkbox
-                  id={`${idPrefix}-org-${org.id}`}
-                  checked={checked}
-                  onCheckedChange={() => setSelectedOrgIds(toggleSelection(selectedOrgIds, org.id))}
-                />
-                <span className="font-medium text-slate-800 truncate">{org.name}</span>
-                {org.domain && (
-                  <span className="font-mono text-[11px] text-slate-400 ml-auto shrink-0">
-                    {org.domain}
-                  </span>
-                )}
-              </label>
-            )
-          })}
-        </div>
-      </div>
+  ) => {
+    const toggleOrg = (orgId: string) => {
+      const nextIds = toggleSelection(selectedOrgIds, orgId)
+      setSelectedOrgIds(nextIds)
+      if (!selectedOrgIds.includes(orgId) && !orgAccessMap[orgId]) {
+        setOrgAccessMap((prev) => ({
+          ...prev,
+          [orgId]: { mode: "services", permissions: ["DNS: Read", "Email: Read"] },
+        }))
+      }
+    }
 
-      {/* Access Level: Admin vs Assign Services */}
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-slate-700">Organization Access Level</Label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => setAccessMode("admin")}
-            className={cn(
-              "text-left rounded-lg border p-3.5 transition-all space-y-1",
-              accessMode === "admin"
-                ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                : "border-slate-200 bg-white hover:border-slate-300"
-            )}
-          >
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-900">
-                <ShieldCheck
-                  className={cn("w-4 h-4", accessMode === "admin" ? "text-primary" : "text-slate-400")}
-                  strokeWidth={1.75}
-                />
-                Admin
-              </span>
-              <span
-                className={cn(
-                  "h-3.5 w-3.5 rounded-full border flex items-center justify-center",
-                  accessMode === "admin" ? "border-primary" : "border-slate-300"
-                )}
-              >
-                {accessMode === "admin" && <span className="h-2 w-2 rounded-full bg-primary" />}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Full access to all services and team management. Cannot delete organizations.
-            </p>
-          </button>
+    const selectAllOrgs = () => {
+      if (selectedOrgIds.length === orgs.length) {
+        setSelectedOrgIds([])
+        return
+      }
+      const allIds = orgs.map((o) => o.id)
+      setSelectedOrgIds(allIds)
+      setOrgAccessMap((prev) => {
+        const next = { ...prev }
+        for (const oid of allIds) {
+          if (!next[oid]) {
+            next[oid] = { mode: "services", permissions: ["DNS: Read", "Email: Read"] }
+          }
+        }
+        return next
+      })
+    }
 
-          <button
-            type="button"
-            onClick={() => setAccessMode("services")}
-            className={cn(
-              "text-left rounded-lg border p-3.5 transition-all space-y-1",
-              accessMode === "services"
-                ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                : "border-slate-200 bg-white hover:border-slate-300"
-            )}
-          >
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-900">
-                <SlidersHorizontal
-                  className={cn("w-4 h-4", accessMode === "services" ? "text-primary" : "text-slate-400")}
-                  strokeWidth={1.75}
-                />
-                Assign Services
-              </span>
-              <span
-                className={cn(
-                  "h-3.5 w-3.5 rounded-full border flex items-center justify-center",
-                  accessMode === "services" ? "border-primary" : "border-slate-300"
-                )}
-              >
-                {accessMode === "services" && <span className="h-2 w-2 rounded-full bg-primary" />}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Grant granular DNS Management or Email Service permissions only.
-            </p>
-          </button>
-        </div>
-      </div>
-
-      {/* Granular Service Permissions (only when Assign Services is chosen) */}
-      {accessMode === "services" && (
+    return (
+      <div className="space-y-5">
+        {/* Organizations */}
         <div className="space-y-2">
-          <Label className="text-xs font-medium text-slate-700">
-            Service Permissions ({selectedPermissions.length} selected)
-          </Label>
-          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3.5 space-y-3">
-            {PERMISSION_GROUPS.map((group) => {
-              const groupOptions = SERVICE_PERMISSION_OPTIONS.filter((opt) => opt.group === group)
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-medium text-slate-700">
+              Organizations ({selectedOrgIds.length} selected)
+            </Label>
+            {orgs.length > 1 && (
+              <button
+                type="button"
+                onClick={selectAllOrgs}
+                className="text-[11px] font-medium text-primary hover:underline"
+              >
+                {selectedOrgIds.length === orgs.length ? "Clear all" : "Select all"}
+              </button>
+            )}
+          </div>
+          <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100 bg-white">
+            {orgs.map((org) => {
+              const checked = selectedOrgIds.includes(org.id)
               return (
-                <div key={group} className="space-y-1.5">
-                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                    {group}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {groupOptions.map((opt) => {
-                      const checked = selectedPermissions.includes(opt.id)
-                      return (
-                        <label
-                          key={opt.id}
-                          htmlFor={`${idPrefix}-perm-${opt.id}`}
-                          className={cn(
-                            "flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs cursor-pointer transition-colors",
-                            checked
-                              ? "border-primary/40 bg-white"
-                              : "border-slate-200 bg-white hover:border-slate-300"
-                          )}
-                        >
-                          <Checkbox
-                            id={`${idPrefix}-perm-${opt.id}`}
-                            checked={checked}
-                            className="mt-0.5"
-                            onCheckedChange={() =>
-                              setSelectedPermissions(toggleSelection(selectedPermissions, opt.id))
-                            }
-                          />
-                          <div className="space-y-0.5">
-                            <span className="text-slate-800 font-medium block">{opt.label}</span>
-                            <span className="text-[10px] text-slate-400 leading-tight block">
-                              {opt.description}
-                            </span>
-                          </div>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
+                <label
+                  key={org.id}
+                  htmlFor={`${idPrefix}-org-${org.id}`}
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-slate-50 cursor-pointer"
+                >
+                  <Checkbox
+                    id={`${idPrefix}-org-${org.id}`}
+                    checked={checked}
+                    onCheckedChange={() => toggleOrg(org.id)}
+                  />
+                  <span className="font-medium text-slate-800 truncate">{org.name}</span>
+                  {org.domain && (
+                    <span className="font-mono text-[11px] text-slate-400 ml-auto shrink-0">
+                      {org.domain}
+                    </span>
+                  )}
+                </label>
               )
             })}
           </div>
         </div>
-      )}
-    </div>
-  )
+
+        {/* Per-Organization Permission Level Settings */}
+        {selectedOrgIds.length > 0 && (
+          <div className="space-y-3">
+            <Label className="text-xs font-medium text-slate-700">
+              Permission Level per Organization
+            </Label>
+            <div className="space-y-3">
+              {selectedOrgIds.map((oid) => {
+                const org = orgMap.get(oid)
+                const cfg = orgAccessMap[oid] || { mode: "services", permissions: [] }
+                const setOrgMode = (mode: "admin" | "services") => {
+                  setOrgAccessMap((prev) => ({
+                    ...prev,
+                    [oid]: {
+                      mode,
+                      permissions:
+                        mode === "admin"
+                          ? [...ADMIN_ALL_PERMISSIONS]
+                          : prev[oid]?.permissions.filter((p) => p !== ORG_ADMIN_PERMISSION) || [
+                              "DNS: Read",
+                              "Email: Read",
+                            ],
+                    },
+                  }))
+                }
+                const toggleOrgPerm = (permId: string) => {
+                  setOrgAccessMap((prev) => {
+                    const current = prev[oid]?.permissions || []
+                    return {
+                      ...prev,
+                      [oid]: {
+                        mode: "services",
+                        permissions: toggleSelection(current, permId),
+                      },
+                    }
+                  })
+                }
+
+                return (
+                  <div
+                    key={oid}
+                    className="rounded-lg border border-slate-200 bg-slate-50/40 p-3.5 space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="text-xs font-semibold text-slate-900 truncate">
+                          {org?.name || "Organization"}
+                        </span>
+                        {org?.domain && (
+                          <span className="text-[11px] font-mono text-slate-400 truncate">
+                            {org.domain}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shrink-0 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => setOrgMode("admin")}
+                          className={cn(
+                            "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1",
+                            cfg.mode === "admin"
+                              ? "bg-primary text-white"
+                              : "text-slate-600 hover:text-slate-900"
+                          )}
+                        >
+                          <ShieldCheck className="w-3 h-3" />
+                          Admin
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOrgMode("services")}
+                          className={cn(
+                            "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1",
+                            cfg.mode === "services"
+                              ? "bg-slate-900 text-white"
+                              : "text-slate-600 hover:text-slate-900"
+                          )}
+                        >
+                          <SlidersHorizontal className="w-3 h-3" />
+                          Assign Services
+                        </button>
+                      </div>
+                    </div>
+
+                    {cfg.mode === "admin" ? (
+                      <p className="text-[11px] text-slate-500">
+                        Full access to all services and team management for this organization (cannot delete organization).
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5 pt-1">
+                        {PERMISSION_GROUPS.map((group) => {
+                          const groupOptions = SERVICE_PERMISSION_OPTIONS.filter(
+                            (opt) => opt.group === group
+                          )
+                          return (
+                            <div key={group} className="space-y-1.5">
+                              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                                {group}
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {groupOptions.map((opt) => {
+                                  const checked = cfg.permissions.includes(opt.id)
+                                  return (
+                                    <label
+                                      key={opt.id}
+                                      htmlFor={`${idPrefix}-${oid}-perm-${opt.id}`}
+                                      className={cn(
+                                        "flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs cursor-pointer transition-colors",
+                                        checked
+                                          ? "border-primary/40 bg-white"
+                                          : "border-slate-200 bg-white hover:border-slate-300"
+                                      )}
+                                    >
+                                      <Checkbox
+                                        id={`${idPrefix}-${oid}-perm-${opt.id}`}
+                                        checked={checked}
+                                        className="mt-0.5"
+                                        onCheckedChange={() => toggleOrgPerm(opt.id)}
+                                      />
+                                      <div className="space-y-0.5">
+                                        <span className="text-slate-800 font-medium block">
+                                          {opt.label}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 leading-tight block">
+                                          {opt.description}
+                                        </span>
+                                      </div>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <DashboardShell>
@@ -549,16 +640,16 @@ export default function TeamManagementPage() {
                     Invite member
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-2xl rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
-                  <DialogHeader className="p-6 pb-2">
+                <DialogContent className="sm:max-w-2xl rounded-xl border border-slate-200 p-0 overflow-hidden bg-white flex flex-col max-h-[90dvh]">
+                  <DialogHeader className="p-5 sm:p-6 pb-3 shrink-0 border-b border-slate-100">
                     <DialogTitle className="font-headline font-semibold text-base text-slate-900">
                       Invite Team Member
                     </DialogTitle>
                     <DialogDescription className="text-slate-500 text-xs">
-                      Assign organizations and choose between Admin or service-level permissions.
+                      Assign organizations and configure Admin or service-level permissions per organization.
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="p-6 pt-2 space-y-5 max-h-[75vh] overflow-y-auto">
+                  <div className="p-5 sm:p-6 space-y-5 flex-1 min-h-0 overflow-y-auto">
                     <div className="space-y-1.5">
                       <Label htmlFor="member-email" className="text-xs font-medium text-slate-700">
                         Email Address
@@ -575,14 +666,12 @@ export default function TeamManagementPage() {
                     {renderAccessForm(
                       inviteOrgIds,
                       setInviteOrgIds,
-                      inviteAccessMode,
-                      setInviteAccessMode,
-                      invitePermissions,
-                      setInvitePermissions,
+                      inviteOrgAccess,
+                      setInviteOrgAccess,
                       "invite"
                     )}
                   </div>
-                  <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+                  <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex flex-row justify-end gap-2 shrink-0">
                     <Button
                       variant="outline"
                       onClick={() => setIsInviteOpen(false)}
@@ -595,8 +684,7 @@ export default function TeamManagementPage() {
                       disabled={
                         isSubmitting ||
                         !inviteEmail.trim() ||
-                        inviteOrgIds.length === 0 ||
-                        (inviteAccessMode === "services" && invitePermissions.length === 0)
+                        !isAccessMapValid(inviteOrgIds, inviteOrgAccess)
                       }
                       className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
                     >
@@ -849,28 +937,26 @@ export default function TeamManagementPage() {
 
         {/* Edit access dialog */}
         <Dialog open={!!memberToEdit} onOpenChange={(open) => !open && setMemberToEdit(null)}>
-          <DialogContent className="sm:max-w-2xl rounded-xl border border-slate-200 p-0 overflow-hidden bg-white">
-            <DialogHeader className="p-6 pb-2">
+          <DialogContent className="sm:max-w-2xl rounded-xl border border-slate-200 p-0 overflow-hidden bg-white flex flex-col max-h-[90dvh]">
+            <DialogHeader className="p-5 sm:p-6 pb-3 shrink-0 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
                 Edit Member Access
               </DialogTitle>
               <DialogDescription className="text-slate-500 text-xs">
-                Update organization allocations and access level for{" "}
+                Update organization allocations and per-organization permissions for{" "}
                 <span className="font-mono text-slate-800">{memberToEdit?.email}</span>.
               </DialogDescription>
             </DialogHeader>
-            <div className="p-6 pt-2 max-h-[75vh] overflow-y-auto">
+            <div className="p-5 sm:p-6 flex-1 min-h-0 overflow-y-auto">
               {renderAccessForm(
                 editOrgIds,
                 setEditOrgIds,
-                editAccessMode,
-                setEditAccessMode,
-                editPermissions,
-                setEditPermissions,
+                editOrgAccess,
+                setEditOrgAccess,
                 "edit"
               )}
             </div>
-            <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+            <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex flex-row justify-end gap-2 shrink-0">
               <Button
                 variant="outline"
                 onClick={() => setMemberToEdit(null)}
@@ -880,11 +966,7 @@ export default function TeamManagementPage() {
               </Button>
               <Button
                 onClick={handleSaveEdit}
-                disabled={
-                  isSubmitting ||
-                  editOrgIds.length === 0 ||
-                  (editAccessMode === "services" && editPermissions.length === 0)
-                }
+                disabled={isSubmitting || !isAccessMapValid(editOrgIds, editOrgAccess)}
                 className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
               >
                 {isSubmitting ? (

@@ -79,6 +79,7 @@ export async function listTeamManagementData(idToken: string) {
           organizationId: data.organizationId,
           organizationIds: data.organizationIds || (data.organizationId ? [data.organizationId] : []),
           permissions: data.permissions || [],
+          orgPermissions: data.orgPermissions || undefined,
           accessMode: data.accessMode || ((data.permissions || []).includes(ORG_ADMIN_PERMISSION) ? 'admin' : 'services'),
           status: data.status || 'Pending',
           invitedBy: data.invitedBy,
@@ -109,17 +110,32 @@ export async function inviteTeamMember(
     organizationIds: string[];
     accessMode?: 'admin' | 'services';
     permissions: string[];
+    orgPermissions?: Record<string, string[]>;
   }
 ) {
   try {
     const caller = await verifyCaller(idToken);
     const targetEmail = (params.email || '').toLowerCase().trim();
     const orgIds = Array.from(new Set((params.organizationIds || []).filter(Boolean)));
-    const accessMode: 'admin' | 'services' = params.accessMode === 'admin' ? 'admin' : 'services';
-    const permissions =
-      accessMode === 'admin'
+    const fallbackAccessMode: 'admin' | 'services' = params.accessMode === 'admin' ? 'admin' : 'services';
+    const fallbackPermissions =
+      fallbackAccessMode === 'admin'
         ? [...ADMIN_ALL_PERMISSIONS]
         : Array.from(new Set((params.permissions || []).filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
+
+    // Build normalized per-organization permissions map
+    const resolvedOrgPermissions: Record<string, string[]> = {};
+    for (const oid of orgIds) {
+      const rawPerms = params.orgPermissions?.[oid] || fallbackPermissions;
+      const isOrgAdmin = rawPerms.includes(ORG_ADMIN_PERMISSION);
+      resolvedOrgPermissions[oid] = isOrgAdmin
+        ? [...ADMIN_ALL_PERMISSIONS]
+        : Array.from(new Set(rawPerms.filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
+    }
+    const permissions = Array.from(new Set(Object.values(resolvedOrgPermissions).flat()));
+    const accessMode: 'admin' | 'services' = permissions.includes(ORG_ADMIN_PERMISSION)
+      ? 'admin'
+      : 'services';
 
     if (!targetEmail || !targetEmail.includes('@')) {
       return { success: false, error: 'Please enter a valid work email address.' };
@@ -130,8 +146,10 @@ export async function inviteTeamMember(
     if (orgIds.length === 0) {
       return { success: false, error: 'Select at least one organization.' };
     }
-    if (permissions.length === 0) {
-      return { success: false, error: 'Select at least one service-level permission.' };
+    for (const oid of orgIds) {
+      if ((resolvedOrgPermissions[oid] || []).length === 0) {
+        return { success: false, error: 'Select at least one permission for each selected organization.' };
+      }
     }
 
     // Verify caller is owner or Org Admin for EVERY selected organization
@@ -195,11 +213,17 @@ export async function inviteTeamMember(
           ...orgIds,
         ])
       );
+      const mergedOrgPermissions: Record<string, string[]> = {
+        ...(existingData.orgPermissions || {}),
+        ...resolvedOrgPermissions,
+      };
+      const mergedFlatPerms = Array.from(new Set(Object.values(mergedOrgPermissions).flat()));
       await existingDoc.ref.update({
         organizationIds: mergedOrgIds,
         organizationId: mergedOrgIds[0],
-        accessMode,
-        permissions,
+        accessMode: mergedFlatPerms.includes(ORG_ADMIN_PERMISSION) ? 'admin' : 'services',
+        permissions: mergedFlatPerms,
+        orgPermissions: mergedOrgPermissions,
         ownerName: ownerDisplayName,
         status: existingData.status === 'Suspended' ? 'Suspended' : initialStatus,
         ...(existingUserUid ? { memberUid: existingUserUid } : {}),
@@ -215,6 +239,7 @@ export async function inviteTeamMember(
         ownerName: ownerDisplayName,
         accessMode,
         permissions,
+        orgPermissions: resolvedOrgPermissions,
         status: initialStatus,
         ...(existingUserUid ? { memberUid: existingUserUid } : {}),
         invitedAt: FieldValue.serverTimestamp(),
@@ -225,10 +250,11 @@ export async function inviteTeamMember(
     // Allocate organizations (unless suspended)
     const batch = adminDb.batch();
     for (const orgDoc of orgDocs) {
+      const orgPerms = resolvedOrgPermissions[orgDoc.id] || permissions;
       batch.update(orgDoc.ref, {
         ownerName: ownerDisplayName,
         memberEmails: FieldValue.arrayUnion(targetEmail),
-        [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]: permissions,
+        [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]: orgPerms,
       });
     }
     await batch.commit();
@@ -309,7 +335,8 @@ export async function updateTeamMemberStatus(
       } else {
         batch.update(orgRef, {
           memberEmails: FieldValue.arrayUnion(targetEmail),
-          [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]: data.permissions || [],
+          [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]:
+            data.orgPermissions?.[orgId] || data.permissions || [],
         });
       }
     }
@@ -327,7 +354,12 @@ export async function updateTeamMemberStatus(
 export async function updateTeamMemberAccess(
   idToken: string,
   memberId: string,
-  params: { organizationIds: string[]; accessMode?: 'admin' | 'services'; permissions: string[] }
+  params: {
+    organizationIds: string[];
+    accessMode?: 'admin' | 'services';
+    permissions: string[];
+    orgPermissions?: Record<string, string[]>;
+  }
 ) {
   try {
     const caller = await verifyCaller(idToken);
@@ -345,17 +377,32 @@ export async function updateTeamMemberAccess(
       : [];
 
     const nextOrgIds = Array.from(new Set((params.organizationIds || []).filter(Boolean)));
-    const accessMode: 'admin' | 'services' = params.accessMode === 'admin' ? 'admin' : 'services';
-    const nextPermissions =
-      accessMode === 'admin'
+    const fallbackAccessMode: 'admin' | 'services' = params.accessMode === 'admin' ? 'admin' : 'services';
+    const fallbackPermissions =
+      fallbackAccessMode === 'admin'
         ? [...ADMIN_ALL_PERMISSIONS]
         : Array.from(new Set((params.permissions || []).filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
+
+    const resolvedOrgPermissions: Record<string, string[]> = {};
+    for (const oid of nextOrgIds) {
+      const rawPerms = params.orgPermissions?.[oid] || fallbackPermissions;
+      const isOrgAdmin = rawPerms.includes(ORG_ADMIN_PERMISSION);
+      resolvedOrgPermissions[oid] = isOrgAdmin
+        ? [...ADMIN_ALL_PERMISSIONS]
+        : Array.from(new Set(rawPerms.filter((p) => Boolean(p) && p !== ORG_ADMIN_PERMISSION)));
+    }
+    const nextPermissions = Array.from(new Set(Object.values(resolvedOrgPermissions).flat()));
+    const accessMode: 'admin' | 'services' = nextPermissions.includes(ORG_ADMIN_PERMISSION)
+      ? 'admin'
+      : 'services';
 
     if (nextOrgIds.length === 0) {
       return { success: false, error: 'Select at least one organization.' };
     }
-    if (nextPermissions.length === 0) {
-      return { success: false, error: 'Select at least one permission.' };
+    for (const oid of nextOrgIds) {
+      if ((resolvedOrgPermissions[oid] || []).length === 0) {
+        return { success: false, error: 'Select at least one permission for each selected organization.' };
+      }
     }
 
     // Verify caller is owner or Org Admin of all new orgs
@@ -376,6 +423,7 @@ export async function updateTeamMemberAccess(
       organizationId: nextOrgIds[0],
       accessMode,
       permissions: nextPermissions,
+      orgPermissions: resolvedOrgPermissions,
       updatedAt: FieldValue.serverTimestamp(),
     });
 
@@ -395,7 +443,7 @@ export async function updateTeamMemberAccess(
       for (const orgDoc of nextOrgDocs) {
         batch.update(orgDoc.ref, {
           memberEmails: FieldValue.arrayUnion(targetEmail),
-          [permKey]: nextPermissions,
+          [permKey]: resolvedOrgPermissions[orgDoc.id] || nextPermissions,
         });
       }
     }

@@ -1641,44 +1641,6 @@ export default function EmailServiceAdminPage() {
                   {orgUnits.length + 1}
                 </span>
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors gap-1.5"
-                  >
-                    <MoreVertical className="w-3.5 h-3.5 text-slate-500" />
-                    More Actions
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52 bg-white border border-slate-200 shadow-md rounded-xl p-1">
-                  <DropdownMenuItem
-                    onSelect={() => handleSyncDnsRecords()}
-                    className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span>Verify DNS Propagation</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setBulkImportErrors([])
-                      setIsBulkImportOpen(true)
-                    }}
-                    className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
-                  >
-                    <Upload className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span>Bulk Import Users</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={handleExportUsersCsv}
-                    className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
-                  >
-                    <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span>Export Users (CSV)</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </>
           }
         />

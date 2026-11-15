@@ -35,8 +35,9 @@ export function TopHeader() {
         {/* Mobile brand mark */}
         <Link
           href="/account/home"
-          className="lg:hidden flex items-center pr-1 sm:pr-2 shrink-0 hover:opacity-85 transition-opacity"
+          className="lg:hidden flex items-center gap-2 pr-1 sm:pr-2 shrink-0 hover:opacity-85 transition-opacity"
         >
+          <img src="/favicon.svg" alt="" className="w-6 h-6 shrink-0" />
           <span className="font-bold text-[18px] tracking-tight text-slate-950 font-headline">
             Revlet
           </span>

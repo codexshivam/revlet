@@ -23,6 +23,7 @@ export function PublicSupportView() {
             href="/"
             className="flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary rounded-lg p-1"
           >
+            <img src="/favicon.svg" alt="" className="w-6 h-6 shrink-0" />
             <span className="font-semibold text-base tracking-tight text-slate-900">
               Revlet
             </span>

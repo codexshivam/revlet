@@ -13,8 +13,9 @@ export function AuthFrame({ children, className }: AuthFrameProps) {
       <header className="w-full bg-white border-b border-slate-200 px-4 sm:px-8 lg:px-12 h-14 flex items-center justify-between shrink-0">
         <Link
           href="https://revlet.me"
-          className="flex items-center hover:opacity-85 transition-opacity"
+          className="flex items-center gap-2 hover:opacity-85 transition-opacity"
         >
+          <img src="/favicon.svg" alt="" className="w-6 h-6 shrink-0" />
           <span className="font-semibold text-base tracking-tight text-slate-900">
             Revlet
           </span>

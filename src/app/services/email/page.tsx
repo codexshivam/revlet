@@ -277,7 +277,7 @@ export default function EmailServiceAdminPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     const tabParam = new URLSearchParams(window.location.search).get("tab")
-    if (tabParam && ["users", "groups", "suspended", "governance", "settings"].includes(tabParam)) {
+    if (tabParam && ["users", "groups", "shared", "suspended", "governance", "settings"].includes(tabParam)) {
       setActiveTabState(tabParam)
     }
   }, [])
@@ -1973,6 +1973,13 @@ export default function EmailServiceAdminPage() {
               </TabsTrigger>
 
               <TabsTrigger
+                value="shared"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                Shared Mailboxes
+              </TabsTrigger>
+
+              <TabsTrigger
                 value="suspended"
                 className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
               >
@@ -3064,9 +3071,15 @@ export default function EmailServiceAdminPage() {
             </div>
           </TabsContent>
 
+          <TabsContent value="shared" className="mt-0">
+            {selectedOrgId && (
+              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="shared" />
+            )}
+          </TabsContent>
+
           <TabsContent value="governance" className="mt-0">
             {selectedOrgId && (
-              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} />
+              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="quarantine" />
             )}
           </TabsContent>
         </Tabs>

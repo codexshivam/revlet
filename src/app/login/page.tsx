@@ -217,10 +217,24 @@ export default function LoginPage() {
 
     setIsResetLoading(true)
     try {
-      await sendPasswordResetEmail(auth, resetEmail.trim())
+      const res = await fetch("/api/auth/action-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "password_reset",
+          email: resetEmail.trim(),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.ok) {
+        if (data?.code === "auth/user-not-found") {
+          throw { code: "auth/user-not-found" }
+        }
+        await sendPasswordResetEmail(auth, resetEmail.trim())
+      }
       toast({
         title: "Reset link sent",
-        description: "Check your email for password reset instructions.",
+        description: "Check your email for password reset instructions from accounts@revlet.me.",
       })
       setIsResetOpen(false)
       setResetEmail("")

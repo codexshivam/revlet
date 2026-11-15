@@ -61,17 +61,51 @@ export async function GET(req: NextRequest) {
     const orgDoc = orgSnap.docs[0];
     const orgData = orgDoc.data();
 
-    const [usersSnap, groupsSnap, ousSnap] = await Promise.all([
+    const [usersSnap, groupsSnap, ousSnap, sharedSnap] = await Promise.all([
       orgDoc.ref.collection('mailUsers').get(),
       orgDoc.ref.collection('mailGroups').get(),
       orgDoc.ref.collection('mailOrgUnits').get(),
+      orgDoc.ref.collection('mailSharedMailboxes').get(),
     ]);
+
+    const sharedMailboxes = sharedSnap.docs.map((doc) => {
+      const sd = doc.data();
+      return {
+        id: doc.id,
+        displayName: String(sd.displayName || sd.email || ''),
+        email: String(sd.email || '').toLowerCase(),
+        delegates: Array.isArray(sd.delegates)
+          ? sd.delegates.map((del: any) => ({
+              email: String(del?.email || '').toLowerCase(),
+              accessLevel: (del?.accessLevel || 'FULL_ACCESS') as
+                | 'FULL_ACCESS'
+                | 'SEND_AS'
+                | 'READ_ONLY',
+            }))
+          : [],
+      };
+    });
 
     const mailboxes = usersSnap.docs
       .map((doc) => {
         const d = doc.data();
+        const primaryEmail = (d.primaryEmail || '').toLowerCase();
         const aliases: string[] = Array.isArray(d.aliases) ? d.aliases : [];
         const isCatchAllTarget = orgData.mailCatchAllUserId === doc.id;
+        const userSharedMailboxes = sharedMailboxes
+          .map((sm) => {
+            const match = sm.delegates.find(
+              (del) => del.email.toLowerCase() === primaryEmail
+            );
+            if (!match) return null;
+            return {
+              id: sm.id,
+              displayName: sm.displayName,
+              email: sm.email,
+              accessLevel: match.accessLevel,
+            };
+          })
+          .filter(Boolean);
         return {
           id: doc.id,
           firstName: d.firstName || '',
@@ -79,6 +113,7 @@ export async function GET(req: NextRequest) {
           displayName: d.displayName || `${d.firstName || ''} ${d.lastName || ''}`.trim(),
           primaryEmail: d.primaryEmail || '',
           aliases,
+          sharedMailboxes: userSharedMailboxes,
           orgUnitPath: d.orgUnitPath || '/',
           status: d.status || 'active',
           isCatchAllTarget,
@@ -131,6 +166,7 @@ export async function GET(req: NextRequest) {
       },
       mailboxes,
       groups,
+      sharedMailboxes,
       orgUnits,
     });
   } catch (err: any) {

@@ -41,7 +41,7 @@ service cloud.firestore {
         && (
           isSuperAdmin() ||
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt'])
+            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt', 'memberEmails', 'adminEmails', 'memberPermissions'])
         );
       allow delete: if isResourceOwner() || isSuperAdmin();
 

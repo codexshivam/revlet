@@ -28,6 +28,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "setup:scheduler": "node scripts/setup-cloud-scheduler.mjs",
     "security:check": "npm audit --audit-level=critical && tsc --noEmit && next lint"
   },
   "dependencies": {

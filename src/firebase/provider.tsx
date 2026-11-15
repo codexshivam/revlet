@@ -1,11 +1,11 @@
-
 'use client';
 
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, Suspense } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Auth } from 'firebase/auth';
 import { Firestore } from 'firebase/firestore';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
+import { FirebaseTelemetryObserver } from './telemetry';
 
 interface FirebaseContextType {
   app: FirebaseApp;
@@ -29,6 +29,9 @@ export function FirebaseProvider({
   return (
     <FirebaseContext.Provider value={{ app, auth, db }}>
       <FirebaseErrorListener />
+      <Suspense fallback={null}>
+        <FirebaseTelemetryObserver app={app} />
+      </Suspense>
       {children}
     </FirebaseContext.Provider>
   );

@@ -8,9 +8,6 @@ import { sendRevletAlertEmail } from '@/lib/revlet-alerts';
 async function verifyCaller(idToken: string) {
   if (!idToken) throw new Error('Unauthorized: Missing credentials.');
   const decoded = await adminAuth.verifyIdToken(idToken);
-  if (decoded.email_verified !== true) {
-    throw new Error('Unauthorized: Email address must be verified.');
-  }
   return {
     uid: decoded.uid,
     email: (decoded.email || '').toLowerCase().trim(),

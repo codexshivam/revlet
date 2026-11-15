@@ -124,7 +124,7 @@ const siteSchema = {
         'https://www.instagram.com/revlet.me',
         'https://www.facebook.com/revletplatform',
         'https://x.com/revletme',
-        'https://www.linkedin.com/company',
+        'https://www.linkedin.com/company/revlet',
       ],
     },
     {

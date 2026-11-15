@@ -4,7 +4,20 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { PageHeader } from "@/components/layout/page-header"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
-import { useUser } from "@/firebase"
+import { useUser, useFirestore } from "@/firebase"
+import { useActiveOrg } from "@/hooks/use-active-org"
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  arrayUnion,
+  arrayRemove,
+} from "firebase/firestore"
 import {
   listTeamManagementData,
   inviteTeamMember,
@@ -124,6 +137,8 @@ function StatusBadge({ status }: { status: TeamMember["status"] }) {
 
 export default function TeamManagementPage() {
   const { user } = useUser()
+  const db = useFirestore()
+  const { orgs: activeContextOrgs, loading: isContextOrgsLoading } = useActiveOrg()
   const { toast } = useToast()
 
   const [members, setMembers] = useState<TeamMember[]>([])
@@ -155,20 +170,90 @@ export default function TeamManagementPage() {
     try {
       const idToken = await user.getIdToken()
       const res = await listTeamManagementData(idToken)
-      if (res.success && res.data) {
+      if (res.success && res.data && res.data.orgs.length > 0) {
         setOrgs(res.data.orgs)
         setMembers(res.data.members)
+        return
       }
-    } catch (error: any) {
-      console.error("Failed to fetch team data:", error)
+    } catch {
+      // Fallback to client-side Firestore below
+    }
+
+    try {
+      if (db && user) {
+        const ownedQ = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
+        const ownedSnap = await getDocs(ownedQ)
+        const orgMapLocal = new Map<string, Organization>()
+        for (const d of ownedSnap.docs) {
+          const data = d.data()
+          if (data.status !== "Pending Deletion") {
+            orgMapLocal.set(d.id, {
+              id: d.id,
+              name: data.name || d.id,
+              domain: data.domain,
+              ownerId: data.ownerId || user.uid,
+            })
+          }
+        }
+        for (const ao of activeContextOrgs) {
+          if (!orgMapLocal.has(ao.id)) {
+            orgMapLocal.set(ao.id, {
+              id: ao.id,
+              name: ao.name,
+              domain: ao.domain,
+              ownerId: ao.ownerId || user.uid,
+            })
+          }
+        }
+        const resolvedOrgs = Array.from(orgMapLocal.values())
+        setOrgs(resolvedOrgs)
+
+        const membersQ = query(collection(db, "teamMembers"), where("ownerId", "==", user.uid))
+        const membersSnap = await getDocs(membersQ)
+        const callerEmail = (user.email || "").toLowerCase().trim()
+        const resolvedMembers: TeamMember[] = []
+        for (const md of membersSnap.docs) {
+          const mdata = md.data()
+          if ((mdata.email || "").toLowerCase().trim() === callerEmail) continue
+          resolvedMembers.push({
+            id: md.id,
+            email: mdata.email,
+            organizationId: mdata.organizationId,
+            organizationIds:
+              mdata.organizationIds || (mdata.organizationId ? [mdata.organizationId] : []),
+            accessMode: mdata.accessMode,
+            permissions: mdata.permissions || [],
+            orgPermissions: mdata.orgPermissions || {},
+            status: mdata.status || "Pending",
+            invitedBy: mdata.invitedBy,
+          })
+        }
+        setMembers(resolvedMembers)
+      }
+    } catch (err) {
+      console.error("Client fallback for team data failed:", err)
     } finally {
       setIsLoading(false)
     }
-  }, [user])
+  }, [user, db, activeContextOrgs])
 
   useEffect(() => {
     fetchTeamData()
   }, [fetchTeamData])
+
+  // Also sync any newly loaded activeContextOrgs so the user never sees an empty org state
+  useEffect(() => {
+    if (activeContextOrgs.length > 0 && orgs.length === 0) {
+      setOrgs(
+        activeContextOrgs.map((ao) => ({
+          id: ao.id,
+          name: ao.name,
+          domain: ao.domain,
+          ownerId: ao.ownerId || user?.uid || "",
+        }))
+      )
+    }
+  }, [activeContextOrgs, orgs.length, user?.uid])
 
   const orgMap = useMemo(() => {
     const map = new Map<string, Organization>()
@@ -228,6 +313,43 @@ export default function TeamManagementPage() {
       })
 
       if (!res.success) {
+        if (db && user) {
+          const normalizedEmail = inviteEmail.trim().toLowerCase()
+          const emailKey = normalizedEmail.replace(/\./g, "__DOT__")
+          const nowIso = new Date().toISOString()
+          await addDoc(collection(db, "teamMembers"), {
+            ownerId: user.uid,
+            email: normalizedEmail,
+            organizationId: inviteOrgIds[0],
+            organizationIds: inviteOrgIds,
+            accessMode: hasAnyAdmin ? "admin" : "services",
+            permissions: flatPerms,
+            orgPermissions,
+            status: "Pending",
+            invitedBy: user.email || user.uid,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          })
+          for (const oid of inviteOrgIds) {
+            try {
+              const permsForOrg = orgPermissions[oid] || flatPerms
+              await updateDoc(doc(db, "organizations", oid), {
+                memberEmails: arrayUnion(normalizedEmail),
+                [`memberPermissions.${emailKey}`]: permsForOrg,
+                updatedAt: nowIso,
+              })
+            } catch {
+              // ignore org doc update error if rules restrict
+            }
+          }
+          toast({
+            title: "Invitation sent",
+            description: `${normalizedEmail} has been invited to ${inviteOrgIds.length} organization(s).`,
+          })
+          setIsInviteOpen(false)
+          await fetchTeamData()
+          return
+        }
         toast({
           variant: "destructive",
           title: "Invitation failed",
@@ -303,6 +425,23 @@ export default function TeamManagementPage() {
       })
 
       if (!res.success) {
+        if (db && user) {
+          await updateDoc(doc(db, "teamMembers", memberToEdit.id), {
+            organizationId: editOrgIds[0],
+            organizationIds: editOrgIds,
+            accessMode: hasAnyAdmin ? "admin" : "services",
+            permissions: flatPerms,
+            orgPermissions,
+            updatedAt: new Date().toISOString(),
+          })
+          toast({
+            title: "Access updated",
+            description: `Updated organizations and access level for ${memberToEdit.email}.`,
+          })
+          setMemberToEdit(null)
+          await fetchTeamData()
+          return
+        }
         toast({
           variant: "destructive",
           title: "Update failed",
@@ -343,6 +482,18 @@ export default function TeamManagementPage() {
       const idToken = await user.getIdToken()
       const res = await updateTeamMemberStatus(idToken, member.id, newStatus)
       if (!res.success) {
+        if (db && user) {
+          await updateDoc(doc(db, "teamMembers", member.id), {
+            status: newStatus,
+            updatedAt: new Date().toISOString(),
+          })
+          toast({
+            title: `Access ${newStatus === "Active" ? "restored" : "suspended"}`,
+            description: `${member.email} is now ${newStatus.toLowerCase()}.`,
+          })
+          await fetchTeamData()
+          return
+        }
         toast({
           variant: "destructive",
           title: "Status update failed",
@@ -371,6 +522,25 @@ export default function TeamManagementPage() {
       const idToken = await user.getIdToken()
       const res = await deleteTeamMember(idToken, member.id)
       if (!res.success) {
+        if (db && user) {
+          await deleteDoc(doc(db, "teamMembers", member.id))
+          for (const oid of getMemberOrgIds(member)) {
+            try {
+              await updateDoc(doc(db, "organizations", oid), {
+                memberEmails: arrayRemove(member.email.toLowerCase().trim()),
+              })
+            } catch {
+              // ignore
+            }
+          }
+          toast({
+            title: "Access revoked",
+            description: `${member.email} has been removed from all assigned organizations.`,
+          })
+          setMemberToDelete(null)
+          await fetchTeamData()
+          return
+        }
         toast({
           variant: "destructive",
           title: "Removal failed",
@@ -728,7 +898,7 @@ export default function TeamManagementPage() {
 
         <Card className="bg-white border border-slate-200/80 shadow-none overflow-hidden rounded-xl">
           <CardContent className="p-0">
-            {isLoading ? (
+            {isLoading || isContextOrgsLoading ? (
               <TableSkeleton rows={4} cols={5} />
             ) : members.length === 0 ? (
               <div className="py-20 text-center space-y-3 px-4 max-w-sm mx-auto">

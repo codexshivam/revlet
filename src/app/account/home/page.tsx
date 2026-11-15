@@ -578,12 +578,12 @@ export default function AccountHomePage() {
                       {orgs.map((org) => (
                         <TableRow
                           key={org.id}
-                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
+                          className="group border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
                         >
                           <TableCell className="pl-6 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center text-slate-500 shrink-0">
-                                <Building2 className="w-4 h-4" strokeWidth={1.5} />
+                              <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center text-slate-500 group-hover:text-black transition-colors shrink-0">
+                                <Building2 className="w-4 h-4 group-hover:text-black transition-colors" strokeWidth={1.5} />
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-xs font-medium text-slate-900">

@@ -118,12 +118,30 @@ export default function SettingsPage() {
       const credential = EmailAuthProvider.credential(user.email!, emailConfirmPass)
       await reauthenticateWithCredential(user, credential)
 
-      await verifyBeforeUpdateEmail(user, newEmail.trim())
+      const idToken = await user.getIdToken()
+      const customRes = await fetch("/api/auth/action-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          type: "change_email",
+          newEmail: newEmail.trim(),
+        }),
+      })
+      const customData = await customRes.json().catch(() => ({}))
+      if (!customRes.ok || !customData?.ok) {
+        if (customData?.code === "auth/email-already-exists") {
+          throw { code: "auth/email-already-in-use" }
+        }
+        await verifyBeforeUpdateEmail(user, newEmail.trim())
+      }
 
       toast({
         title: "Verification sent",
         description:
-          "A verification link has been sent to your new email address. Changes will apply after confirmation.",
+          "A verification link from accounts@revlet.me has been sent to your new email address. Changes will apply after confirmation.",
       })
       setNewEmail("")
       setEmailConfirmPass("")

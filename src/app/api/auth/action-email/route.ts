@@ -77,10 +77,12 @@ export async function POST(req: NextRequest) {
         ],
       });
 
-      return NextResponse.json({
-        ok: true,
-        sent: sendResult.sent,
-      });
+      return NextResponse.json(
+        sendResult.sent
+          ? { ok: true, sent: true }
+          : { ok: false, sent: false, error: 'Failed to dispatch password reset email.' },
+        { status: sendResult.sent ? 200 : 502 }
+      );
     }
 
     // Authenticated actions below require a valid Firebase ID token
@@ -127,10 +129,12 @@ export async function POST(req: NextRequest) {
         ],
       });
 
-      return NextResponse.json({
-        ok: true,
-        sent: sendResult.sent,
-      });
+      return NextResponse.json(
+        sendResult.sent
+          ? { ok: true, sent: true }
+          : { ok: false, sent: false, error: 'Failed to dispatch password reset email.' },
+        { status: sendResult.sent ? 200 : 502 }
+      );
     }
 
     // 3. Verify & Change Primary Administrative Email
@@ -177,10 +181,12 @@ export async function POST(req: NextRequest) {
         ],
       });
 
-      return NextResponse.json({
-        ok: true,
-        sent: sendResult.sent,
-      });
+      return NextResponse.json(
+        sendResult.sent
+          ? { ok: true, sent: true }
+          : { ok: false, sent: false, error: 'Failed to dispatch password reset email.' },
+        { status: sendResult.sent ? 200 : 502 }
+      );
     }
 
     return NextResponse.json(

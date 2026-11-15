@@ -56,8 +56,11 @@ interface EmailGovernancePanelProps {
 export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePanelProps) {
   const { user } = useUser()
   const [activeSection, setActiveSection] = useState<"shared" | "quarantine" | "dlp" | "ediscovery" | "audit">(
-    mode || "shared"
+    mode || "quarantine"
   )
+  useEffect(() => {
+    if (mode) setActiveSection(mode)
+  }, [mode])
   const [loading, setLoading] = useState(true)
   const [legalHolds, setLegalHolds] = useState<LegalHoldRecord[]>([])
   const [dlpRules, setDlpRules] = useState<DlpRuleRecord[]>([])
@@ -177,62 +180,59 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   }
 
   return (
-    <div className="space-y-5">
-      {/* Segmented Governance Navigation */}
-      <div className="rounded-xl border border-slate-200/80 bg-white p-1.5 flex flex-wrap items-center gap-1">
-        {(
-          [
-            { id: "shared", label: "Shared Mailboxes", count: sharedMailboxes.length, icon: MailCheck },
-            {
-              id: "quarantine",
-              label: "Quarantine",
-              count: quarantineItems.filter((q) => q.status === "quarantined").length,
-              icon: ShieldAlert,
-            },
-            { id: "dlp", label: "DLP & Mail Flow", count: dlpRules.length + transportRules.length, icon: Lock },
-            { id: "ediscovery", label: "eDiscovery & Legal Hold", count: legalHolds.length, icon: Scale },
-            { id: "audit", label: "SIEM & Audit Logs", icon: ScrollText },
-          ] as const
-        ).map((item) => {
-          const Icon = item.icon
-          const isActive = activeSection === item.id
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setActiveSection(item.id)}
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                isActive
-                  ? "bg-slate-900 text-white shadow-2xs"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
-              }`}
-            >
-              <Icon className={`w-3.5 h-3.5 ${isActive ? "text-white" : "text-slate-500"}`} strokeWidth={1.75} />
-              <span>{item.label}</span>
-              {"count" in item && typeof item.count === "number" && (
-                <span
-                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono tabular-nums ${
-                    isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {item.count}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+    <div className="space-y-4">
+      {/* Segmented Governance Navigation (omitted when rendered in standalone Shared Mailboxes tab) */}
+      {mode !== "shared" && (
+        <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-slate-100/70 p-1">
+          {(
+            [
+              {
+                id: "quarantine",
+                label: "Quarantine",
+                count: quarantineItems.filter((q) => q.status === "quarantined").length,
+                icon: ShieldAlert,
+              },
+              { id: "dlp", label: "DLP & Mail Flow", count: dlpRules.length + transportRules.length, icon: Lock },
+              { id: "ediscovery", label: "eDiscovery & Legal Hold", count: legalHolds.length, icon: Scale },
+              { id: "audit", label: "SIEM & Audit Logs", icon: ScrollText },
+            ] as const
+          ).map((item) => {
+            const Icon = item.icon
+            const isActive = activeSection === item.id
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveSection(item.id)}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  isActive
+                    ? "bg-white text-slate-900 border border-slate-200/80"
+                    : "text-slate-600 hover:text-slate-900 border border-transparent"
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? "text-slate-700" : "text-slate-400"}`} strokeWidth={1.5} />
+                <span>{item.label}</span>
+                {"count" in item && typeof item.count === "number" && (
+                  <span className="font-mono text-[11px] tabular-nums text-slate-400">
+                    {item.count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {activeSection === "shared" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <MailCheck className="w-4 h-4 text-blue-600" />
+          <Card className="lg:col-span-1 border-slate-200/80 shadow-none">
+            <CardHeader className="p-5 pb-3">
+              <CardTitle className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                <MailCheck className="w-4 h-4 text-slate-500" strokeWidth={1.5} />
                 Create Shared Mailbox
               </CardTitle>
-              <CardDescription className="text-xs">
-                Provision a delegated team mailbox (distinct from distribution lists).
+              <CardDescription className="text-xs text-slate-500">
+                Provision a delegated team mailbox (distinct from distribution lists)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

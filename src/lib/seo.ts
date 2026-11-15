@@ -26,13 +26,13 @@ export const PAGE_SEO = {
   },
   signup: {
     path: '/signup',
-    title: 'Get Started | Revlet',
+    title: 'Get Started Free | Revlet',
     description:
-      'Create your Revlet account and get professional email on your own domain, easy DNS management, and secure team access in minutes.',
-    ogTitle: 'Get started with Revlet',
-    ogDescription: 'Professional email on your domain, simple DNS, and secure team access — set up in minutes.',
-    ogEyebrow: 'Get Started',
-    ogHeadline: 'Professional email and domains, set up in minutes.',
+      'Create your free Revlet account in minutes. Get up to 1,000 custom domain business email mailboxes, fast DNS management, and team access at $0/mo.',
+    ogTitle: 'Get started free with Revlet',
+    ogDescription: 'Up to 1,000 custom mailboxes, fast DNS management, and team access — free at $0/mo.',
+    ogEyebrow: 'Get Started Free',
+    ogHeadline: 'Business email and domains, free for up to 1,000 seats.',
   },
   support: {
     path: '/support',
@@ -118,6 +118,8 @@ export function buildPageMetadata({
     },
     twitter: {
       card: 'summary_large_image',
+      site: '@revletme',
+      creator: '@revletme',
       title: socialTitle,
       description: socialDescription,
     },

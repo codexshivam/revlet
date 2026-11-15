@@ -3720,7 +3720,7 @@ export default function EmailServiceAdminPage() {
                   <Input
                     value={newGroupMemberInput}
                     onChange={(e) => setNewGroupMemberInput(e.target.value)}
-                    placeholder={`member@${selectedOrg.domain}`}
+                    placeholder="member@example.com"
                     className="h-9 text-xs font-mono border-slate-200 rounded-lg"
                   />
                   <Button
@@ -3897,7 +3897,7 @@ export default function EmailServiceAdminPage() {
                   <Input
                     value={groupMemberInput}
                     onChange={(e) => setGroupMemberInput(e.target.value)}
-                    placeholder={`user@${selectedOrg.domain}`}
+                    placeholder="user@example.com"
                     className="h-9 text-xs font-mono border-slate-200 rounded-lg"
                   />
                   <Button

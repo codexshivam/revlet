@@ -151,7 +151,7 @@ function buildInstitutionalEmailContent(
   const ctaUrl = params.ctaUrl || defaultCta?.url || '';
   const ctaLabel = params.ctaLabel || defaultCta?.label || '';
   const supportEmail = (
-    process.env.REVLET_SUPPORT_EMAIL || 'support@revlet.me'
+    process.env.REVLET_SUPPORT_EMAIL || 'hello@revlet.me'
   ).trim();
 
   const detailRows = params.details || [];

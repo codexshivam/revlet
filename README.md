@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="public/banner.svg" width="100%" alt="Revlet Enterprise IT Management Control Plane" />
+<img src="public/readme-hero.png" width="100%" alt="Revlet — Unified Cloud Control Plane for Business Email, Global DNS & Team Security" />
 
 </div>
 

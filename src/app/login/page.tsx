@@ -22,6 +22,18 @@ import { useAuth, useUser } from "@/firebase"
 import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "firebase/auth"
 import { AuthFrame } from "@/components/layout/auth-frame"
 
+function sanitizeMfaError(input: unknown, fallback = "Verification failed. Please try again."): string {
+  const raw = typeof input === "string" ? input : (input as any)?.message || ""
+  if (!raw) return fallback
+  if (/webauthn|fido2|totp|firebase|firestore|stalwart|jmap|notallowederror|abort|securityerror/i.test(raw)) {
+    if (/cancel|notallowederror|abort/i.test(raw)) {
+      return "Verification was cancelled or timed out."
+    }
+    return fallback
+  }
+  return raw
+}
+
 function b64uToBuf(s: string): ArrayBuffer {
   const b = atob((s + "=".repeat((4 - (s.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"))
   const a = new Uint8Array(b.length)
@@ -296,7 +308,7 @@ export default function LoginPage() {
       if (!verRes.ok || !ver.ok) throw new Error(ver.error || "Invalid verification code")
       router.push("/account/home")
     } catch (err: any) {
-      setMfaError(err?.message || "Verification failed")
+      setMfaError(sanitizeMfaError(err, "Verification failed"))
     } finally {
       setMfaBusy(false)
     }
@@ -318,7 +330,7 @@ export default function LoginPage() {
       setMfaEmailOtpSent(true)
       toast({ title: "Verification code sent", description: `Check ${mfaStatus?.secondaryEmail}` })
     } catch (err: any) {
-      setMfaError(err?.message || "Could not send code")
+      setMfaError(sanitizeMfaError(err, "Could not send code"))
     } finally {
       setMfaBusy(false)
     }
@@ -358,7 +370,7 @@ export default function LoginPage() {
               </h1>
               <p className="text-xs text-slate-500 leading-relaxed">
                 {mfaStep === "enroll"
-                  ? "Your organization requires 2-Step Verification. Scan the QR code below with Google Authenticator, 1Password, or Authy to continue."
+                  ? "Your organization requires 2-Step Verification. Scan the QR code below with your authenticator app to continue."
                   : "To help keep your account safe, verify it’s really you using your second factor."}
               </p>
             </div>
@@ -426,7 +438,7 @@ export default function LoginPage() {
                       <Smartphone className="w-4 h-4 text-primary shrink-0" />
                       <div>
                         <div className="text-xs font-semibold text-slate-900">Get a verification code from your Authenticator app</div>
-                        <div className="text-[11px] text-slate-500">Google Authenticator, 1Password, or Authy</div>
+                        <div className="text-[11px] text-slate-500">Time-based 6-digit verification code</div>
                       </div>
                     </button>
                   )}
@@ -567,7 +579,7 @@ export default function LoginPage() {
               id="email"
               type="email"
               autoComplete="email"
-              placeholder="admin@institution.edu"
+              placeholder="admin@example.com"
               className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

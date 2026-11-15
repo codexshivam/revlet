@@ -131,8 +131,17 @@ export interface RevletEmailPayload {
   otpCode?: string;
   ctaUrl?: string;
   ctaLabel?: string;
+  securityNote?: string;
   footerNote?: string;
 }
+
+const BADGE_DETAIL_LABELS = new Set([
+  'action type',
+  'status',
+  'trigger',
+  'bounce type',
+  'severity',
+]);
 
 function buildInstitutionalEmailContent(
   params: RevletEmailPayload,
@@ -141,31 +150,47 @@ function buildInstitutionalEmailContent(
 ): { html: string; text: string } {
   const ctaUrl = params.ctaUrl || defaultCta?.url || '';
   const ctaLabel = params.ctaLabel || defaultCta?.label || '';
+  const supportEmail = (
+    process.env.REVLET_SUPPORT_EMAIL || 'support@revlet.me'
+  ).trim();
 
-  const detailRowsHtml = (params.details || [])
-    .map(
-      (d) => `
+  const detailRows = params.details || [];
+  const detailRowsHtml = detailRows
+    .map((d, idx) => {
+      const isLast = idx === detailRows.length - 1;
+      const borderBottom = isLast ? 'none' : '1px solid #e2e8f0';
+      const labelLower = (d.label || '').trim().toLowerCase();
+      const isBadge = BADGE_DETAIL_LABELS.has(labelLower);
+      const isEmailOrDomain =
+        d.value.includes('@') ||
+        /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d.value.trim());
+
+      const renderedValue = isBadge
+        ? `<span style="display:inline-block;background-color:#eef2ff;color:#4338ca;font-size:12px;font-weight:600;padding:4px 11px;border-radius:999px;line-height:1.3;">${escapeHtml(d.value)}</span>`
+        : `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:13px;font-weight:600;color:${isEmailOrDomain ? '#1d4ed8' : '#0f172a'};word-break:break-word;">${escapeHtml(d.value)}</span>`;
+
+      return `
       <tr>
-        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b;font-weight:600;width:38%;">${escapeHtml(d.label)}</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#0f172a;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${escapeHtml(d.value)}</td>
-      </tr>`
-    )
+        <td class="detail-label" style="padding:12px 16px;border-bottom:${borderBottom};font-size:13px;color:#64748b;font-weight:500;text-align:left;vertical-align:middle;width:40%;">${escapeHtml(d.label)}</td>
+        <td class="detail-value" style="padding:12px 16px;border-bottom:${borderBottom};text-align:right;vertical-align:middle;width:60%;">${renderedValue}</td>
+      </tr>`;
+    })
     .join('');
 
   const summaryHtml = params.summaryLines
     .map(
       (line) =>
-        `<p style="margin:0 0 12px 0;font-size:14px;line-height:1.65;color:#334155;">${escapeHtml(line)}</p>`
+        `<p style="margin:0 0 12px 0;font-size:14px;line-height:1.65;color:#475569;">${escapeHtml(line)}</p>`
     )
     .join('');
 
   const otpHtml = params.otpCode
     ? `
-      <div style="margin:20px 0;padding:18px 20px;background-color:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;text-align:center;">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:6px;">
+      <div style="margin:20px 0;padding:18px 20px;background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;text-align:center;">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:8px;">
           One-Time Verification Code
         </div>
-        <div style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:28px;font-weight:700;letter-spacing:0.24em;color:#0f172a;">
+        <div style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:28px;font-weight:700;letter-spacing:0.22em;color:#0f172a;">
           ${escapeHtml(params.otpCode)}
         </div>
       </div>`
@@ -174,64 +199,130 @@ function buildInstitutionalEmailContent(
   const ctaHtml =
     ctaUrl && ctaLabel
       ? `
-      <div style="margin-top:24px;">
-        <a href="${escapeHtml(ctaUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:11px 20px;border-radius:8px;">${escapeHtml(ctaLabel)}</a>
-        <p style="margin:12px 0 0;color:#64748b;font-size:11px;line-height:1.5;word-break:break-all;">
-          If the button above does not open, copy and paste this URL into your browser:<br />
-          <a href="${escapeHtml(ctaUrl)}" style="color:#2563eb;text-decoration:underline;">${escapeHtml(ctaUrl)}</a>
+      <div style="margin-top:22px;">
+        <a href="${escapeHtml(ctaUrl)}" target="_blank" rel="noopener noreferrer" class="cta-btn" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:10px;line-height:1.3;">${escapeHtml(ctaLabel)}</a>
+      </div>
+      <div style="margin-top:20px;">
+        <p style="margin:0 0 8px 0;color:#64748b;font-size:12px;line-height:1.5;">
+          If the button above does not open, copy and paste this URL into your browser:
         </p>
+        <div style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.55;color:#334155;word-break:break-all;">
+          <a href="${escapeHtml(ctaUrl)}" target="_blank" rel="noopener noreferrer" style="color:#334155;text-decoration:none;word-break:break-all;">${escapeHtml(ctaUrl)}</a>
+        </div>
       </div>`
       : '';
 
+  const defaultSecurityNote =
+    senderBadge === 'accounts@revlet.me'
+      ? `If you did not initiate this request, no modifications have been made to your account. You can safely disregard this email or report suspicious activity to ${supportEmail}.`
+      : `This message was generated automatically by Revlet Platform. If you believe this notification was sent in error, contact ${supportEmail}.`;
+  const securityNoteText = params.securityNote || defaultSecurityNote;
+  const securityNoticeHtml = `
+    <div style="margin-top:22px;background-color:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:13px 16px;font-size:12.5px;line-height:1.6;color:#713f12;">
+      <strong style="color:#78350f;">Didn&rsquo;t expect this?</strong>
+      ${escapeHtml(securityNoteText).replace(
+        escapeHtml(supportEmail),
+        `<a href="mailto:${escapeHtml(supportEmail)}" style="color:#92400e;text-decoration:underline;font-weight:600;">${escapeHtml(supportEmail)}</a>`
+      )}
+    </div>`;
+
   const footerNote =
     params.footerNote ||
-    `Automated no-reply notification from Revlet (${senderBadge}). Please do not reply directly to this email.`;
+    'Please do not reply directly to this email as this is an automated no-reply address.';
 
   const html = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>${escapeHtml(params.subject)}</title></head>
-<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;padding:32px 16px;">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>${escapeHtml(params.subject)}</title>
+  <style>
+    @media only screen and (max-width: 600px) {
+      .email-wrapper {
+        padding: 12px 8px !important;
+      }
+      .email-card {
+        border-radius: 14px !important;
+      }
+      .email-header {
+        padding: 20px 18px !important;
+      }
+      .email-body {
+        padding: 22px 18px !important;
+      }
+      .email-footer {
+        padding: 18px 16px !important;
+      }
+      .email-title {
+        font-size: 18px !important;
+      }
+      .cta-btn {
+        display: block !important;
+        text-align: center !important;
+        width: auto !important;
+      }
+      .detail-label,
+      .detail-value {
+        padding: 10px 12px !important;
+        font-size: 12px !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-wrapper" style="background-color:#f1f5f9;padding:28px 14px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:580px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-card" style="max-width:580px;width:100%;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.06);">
           <tr>
-            <td style="background-color:#0f172a;padding:22px 28px;border-bottom:3px solid #2563eb;">
+            <td class="email-header" style="background-color:#0b0d24;background-image:radial-gradient(circle at 50% 0%, #1c1f4a 0%, #0b0d24 72%);padding:24px 28px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
-                  <td style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#ffffff;">Revlet</td>
-                  <td align="right" style="font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#94a3b8;">${escapeHtml(senderBadge)}</td>
+                  <td style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#ffffff;vertical-align:middle;">Revlet</td>
+                  <td align="right" style="vertical-align:middle;">
+                    <span style="display:inline-block;background-color:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.16);border-radius:999px;padding:4px 12px;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#cbd5e1;white-space:nowrap;">${escapeHtml(senderBadge)}</span>
+                  </td>
                 </tr>
               </table>
               ${
                 params.subtitle
-                  ? `<div style="margin-top:6px;font-size:12px;color:#cbd5e1;line-height:1.5;">${escapeHtml(params.subtitle)}</div>`
+                  ? `<div style="margin-top:16px;background-color:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;color:#e2e8f0;">${escapeHtml(params.subtitle)}</div>`
                   : ''
               }
             </td>
           </tr>
           <tr>
-            <td style="padding:28px;">
-              <h1 style="margin:0 0 16px 0;font-size:18px;font-weight:700;color:#0f172a;letter-spacing:-0.01em;">${escapeHtml(params.title)}</h1>
+            <td class="email-body" style="padding:28px;">
+              <h1 class="email-title" style="margin:0 0 12px 0;font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-0.015em;line-height:1.3;">${escapeHtml(params.title)}</h1>
               ${summaryHtml}
               ${otpHtml}
               ${
                 detailRowsHtml
-                  ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background-color:#f8fafc;">
+                  ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;background-color:#ffffff;">
                       ${detailRowsHtml}
                     </table>`
                   : ''
               }
               ${ctaHtml}
+              ${securityNoticeHtml}
             </td>
           </tr>
           <tr>
-            <td style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 28px;font-size:11px;color:#64748b;line-height:1.6;">
-              ${escapeHtml(footerNote)}
-              <div style="margin-top:6px;color:#94a3b8;">
-                <a href="https://app.revlet.me" style="color:#64748b;text-decoration:none;font-weight:600;">app.revlet.me</a>
+            <td class="email-footer" style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 28px;text-align:center;font-size:11.5px;color:#64748b;line-height:1.65;">
+              <div>${escapeHtml(footerNote)}</div>
+              <div style="margin-top:10px;color:#94a3b8;">
+                <a href="https://revlet.me/support" style="color:#64748b;text-decoration:none;font-weight:500;">Help &amp; Support</a>
                 &nbsp;&middot;&nbsp;
-                <a href="https://mail.revlet.me" style="color:#64748b;text-decoration:none;font-weight:600;">mail.revlet.me</a>
+                <a href="https://revlet.me/privacy" style="color:#64748b;text-decoration:none;font-weight:500;">Privacy Policy</a>
+                &nbsp;&middot;&nbsp;
+                <a href="https://revlet.me/terms" style="color:#64748b;text-decoration:none;font-weight:500;">Service Terms</a>
+                &nbsp;&middot;&nbsp;
+                <a href="https://revlet.me" style="color:#64748b;text-decoration:none;font-weight:500;">About</a>
+              </div>
+              <div style="margin-top:10px;font-size:11px;color:#94a3b8;">
+                Revlet Platform &middot; Developed &amp; Managed by Shivam Yadav.
               </div>
             </td>
           </tr>
@@ -252,8 +343,11 @@ function buildInstitutionalEmailContent(
     ...(params.details || []).map((d) => `${d.label}: ${d.value}`),
     ...(ctaUrl && ctaLabel ? ['', `${ctaLabel}: ${ctaUrl}`] : []),
     '',
+    `Security Notice: ${securityNoteText}`,
+    '',
     '---',
     footerNote,
+    'Revlet Platform · Developed & Managed by Shivam Yadav.',
   ]
     .filter(Boolean)
     .join('\n');

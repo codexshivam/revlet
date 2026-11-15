@@ -2,12 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react"
 import QRCode from "qrcode"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Smartphone, KeyRound, Mail, ShieldCheck, Loader2, Trash2, CheckCircle2 } from "lucide-react"
+import { Smartphone, KeyRound, Mail, Loader2, Trash2, Copy, Check } from "lucide-react"
 import { useUser } from "@/firebase"
 import { toast } from "@/hooks/use-toast"
 
@@ -41,6 +38,10 @@ export function MfaEnrollmentCard() {
   const [secondaryEmailVerified, setSecondaryEmailVerified] = useState(false)
   const [emailOtpSent, setEmailOtpSent] = useState(false)
   const [emailOtpCode, setEmailOtpCode] = useState("")
+  const [showDisableTotp, setShowDisableTotp] = useState(false)
+  const [showAddPasskey, setShowAddPasskey] = useState(false)
+  const [showEditEmail, setShowEditEmail] = useState(false)
+  const [copiedSecret, setCopiedSecret] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
 
   const loadMfaStatus = useCallback(async () => {
@@ -226,192 +227,409 @@ export function MfaEnrollmentCard() {
     }
   }
 
+  const activeFactorCount =
+    (totpEnabled ? 1 : 0) + (passkeys.length > 0 ? 1 : 0) + (secondaryEmailVerified ? 1 : 0)
+
+  const handleCopySecret = async () => {
+    if (!totpSecret) return
+    try {
+      await navigator.clipboard.writeText(totpSecret)
+      setCopiedSecret(true)
+      setTimeout(() => setCopiedSecret(false), 1800)
+    } catch {
+      // ignore
+    }
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ShieldCheck className="w-4 h-4 text-blue-600" />
-          Multi-Factor Authentication (Step-Up MFA)
-        </CardTitle>
-        <CardDescription className="text-xs">
-          Configure Authenticator App, Passkey, and Secondary Email for sensitive admin & compliance actions.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {loading ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading MFA factors...
-          </div>
-        ) : (
-          <>
-            {/* 1. Authenticator App (TOTP) */}
-            <div className="p-4 rounded-lg border bg-muted/20 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="w-4 h-4 text-slate-700" />
-                  <div>
-                    <p className="text-sm font-medium">Authenticator App (TOTP)</p>
-                    <p className="text-xs text-muted-foreground">Google Authenticator, 1Password, Authy</p>
-                  </div>
+    <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-medium text-slate-900">Multi-Factor Authentication</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Verify sign-ins and sensitive admin actions with a second factor
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 text-xs text-slate-600 tabular-nums shrink-0">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              activeFactorCount > 0 ? "bg-emerald-500" : "bg-slate-300"
+            }`}
+            aria-hidden="true"
+          />
+          <span>
+            {activeFactorCount > 0
+              ? `${activeFactorCount} ${activeFactorCount === 1 ? "factor" : "factors"} active`
+              : "No factors configured"}
+          </span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="px-5 py-8 flex items-center gap-2 text-xs text-slate-500">
+          <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
+          <span>Loading security factors</span>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-200/80">
+          {/* 1. Authenticator App (TOTP) */}
+          <div className="p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
+                  <Smartphone className="w-4 h-4 text-slate-600" strokeWidth={1.5} />
                 </div>
-                <Badge variant={totpEnabled ? "default" : "secondary"}>
-                  {totpEnabled ? "Enrolled" : "Not Enrolled"}
-                </Badge>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-900">Authenticator app</span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          totpEnabled ? "bg-emerald-500" : "bg-slate-300"
+                        }`}
+                      />
+                      {totpEnabled ? "Active" : "Not set up"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Time-based codes from Google Authenticator, 1Password, or Authy
+                  </p>
+                </div>
               </div>
 
-              {!totpEnabled && !totpSecret && (
-                <Button size="sm" variant="outline" onClick={handleStartTotp} disabled={busy === "totp"}>
-                  Set up Authenticator App
-                </Button>
-              )}
-
-              {totpSecret && (
-                <div className="space-y-3 pt-2 border-t">
-                  <p className="text-xs text-muted-foreground">
-                    Scan this QR code with your authenticator app, or enter the setup key manually:
-                  </p>
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                    {totpQrDataUrl && (
-                      <div className="p-2 rounded-lg bg-white border border-slate-200 shrink-0">
-                        <img src={totpQrDataUrl} alt="Authenticator QR Code" className="w-40 h-40" />
-                      </div>
-                    )}
-                    <div className="space-y-2 flex-1 min-w-0">
-                      <div className="text-[11px] font-medium text-slate-600">Manual Setup Key</div>
-                      <div className="p-2.5 rounded bg-background border font-mono text-xs break-all select-all">
-                        {totpSecret}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={totpCode}
-                      onChange={(e) => setTotpCode(e.target.value)}
-                      placeholder="6-digit code"
-                      maxLength={6}
-                      className="max-w-[160px] font-mono"
-                    />
-                    <Button size="sm" onClick={handleEnableTotp} disabled={busy === "totp"}>
-                      Verify & Enable
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {totpEnabled && (
-                <div className="flex items-center gap-2 pt-2 border-t">
-                  <Input
-                    value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value)}
-                    placeholder="Enter 6-digit code to disable"
-                    maxLength={6}
-                    className="max-w-[210px] font-mono h-8 text-xs"
-                  />
-                  <Button size="sm" variant="destructive" onClick={handleDisableTotp} disabled={busy === "totp"}>
+              <div className="shrink-0 pl-11 sm:pl-0">
+                {!totpEnabled && !totpSecret && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs rounded-lg border-slate-200"
+                    onClick={handleStartTotp}
+                    disabled={busy === "totp"}
+                  >
+                    {busy === "totp" ? "Starting..." : "Set up"}
+                  </Button>
+                )}
+                {totpEnabled && !showDisableTotp && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-xs text-slate-600 hover:text-rose-600 rounded-lg"
+                    onClick={() => {
+                      setTotpCode("")
+                      setShowDisableTotp(true)
+                    }}
+                  >
                     Disable
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
-            {/* 2. Passkeys (WebAuthn) */}
-            <div className="p-4 rounded-lg border bg-muted/20 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-slate-700" />
-                  <div>
-                    <p className="text-sm font-medium">Passkeys & Hardware Keys</p>
-                    <p className="text-xs text-muted-foreground">Touch ID, Face ID, YubiKey (FIDO2 / WebAuthn)</p>
-                  </div>
-                </div>
-                <Badge variant={passkeys.length > 0 ? "default" : "secondary"}>
-                  {passkeys.length} Registered
-                </Badge>
-              </div>
-
-              {passkeys.length > 0 && (
-                <div className="space-y-2">
-                  {passkeys.map((pk) => (
-                    <div key={pk.id} className="flex items-center justify-between p-2 rounded bg-background border text-xs">
-                      <span className="font-medium">{pk.label}</span>
+            {totpSecret && (
+              <div className="ml-0 sm:ml-11 p-4 rounded-xl border border-slate-200/80 bg-slate-50/70 space-y-4">
+                <div className="flex flex-col sm:flex-row items-start gap-5">
+                  {totpQrDataUrl && (
+                    <div className="p-2.5 rounded-lg bg-white border border-slate-200/80 shrink-0">
+                      <img src={totpQrDataUrl} alt="Authenticator QR Code" className="w-36 h-36" />
+                    </div>
+                  )}
+                  <div className="space-y-3 flex-1 min-w-0">
+                    <div>
+                      <p className="text-xs font-medium text-slate-900">1. Scan QR code or copy setup key</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Open your authenticator app and scan the code, or paste the key below
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200/80 font-mono text-xs text-slate-700 break-all select-all flex-1">
+                        {totpSecret}
+                      </div>
                       <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => handleRemovePasskey(pk.id)}
-                        disabled={busy === `pk-${pk.id}`}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2.5 text-xs border-slate-200 shrink-0"
+                        onClick={handleCopySecret}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        {copiedSecret ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.5} />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.5} />
+                        )}
                       </Button>
                     </div>
-                  ))}
+                    <div className="pt-1 space-y-2">
+                      <p className="text-xs font-medium text-slate-900">2. Enter the 6-digit code</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          value={totpCode}
+                          onChange={(e) => setTotpCode(e.target.value)}
+                          placeholder="000000"
+                          maxLength={6}
+                          className="w-32 h-8 text-xs font-mono tabular-nums bg-white"
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs rounded-lg"
+                          onClick={handleEnableTotp}
+                          disabled={busy === "totp"}
+                        >
+                          Verify and enable
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs text-slate-500"
+                          onClick={() => {
+                            setTotpSecret(null)
+                            setTotpUri(null)
+                            setTotpQrDataUrl(null)
+                            setTotpCode("")
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              <div className="flex items-center gap-2">
+            {totpEnabled && showDisableTotp && (
+              <div className="ml-0 sm:ml-11 p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 flex flex-wrap items-center gap-2">
+                <Input
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                  placeholder="Current 6-digit code"
+                  maxLength={6}
+                  className="w-40 h-8 text-xs font-mono tabular-nums bg-white"
+                />
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8 text-xs rounded-lg"
+                  onClick={async () => {
+                    await handleDisableTotp()
+                    setShowDisableTotp(false)
+                  }}
+                  disabled={busy === "totp"}
+                >
+                  Confirm disable
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-xs text-slate-500"
+                  onClick={() => {
+                    setShowDisableTotp(false)
+                    setTotpCode("")
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Passkeys (WebAuthn) */}
+          <div className="p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
+                  <KeyRound className="w-4 h-4 text-slate-600" strokeWidth={1.5} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-900">Passkeys &amp; security keys</span>
+                    <span className="text-xs font-mono tabular-nums text-slate-500">
+                      {passkeys.length} registered
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Sign in with Touch ID, Face ID, or a FIDO2 hardware key
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 pl-11 sm:pl-0">
+                {!showAddPasskey && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs rounded-lg border-slate-200"
+                    onClick={() => setShowAddPasskey(true)}
+                  >
+                    Add passkey
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {passkeys.length > 0 && (
+              <div className="ml-0 sm:ml-11 divide-y divide-slate-200/80 rounded-lg border border-slate-200/80 bg-slate-50/40">
+                {passkeys.map((pk) => (
+                  <div key={pk.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-medium text-slate-800 truncate">{pk.label}</span>
+                      {pk.createdAt && (
+                        <span className="text-slate-400 font-mono text-[11px] tabular-nums hidden sm:inline">
+                          {new Date(pk.createdAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-slate-400 hover:text-rose-600"
+                      onClick={() => handleRemovePasskey(pk.id)}
+                      disabled={busy === `pk-${pk.id}`}
+                      title="Remove passkey"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {showAddPasskey && (
+              <div className="ml-0 sm:ml-11 p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 flex flex-wrap items-center gap-2">
                 <Input
                   value={passkeyLabel}
                   onChange={(e) => setPasskeyLabel(e.target.value)}
-                  placeholder="Passkey name"
-                  className="max-w-[220px] h-8 text-xs"
+                  placeholder="Device name (e.g. MacBook Pro)"
+                  className="w-56 h-8 text-xs bg-white"
                 />
-                <Button size="sm" variant="outline" onClick={handleRegisterPasskey} disabled={busy === "passkey"}>
-                  Register Passkey
+                <Button
+                  size="sm"
+                  className="h-8 text-xs rounded-lg"
+                  onClick={async () => {
+                    await handleRegisterPasskey()
+                    setShowAddPasskey(false)
+                  }}
+                  disabled={busy === "passkey"}
+                >
+                  {busy === "passkey" ? "Waiting for device..." : "Register"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-xs text-slate-500"
+                  onClick={() => setShowAddPasskey(false)}
+                >
+                  Cancel
                 </Button>
               </div>
-            </div>
+            )}
+          </div>
 
-            {/* 3. Secondary Recovery Email */}
-            <div className="p-4 rounded-lg border bg-muted/20 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-slate-700" />
-                  <div>
-                    <p className="text-sm font-medium">Secondary Recovery Email</p>
-                    <p className="text-xs text-muted-foreground">Backup 6-digit email verification for Step-Up MFA</p>
-                  </div>
+          {/* 3. Secondary Recovery Email */}
+          <div className="p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
+                  <Mail className="w-4 h-4 text-slate-600" strokeWidth={1.5} />
                 </div>
-                {secondaryEmailVerified ? (
-                  <Badge className="gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Verified
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">Not Verified</Badge>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-900">Secondary recovery email</span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          secondaryEmailVerified ? "bg-emerald-500" : "bg-slate-300"
+                        }`}
+                      />
+                      {secondaryEmailVerified ? "Verified" : "Not verified"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {secondaryEmailVerified && secondaryEmail
+                      ? `Backup 6-digit codes sent to ${secondaryEmail}`
+                      : "Receive a backup 6-digit verification code by email"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 pl-11 sm:pl-0">
+                {!showEditEmail && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs rounded-lg border-slate-200"
+                    onClick={() => setShowEditEmail(true)}
+                  >
+                    {secondaryEmailVerified ? "Change" : "Add email"}
+                  </Button>
                 )}
               </div>
+            </div>
 
-              <div className="flex items-center gap-2">
-                <Input
-                  type="email"
-                  value={secondaryEmail}
-                  onChange={(e) => setSecondaryEmail(e.target.value)}
-                  placeholder="backup@domain.com"
-                  className="max-w-[260px] h-8 text-xs"
-                />
-                <Button size="sm" variant="outline" onClick={handleSendSecondaryEmail} disabled={busy === "email"}>
-                  Send Code
-                </Button>
-              </div>
-
-              {emailOtpSent && (
-                <div className="flex items-center gap-2">
+            {showEditEmail && (
+              <div className="ml-0 sm:ml-11 p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <Input
-                    value={emailOtpCode}
-                    onChange={(e) => setEmailOtpCode(e.target.value)}
-                    placeholder="6-digit email code"
-                    maxLength={6}
-                    className="max-w-[160px] h-8 text-xs font-mono"
+                    type="email"
+                    value={secondaryEmail}
+                    onChange={(e) => setSecondaryEmail(e.target.value)}
+                    placeholder="backup@domain.com"
+                    className="w-60 h-8 text-xs bg-white"
                   />
-                  <Button size="sm" onClick={handleVerifySecondaryEmail} disabled={busy === "email"}>
-                    Verify Email
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs border-slate-200 bg-white"
+                    onClick={handleSendSecondaryEmail}
+                    disabled={busy === "email"}
+                  >
+                    Send code
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-xs text-slate-500"
+                    onClick={() => {
+                      setShowEditEmail(false)
+                      setEmailOtpSent(false)
+                      setEmailOtpCode("")
+                    }}
+                  >
+                    Cancel
                   </Button>
                 </div>
-              )}
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+
+                {emailOtpSent && (
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
+                    <Input
+                      value={emailOtpCode}
+                      onChange={(e) => setEmailOtpCode(e.target.value)}
+                      placeholder="6-digit code"
+                      maxLength={6}
+                      className="w-36 h-8 text-xs font-mono tabular-nums bg-white"
+                    />
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs rounded-lg"
+                      onClick={async () => {
+                        await handleVerifySecondaryEmail()
+                        setShowEditEmail(false)
+                      }}
+                      disabled={busy === "email"}
+                    >
+                      Verify email
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

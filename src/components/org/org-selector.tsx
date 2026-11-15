@@ -175,7 +175,7 @@ export function OrgSelector({
                       setOpen(false)
                     }}
                     className={cn(
-                      "text-xs py-2 px-2.5 cursor-pointer transition-colors m-1 rounded-md flex items-center justify-between gap-2",
+                      "group text-xs py-2 px-2.5 cursor-pointer transition-colors m-1 rounded-md flex items-center justify-between gap-2 [&:hover_svg]:!text-black [&[data-selected='true']_svg]:!text-black",
                       isSelected 
                         ? "bg-slate-100 text-slate-900 data-[selected=true]:bg-slate-100 font-semibold border border-slate-200/80"
                         : "text-slate-700 hover:bg-slate-50 hover:text-slate-900 data-[selected=true]:bg-slate-50 data-[selected=true]:text-slate-900"
@@ -184,7 +184,7 @@ export function OrgSelector({
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <Building2
                         className={cn(
-                          "h-3.5 w-3.5 shrink-0",
+                          "h-3.5 w-3.5 shrink-0 transition-colors group-hover:!text-black group-data-[selected=true]:!text-black",
                           isSelected ? "text-blue-600" : "text-slate-400"
                         )}
                       />

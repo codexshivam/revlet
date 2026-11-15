@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
+import { MfaEnrollmentCard } from "@/components/security/mfa-enrollment-card"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -427,6 +428,8 @@ export default function SettingsPage() {
         </Card>
 
         {/* 4. Active Session */}
+        <MfaEnrollmentCard />
+
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-sm font-headline font-semibold text-slate-900">

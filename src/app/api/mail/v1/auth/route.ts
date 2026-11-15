@@ -144,6 +144,36 @@ export async function POST(req: NextRequest) {
 
     const rolling = await calculateRollingQuota(orgData);
 
+    // Derive granular RBAC role from orgData.memberPermissions or mailbox record
+    const primaryLower = (userData.primaryEmail || '').toLowerCase();
+    const emailPermKey = primaryLower.replace(/\./g, '__DOT__');
+    const orgPerms: string[] = Array.isArray(orgData.memberPermissions?.[emailPermKey])
+      ? orgData.memberPermissions[emailPermKey]
+      : [];
+    let derivedRole = userData.role || 'MEMBER';
+    if (orgPerms.includes('*') || orgPerms.includes('Org: Admin')) derivedRole = 'ORG_ADMIN';
+    else if (orgPerms.includes('Security: Admin')) derivedRole = 'SECURITY_ADMIN';
+    else if (orgPerms.includes('Compliance: Admin')) derivedRole = 'COMPLIANCE_ADMIN';
+    else if (orgPerms.includes('HelpDesk: Admin')) derivedRole = 'HELP_DESK_ADMIN';
+
+    // Fetch delegated shared mailboxes for this user
+    const sharedSnap = await orgDoc.ref.collection('mailSharedMailboxes').get();
+    const sharedMailboxes = sharedSnap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as any) }))
+      .filter((sm) =>
+        Array.isArray(sm.delegates) &&
+        sm.delegates.some((del: any) => (del.email || '').toLowerCase() === primaryLower)
+      )
+      .map((sm) => {
+        const match = sm.delegates.find((del: any) => (del.email || '').toLowerCase() === primaryLower);
+        return {
+          id: sm.id,
+          displayName: sm.displayName,
+          email: sm.email,
+          accessLevel: match?.accessLevel || 'READ_ONLY',
+        };
+      });
+
     return NextResponse.json({
       ok: true,
       organization: {
@@ -161,7 +191,9 @@ export async function POST(req: NextRequest) {
         lastName: userData.lastName,
         displayName: userData.displayName,
         primaryEmail: userData.primaryEmail,
+        role: derivedRole,
         aliases,
+        sharedMailboxes,
         orgUnitPath: userData.orgUnitPath || '/',
         isCatchAllTarget,
         canonicalStalwartEmails: canonicalEmails,

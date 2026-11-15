@@ -26,11 +26,11 @@ const nextConfig: NextConfig = {
   async headers() {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://apis.google.com https://*.firebaseapp.com",
+      "script-src 'self' 'unsafe-inline' https://apis.google.com https://*.firebaseapp.com https://www.googletagmanager.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://placehold.co https://images.unsplash.com https://picsum.photos https://*.googleusercontent.com",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://*.cloudfunctions.net https://api.cloudflare.com",
+      "img-src 'self' data: blob: https://placehold.co https://images.unsplash.com https://picsum.photos https://*.googleusercontent.com https://www.googletagmanager.com https://*.google-analytics.com",
+      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://*.cloudfunctions.net https://api.cloudflare.com https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com",
       "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",

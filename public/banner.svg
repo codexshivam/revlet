@@ -1,126 +1,160 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="2640" height="1024" viewBox="0 0 2640 1024" fill="none" role="img" aria-label="Revlet Logo">
-  <title>Revlet</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none" role="img" aria-label="Revlet OpenGraph Banner">
   <defs>
-    <!-- Pillar: Electric Indigo to Royal Sapphire (high contrast on both white & dark) -->
-    <linearGradient id="rvl-pillar" x1="176" y1="144" x2="356" y2="880" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#4F46E5"/>
-      <stop offset="48%" stop-color="#2563EB"/>
-      <stop offset="100%" stop-color="#1D4ED8"/>
+    <radialGradient id="bn-glow" cx="24%" cy="50%" r="85%">
+      <stop offset="0%" stop-color="#27272A" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#18181B" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#09090B" stop-opacity="1"/>
+    </radialGradient>
+    
+    <linearGradient id="rvb-f0" x1="160" y1="140" x2="600" y2="410" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="52%" stop-color="#E4E4E7"/>
+      <stop offset="100%" stop-color="#A1A1AA"/>
     </linearGradient>
-
-    <!-- Upper Loop: Royal Blue to Electric Sky Cyan -->
-    <linearGradient id="rvl-loop" x1="176" y1="144" x2="812" y2="580" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#2563EB"/>
-      <stop offset="50%" stop-color="#3B82F6"/>
-      <stop offset="100%" stop-color="#06B6D4"/>
+    <linearGradient id="rvb-f1" x1="160" y1="140" x2="600" y2="410" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E4E4E7"/>
+      <stop offset="52%" stop-color="#D4D4D8"/>
+      <stop offset="100%" stop-color="#71717A"/>
     </linearGradient>
-
-    <!-- Forward Ascent Wing: Deep Violet-Indigo to Luminous Cyan-Azure -->
-    <linearGradient id="rvl-wing" x1="440" y1="520" x2="848" y2="880" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#4338CA"/>
-      <stop offset="45%" stop-color="#2563EB"/>
-      <stop offset="100%" stop-color="#38BDF8"/>
+    <linearGradient id="rvb-f2" x1="160" y1="140" x2="600" y2="410" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F4F4F5"/>
+      <stop offset="52%" stop-color="#D4D4D8"/>
+      <stop offset="100%" stop-color="#A1A1AA"/>
     </linearGradient>
-
-    <!-- Fold Crease Shadow under Loop -->
-    <linearGradient id="rvl-crease" x1="520" y1="540" x2="590" y2="690" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#060B26" stop-opacity="0.48"/>
-      <stop offset="100%" stop-color="#060B26" stop-opacity="0"/>
+    <linearGradient id="rvb-f3" x1="160" y1="140" x2="600" y2="410" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E4E4E7"/>
+      <stop offset="52%" stop-color="#A1A1AA"/>
+      <stop offset="100%" stop-color="#71717A"/>
     </linearGradient>
-
-    <!-- Pillar Inner Bevel Shadow -->
-    <linearGradient id="rvl-bevel" x1="280" y1="310" x2="356" y2="310" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#060B26" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#060B26" stop-opacity="0.28"/>
-    </linearGradient>
-
-    <!-- Top Specular Highlight -->
-    <linearGradient id="rvl-rim" x1="180" y1="144" x2="800" y2="420" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.65"/>
-      <stop offset="55%" stop-color="#BAE6FD" stop-opacity="0.32"/>
+    <linearGradient id="rvb-rim" x1="156" y1="144" x2="580" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="65%" stop-color="#FFFFFF" stop-opacity="0.35"/>
       <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
+    <linearGradient id="rvb-tuck" x1="480" y1="270" x2="600" y2="270" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.28"/>
+    </linearGradient>
   </defs>
-  <g transform="translate(20, 0)">
+  <rect width="1200" height="630" fill="#09090B"/>
+  <rect width="1200" height="630" fill="url(#bn-glow)"/>
+  <g stroke="#FFFFFF" stroke-opacity="0.035" stroke-width="1">
+    <line x1="0" y1="157" x2="1200" y2="157"/>
+    <line x1="0" y1="315" x2="1200" y2="315"/>
+    <line x1="0" y1="473" x2="1200" y2="473"/>
+    <line x1="300" y1="0" x2="300" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="900" y1="0" x2="900" y2="630"/>
+  </g>
+  <g transform="translate(108, 175) scale(0.273)">
     
-    <!-- 1. Back Layer: Forward Ascent Wing -->
+  <clipPath id="rvb-blade-clip">
     <path d="
-      M 428 536
-      L 624 536
-      L 838 808
-      A 46 46 0 0 1 802 880
-      L 682 880
-      A 64 64 0 0 1 632 856
-      Z
-    " fill="url(#rvl-wing)"/>
-
-    <!-- Dimensional Fold Shadow where Wing tucks under Loop -->
-    <path d="
-      M 428 536
-      L 648 536
-      L 718 625
-      L 498 672
-      Z
-    " fill="url(#rvl-crease)"/>
-
-    <!-- 2. Left Layer: Sovereign Pillar -->
-    <clipPath id="rvl-pillar-clip">
+    M 156 364
+    C 156 226, 268 144, 406 144
+    L 568 144
+    C 586 144, 598 158, 594 176
+    C 586 218, 584 282, 592 366
+    C 594 386, 580 402, 560 402
+    L 192 402
+    C 172 402, 156 386, 156 364
+    Z
+  "/>
+  </clipPath>
+  <g transform="rotate(45 512 512) scale(0.91) translate(49 49)">
+    
+    <g transform="rotate(0 512 512)">
       <path d="
-        M 176 232
-        A 88 88 0 0 1 264 144
-        L 356 144
-        L 356 792
-        A 88 88 0 0 1 268 880
-        L 224 880
-        A 48 48 0 0 1 176 832
+    M 156 364
+    C 156 226, 268 144, 406 144
+    L 568 144
+    C 586 144, 598 158, 594 176
+    C 586 218, 584 282, 592 366
+    C 594 386, 580 402, 560 402
+    L 192 402
+    C 172 402, 156 386, 156 364
+    Z
+  " fill="url(#rvb-f0)"/>
+      <rect x="470" y="144" width="130" height="258" fill="url(#rvb-tuck)" clip-path="url(#rvb-blade-clip)"/>
+      <path d="
+        M 158 340
+        C 164 218, 272 146, 406 146
+        L 566 146
+        L 406 158
+        C 278 164, 174 232, 158 340
         Z
-      "/>
-    </clipPath>
-    <path d="
-      M 176 232
-      A 88 88 0 0 1 264 144
-      L 356 144
-      L 356 792
-      A 88 88 0 0 1 268 880
-      L 224 880
-      A 48 48 0 0 1 176 832
-      Z
-    " fill="url(#rvl-pillar)"/>
-
-    <!-- Subtle 3D Bevel along right edge of Pillar (clipped cleanly to pillar contour) -->
-    <rect x="276" y="144" width="80" height="736" fill="url(#rvl-bevel)" clip-path="url(#rvl-pillar-clip)"/>
-
-    <!-- 3. Front Layer: Sweeping Kinetic Loop (exact tangent arcs) -->
-    <path d="
-      M 176 232
-      A 88 88 0 0 1 264 144
-      L 556 144
-      A 246 246 0 0 1 802 390
-      A 246 246 0 0 1 556 636
-      L 444 636
-      A 48 48 0 0 1 396 588
-      L 396 554
-      A 82 82 0 0 1 478 472
-      L 556 472
-      A 82 82 0 0 0 638 390
-      A 82 82 0 0 0 556 308
-      L 356 308
-      L 176 232
-      Z
-    " fill="url(#rvl-loop)"/>
-
-    <!-- Crisp Specular Rim Light along Upper Crest -->
-    <path d="
-      M 178 220
-      A 88 88 0 0 1 264 144
-      L 556 144
-      A 246 246 0 0 1 800 366
-      A 244 244 0 0 0 556 162
-      L 264 162
-      A 84 84 0 0 0 178 220
-      Z
-    " fill="url(#rvl-rim)"/>
+      " fill="url(#rvb-rim)"/>
+    </g>
+    <g transform="rotate(90 512 512)">
+      <path d="
+    M 156 364
+    C 156 226, 268 144, 406 144
+    L 568 144
+    C 586 144, 598 158, 594 176
+    C 586 218, 584 282, 592 366
+    C 594 386, 580 402, 560 402
+    L 192 402
+    C 172 402, 156 386, 156 364
+    Z
+  " fill="url(#rvb-f1)"/>
+      <rect x="470" y="144" width="130" height="258" fill="url(#rvb-tuck)" clip-path="url(#rvb-blade-clip)"/>
+      <path d="
+        M 158 340
+        C 164 218, 272 146, 406 146
+        L 566 146
+        L 406 158
+        C 278 164, 174 232, 158 340
+        Z
+      " fill="url(#rvb-rim)"/>
+    </g>
+    <g transform="rotate(180 512 512)">
+      <path d="
+    M 156 364
+    C 156 226, 268 144, 406 144
+    L 568 144
+    C 586 144, 598 158, 594 176
+    C 586 218, 584 282, 592 366
+    C 594 386, 580 402, 560 402
+    L 192 402
+    C 172 402, 156 386, 156 364
+    Z
+  " fill="url(#rvb-f2)"/>
+      <rect x="470" y="144" width="130" height="258" fill="url(#rvb-tuck)" clip-path="url(#rvb-blade-clip)"/>
+      <path d="
+        M 158 340
+        C 164 218, 272 146, 406 146
+        L 566 146
+        L 406 158
+        C 278 164, 174 232, 158 340
+        Z
+      " fill="url(#rvb-rim)"/>
+    </g>
+    <g transform="rotate(270 512 512)">
+      <path d="
+    M 156 364
+    C 156 226, 268 144, 406 144
+    L 568 144
+    C 586 144, 598 158, 594 176
+    C 586 218, 584 282, 592 366
+    C 594 386, 580 402, 560 402
+    L 192 402
+    C 172 402, 156 386, 156 364
+    Z
+  " fill="url(#rvb-f3)"/>
+      <rect x="470" y="144" width="130" height="258" fill="url(#rvb-tuck)" clip-path="url(#rvb-blade-clip)"/>
+      <path d="
+        M 158 340
+        C 164 218, 272 146, 406 146
+        L 566 146
+        L 406 158
+        C 278 164, 174 232, 158 340
+        Z
+      " fill="url(#rvb-rim)"/>
+    </g>
+  </g>
   
   </g>
-  <text x="970" y="675" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="472" font-weight="800" letter-spacing="-14" fill="#0B0F29">Revlet</text>
+  <text x="424" y="346" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Avenir Next', 'Helvetica Neue', Arial, sans-serif" font-size="112" font-weight="700" letter-spacing="-3" fill="#FFFFFF">Revlet</text>
+  <text x="428" y="408" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Avenir Next', 'Helvetica Neue', Arial, sans-serif" font-size="26" font-weight="500" letter-spacing="-0.2" fill="#A1A1AA">Enterprise IT Management &amp; Sovereign Cloud Infrastructure</text>
+  <text x="428" y="458" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="19" font-weight="600" letter-spacing="1.2" fill="#71717A">revlet.me</text>
 </svg>

@@ -11,6 +11,8 @@ import {
   LifeBuoy,
   Mail,
   Settings,
+  ShieldAlert,
+  UserPlus,
   Users,
 } from "lucide-react"
 import {
@@ -56,44 +58,31 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Jump to a page, service tab, or organization..." />
-      <CommandList>
-        <CommandEmpty>No matching pages or organizations found.</CommandEmpty>
+      <CommandInput placeholder="Type a command, page, or organization (⌘K)..." />
+      <CommandList className="max-h-[360px]">
+        <CommandEmpty>No matching commands, pages, or organizations found.</CommandEmpty>
 
         <CommandGroup heading="Navigation">
           <CommandItem onSelect={() => navigate("/account/home")}>
-            <LayoutDashboard className="mr-2 h-4 w-4 text-slate-500" />
+            <LayoutDashboard className="mr-2 h-4 w-4 text-blue-600" />
             <span>Account Home</span>
             <CommandShortcut>Home</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/services/dns")}>
-            <Globe className="mr-2 h-4 w-4 text-slate-500" />
+            <Globe className="mr-2 h-4 w-4 text-emerald-600" />
             <span>DNS Management</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/services/email")}>
-            <Mail className="mr-2 h-4 w-4 text-slate-500" />
+            <Mail className="mr-2 h-4 w-4 text-blue-600" />
             <span>Email Service</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/management/team")}>
-            <Users className="mr-2 h-4 w-4 text-slate-500" />
+            <Users className="mr-2 h-4 w-4 text-slate-600" />
             <span>Team Management</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/management/settings")}>
-            <Settings className="mr-2 h-4 w-4 text-slate-500" />
+            <Settings className="mr-2 h-4 w-4 text-slate-600" />
             <span>Account Settings</span>
-          </CommandItem>
-          <CommandItem onSelect={() => navigate("/support")}>
-            <LifeBuoy className="mr-2 h-4 w-4 text-slate-500" />
-            <span>Support</span>
-          </CommandItem>
-          <CommandItem
-            onSelect={() => {
-              setOpen(false)
-              window.open("https://mail.revlet.me", "_blank", "noopener,noreferrer")
-            }}
-          >
-            <ExternalLink className="mr-2 h-4 w-4 text-slate-500" />
-            <span>Open RevletMail Webmail</span>
           </CommandItem>
         </CommandGroup>
 
@@ -101,16 +90,43 @@ export function CommandPalette() {
 
         <CommandGroup heading="Email Directory">
           <CommandItem onSelect={() => navigate("/services/email?tab=users")}>
-            <Mail className="mr-2 h-4 w-4 text-slate-500" />
+            <Mail className="mr-2 h-4 w-4 text-slate-600" />
             <span>Email: Users Directory</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/services/email?tab=groups")}>
-            <Users className="mr-2 h-4 w-4 text-slate-500" />
+            <Users className="mr-2 h-4 w-4 text-slate-600" />
             <span>Email: Groups</span>
           </CommandItem>
+          <CommandItem onSelect={() => navigate("/services/email?tab=suspended")}>
+            <ShieldAlert className="mr-2 h-4 w-4 text-amber-600" />
+            <span>Email: Suspended Accounts</span>
+          </CommandItem>
           <CommandItem onSelect={() => navigate("/services/email?tab=settings")}>
-            <Settings className="mr-2 h-4 w-4 text-slate-500" />
-            <span>Email: Settings & DNS</span>
+            <Settings className="mr-2 h-4 w-4 text-slate-600" />
+            <span>Email: Settings &amp; DNS</span>
+          </CommandItem>
+        </CommandGroup>
+
+        <CommandSeparator />
+
+        <CommandGroup heading="Quick Actions">
+          <CommandItem onSelect={() => navigate("/management/team")}>
+            <UserPlus className="mr-2 h-4 w-4 text-blue-600" />
+            <span>Invite Team Member</span>
+          </CommandItem>
+          <CommandItem onSelect={() => navigate("/support")}>
+            <LifeBuoy className="mr-2 h-4 w-4 text-slate-600" />
+            <span>Help &amp; Support</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              setOpen(false)
+              window.open("https://mail.revlet.me", "_blank", "noopener,noreferrer")
+            }}
+          >
+            <ExternalLink className="mr-2 h-4 w-4 text-blue-600" />
+            <span>Open RevletMail Webmail</span>
+            <CommandShortcut>↗</CommandShortcut>
           </CommandItem>
         </CommandGroup>
 
@@ -134,9 +150,9 @@ export function CommandPalette() {
                     }}
                   >
                     <Building2 className="mr-2 h-4 w-4 text-slate-500" />
-                    <span className="truncate">{org.name}</span>
+                    <span className="truncate font-medium">{org.name}</span>
                     {org.domain && (
-                      <span className="ml-2 text-xs text-slate-400 truncate">
+                      <span className="ml-2 text-xs text-slate-400 group-hover:text-white/85 group-data-[selected='true']:text-white/85 truncate transition-colors">
                         {org.domain}
                       </span>
                     )}

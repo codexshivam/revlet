@@ -163,25 +163,6 @@ export async function PUT(req: NextRequest) {
           ? prevSettings.blockedSenders
           : [];
 
-      const incomingVac =
-        incoming.vacationResponder && typeof incoming.vacationResponder === 'object'
-          ? (incoming.vacationResponder as Record<string, unknown>)
-          : null;
-      const prevVac =
-        prevSettings.vacationResponder && typeof prevSettings.vacationResponder === 'object'
-          ? (prevSettings.vacationResponder as Record<string, unknown>)
-          : {};
-
-      const vacationResponder = incomingVac
-        ? {
-            isEnabled: Boolean(incomingVac.isEnabled),
-            subject: typeof incomingVac.subject === 'string' ? incomingVac.subject.slice(0, 300) : '',
-            body: typeof incomingVac.body === 'string' ? incomingVac.body.slice(0, 10000) : '',
-            fromDate: typeof incomingVac.fromDate === 'string' ? incomingVac.fromDate.slice(0, 40) : '',
-            toDate: typeof incomingVac.toDate === 'string' ? incomingVac.toDate.slice(0, 40) : '',
-          }
-        : prevVac;
-
       updatePayload.settings = {
         pageSize:
           typeof incoming.pageSize === 'number' && incoming.pageSize >= 10 && incoming.pageSize <= 200
@@ -226,7 +207,6 @@ export async function PUT(req: NextRequest) {
             : Boolean(prevSettings.desktopNotifications),
         trustedSenders,
         blockedSenders,
-        vacationResponder,
       };
     }
 

@@ -14,20 +14,25 @@ import { sendRevletAlertEmail } from '@/lib/revlet-alerts';
 const MFA_SESSION_COOKIE = 'revlet_mfa_session';
 
 function setMfaSessionCookie(
+  req: NextRequest,
   res: NextResponse,
   uid: string,
   email: string,
   method: 'totp' | 'passkey' | 'secondary_email' | 'firebase_mfa'
 ): NextResponse {
-  const sessionToken = createStepUpToken({ uid, email, method }, 7 * 24 * 3600);
+  const isHttps =
+    req.nextUrl.protocol === 'https:' ||
+    req.headers.get('x-forwarded-proto') === 'https';
+  const thirtyDays = 30 * 24 * 3600;
+  const sessionToken = createStepUpToken({ uid, email, method }, thirtyDays);
   res.cookies.set({
     name: MFA_SESSION_COOKIE,
     value: sessionToken,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isHttps,
     sameSite: 'lax',
     path: '/',
-    maxAge: 7 * 24 * 3600,
+    maxAge: thirtyDays,
   });
   return res;
 }
@@ -139,7 +144,7 @@ export async function POST(req: NextRequest) {
         },
         { merge: true }
       );
-      return setMfaSessionCookie(NextResponse.json({ ok: true }), uid, email, 'totp');
+      return setMfaSessionCookie(req, NextResponse.json({ ok: true }), uid, email, 'totp');
     }
 
     if (action === 'totp_disable') {
@@ -199,7 +204,7 @@ export async function POST(req: NextRequest) {
         label,
         createdAt: new Date().toISOString(),
       });
-      return setMfaSessionCookie(NextResponse.json({ ok: true }), uid, email, 'passkey');
+      return setMfaSessionCookie(req, NextResponse.json({ ok: true }), uid, email, 'passkey');
     }
 
     if (action === 'passkey_remove') {
@@ -310,6 +315,7 @@ export async function POST(req: NextRequest) {
       );
       const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
       return setMfaSessionCookie(
+        req,
         NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
         uid,
         email,
@@ -335,6 +341,7 @@ export async function POST(req: NextRequest) {
         }
         const stepUpToken = createStepUpToken({ uid, email, method: 'totp' });
         return setMfaSessionCookie(
+          req,
           NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
           uid,
           email,
@@ -361,6 +368,7 @@ export async function POST(req: NextRequest) {
         await userRef.collection('mfaChallenges').doc('current').delete().catch(() => {});
         const stepUpToken = createStepUpToken({ uid, email, method: 'passkey' });
         return setMfaSessionCookie(
+          req,
           NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
           uid,
           email,
@@ -387,6 +395,7 @@ export async function POST(req: NextRequest) {
         await userRef.set({ secondaryOtpHash: null, secondaryOtpExpiresAt: null }, { merge: true });
         const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
         return setMfaSessionCookie(
+          req,
           NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
           uid,
           email,
@@ -404,6 +413,7 @@ export async function POST(req: NextRequest) {
         }
         const stepUpToken = createStepUpToken({ uid, email, method: 'firebase_mfa' });
         return setMfaSessionCookie(
+          req,
           NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
           uid,
           email,

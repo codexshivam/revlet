@@ -6,9 +6,31 @@ import {
   createStepUpToken,
   generateTotpSecret,
   hashOtpCode,
+  verifyStepUpToken,
   verifyTotpCode,
 } from '@/lib/mfa';
 import { sendRevletAlertEmail } from '@/lib/revlet-alerts';
+
+const MFA_SESSION_COOKIE = 'revlet_mfa_session';
+
+function setMfaSessionCookie(
+  res: NextResponse,
+  uid: string,
+  email: string,
+  method: 'totp' | 'passkey' | 'secondary_email' | 'firebase_mfa'
+): NextResponse {
+  const sessionToken = createStepUpToken({ uid, email, method }, 7 * 24 * 3600);
+  res.cookies.set({
+    name: MFA_SESSION_COOKIE,
+    value: sessionToken,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 7 * 24 * 3600,
+  });
+  return res;
+}
 
 async function authenticateBearer(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || '';
@@ -35,13 +57,41 @@ export async function GET(req: NextRequest) {
       createdAt: d.data().createdAt || '',
     }));
 
+    const totpEnabled = Boolean(u.totpEnabled && u.totpSecret);
+    const secondaryEmailVerified = Boolean(u.secondaryEmailVerified && u.secondaryEmail);
+    const hasEnrolledMfa = totpEnabled || passkeys.length > 0 || secondaryEmailVerified;
+
+    let enforceMfa = false;
+    try {
+      const orgsSnap = await adminDb
+        .collection('organizations')
+        .where('memberIds', 'array-contains', decoded.uid)
+        .get();
+      enforceMfa = orgsSnap.docs.some((d) => Boolean(d.data()?.enforceMfa));
+      if (!enforceMfa) {
+        const ownedSnap = await adminDb
+          .collection('organizations')
+          .where('ownerId', '==', decoded.uid)
+          .get();
+        enforceMfa = ownedSnap.docs.some((d) => Boolean(d.data()?.enforceMfa));
+      }
+    } catch {
+      enforceMfa = false;
+    }
+
+    const mfaCookie = req.cookies.get(MFA_SESSION_COOKIE)?.value;
+    const mfaSessionVerified = Boolean(verifyStepUpToken(mfaCookie, decoded.uid));
+
     return NextResponse.json({
       ok: true,
+      hasEnrolledMfa,
+      enforceMfa,
+      mfaSessionVerified,
       mfa: {
-        totpEnabled: Boolean(u.totpEnabled && u.totpSecret),
+        totpEnabled,
         passkeys,
         secondaryEmail: u.secondaryEmail || '',
-        secondaryEmailVerified: Boolean(u.secondaryEmailVerified && u.secondaryEmail),
+        secondaryEmailVerified,
       },
     });
   } catch (err: any) {
@@ -89,7 +139,7 @@ export async function POST(req: NextRequest) {
         },
         { merge: true }
       );
-      return NextResponse.json({ ok: true });
+      return setMfaSessionCookie(NextResponse.json({ ok: true }), uid, email, 'totp');
     }
 
     if (action === 'totp_disable') {
@@ -149,7 +199,7 @@ export async function POST(req: NextRequest) {
         label,
         createdAt: new Date().toISOString(),
       });
-      return NextResponse.json({ ok: true });
+      return setMfaSessionCookie(NextResponse.json({ ok: true }), uid, email, 'passkey');
     }
 
     if (action === 'passkey_remove') {
@@ -259,7 +309,12 @@ export async function POST(req: NextRequest) {
         { merge: true }
       );
       const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
-      return NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 });
+      return setMfaSessionCookie(
+        NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
+        uid,
+        email,
+        'secondary_email'
+      );
     }
 
     if (action === 'step_up_verify') {
@@ -279,7 +334,12 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ ok: false, error: 'Invalid authenticator code.' }, { status: 400 });
         }
         const stepUpToken = createStepUpToken({ uid, email, method: 'totp' });
-        return NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 });
+        return setMfaSessionCookie(
+          NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
+          uid,
+          email,
+          'totp'
+        );
       }
 
       if (method === 'passkey') {
@@ -300,7 +360,12 @@ export async function POST(req: NextRequest) {
         }
         await userRef.collection('mfaChallenges').doc('current').delete().catch(() => {});
         const stepUpToken = createStepUpToken({ uid, email, method: 'passkey' });
-        return NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 });
+        return setMfaSessionCookie(
+          NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
+          uid,
+          email,
+          'passkey'
+        );
       }
 
       if (method === 'secondary_email') {
@@ -321,7 +386,12 @@ export async function POST(req: NextRequest) {
         }
         await userRef.set({ secondaryOtpHash: null, secondaryOtpExpiresAt: null }, { merge: true });
         const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
-        return NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 });
+        return setMfaSessionCookie(
+          NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
+          uid,
+          email,
+          'secondary_email'
+        );
       }
 
       if (method === 'firebase_mfa') {
@@ -333,7 +403,12 @@ export async function POST(req: NextRequest) {
           );
         }
         const stepUpToken = createStepUpToken({ uid, email, method: 'firebase_mfa' });
-        return NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 });
+        return setMfaSessionCookie(
+          NextResponse.json({ ok: true, stepUpToken, expiresInSeconds: 600 }),
+          uid,
+          email,
+          'firebase_mfa'
+        );
       }
 
       return NextResponse.json({ ok: false, error: 'Unsupported MFA method.' }, { status: 400 });
@@ -346,4 +421,10 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+}
+
+export async function DELETE() {
+  const res = NextResponse.json({ ok: true });
+  res.cookies.delete(MFA_SESSION_COOKIE);
+  return res;
 }

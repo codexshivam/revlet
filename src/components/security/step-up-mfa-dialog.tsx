@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useUser } from "@/firebase"
 import {
   Dialog,
   DialogContent,
@@ -13,25 +14,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ShieldCheck, Smartphone, KeyRound, Mail, Loader2, AlertCircle } from "lucide-react"
-import { useUser } from "@/firebase"
+import { ShieldCheck, KeyRound, Mail, Smartphone, Loader2, AlertCircle } from "lucide-react"
 import Link from "next/link"
-
-function bufferToBase64Url(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf)
-  let str = ""
-  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i])
-  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
-}
-
-function base64UrlToBuffer(b64u: string): ArrayBuffer {
-  const pad = "=".repeat((4 - (b64u.length % 4)) % 4)
-  const b64 = (b64u + pad).replace(/-/g, "+").replace(/_/g, "/")
-  const bin = atob(b64)
-  const arr = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
-  return arr.buffer
-}
 
 interface StepUpMfaDialogProps {
   open: boolean
@@ -40,20 +24,46 @@ interface StepUpMfaDialogProps {
   onVerified: (stepUpToken: string) => void
 }
 
+function sanitizeMfaError(input: unknown, fallback = "Verification failed. Please try again."): string {
+  const raw = typeof input === "string" ? input : (input as any)?.message || ""
+  if (!raw) return fallback
+  if (/webauthn|fido2|totp|firebase|firestore|stalwart|jmap|notallowederror|abort|securityerror/i.test(raw)) {
+    if (/cancel|notallowederror|abort/i.test(raw)) {
+      return "Verification was cancelled or timed out."
+    }
+    return fallback
+  }
+  return raw
+}
+
+function b64uToBuf(s: string): ArrayBuffer {
+  const b = atob((s + "=".repeat((4 - (s.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"))
+  const a = new Uint8Array(b.length)
+  for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i)
+  return a.buffer
+}
+
+function bufToB64u(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf)
+  let str = ""
+  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i])
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+}
+
 export function StepUpMfaDialog({
   open,
   onOpenChange,
-  actionLabel = "Complete this sensitive administrative action",
+  actionLabel = "This action requires additional verification.",
   onVerified,
 }: StepUpMfaDialogProps) {
   const { user } = useUser()
-  const [activeTab, setActiveTab] = useState<"totp" | "passkey" | "email">("totp")
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [totpEnabled, setTotpEnabled] = useState(false)
   const [passkeyCount, setPasskeyCount] = useState(0)
   const [secondaryEmail, setSecondaryEmail] = useState("")
   const [secondaryEmailVerified, setSecondaryEmailVerified] = useState(false)
 
+  const [activeTab, setActiveTab] = useState<"totp" | "passkey" | "email">("totp")
   const [totpCode, setTotpCode] = useState("")
   const [emailCode, setEmailCode] = useState("")
   const [emailCodeSent, setEmailCodeSent] = useState(false)
@@ -62,11 +72,13 @@ export function StepUpMfaDialog({
 
   useEffect(() => {
     if (!open || !user) return
+    let cancelled = false
     setError(null)
     setTotpCode("")
     setEmailCode("")
     setEmailCodeSent(false)
     setLoadingStatus(true)
+
     user
       .getIdToken()
       .then((token) =>
@@ -76,18 +88,28 @@ export function StepUpMfaDialog({
       )
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return
         if (data?.ok && data.mfa) {
-          setTotpEnabled(Boolean(data.mfa.totpEnabled))
-          setPasskeyCount(Array.isArray(data.mfa.passkeys) ? data.mfa.passkeys.length : 0)
+          const tEnabled = Boolean(data.mfa.totpEnabled)
+          const pCount = Array.isArray(data.mfa.passkeys) ? data.mfa.passkeys.length : 0
+          const sVerified = Boolean(data.mfa.secondaryEmailVerified)
+          setTotpEnabled(tEnabled)
+          setPasskeyCount(pCount)
           setSecondaryEmail(data.mfa.secondaryEmail || "")
-          setSecondaryEmailVerified(Boolean(data.mfa.secondaryEmailVerified))
-          if (data.mfa.totpEnabled) setActiveTab("totp")
-          else if (Array.isArray(data.mfa.passkeys) && data.mfa.passkeys.length > 0) setActiveTab("passkey")
-          else setActiveTab("email")
+          setSecondaryEmailVerified(sVerified)
+          if (tEnabled) setActiveTab("totp")
+          else if (pCount > 0) setActiveTab("passkey")
+          else if (sVerified) setActiveTab("email")
         }
       })
       .catch(() => {})
-      .finally(() => setLoadingStatus(false))
+      .finally(() => {
+        if (!cancelled) setLoadingStatus(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [open, user])
 
   const handleVerifyTotp = async () => {
@@ -102,16 +124,20 @@ export function StepUpMfaDialog({
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: "step_up_verify", method: "totp", code: totpCode.trim() }),
+        body: JSON.stringify({
+          action: "step_up_verify",
+          method: "totp",
+          code: totpCode.trim(),
+        }),
       })
       const data = await res.json()
       if (!res.ok || !data.ok || !data.stepUpToken) {
-        throw new Error(data.error || "Verification failed")
+        throw new Error(data.error || "Invalid verification code")
       }
       onVerified(data.stepUpToken)
       onOpenChange(false)
     } catch (err: any) {
-      setError(err?.message || "Invalid authenticator code")
+      setError(sanitizeMfaError(err, "Verification failed"))
     } finally {
       setSubmitting(false)
     }
@@ -120,7 +146,7 @@ export function StepUpMfaDialog({
   const handleVerifyPasskey = async () => {
     if (!user) return
     if (typeof window === "undefined" || !window.PublicKeyCredential) {
-      setError("Passkeys (WebAuthn) are not supported in this browser.")
+      setError("Passkeys are not supported in this browser.")
       return
     }
     setSubmitting(true)
@@ -136,24 +162,26 @@ export function StepUpMfaDialog({
         body: JSON.stringify({ action: "passkey_assert_options" }),
       })
       const optData = await optRes.json()
-      if (!optRes.ok || !optData.ok) throw new Error(optData.error || "Could not start passkey prompt")
+      if (!optRes.ok || !optData.ok) {
+        throw new Error(optData.error || "Could not start passkey verification")
+      }
 
-      const assertion = (await navigator.credentials.get({
+      const cred = (await navigator.credentials.get({
         publicKey: {
-          challenge: base64UrlToBuffer(optData.challenge),
+          challenge: b64uToBuf(optData.challenge),
           allowCredentials: (optData.allowCredentials || []).map((c: any) => ({
-            id: base64UrlToBuffer(c.id),
+            id: b64uToBuf(c.id),
             type: "public-key",
           })),
-          userVerification: "preferred",
           timeout: 60000,
+          userVerification: "preferred",
         },
       })) as PublicKeyCredential | null
 
-      if (!assertion) throw new Error("Passkey prompt was cancelled.")
-      const response = assertion.response as AuthenticatorAssertionResponse
+      if (!cred) throw new Error("Passkey verification cancelled")
+      const resp = cred.response as AuthenticatorAssertionResponse
 
-      const verRes = await fetch("/api/auth/mfa", {
+      const verifyRes = await fetch("/api/auth/mfa", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -162,18 +190,18 @@ export function StepUpMfaDialog({
         body: JSON.stringify({
           action: "step_up_verify",
           method: "passkey",
-          credentialId: bufferToBase64Url(assertion.rawId),
-          clientDataJSON: bufferToBase64Url(response.clientDataJSON),
+          credentialId: bufToB64u(cred.rawId),
+          clientDataJSON: bufToB64u(resp.clientDataJSON),
         }),
       })
-      const verData = await verRes.json()
-      if (!verRes.ok || !verData.ok || !verData.stepUpToken) {
-        throw new Error(verData.error || "Passkey verification failed")
+      const verifyData = await verifyRes.json()
+      if (!verifyRes.ok || !verifyData.ok || !verifyData.stepUpToken) {
+        throw new Error(verifyData.error || "Passkey verification failed")
       }
-      onVerified(verData.stepUpToken)
+      onVerified(verifyData.stepUpToken)
       onOpenChange(false)
     } catch (err: any) {
-      setError(err?.message || "Passkey verification failed")
+      setError(sanitizeMfaError(err, "Passkey verification failed"))
     } finally {
       setSubmitting(false)
     }
@@ -197,7 +225,7 @@ export function StepUpMfaDialog({
       if (!res.ok || !data.ok) throw new Error(data.error || "Could not send verification email")
       setEmailCodeSent(true)
     } catch (err: any) {
-      setError(err?.message || "Failed to send email code")
+      setError(sanitizeMfaError(err, "Failed to send email code"))
     } finally {
       setSubmitting(false)
     }
@@ -228,7 +256,7 @@ export function StepUpMfaDialog({
       onVerified(data.stepUpToken)
       onOpenChange(false)
     } catch (err: any) {
-      setError(err?.message || "Verification failed")
+      setError(sanitizeMfaError(err, "Verification failed"))
     } finally {
       setSubmitting(false)
     }
@@ -240,7 +268,7 @@ export function StepUpMfaDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <ShieldCheck className="w-5 h-5 text-blue-600" />
-            Step-Up MFA Verification Required
+            Verification Required
           </DialogTitle>
           <DialogDescription className="text-xs">{actionLabel}</DialogDescription>
         </DialogHeader>
@@ -248,7 +276,7 @@ export function StepUpMfaDialog({
         {loadingStatus ? (
           <div className="py-8 flex items-center justify-center text-muted-foreground text-xs gap-2">
             <Loader2 className="w-4 h-4 animate-spin" />
-            Checking enrolled MFA factors...
+            Checking verification methods...
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">

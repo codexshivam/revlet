@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import Link from "next/link"
 import { AlertTriangle, RefreshCw, Home, HelpCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { reportCrashException } from "@/firebase/telemetry"
 
 export default function ErrorBoundary({
   error,
@@ -13,8 +14,13 @@ export default function ErrorBoundary({
   reset: () => void
 }) {
   useEffect(() => {
-    // Log unexpected runtime exception for diagnostics
+    // Log unexpected runtime exception for diagnostics & Crashlytics telemetry
     console.error("Revlet Application Error:", error)
+    reportCrashException(error, {
+      fatal: false,
+      component: "ErrorBoundary",
+      digest: error.digest,
+    })
   }, [error])
 
   return (

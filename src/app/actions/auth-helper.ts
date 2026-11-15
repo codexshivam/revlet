@@ -1,5 +1,13 @@
 import { adminAuth, adminDb } from '@/firebase/admin';
 import { decryptToken } from '@/lib/security/encryption';
+import { verifyStepUpToken } from '@/lib/mfa';
+
+export function assertStepUpMfa(uid: string, stepUpToken?: string | null): void {
+  const verified = verifyStepUpToken(stepUpToken, uid);
+  if (!verified) {
+    throw new Error('MFA_STEP_UP_REQUIRED: Please complete Step-Up MFA verification to continue.');
+  }
+}
 
 export type VerifiedUserOrg = {
   uid: string;

@@ -72,6 +72,7 @@ import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/layout/page-header"
 import { EmptyOrgState } from "@/components/services/empty-org-state"
 import { ServiceActivationCard } from "@/components/services/service-activation-card"
+import { EmailGovernancePanel } from "@/components/services/email-governance-panel"
 import { TablePagination } from "@/components/ui/table-pagination"
 import {
   getMailServiceState,
@@ -1940,6 +1941,41 @@ export default function EmailServiceAdminPage() {
               >
                 Settings
               </TabsTrigger>
+
+              <TabsTrigger
+                value="shared"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                Shared Mailboxes
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="quarantine"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                Quarantine
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="dlp"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                DLP &amp; Mail Flow
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="ediscovery"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                eDiscovery &amp; Legal Hold
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="audit"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                SIEM &amp; Audit Logs
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -2990,6 +3026,36 @@ export default function EmailServiceAdminPage() {
                 Deactivate Service
               </Button>
             </div>
+          </TabsContent>
+
+          <TabsContent value="shared" className="mt-0">
+            {selectedOrgId && (
+              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="shared" />
+            )}
+          </TabsContent>
+
+          <TabsContent value="quarantine" className="mt-0">
+            {selectedOrgId && (
+              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="quarantine" />
+            )}
+          </TabsContent>
+
+          <TabsContent value="dlp" className="mt-0">
+            {selectedOrgId && (
+              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="dlp" />
+            )}
+          </TabsContent>
+
+          <TabsContent value="ediscovery" className="mt-0">
+            {selectedOrgId && (
+              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="ediscovery" />
+            )}
+          </TabsContent>
+
+          <TabsContent value="audit" className="mt-0">
+            {selectedOrgId && (
+              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="audit" />
+            )}
           </TabsContent>
         </Tabs>
 

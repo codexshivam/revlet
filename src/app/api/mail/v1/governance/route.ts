@@ -121,6 +121,7 @@ export async function POST(req: NextRequest) {
           recipients: Array.isArray(body.recipients) ? body.recipients : [],
           subject: body.subject || '(No Subject)',
           snippet: body.snippet || '',
+          bodyText: typeof body.bodyText === 'string' ? body.bodyText.slice(0, 10000) : '',
           reason: body.reason || 'DLP',
           matchedRule: body.matchedRule || 'Policy Match',
           score: typeof body.score === 'number' ? body.score : 95,

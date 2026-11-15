@@ -6,8 +6,22 @@ export default function robots(): MetadataRoute.Robots {
 
   return {
     rules: [
-      // All search engines and AI assistants (Googlebot, Bingbot, Google-Extended,
-      // GPTBot, ClaudeBot, PerplexityBot, Applebot) may read public pages only.
+      {
+        userAgent: [
+          'Googlebot',
+          'Googlebot-Image',
+          'Google-Extended',
+          'Bingbot',
+          'Applebot',
+          'GPTBot',
+          'OAI-SearchBot',
+          'ChatGPT-User',
+          'ClaudeBot',
+          'PerplexityBot',
+        ],
+        allow: '/',
+        disallow: privateDisallowed,
+      },
       { userAgent: '*', allow: '/', disallow: privateDisallowed },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,

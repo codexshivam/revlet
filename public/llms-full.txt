@@ -1,34 +1,20 @@
-# Revlet Platform — Complete Product & Support Overview
+# Revlet Console (app.revlet.me) — Complete Overview
 
-> Dashboard | Revlet Platform (`https://app.revlet.me`)
-> Marketing Site: `https://revlet.me` (`Revlet | Enterprise Cloud Infrastructure`)
+> `Revlet Console` (`https://app.revlet.me`) — Unified Admin Panel by Revlet (`https://revlet.me`)
 
 ## Overview
-Revlet brings professional business email, domain DNS management, and team access control together in one clean, reliable platform. Organizations use Revlet so their teams don't have to jump between separate domain registrars, DNS panels, and email admin tools.
+Revlet brings professional business email, global domain DNS management, and team access control together in one clean platform. Organizations start free during Open Access at `$0/month` for up to 1,000 custom mailboxes.
 
-## Core Services
+## Core Capabilities
+- **Custom Domain Business Email (`/services/email`)**: Provision up to 1,000 `@yourcompany.com` mailboxes, up to 25 aliases per mailbox, 50 Organizational Units, bulk CSV onboarding (200 rows per upload), unlimited incoming email, and 1,000 monthly outbound emails per organization. Automated checks for `MX`, `SPF`, `DKIM`, and `DMARC` plus 14-day soft-delete recovery.
+- **Shared Team Mailboxes**: Manage team addresses (`hello@`, `support@`, `billing@`) using individual staff sign-ins and synced sent folders without password sharing.
+- **Cloud DNS Management (`/services/dns`)**: Sub-second global updates across 16 record types, BIND zone file import/export, zero-billing Cloudflare integration or external registrar verification, and 1-click snapshot rollback.
+- **Team Permissions (`/management/team`)**: Scoped per-organization access across `Admin`, DNS, and Email roles.
 
-### 1. Business Email Service (`/services/email`)
-- **Custom Domain Mailboxes**: Create professional email addresses on your own domain (`you@yourcompany.com`).
-- **Aliases & Mailing Groups**: Add multiple email aliases per user and create team distribution groups (`sales@`, `support@`).
-- **Organizational Units**: Group users by department, campus, or team (`/` or custom paths) and filter your directory in one click.
-- **Bulk Import & Export**: Onboard hundreds of users at once using a downloadable CSV template (including initial passwords) or export your directory anytime.
-- **Built-In Deliverability & Protection**: Automatic checks for required `MX`, `SPF`, `DKIM`, and `DMARC` records, with one-click setup when your domain DNS is managed in Revlet.
-- **14-Day Recovery Window**: Deleted email accounts and deactivated email services remain recoverable for 14 days before permanent removal, with automated alerts sent to the organization owner.
-
-### 2. DNS Management (`/services/dns`)
-- **Clean Record Management**: View, search, filter, and paginate `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `SRV`, and `NS` records across desktop and mobile.
-- **Proxy & Routing Controls**: Toggle traffic proxying and configure mail routing records without complex syntax.
-- **Restore Points (Snapshots)**: Save a point-in-time snapshot of your domain's DNS records and roll back whenever needed.
-
-### 3. Team Management (`/management/team`)
-- **Right-Sized Access Per Organization**: Choose `Admin` access or `Assign Services` (`DNS: Read`, `DNS: Edit`, `DNS: Admin`, `Email: Read`, `Email: Add`, `Email: Admin`) separately for every organization a team member belongs to.
-- **No Shared Passwords**: Team members sign in with their own Revlet account, keeping your organization secure and auditable.
-
-### 4. Account Home (`/account/home`)
-- **All Your Organizations in One Place**: Add new organizations, switch active workspaces from the header, and manage organization details from a unified home screen.
-
-## Public Pages on `app.revlet.me`
-- **Get Started (`https://app.revlet.me/signup`)**: Create a Revlet account and register your first organization in minutes.
-- **Login (`https://app.revlet.me/login`)**: Sign in to manage your business email, domains, and team access.
-- **Help & Support (`https://app.revlet.me/support`)**: Browse frequently asked questions or contact `hello@revlet.me` for direct support.
+## Knowledge Graph & Ecosystem
+- **Parent Brand**: Revlet (`https://revlet.me`)
+- **Founder**: Shivam Yadav (`https://revlet.me/about/`)
+- **Webmail App**: `https://mail.revlet.me/login`
+- **Public Console Routes**: `https://app.revlet.me/signup`, `https://app.revlet.me/login`, `https://app.revlet.me/support`
+- **Social Channels**: Instagram (`https://www.instagram.com/revlet.me`), Facebook (`https://www.facebook.com/revletplatform`), X (`https://x.com/revletme`), LinkedIn (`https://www.linkedin.com/company`), GitHub (`https://github.com/codexshivam/revlet`)
+- **Support**: `hello@revlet.me`

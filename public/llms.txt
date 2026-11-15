@@ -1,19 +1,23 @@
-# Revlet Platform (app.revlet.me)
+# Revlet Console (app.revlet.me)
 
-> Professional business email, simple DNS management, and secure team access — all in one place.
+> Business email on your own domain, fast global DNS management, shared team mailboxes, and organization permissions — free to start at $0/mo.
 
-Revlet helps growing businesses, schools, and teams run their cloud infrastructure from one simple, secure dashboard. Launch custom `@yourdomain.com` email accounts, manage your domain DNS with restore points, and invite teammates with the exact access they need for each organization.
+Revlet helps growing businesses, schools, and teams run their cloud infrastructure from one simple, secure console. Create up to 1,000 `@yourcompany.com` mailboxes free, manage domain DNS with one-click restore points, collaborate on shared team inboxes, and set per-organization permissions.
 
-## What You Can Do with Revlet
-- **Business Email on Your Own Domain**: Create `@yourcompany.com` mailboxes, aliases, mailing groups, and organizational units in minutes. Built-in SPF, DKIM, and DMARC protection helps your emails reach the inbox, while a 14-day recovery window protects against accidental deletion.
-- **Simple, Reliable DNS Management**: Add, search, and update domain records (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, `SRV`, `NS`) from a clean interface, and save restore points before making major changes.
-- **Per-Organization Team Access**: Invite teammates as organization admins or grant access only to specific services (DNS or Email) per organization—without ever sharing root passwords or provider keys.
-- **Multi-Organization Workspace**: Manage multiple companies, brands, or client domains from a single Revlet account and switch between them in one click.
+## What You Can Do in Revlet Console
+- **Business Email (`$0/mo` Open Access)**: Up to 1,000 mailboxes per organization, 25 email aliases per mailbox, unlimited incoming email, 1,000 outbound emails per month per organization, and 14-day recovery protection.
+- **Shared Team Mailboxes**: Set up `hello@`, `support@`, and `billing@` with role-based access (`Full Access`, `Send-As`, `Read-Only`) and no shared passwords.
+- **Cloud DNS Management**: Sub-second global updates across 16 DNS record types, unlimited subdomains, zone import/export, and one-click undo snapshots.
+- **Team & Multi-Organization Access**: Manage multiple companies or domains from one login with passkey-backed security.
 
-## Key Links
-- **Marketing Site**: https://revlet.me
-- **Platform Dashboard**: https://app.revlet.me
-- **RevletMail Webmail**: https://mail.revlet.me/login
-- **Sign In**: https://app.revlet.me/login
-- **Get Started**: https://app.revlet.me/signup
-- **Help & Support**: https://app.revlet.me/support
+## Ecosystem & Official Links
+- **Marketing & Pricing**: https://revlet.me/ & https://revlet.me/pricing/
+- **Console Login**: https://app.revlet.me/login
+- **Get Started Free**: https://app.revlet.me/signup
+- **Webmail Login**: https://mail.revlet.me/login
+- **Help & Support**: https://app.revlet.me/support (`hello@revlet.me`)
+- **Official Social Channels**:
+  - Instagram: https://www.instagram.com/revlet.me
+  - Facebook: https://www.facebook.com/revletplatform
+  - X: https://x.com/revletme
+  - LinkedIn: https://www.linkedin.com/company

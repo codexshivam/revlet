@@ -31,17 +31,18 @@ service cloud.firestore {
         && request.resource.data.contactEmail is string;
       allow read: if isResourceOwner() || isSuperAdmin() || (
         isAuthenticated() &&
-        request.auth.token.email_verified == true &&
         request.auth.token.email != null &&
-        'memberEmails' in resource.data &&
         request.auth.token.email.lower() in resource.data.memberEmails
+      ) || (
+        isAuthenticated() &&
+        request.auth.uid in resource.data.memberIds
       );
       allow update: if (isResourceOwner() || isSuperAdmin())
         && request.resource.data.ownerId == resource.data.ownerId
         && (
           isSuperAdmin() ||
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt', 'memberEmails', 'adminEmails', 'memberPermissions'])
+            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt', 'memberEmails', 'memberIds', 'adminEmails', 'memberPermissions'])
         );
       allow delete: if isResourceOwner() || isSuperAdmin();
 
@@ -74,6 +75,44 @@ service cloud.firestore {
       match /mailAuditLogs/{logId} {
         allow read, write: if false;
       }
+
+      match /mailSharedMailboxes/{mailboxId} {
+        allow read, write: if false;
+      }
+
+      match /mailQuarantine/{quarantineId} {
+        allow read, write: if false;
+      }
+
+      match /mailDlpRules/{ruleId} {
+        allow read, write: if false;
+      }
+
+      match /mailTransportRules/{ruleId} {
+        allow read, write: if false;
+      }
+
+      match /mailLegalHolds/{holdId} {
+        allow read, write: if false;
+      }
+
+      match /mailUserSettings/{emailId} {
+        allow read, write: if false;
+      }
+
+      match /mailUserMfa/{emailId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ─── Telemetry & Crash Reports ────────────────────────────────────────────
+    // Written and queried exclusively via Server API routes using Firebase Admin SDK.
+    match /crashReports/{reportId} {
+      allow read, write: if false;
+    }
+
+    match /system/{docId} {
+      allow read, write: if false;
     }
 
     // ─── Team Members ─────────────────────────────────────────────────────────

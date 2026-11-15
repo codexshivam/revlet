@@ -39,6 +39,7 @@ import {
   deleteTransportRule,
   resolveQuarantineItem,
   createSharedMailbox,
+  updateSharedMailboxDelegates,
   deleteSharedMailbox,
   exportSiemAuditLogs,
   type LegalHoldRecord,
@@ -46,6 +47,7 @@ import {
   type TransportRuleRecord,
   type QuarantineItemRecord,
   type SharedMailboxRecord,
+  type SharedMailboxDelegate,
   type AuditLogRecord,
 } from "@/app/actions/email-governance"
 import {
@@ -91,6 +93,10 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   const [smLocalPart, setSmLocalPart] = useState("")
   const [smDelegateEmail, setSmDelegateEmail] = useState("")
   const [smDelegateAccess, setSmDelegateAccess] = useState<"FULL_ACCESS" | "SEND_AS" | "READ_ONLY">("FULL_ACCESS")
+  const [editingSharedMailbox, setEditingSharedMailbox] = useState<SharedMailboxRecord | null>(null)
+  const [editingDelegates, setEditingDelegates] = useState<SharedMailboxDelegate[]>([])
+  const [newDelegateEmail, setNewDelegateEmail] = useState("")
+  const [newDelegateAccess, setNewDelegateAccess] = useState<"FULL_ACCESS" | "SEND_AS" | "READ_ONLY">("FULL_ACCESS")
 
   // Legal Hold form
   const [holdMatter, setHoldMatter] = useState("")
@@ -376,19 +382,34 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                         </div>
                       </TableCell>
                       <TableCell className="text-right pr-6 py-3.5">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-destructive hover:bg-rose-50"
-                          onClick={() =>
-                            runWithStepUp(`Delete shared mailbox ${sm.email}`, async (tok) => {
-                              const idToken = await user!.getIdToken()
-                              return deleteSharedMailbox(idToken, orgId, sm.id, tok)
-                            })
-                          }
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs"
+                            onClick={() => {
+                              setEditingSharedMailbox(sm)
+                              setEditingDelegates(Array.isArray(sm.delegates) ? [...sm.delegates] : [])
+                              setNewDelegateEmail("")
+                              setNewDelegateAccess("FULL_ACCESS")
+                            }}
+                          >
+                            Delegates
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive hover:bg-rose-50"
+                            onClick={() =>
+                              runWithStepUp(`Delete shared mailbox ${sm.email}`, async (tok) => {
+                                const idToken = await user!.getIdToken()
+                                return deleteSharedMailbox(idToken, orgId, sm.id, tok)
+                              })
+                            }
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -396,6 +417,123 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
               </Table>
             )}
           </div>
+
+          <Dialog
+            open={Boolean(editingSharedMailbox)}
+            onOpenChange={(open) => {
+              if (!open) setEditingSharedMailbox(null)
+            }}
+          >
+            <DialogContent className="sm:max-w-md bg-white">
+              <DialogHeader>
+                <DialogTitle className="text-base font-semibold text-slate-900">
+                  Manage Delegates
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  {editingSharedMailbox?.displayName} ({editingSharedMailbox?.email})
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={newDelegateEmail}
+                    onChange={(e) => setNewDelegateEmail(e.target.value)}
+                    placeholder="colleague@example.com"
+                    className="h-9 text-xs flex-1"
+                  />
+                  <Select value={newDelegateAccess} onValueChange={(v) => setNewDelegateAccess(v as any)}>
+                    <SelectTrigger className="h-9 text-xs w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FULL_ACCESS">Full Access</SelectItem>
+                      <SelectItem value="SEND_AS">Send As</SelectItem>
+                      <SelectItem value="READ_ONLY">Read Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 text-xs"
+                    disabled={!newDelegateEmail.trim().includes("@")}
+                    onClick={() => {
+                      const clean = newDelegateEmail.trim().toLowerCase()
+                      if (!clean.includes("@")) return
+                      setEditingDelegates((prev) => {
+                        const filtered = prev.filter((d) => d.email.toLowerCase() !== clean)
+                        return [...filtered, { email: clean, accessLevel: newDelegateAccess }]
+                      })
+                      setNewDelegateEmail("")
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+
+                <div className="border border-slate-200/80 rounded-lg divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                  {editingDelegates.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-6">
+                      No delegates assigned to this shared mailbox.
+                    </p>
+                  ) : (
+                    editingDelegates.map((del) => (
+                      <div key={del.email} className="flex items-center justify-between px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-mono text-slate-800 truncate">{del.email}</p>
+                          <p className="text-[10px] text-slate-500">{del.accessLevel}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-slate-400 hover:text-destructive"
+                          onClick={() =>
+                            setEditingDelegates((prev) =>
+                              prev.filter((d) => d.email.toLowerCase() !== del.email.toLowerCase())
+                            )
+                          }
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingSharedMailbox(null)}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busy || !user || !editingSharedMailbox}
+                  onClick={() => {
+                    const targetSm = editingSharedMailbox
+                    if (!targetSm || !user) return
+                    const nextDelegates = [...editingDelegates]
+                    setEditingSharedMailbox(null)
+                    runWithStepUp(`Update delegates for ${targetSm.email}`, async (tok) => {
+                      const idToken = await user.getIdToken()
+                      return updateSharedMailboxDelegates(idToken, orgId, targetSm.id, nextDelegates, tok)
+                    })
+                  }}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white text-xs"
+                >
+                  Save Delegates
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={isAddSharedOpen} onOpenChange={setIsAddSharedOpen}>
             <DialogContent className="sm:max-w-md bg-white">

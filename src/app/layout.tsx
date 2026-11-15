@@ -24,7 +24,7 @@ const inter = Inter({
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#f8fafc',
+  themeColor: '#09090b',
   colorScheme: 'light',
 };
 
@@ -94,15 +94,16 @@ const siteSchema = {
     {
       '@type': 'Organization',
       '@id': `${MARKETING_URL}/#organization`,
-      name: SITE_NAME,
+      name: 'Revlet',
+      alternateName: ['Revlet Platform', 'RevletMail', 'Revlet Mail', 'Revlet Cloud Control Plane'],
       url: MARKETING_URL,
       logo: {
         '@type': 'ImageObject',
         '@id': `${MARKETING_URL}/#logo`,
-        url: `${SITE_URL}/favicon-192x192.png`,
-        width: 192,
-        height: 192,
-        caption: SITE_NAME,
+        url: `${MARKETING_URL}/favicon-512x512.png`,
+        width: 512,
+        height: 512,
+        caption: 'Revlet',
       },
       image: { '@id': `${MARKETING_URL}/#logo` },
       description:
@@ -115,7 +116,13 @@ const siteSchema = {
         url: `${SITE_URL}${PAGE_SEO.support.path}`,
         availableLanguage: ['English'],
       },
-      sameAs: [MARKETING_URL, 'https://github.com/codexshivam/revlet'],
+      sameAs: [
+        MARKETING_URL,
+        SITE_URL,
+        'https://mail.revlet.me',
+        'https://github.com/codexshivam/revlet',
+        'https://facebook.com/revlet',
+      ],
     },
     {
       '@type': 'Person',
@@ -135,6 +142,7 @@ const siteSchema = {
       description: SITE_DESCRIPTION,
       inLanguage: 'en',
       publisher: { '@id': `${MARKETING_URL}/#organization` },
+      isPartOf: { '@id': `${MARKETING_URL}/#website` },
     },
     {
       '@type': ['SoftwareApplication', 'WebApplication'],
@@ -146,7 +154,10 @@ const siteSchema = {
       operatingSystem: 'Web browser',
       inLanguage: 'en',
       image: `${SITE_URL}/opengraph-image`,
+      screenshot: `${SITE_URL}/opengraph-image`,
       publisher: { '@id': `${MARKETING_URL}/#organization` },
+      author: { '@id': `${MARKETING_URL}/about/#shivam-yadav` },
+      isPartOf: { '@id': `${MARKETING_URL}/#application` },
       featureList: [
         'Professional email on your own domain',
         'Aliases, group mailboxes, and organizational units',

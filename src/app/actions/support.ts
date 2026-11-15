@@ -17,7 +17,7 @@ export async function notifySupportTicketEvent(
   try {
     const decoded = await adminAuth.verifyIdToken(idToken);
     const callerEmail = (decoded.email || '').toLowerCase().trim();
-    const supportInbox = (process.env.REVLET_SUPPORT_EMAIL || 'support@revlet.me')
+    const supportInbox = (process.env.REVLET_SUPPORT_EMAIL || 'hello@revlet.me')
       .toLowerCase()
       .trim();
 

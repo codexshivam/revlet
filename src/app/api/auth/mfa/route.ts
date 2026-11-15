@@ -41,7 +41,7 @@ async function authenticateBearer(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || '';
   const idToken = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (!idToken) {
-    throw new Error('Unauthorized: Missing Firebase ID token.');
+    throw new Error('Unauthorized: Missing credentials.');
   }
   const decoded = await adminAuth.verifyIdToken(idToken);
   return decoded;
@@ -407,7 +407,7 @@ export async function POST(req: NextRequest) {
         const secondFactor = (decoded as any).firebase?.sign_in_second_factor;
         if (!secondFactor) {
           return NextResponse.json(
-            { ok: false, error: 'Firebase Auth second factor is not present in this ID token.' },
+            { ok: false, error: 'Second factor verification is not active in this session.' },
             { status: 400 }
           );
         }
@@ -421,13 +421,13 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      return NextResponse.json({ ok: false, error: 'Unsupported MFA method.' }, { status: 400 });
+      return NextResponse.json({ ok: false, error: 'Unsupported verification method.' }, { status: 400 });
     }
 
     return NextResponse.json({ ok: false, error: 'Unsupported action.' }, { status: 400 });
   } catch (err: any) {
     return NextResponse.json(
-      { ok: false, error: err?.message || 'MFA request failed.' },
+      { ok: false, error: 'Verification request could not be completed.' },
       { status: 400 }
     );
   }

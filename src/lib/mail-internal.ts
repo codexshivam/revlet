@@ -1,9 +1,86 @@
+import https from 'https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
 import {
   resolveOrganizationOwnerEmail,
   sendRevletAlertEmail,
 } from '@/lib/revlet-alerts';
+
+async function stalwartJsonRequest(
+  urlStr: string,
+  authHeader: string,
+  bodyStr: string,
+  timeoutMs = 6000
+): Promise<{ ok: boolean; status: number; data: any }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(urlStr, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+      },
+      body: bodyStr,
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  } catch (err: any) {
+    const causeCode = err?.cause?.code || err?.code || '';
+    if (
+      causeCode === 'DEPTH_ZERO_SELF_SIGNED_CERT' ||
+      causeCode === 'SELF_SIGNED_CERT_IN_CHAIN' ||
+      causeCode === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+    ) {
+      return new Promise((resolve) => {
+        const parsed = new URL(urlStr);
+        const req = https.request(
+          {
+            hostname: parsed.hostname,
+            port: parsed.port || 443,
+            path: parsed.pathname + parsed.search,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: authHeader,
+              'Content-Length': Buffer.byteLength(bodyStr),
+            },
+            rejectUnauthorized: false,
+            timeout: timeoutMs,
+          },
+          (res) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (c) => chunks.push(Buffer.from(c)));
+            res.on('end', () => {
+              const raw = Buffer.concat(chunks).toString('utf8');
+              let parsedData = {};
+              try {
+                parsedData = JSON.parse(raw);
+              } catch {
+                parsedData = {};
+              }
+              const status = res.statusCode || 500;
+              resolve({ ok: status >= 200 && status < 300, status, data: parsedData });
+            });
+          }
+        );
+        req.on('error', () => resolve({ ok: false, status: 503, data: {} }));
+        req.on('timeout', () => {
+          req.destroy();
+          resolve({ ok: false, status: 504, data: {} });
+        });
+        req.write(bodyStr);
+        req.end();
+      });
+    }
+    console.warn('[Stalwart JMAP] Call deferred:', err?.message || err);
+    return { ok: false, status: 503, data: {} };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ============================================================================
 // IMMUTABLE SECURITY AUDIT LOGGING
@@ -57,36 +134,19 @@ export async function callStalwartJmap(
   const { baseUrl, authHeader, enabled } = getStalwartConfig();
   if (!enabled) return [];
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
-  try {
-    const res = await fetch(`${baseUrl}/jmap/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({
-        using: [
-          'urn:ietf:params:jmap:core',
-          'urn:ietf:params:jmap:mail',
-          'urn:ietf:params:jmap:submission',
-          'urn:stalwart:jmap',
-        ],
-        methodCalls,
-      }),
-      signal: controller.signal,
-      cache: 'no-store',
-    });
-    if (!res.ok) return [];
-    const data = await res.json().catch(() => ({}));
-    return Array.isArray(data.methodResponses) ? data.methodResponses : [];
-  } catch (err: any) {
-    console.warn('[Stalwart JMAP] Call deferred:', err?.message || err);
-    return [];
-  } finally {
-    clearTimeout(timer);
-  }
+  const bodyStr = JSON.stringify({
+    using: [
+      'urn:ietf:params:jmap:core',
+      'urn:ietf:params:jmap:mail',
+      'urn:ietf:params:jmap:submission',
+      'urn:stalwart:jmap',
+    ],
+    methodCalls,
+  });
+
+  const { ok, data } = await stalwartJsonRequest(`${baseUrl}/jmap/`, authHeader, bodyStr, 6000);
+  if (!ok) return [];
+  return Array.isArray(data?.methodResponses) ? data.methodResponses : [];
 }
 
 export async function findStalwartAccountByEmail(cleanEmail: string): Promise<any | null> {

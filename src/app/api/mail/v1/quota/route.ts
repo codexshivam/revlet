@@ -117,11 +117,20 @@ export async function POST(req: NextRequest) {
           .where('status', '==', 'active')
           .limit(1)
           .get();
-        isAuthorizedSender = !aliasSnap.empty;
+        if (!aliasSnap.empty) {
+          isAuthorizedSender = true;
+        } else {
+          const sharedSnap = await orgRef
+            .collection('mailSharedMailboxes')
+            .where('email', '==', fromEmail)
+            .limit(1)
+            .get();
+          isAuthorizedSender = !sharedSnap.empty;
+        }
       }
       senderAuthCache.set(senderCacheKey, {
         authorized: isAuthorizedSender,
-        expiresAt: Date.now() + CACHE_TTL_MS,
+        expiresAt: Date.now() + (isAuthorizedSender ? CACHE_TTL_MS : 5_000),
       });
     }
 

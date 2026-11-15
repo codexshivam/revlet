@@ -50,11 +50,14 @@ import {
 interface EmailGovernancePanelProps {
   orgId: string
   domain: string
-  mode: "shared" | "quarantine" | "dlp" | "ediscovery" | "audit"
+  mode?: "shared" | "quarantine" | "dlp" | "ediscovery" | "audit"
 }
 
 export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePanelProps) {
   const { user } = useUser()
+  const [activeSection, setActiveSection] = useState<"shared" | "quarantine" | "dlp" | "ediscovery" | "audit">(
+    mode || "shared"
+  )
   const [loading, setLoading] = useState(true)
   const [legalHolds, setLegalHolds] = useState<LegalHoldRecord[]>([])
   const [dlpRules, setDlpRules] = useState<DlpRuleRecord[]>([])
@@ -174,8 +177,53 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   }
 
   return (
-    <div className="space-y-4">
-      {mode === "shared" && (
+    <div className="space-y-5">
+      {/* Segmented Governance Navigation */}
+      <div className="rounded-xl border border-slate-200/80 bg-white p-1.5 flex flex-wrap items-center gap-1">
+        {(
+          [
+            { id: "shared", label: "Shared Mailboxes", count: sharedMailboxes.length, icon: MailCheck },
+            {
+              id: "quarantine",
+              label: "Quarantine",
+              count: quarantineItems.filter((q) => q.status === "quarantined").length,
+              icon: ShieldAlert,
+            },
+            { id: "dlp", label: "DLP & Mail Flow", count: dlpRules.length + transportRules.length, icon: Lock },
+            { id: "ediscovery", label: "eDiscovery & Legal Hold", count: legalHolds.length, icon: Scale },
+            { id: "audit", label: "SIEM & Audit Logs", icon: ScrollText },
+          ] as const
+        ).map((item) => {
+          const Icon = item.icon
+          const isActive = activeSection === item.id
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveSection(item.id)}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                isActive
+                  ? "bg-slate-900 text-white shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
+              }`}
+            >
+              <Icon className={`w-3.5 h-3.5 ${isActive ? "text-white" : "text-slate-500"}`} strokeWidth={1.75} />
+              <span>{item.label}</span>
+              {"count" in item && typeof item.count === "number" && (
+                <span
+                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono tabular-nums ${
+                    isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {item.count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {activeSection === "shared" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-1">
             <CardHeader>
@@ -310,7 +358,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
         </div>
       )}
 
-      {mode === "quarantine" && (
+      {activeSection === "quarantine" && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
@@ -375,7 +423,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
         </Card>
       )}
 
-      {mode === "dlp" && (
+      {activeSection === "dlp" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
@@ -544,7 +592,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
         </div>
       )}
 
-      {mode === "ediscovery" && (
+      {activeSection === "ediscovery" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-1">
             <CardHeader>
@@ -680,7 +728,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
         </div>
       )}
 
-      {mode === "audit" && (
+      {activeSection === "audit" && (
         <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

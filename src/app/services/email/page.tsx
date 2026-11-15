@@ -64,7 +64,7 @@ import {
   Download,
   AlertTriangle,
 } from "lucide-react"
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { toast } from "@/hooks/use-toast"
 import { useUser } from "@/firebase"
 import { useActiveOrg } from "@/hooks/use-active-org"
@@ -115,7 +115,9 @@ export default function EmailServiceAdminPage() {
   // Core service state
   const [isLoadingQuota, setIsLoadingQuota] = useState(false)
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true)
+  const [hasLoadedDirectory, setHasLoadedDirectory] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const loadRequestSeqRef = useRef(0)
   const [isActivating, setIsActivating] = useState(false)
   const [isDeactivating, setIsDeactivating] = useState(false)
   const [isSyncingDns, setIsSyncingDns] = useState(false)
@@ -355,6 +357,7 @@ export default function EmailServiceAdminPage() {
   // Reset directory and DNS state immediately when switching organizations so stale or empty states never flash
   useEffect(() => {
     if (!selectedOrgId) return
+    loadRequestSeqRef.current += 1
     setUsers([])
     setOrgUnits([])
     setGroups([])
@@ -362,6 +365,7 @@ export default function EmailServiceAdminPage() {
     setHasScannedDns(false)
     setMailPurgeScheduledAt(null)
     setSelectedUserOu("ALL")
+    setHasLoadedDirectory(false)
     setIsLoadingDirectory(true)
     setIsLoadingQuota(true)
   }, [selectedOrgId])
@@ -372,10 +376,13 @@ export default function EmailServiceAdminPage() {
         return
       }
       if (!user || !selectedOrgId) {
+        loadRequestSeqRef.current += 1
+        setHasLoadedDirectory(false)
         setIsLoadingQuota(false)
         setIsLoadingDirectory(false)
         return
       }
+      const requestSeq = ++loadRequestSeqRef.current
       if (!silent) {
         setIsLoadingDirectory(true)
       } else {
@@ -384,6 +391,9 @@ export default function EmailServiceAdminPage() {
 
       try {
         const idToken = await user.getIdToken()
+        if (loadRequestSeqRef.current !== requestSeq) {
+          return
+        }
 
         // Fetch directory collections (Users, OrgUnits, Groups) immediately in parallel
         const dirPromise = Promise.all([
@@ -392,6 +402,9 @@ export default function EmailServiceAdminPage() {
           listMailGroups(idToken, selectedOrgId),
         ])
           .then(([ousRes, usersRes, groupsRes]) => {
+            if (loadRequestSeqRef.current !== requestSeq) {
+              return
+            }
             if (ousRes.success && ousRes.data) {
               setOrgUnits(ousRes.data)
             }
@@ -401,17 +414,26 @@ export default function EmailServiceAdminPage() {
             if (groupsRes.success && groupsRes.data) {
               setGroups(groupsRes.data)
             }
+            setHasLoadedDirectory(true)
           })
           .catch((err) => {
+            if (loadRequestSeqRef.current !== requestSeq) {
+              return
+            }
             console.error("Failed to load mail directory:", err)
           })
           .finally(() => {
-            setIsLoadingDirectory(false)
+            if (loadRequestSeqRef.current === requestSeq) {
+              setIsLoadingDirectory(false)
+            }
           })
 
         // Fetch DNS status and quota state in parallel
         const statePromise = getMailServiceState(idToken, selectedOrgId)
           .then((stateRes) => {
+            if (loadRequestSeqRef.current !== requestSeq) {
+              return
+            }
             if (stateRes.success && stateRes.data) {
               setServiceActive(stateRes.data.mailServiceActive)
               setDnsServiceActive(stateRes.data.dnsServiceActive)
@@ -426,21 +448,30 @@ export default function EmailServiceAdminPage() {
             }
           })
           .catch((err) => {
+            if (loadRequestSeqRef.current !== requestSeq) {
+              return
+            }
             console.error("Failed to load mail state:", err)
           })
           .finally(() => {
-            setIsLoadingQuota(false)
+            if (loadRequestSeqRef.current === requestSeq) {
+              setIsLoadingQuota(false)
+            }
           })
 
         await Promise.all([dirPromise, statePromise])
       } catch (err: any) {
-        toast({
-          variant: "destructive",
-          title: "Failed to load email service",
-          description: err.message || "Could not retrieve organization mail configuration.",
-        })
+        if (loadRequestSeqRef.current === requestSeq) {
+          toast({
+            variant: "destructive",
+            title: "Failed to load email service",
+            description: err.message || "Could not retrieve organization mail configuration.",
+          })
+        }
       } finally {
-        setIsRefreshing(false)
+        if (loadRequestSeqRef.current === requestSeq) {
+          setIsRefreshing(false)
+        }
       }
     },
     [user, selectedOrgId, authLoading, isLoadingOrgs]
@@ -1786,7 +1817,7 @@ export default function EmailServiceAdminPage() {
         <div className="rounded-xl border border-slate-200/80 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="p-4 sm:p-5 space-y-1">
             <div className="text-xs text-slate-500">Active Mailboxes</div>
-            {isLoadingDirectory ? (
+            {isLoadingDirectory || !hasLoadedDirectory || isLoadingOrgs || authLoading ? (
               <div className="space-y-1.5 pt-1">
                 <Skeleton className="h-7 w-16" />
                 <Skeleton className="h-3.5 w-32" />
@@ -2043,7 +2074,7 @@ export default function EmailServiceAdminPage() {
               </div>
 
               {/* Users table */}
-              {isLoadingDirectory ? (
+              {isLoadingDirectory || !hasLoadedDirectory || isLoadingOrgs || authLoading ? (
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">

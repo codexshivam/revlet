@@ -8,9 +8,25 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { StepUpMfaDialog } from "@/components/security/step-up-mfa-dialog"
 import {
   getGovernanceOverview,
@@ -33,18 +49,11 @@ import {
   type AuditLogRecord,
 } from "@/app/actions/email-governance"
 import {
-  Scale,
-  ShieldAlert,
-  Inbox,
-  FileSearch,
   Download,
   Plus,
   Trash2,
   CheckCircle2,
-  Loader2,
-  Lock,
-  MailCheck,
-  ScrollText,
+  Search,
 } from "lucide-react"
 
 interface EmailGovernancePanelProps {
@@ -75,7 +84,9 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   const [mfaActionLabel, setMfaActionLabel] = useState("")
   const [pendingAction, setPendingAction] = useState<((token: string) => Promise<void>) | null>(null)
 
-  // Shared Mailbox form
+  // Shared Mailbox modal & search state
+  const [isAddSharedOpen, setIsAddSharedOpen] = useState(false)
+  const [sharedSearchQuery, setSharedSearchQuery] = useState("")
   const [smDisplayName, setSmDisplayName] = useState("")
   const [smLocalPart, setSmLocalPart] = useState("")
   const [smDelegateEmail, setSmDelegateEmail] = useState("")
@@ -170,11 +181,44 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
     URL.revokeObjectURL(url)
   }
 
+  const filteredSharedMailboxes = sharedMailboxes.filter((sm) => {
+    const q = sharedSearchQuery.trim().toLowerCase()
+    if (!q) return true
+    return (
+      sm.displayName.toLowerCase().includes(q) ||
+      sm.email.toLowerCase().includes(q) ||
+      sm.delegates.some((d) => d.email.toLowerCase().includes(q))
+    )
+  })
+
   if (loading) {
     return (
-      <div className="py-12 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        Loading enterprise governance & compliance controls...
+      <div className="space-y-4">
+        {mode !== "shared" && (
+          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-slate-100/70 p-1">
+            <Skeleton className="h-7 w-24 rounded-lg" />
+            <Skeleton className="h-7 w-28 rounded-lg" />
+            <Skeleton className="h-7 w-36 rounded-lg" />
+            <Skeleton className="h-7 w-32 rounded-lg" />
+          </div>
+        )}
+        <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+          <div className="p-4 border-b border-slate-200/80 bg-slate-50/40 flex items-center justify-between gap-4">
+            <Skeleton className="h-8 w-56 rounded-lg" />
+            <Skeleton className="h-9 w-40 rounded-lg" />
+          </div>
+          <div className="divide-y divide-slate-100">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="px-6 py-4 flex items-center justify-between gap-4">
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-44" />
+                  <Skeleton className="h-3 w-64" />
+                </div>
+                <Skeleton className="h-8 w-24 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
@@ -190,14 +234,12 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                 id: "quarantine",
                 label: "Quarantine",
                 count: quarantineItems.filter((q) => q.status === "quarantined").length,
-                icon: ShieldAlert,
               },
-              { id: "dlp", label: "DLP & Mail Flow", count: dlpRules.length + transportRules.length, icon: Lock },
-              { id: "ediscovery", label: "eDiscovery & Legal Hold", count: legalHolds.length, icon: Scale },
-              { id: "audit", label: "SIEM & Audit Logs", icon: ScrollText },
+              { id: "dlp", label: "DLP & Mail Flow", count: dlpRules.length + transportRules.length },
+              { id: "ediscovery", label: "eDiscovery & Legal Hold", count: legalHolds.length },
+              { id: "audit", label: "SIEM & Audit Logs" },
             ] as const
           ).map((item) => {
-            const Icon = item.icon
             const isActive = activeSection === item.id
             return (
               <button
@@ -210,7 +252,6 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                     : "text-slate-600 hover:text-slate-900 border border-transparent"
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? "text-slate-700" : "text-slate-400"}`} strokeWidth={1.5} />
                 <span>{item.label}</span>
                 {"count" in item && typeof item.count === "number" && (
                   <span className="font-mono text-[11px] tabular-nums text-slate-400">
@@ -224,149 +265,253 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
       )}
 
       {activeSection === "shared" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="lg:col-span-1 border-slate-200/80 shadow-none">
-            <CardHeader className="p-5 pb-3">
-              <CardTitle className="text-sm font-medium text-slate-900 flex items-center gap-2">
-                <MailCheck className="w-4 h-4 text-slate-500" strokeWidth={1.5} />
-                Create Shared Mailbox
-              </CardTitle>
-              <CardDescription className="text-xs text-slate-500">
-                Provision a delegated team mailbox (distinct from distribution lists)
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label className="text-xs">Display Name</Label>
-                <Input
-                  value={smDisplayName}
-                  onChange={(e) => setSmDisplayName(e.target.value)}
-                  placeholder="Support Desk"
-                  className="h-8 text-xs mt-1"
-                />
+        <>
+          <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
+            <div className="p-4 border-b border-slate-200/80 bg-slate-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <h2 className="text-sm font-medium text-slate-900">
+                  Shared Mailboxes
+                  <span className="ml-2 font-mono text-xs text-slate-400 tabular-nums">
+                    {sharedMailboxes.length}
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Delegated team mailboxes with shared inbox access and send-as permissions
+                </p>
               </div>
-              <div>
-                <Label className="text-xs">Email Address</Label>
-                <div className="flex items-center gap-1 mt-1">
-                  <Input
-                    value={smLocalPart}
-                    onChange={(e) => setSmLocalPart(e.target.value)}
-                    placeholder="support"
-                    className="h-8 text-xs"
+
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 sm:w-56">
+                  <Search
+                    className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
+                    strokeWidth={1.5}
                   />
-                  <span className="text-xs font-mono text-muted-foreground">@{domain}</span>
+                  <Input
+                    value={sharedSearchQuery}
+                    onChange={(e) => setSharedSearchQuery(e.target.value)}
+                    placeholder="Search shared mailboxes..."
+                    className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
+                  />
                 </div>
-              </div>
-              <div>
-                <Label className="text-xs">Initial Delegate Email</Label>
-                <Input
-                  value={smDelegateEmail}
-                  onChange={(e) => setSmDelegateEmail(e.target.value)}
-                  placeholder={`alice@${domain}`}
-                  className="h-8 text-xs mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Delegate Access Level</Label>
-                <Select value={smDelegateAccess} onValueChange={(v) => setSmDelegateAccess(v as any)}>
-                  <SelectTrigger className="h-8 text-xs mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FULL_ACCESS">Full Access (Read & Manage)</SelectItem>
-                    <SelectItem value="SEND_AS">Send As</SelectItem>
-                    <SelectItem value="READ_ONLY">Read Only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                size="sm"
-                className="w-full"
-                disabled={busy || !user}
-                onClick={async () => {
-                  if (!user) return
-                  setBusy(true)
-                  try {
-                    const idToken = await user.getIdToken()
-                    const res = await createSharedMailbox(idToken, orgId, {
-                      displayName: smDisplayName,
-                      localPart: smLocalPart,
-                      delegates: smDelegateEmail.trim()
-                        ? [{ email: smDelegateEmail.trim(), accessLevel: smDelegateAccess }]
-                        : [],
-                    })
-                    if (!res.success) throw new Error(res.error)
+                <Button
+                  onClick={() => {
                     setSmDisplayName("")
                     setSmLocalPart("")
                     setSmDelegateEmail("")
-                    toast({ title: "Shared Mailbox Created" })
-                    await loadData()
-                  } catch (err: any) {
-                    toast({ variant: "destructive", title: "Error", description: err?.message })
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-              >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Create Shared Mailbox
-              </Button>
-            </CardContent>
-          </Card>
+                    setSmDelegateAccess("FULL_ACCESS")
+                    setIsAddSharedOpen(true)
+                  }}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
+                  Add Shared Mailbox
+                </Button>
+              </div>
+            </div>
 
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-sm">Active Shared Mailboxes ({sharedMailboxes.length})</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2.5">
-              {sharedMailboxes.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-6 text-center">No shared mailboxes provisioned yet.</p>
-              ) : (
-                sharedMailboxes.map((sm) => (
-                  <div key={sm.id} className="p-3 rounded-lg border flex items-center justify-between gap-3">
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold">{sm.displayName}</span>
-                        <span className="text-xs font-mono text-muted-foreground">{sm.email}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {sm.delegates.map((d, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-[10px]">
-                            {d.email} ({d.accessLevel})
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
+            {filteredSharedMailboxes.length === 0 ? (
+              <div className="py-16 px-4 text-center space-y-2">
+                <p className="text-sm font-medium text-slate-900">
+                  {sharedMailboxes.length === 0 ? "No Shared Mailboxes Created" : "No Matching Shared Mailboxes"}
+                </p>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  {sharedMailboxes.length === 0
+                    ? "Create a delegated team mailbox so multiple team members can read and reply from a shared address"
+                    : "Adjust your search query to find a shared mailbox"}
+                </p>
+                {sharedMailboxes.length === 0 && (
+                  <div className="pt-2">
                     <Button
-                      size="icon"
-                      variant="ghost"
-                      className="text-destructive"
-                      onClick={() =>
-                        runWithStepUp(`Delete shared mailbox ${sm.email}`, async (tok) => {
-                          const idToken = await user!.getIdToken()
-                          return deleteSharedMailbox(idToken, orgId, sm.id, tok)
-                        })
-                      }
+                      size="sm"
+                      onClick={() => setIsAddSharedOpen(true)}
+                      className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
+                      Add Shared Mailbox
                     </Button>
                   </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                )}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                    <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                      Mailbox Name
+                    </TableHead>
+                    <TableHead className="text-xs font-medium py-3 text-slate-500">
+                      Address
+                    </TableHead>
+                    <TableHead className="text-xs font-medium py-3 text-slate-500">
+                      Delegates
+                    </TableHead>
+                    <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredSharedMailboxes.map((sm) => (
+                    <TableRow
+                      key={sm.id}
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
+                    >
+                      <TableCell className="pl-6 py-3.5">
+                        <span className="text-xs font-medium text-slate-900">{sm.displayName}</span>
+                      </TableCell>
+                      <TableCell className="py-3.5">
+                        <span className="text-xs font-mono text-slate-700">{sm.email}</span>
+                      </TableCell>
+                      <TableCell className="py-3.5">
+                        <div className="flex flex-wrap gap-1.5">
+                          {sm.delegates.length === 0 ? (
+                            <span className="text-xs text-slate-400">No delegates assigned</span>
+                          ) : (
+                            sm.delegates.map((d, idx) => (
+                              <Badge key={idx} variant="secondary" className="text-[10px] font-normal">
+                                {d.email} ({d.accessLevel})
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right pr-6 py-3.5">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-destructive hover:bg-rose-50"
+                          onClick={() =>
+                            runWithStepUp(`Delete shared mailbox ${sm.email}`, async (tok) => {
+                              const idToken = await user!.getIdToken()
+                              return deleteSharedMailbox(idToken, orgId, sm.id, tok)
+                            })
+                          }
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          <Dialog open={isAddSharedOpen} onOpenChange={setIsAddSharedOpen}>
+            <DialogContent className="sm:max-w-md bg-white">
+              <DialogHeader>
+                <DialogTitle className="text-base font-semibold text-slate-900">
+                  Add Shared Mailbox
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  Provision a delegated team mailbox with shared access permissions.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 py-2">
+                <div>
+                  <Label className="text-xs">Display Name</Label>
+                  <Input
+                    value={smDisplayName}
+                    onChange={(e) => setSmDisplayName(e.target.value)}
+                    placeholder="Support Desk"
+                    className="h-9 text-xs mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Email Address</Label>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <Input
+                      value={smLocalPart}
+                      onChange={(e) => setSmLocalPart(e.target.value)}
+                      placeholder="support"
+                      className="h-9 text-xs"
+                    />
+                    <span className="text-xs font-mono text-muted-foreground shrink-0">
+                      @{domain || "example.com"}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Initial Delegate Email</Label>
+                  <Input
+                    value={smDelegateEmail}
+                    onChange={(e) => setSmDelegateEmail(e.target.value)}
+                    placeholder="alice@example.com"
+                    className="h-9 text-xs mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Delegate Access Level</Label>
+                  <Select value={smDelegateAccess} onValueChange={(v) => setSmDelegateAccess(v as any)}>
+                    <SelectTrigger className="h-9 text-xs mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FULL_ACCESS">Full Access (Read & Manage)</SelectItem>
+                      <SelectItem value="SEND_AS">Send As</SelectItem>
+                      <SelectItem value="READ_ONLY">Read Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsAddSharedOpen(false)}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy || !user || !smDisplayName.trim() || !smLocalPart.trim()}
+                  onClick={async () => {
+                    if (!user) return
+                    setBusy(true)
+                    try {
+                      const idToken = await user.getIdToken()
+                      const res = await createSharedMailbox(idToken, orgId, {
+                        displayName: smDisplayName,
+                        localPart: smLocalPart,
+                        delegates: smDelegateEmail.trim()
+                          ? [{ email: smDelegateEmail.trim(), accessLevel: smDelegateAccess }]
+                          : [],
+                      })
+                      if (!res.success) throw new Error(res.error)
+                      setSmDisplayName("")
+                      setSmLocalPart("")
+                      setSmDelegateEmail("")
+                      setIsAddSharedOpen(false)
+                      toast({ title: "Shared Mailbox Created" })
+                      await loadData()
+                    } catch (err: any) {
+                      toast({ variant: "destructive", title: "Error", description: err?.message })
+                    } finally {
+                      setBusy(false)
+                    }
+                  }}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white text-xs"
+                >
+                  Create Shared Mailbox
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
       )}
 
       {activeSection === "quarantine" && (
-        <Card>
+        <Card className="border-slate-200/80 shadow-none">
           <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Inbox className="w-4 h-4 text-amber-600" />
+            <CardTitle className="text-sm font-medium text-slate-900">
               Spam & DLP Quarantine Console ({quarantineItems.filter((q) => q.status === "quarantined").length} pending)
             </CardTitle>
             <CardDescription className="text-xs">
-              Review held messages flagged by DLP, phishing, or attachment rules. Release or delete requires Step-Up MFA.
+              Review held messages flagged by DLP, phishing, or attachment rules. Release or delete requires verification.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2.5">
@@ -425,10 +570,9 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
 
       {activeSection === "dlp" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card>
+          <Card className="border-slate-200/80 shadow-none">
             <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-rose-600" />
+              <CardTitle className="text-sm font-medium text-slate-900">
                 Data Loss Prevention (DLP) Rules
               </CardTitle>
               <CardDescription className="text-xs">
@@ -485,7 +629,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   })
                 }
               >
-                <Lock className="w-3.5 h-3.5 mr-1.5" /> Add DLP Rule
+                Add DLP Rule
               </Button>
               <div className="space-y-2 pt-2 border-t">
                 {dlpRules.map((r) => (
@@ -513,10 +657,9 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-slate-200/80 shadow-none">
             <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <ScrollText className="w-4 h-4 text-indigo-600" />
+              <CardTitle className="text-sm font-medium text-slate-900">
                 Transport & Mail Flow Rules
               </CardTitle>
               <CardDescription className="text-xs">
@@ -561,7 +704,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   })
                 }
               >
-                <Lock className="w-3.5 h-3.5 mr-1.5" /> Add Transport Rule
+                Add Transport Rule
               </Button>
               <div className="space-y-2 pt-2 border-t">
                 {transportRules.map((r) => (
@@ -594,14 +737,13 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
 
       {activeSection === "ediscovery" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="lg:col-span-1">
+          <Card className="lg:col-span-1 border-slate-200/80 shadow-none">
             <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Scale className="w-4 h-4 text-purple-600" />
+              <CardTitle className="text-sm font-medium text-slate-900">
                 Place Litigation / Legal Hold
               </CardTitle>
               <CardDescription className="text-xs">
-                Freezes matching mailboxes from the 21-day purge engine and org deletion.
+                Freezes matching mailboxes from the 21-day purge engine and organization deletion.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -619,7 +761,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   <Input
                     value={holdCustodians}
                     onChange={(e) => setHoldCustodians(e.target.value)}
-                    placeholder={`alice@${domain}, bob@${domain}`}
+                    placeholder="alice@example.com, bob@example.com"
                     className="h-8 text-xs mt-1"
                   />
                 </div>
@@ -650,16 +792,15 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   })
                 }
               >
-                <Lock className="w-3.5 h-3.5 mr-1.5" /> Activate Legal Hold
+                Activate Legal Hold
               </Button>
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2">
+          <Card className="lg:col-span-2 border-slate-200/80 shadow-none">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <FileSearch className="w-4 h-4 text-blue-600" />
+                <CardTitle className="text-sm font-medium text-slate-900">
                   Active Legal Holds & eDiscovery Export
                 </CardTitle>
                 <div className="flex items-center gap-2">
@@ -672,6 +813,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   <Button
                     size="sm"
                     variant="outline"
+                    className="h-8 text-xs shrink-0"
                     onClick={() =>
                       runWithStepUp("Export eDiscovery evidence bundle", async (tok) => {
                         const idToken = await user!.getIdToken()
@@ -729,67 +871,81 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
       )}
 
       {activeSection === "audit" && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-sm">Persistent SIEM & Security Audit Logs</CardTitle>
-                <CardDescription className="text-xs">
-                  Immutable Firestore-backed audit trail across auth, MFA, DLP, quarantine, legal holds, and mail actions.
+        <Card className="border-slate-200/80 shadow-none">
+          <CardHeader className="p-5 pb-4 border-b border-slate-100">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="space-y-1 min-w-0">
+                <CardTitle className="text-sm font-medium text-slate-900">
+                  Persistent SIEM & Security Audit Logs
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Immutable audit trail across authentication, security policies, DLP, quarantine, legal holds, and mail actions.
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Input
-                  value={auditFilter}
-                  onChange={(e) => setAuditFilter(e.target.value)}
-                  placeholder="Filter actor or action..."
-                  className="h-8 text-xs w-44"
-                />
-                {(["json", "ndjson", "csv", "cef"] as const).map((fmt) => (
-                  <Button
-                    key={fmt}
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs uppercase"
-                    onClick={() =>
-                      runWithStepUp(`Export SIEM Audit Logs (${fmt.toUpperCase()})`, async (tok) => {
-                        const idToken = await user!.getIdToken()
-                        const res = await exportSiemAuditLogs(idToken, orgId, fmt, tok)
-                        if (res.success && typeof res.content === "string") {
-                          downloadFile(`siem-audit-${orgId}.${fmt === "cef" ? "log" : fmt}`, res.content, "text/plain")
-                          toast({ title: `Exported ${res.count} events (${fmt.toUpperCase()})` })
-                        }
-                        return res
-                      })
-                    }
-                  >
-                    <Download className="w-3 h-3 mr-1" /> {fmt}
-                  </Button>
-                ))}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
+                <div className="relative w-full sm:w-56">
+                  <Search
+                    className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
+                    strokeWidth={1.5}
+                  />
+                  <Input
+                    value={auditFilter}
+                    onChange={(e) => setAuditFilter(e.target.value)}
+                    placeholder="Filter actor or action..."
+                    className="h-8 pl-8 text-xs border-slate-200 bg-white rounded-lg"
+                  />
+                </div>
+                <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50/60 p-0.5 shrink-0">
+                  {(["json", "ndjson", "csv", "cef"] as const).map((fmt) => (
+                    <button
+                      key={fmt}
+                      type="button"
+                      className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-medium uppercase text-slate-700 hover:bg-white hover:text-slate-900 hover:shadow-xs transition-all"
+                      onClick={() =>
+                        runWithStepUp(`Export SIEM Audit Logs (${fmt.toUpperCase()})`, async (tok) => {
+                          const idToken = await user!.getIdToken()
+                          const res = await exportSiemAuditLogs(idToken, orgId, fmt, tok)
+                          if (res.success && typeof res.content === "string") {
+                            downloadFile(`siem-audit-${orgId}.${fmt === "cef" ? "log" : fmt}`, res.content, "text/plain")
+                            toast({ title: `Exported ${res.count} events (${fmt.toUpperCase()})` })
+                          }
+                          return res
+                        })
+                      }
+                    >
+                      <Download className="w-3 h-3 text-slate-500" />
+                      <span>{fmt}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-1.5 max-h-[460px] overflow-y-auto">
-            {auditLogs
-              .filter(
-                (l) =>
-                  !auditFilter.trim() ||
-                  `${l.action} ${l.actorEmail || ""} ${l.target}`.toLowerCase().includes(auditFilter.toLowerCase())
-              )
-              .map((log) => (
-                <div key={log.id} className="p-2.5 rounded border bg-muted/20 flex items-center justify-between gap-3 text-xs">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="font-mono text-[10px]">{log.action}</Badge>
-                      <span className="font-medium truncate">{log.actorEmail || log.actorUid}</span>
-                      <span className="text-muted-foreground font-mono truncate">→ {log.target}</span>
+          <CardContent className="p-5 space-y-1.5 max-h-[460px] overflow-y-auto">
+            {auditLogs.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-8 text-center">No audit events recorded yet.</p>
+            ) : (
+              auditLogs
+                .filter(
+                  (l) =>
+                    !auditFilter.trim() ||
+                    `${l.action} ${l.actorEmail || ""} ${l.target}`.toLowerCase().includes(auditFilter.toLowerCase())
+                )
+                .map((log) => (
+                  <div key={log.id} className="p-2.5 rounded border bg-muted/20 flex items-center justify-between gap-3 text-xs">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="font-mono text-[10px]">{log.action}</Badge>
+                        <span className="font-medium truncate">{log.actorEmail || log.actorUid}</span>
+                        <span className="text-muted-foreground font-mono truncate">→ {log.target}</span>
+                      </div>
                     </div>
+                    <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </span>
                   </div>
-                  <span className="text-[11px] font-mono text-muted-foreground shrink-0">
-                    {new Date(log.createdAt).toLocaleString()}
-                  </span>
-                </div>
-              ))}
+                ))
+            )}
           </CardContent>
         </Card>
       )}

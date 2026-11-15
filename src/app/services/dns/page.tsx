@@ -1462,7 +1462,7 @@ export default function DNSManagementPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-slate-700">Value / target</Label>
                 <Input
-                  placeholder="e.g. 192.0.2.1 or target.domain.com"
+                  placeholder="e.g. 192.0.2.1 or target.example.com"
                   className={cn(
                     "h-9 text-sm border-slate-200 rounded-lg focus-visible:ring-primary/20 bg-white font-mono",
                     formErrors.content && "border-red-400"

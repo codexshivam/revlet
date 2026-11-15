@@ -1134,11 +1134,12 @@ export async function deleteMailOrgUnit(idToken: string, orgId: string, ouId: st
 // USERS DIRECTORY, ALIASES, SUSPENSION & 14-DAY DELETION RECOVERY
 // ============================================================================
 
-async function isEmailAddressTakenInOrg(
+export async function isEmailAddressTakenInOrg(
   orgId: string,
   candidateEmail: string,
   excludeUserId?: string,
-  excludeGroupId?: string
+  excludeGroupId?: string,
+  excludeSharedMailboxId?: string
 ): Promise<string | null> {
   const normalized = candidateEmail.toLowerCase().trim();
 
@@ -1177,6 +1178,20 @@ async function isEmailAddressTakenInOrg(
     const d = doc.data();
     if ((d.groupEmail || '').toLowerCase() === normalized) {
       return `Address "${normalized}" is already used by a group address.`;
+    }
+  }
+
+  const sharedSnap = await adminDb
+    .collection('organizations')
+    .doc(orgId)
+    .collection('mailSharedMailboxes')
+    .get();
+
+  for (const doc of sharedSnap.docs) {
+    if (excludeSharedMailboxId && doc.id === excludeSharedMailboxId) continue;
+    const d = doc.data();
+    if ((d.email || '').toLowerCase() === normalized) {
+      return `Address "${normalized}" is already used by a shared mailbox.`;
     }
   }
 

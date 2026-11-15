@@ -296,6 +296,100 @@ export async function syncStalwartUserPrincipal(params: {
   ]);
 }
 
+export async function syncStalwartSharedMailboxPrincipal(params: {
+  email: string;
+  displayName: string;
+  delegates: Array<{ email: string; accessLevel: 'FULL_ACCESS' | 'SEND_AS' | 'READ_ONLY' }>;
+}) {
+  const cleanEmail = (params.email || '').toLowerCase().trim();
+  const [localPart, domainPart] = cleanEmail.split('@');
+  if (!localPart || !domainPart) return;
+
+  const domainId = await ensureStalwartDomainId(domainPart);
+  if (!domainId) return;
+
+  const mlResponses = await callStalwartJmap([
+    ['x:MailingList/get', { accountId: 'b', ids: null }, 'mlList'],
+  ]);
+  const mlList: any[] = mlResponses.find((r) => r[0] === 'x:MailingList/get')?.[1]?.list || [];
+  const existingMl = mlList.find(
+    (m) => (m.emailAddress || '').toLowerCase() === cleanEmail
+  );
+
+  // Inbound mail to a Shared Mailbox is delivered to FULL_ACCESS and READ_ONLY delegates
+  const recipientsEntries = new Map<string, boolean>();
+  for (const del of params.delegates || []) {
+    if (del.accessLevel !== 'FULL_ACCESS' && del.accessLevel !== 'READ_ONLY') continue;
+    const cleanMem = (del.email || '').toLowerCase().trim();
+    if (
+      cleanMem &&
+      cleanMem !== '__proto__' &&
+      cleanMem !== 'constructor' &&
+      cleanMem !== 'prototype'
+    ) {
+      recipientsEntries.set(cleanMem, true);
+    }
+  }
+  const recipientsMap: Record<string, boolean> = Object.fromEntries(recipientsEntries);
+
+  if (!existingMl) {
+    await callStalwartJmap([
+      [
+        'x:MailingList/set',
+        {
+          accountId: 'b',
+          create: {
+            ml0: {
+              name: localPart,
+              domainId,
+              description: params.displayName || localPart,
+              recipients: recipientsMap,
+            },
+          },
+        },
+        'createSharedMl',
+      ],
+    ]);
+  } else {
+    await callStalwartJmap([
+      [
+        'x:MailingList/set',
+        {
+          accountId: 'b',
+          update: {
+            [existingMl.id]: {
+              description: params.displayName || existingMl.description || localPart,
+              recipients: recipientsMap,
+            },
+          },
+        },
+        'updSharedMl',
+      ],
+    ]);
+  }
+}
+
+export async function deleteStalwartSharedMailboxPrincipal(email: string) {
+  const cleanEmail = (email || '').toLowerCase().trim();
+  if (!cleanEmail) return;
+  try {
+    const mlRes = await callStalwartJmap([
+      ['x:MailingList/get', { accountId: 'b', ids: null }, 'mlList'],
+    ]);
+    const mlList: any[] = mlRes.find((r) => r[0] === 'x:MailingList/get')?.[1]?.list || [];
+    const targetMl = mlList.find(
+      (m) => (m.emailAddress || '').toLowerCase() === cleanEmail
+    );
+    if (targetMl?.id) {
+      await callStalwartJmap([
+        ['x:MailingList/set', { accountId: 'b', destroy: [targetMl.id] }, 'delSharedMl'],
+      ]);
+    }
+  } catch (err) {
+    console.warn('[Stalwart Shared Mailbox Delete] Warning:', err);
+  }
+}
+
 export async function calculateRollingQuota(orgData: any) {
   const now = new Date();
   const nowMs = now.getTime();
@@ -403,6 +497,7 @@ export async function purgeExpiredMailData(): Promise<{
       if (!Number.isNaN(scheduledMs) && scheduledMs <= nowMs) {
         const usersSnap = await orgDoc.ref.collection('mailUsers').get();
         const groupsSnap = await orgDoc.ref.collection('mailGroups').get();
+        const sharedSnap = await orgDoc.ref.collection('mailSharedMailboxes').get();
         const ousSnap = await orgDoc.ref.collection('mailOrgUnits').get();
 
         // Remove user principals from Stalwart
@@ -448,6 +543,7 @@ export async function purgeExpiredMailData(): Promise<{
         const allRefs = [
           ...usersSnap.docs.map((d) => d.ref),
           ...groupsSnap.docs.map((d) => d.ref),
+          ...sharedSnap.docs.map((d) => d.ref),
           ...ousSnap.docs.map((d) => d.ref),
         ];
         for (let i = 0; i < allRefs.length; i += 400) {
@@ -526,6 +622,24 @@ export async function purgeExpiredMailData(): Promise<{
 
         if (deletedSnap.empty) return;
 
+        // Check active legal holds before purging soft-deleted custodians
+        const activeHoldsSnap = await orgDoc.ref
+          .collection('mailLegalHolds')
+          .where('status', '==', 'active')
+          .get();
+        let orgWideHold = false;
+        const heldEmails = new Set<string>();
+        for (const hDoc of activeHoldsSnap.docs) {
+          const custodians: string[] = Array.isArray(hDoc.data().custodians)
+            ? hDoc.data().custodians.map((c: string) => String(c).toLowerCase().trim())
+            : [];
+          if (custodians.length === 0 || custodians.includes('*')) {
+            orgWideHold = true;
+          } else {
+            custodians.forEach((c) => heldEmails.add(c));
+          }
+        }
+
         let ownerEmail: string | null | undefined = undefined;
         for (const uDoc of deletedSnap.docs) {
           const uData = uDoc.data();
@@ -533,11 +647,22 @@ export async function purgeExpiredMailData(): Promise<{
           const expiryMs = new Date(uData.recoverableUntil).getTime();
           if (Number.isNaN(expiryMs) || expiryMs > nowMs) continue;
 
+          const userEmail = (uData.primaryEmail || '').toLowerCase().trim();
+          if (orgWideHold || (userEmail && heldEmails.has(userEmail))) {
+            await logMailAuditEvent({
+              orgId,
+              actorUid: 'system-cron',
+              action: 'LEGAL_HOLD_PURGE_BLOCKED',
+              target: userEmail || uDoc.id,
+              metadata: { reason: 'Active Legal Hold prevented deleted mailbox purge' },
+            });
+            continue;
+          }
+
           if (ownerEmail === undefined) {
             ownerEmail = await resolveOrganizationOwnerEmail(orgData);
           }
 
-          const userEmail = (uData.primaryEmail || '').toLowerCase().trim();
           await uDoc.ref.delete();
           if (userEmail) {
             await dispatchStalwartApi('DELETE', `/api/principal/${encodeURIComponent(userEmail)}`);

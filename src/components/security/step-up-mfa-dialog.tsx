@@ -267,7 +267,7 @@ export function StepUpMfaDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="w-5 h-5 text-blue-600" />
+            <ShieldCheck className="w-5 h-5 text-zinc-900" />
             Verification Required
           </DialogTitle>
           <DialogDescription className="text-xs">{actionLabel}</DialogDescription>
@@ -306,7 +306,7 @@ export function StepUpMfaDialog({
               {!totpEnabled ? (
                 <div className="text-xs text-muted-foreground space-y-2 p-3 rounded-md bg-muted/50 border">
                   <p>Authenticator App is not enrolled yet on your account.</p>
-                  <Link href="/management/settings" className="text-blue-600 font-medium underline inline-block">
+                  <Link href="/management/settings" className="text-zinc-900 font-medium underline inline-block hover:text-zinc-700">
                     Enroll in Account Settings →
                   </Link>
                 </div>
@@ -339,7 +339,7 @@ export function StepUpMfaDialog({
               {passkeyCount === 0 ? (
                 <div className="text-xs text-muted-foreground space-y-2 p-3 rounded-md bg-muted/50 border">
                   <p>No Passkeys registered on your account.</p>
-                  <Link href="/management/settings" className="text-blue-600 font-medium underline inline-block">
+                  <Link href="/management/settings" className="text-zinc-900 font-medium underline inline-block hover:text-zinc-700">
                     Register a Passkey in Account Settings →
                   </Link>
                 </div>
@@ -355,7 +355,7 @@ export function StepUpMfaDialog({
               {!secondaryEmailVerified ? (
                 <div className="text-xs text-muted-foreground space-y-2 p-3 rounded-md bg-muted/50 border">
                   <p>No verified secondary email configured.</p>
-                  <Link href="/management/settings" className="text-blue-600 font-medium underline inline-block">
+                  <Link href="/management/settings" className="text-zinc-900 font-medium underline inline-block hover:text-zinc-700">
                     Configure Secondary Email in Account Settings →
                   </Link>
                 </div>

@@ -158,7 +158,7 @@ function buildInstitutionalEmailContent(
   const detailRowsHtml = detailRows
     .map((d, idx) => {
       const isLast = idx === detailRows.length - 1;
-      const borderBottom = isLast ? 'none' : '1px solid #e2e8f0';
+      const borderBottom = isLast ? 'none' : '1px solid #e4e4e7';
       const labelLower = (d.label || '').trim().toLowerCase();
       const isBadge = BADGE_DETAIL_LABELS.has(labelLower);
       const isEmailOrDomain =
@@ -166,12 +166,12 @@ function buildInstitutionalEmailContent(
         /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d.value.trim());
 
       const renderedValue = isBadge
-        ? `<span style="display:inline-block;background-color:#eef2ff;color:#4338ca;font-size:12px;font-weight:600;padding:4px 11px;border-radius:999px;line-height:1.3;">${escapeHtml(d.value)}</span>`
-        : `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:13px;font-weight:600;color:${isEmailOrDomain ? '#1d4ed8' : '#0f172a'};word-break:break-word;">${escapeHtml(d.value)}</span>`;
+        ? `<span style="display:inline-block;background-color:#f4f4f5;color:#18181b;border:1px solid #e4e4e7;font-size:12px;font-weight:600;padding:4px 11px;border-radius:999px;line-height:1.3;">${escapeHtml(d.value)}</span>`
+        : `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:13px;font-weight:600;color:${isEmailOrDomain ? '#09090b' : '#18181b'};word-break:break-word;">${escapeHtml(d.value)}</span>`;
 
       return `
       <tr>
-        <td class="detail-label" style="padding:12px 16px;border-bottom:${borderBottom};font-size:13px;color:#64748b;font-weight:500;text-align:left;vertical-align:middle;width:40%;">${escapeHtml(d.label)}</td>
+        <td class="detail-label" style="padding:12px 16px;border-bottom:${borderBottom};font-size:13px;color:#71717a;font-weight:500;text-align:left;vertical-align:middle;width:40%;">${escapeHtml(d.label)}</td>
         <td class="detail-value" style="padding:12px 16px;border-bottom:${borderBottom};text-align:right;vertical-align:middle;width:60%;">${renderedValue}</td>
       </tr>`;
     })
@@ -186,11 +186,11 @@ function buildInstitutionalEmailContent(
 
   const otpHtml = params.otpCode
     ? `
-      <div style="margin:20px 0;padding:18px 20px;background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;text-align:center;">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:8px;">
+      <div style="margin:20px 0;padding:18px 20px;background-color:#fafafa;border:1px solid #e4e4e7;border-radius:12px;text-align:center;">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#71717a;margin-bottom:8px;">
           One-Time Verification Code
         </div>
-        <div style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:28px;font-weight:700;letter-spacing:0.22em;color:#0f172a;">
+        <div style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:28px;font-weight:700;letter-spacing:0.22em;color:#09090b;">
           ${escapeHtml(params.otpCode)}
         </div>
       </div>`
@@ -200,14 +200,14 @@ function buildInstitutionalEmailContent(
     ctaUrl && ctaLabel
       ? `
       <div style="margin-top:22px;">
-        <a href="${escapeHtml(ctaUrl)}" target="_blank" rel="noopener noreferrer" class="cta-btn" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:10px;line-height:1.3;">${escapeHtml(ctaLabel)}</a>
+        <a href="${escapeHtml(ctaUrl)}" target="_blank" rel="noopener noreferrer" class="cta-btn" style="display:inline-block;background-color:#09090b;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:10px;line-height:1.3;border:1px solid #27272a;">${escapeHtml(ctaLabel)}</a>
       </div>
       <div style="margin-top:20px;">
-        <p style="margin:0 0 8px 0;color:#64748b;font-size:12px;line-height:1.5;">
+        <p style="margin:0 0 8px 0;color:#71717a;font-size:12px;line-height:1.5;">
           If the button above does not open, copy and paste this URL into your browser:
         </p>
-        <div style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.55;color:#334155;word-break:break-all;">
-          <a href="${escapeHtml(ctaUrl)}" target="_blank" rel="noopener noreferrer" style="color:#334155;text-decoration:none;word-break:break-all;">${escapeHtml(ctaUrl)}</a>
+        <div style="background-color:#fafafa;border:1px solid #e4e4e7;border-radius:10px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.55;color:#27272a;word-break:break-all;">
+          <a href="${escapeHtml(ctaUrl)}" target="_blank" rel="noopener noreferrer" style="color:#27272a;text-decoration:none;word-break:break-all;">${escapeHtml(ctaUrl)}</a>
         </div>
       </div>`
       : '';
@@ -271,16 +271,16 @@ function buildInstitutionalEmailContent(
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-wrapper" style="background-color:#f1f5f9;padding:28px 14px;">
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-wrapper" style="background-color:#f4f4f5;padding:28px 14px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-card" style="max-width:580px;width:100%;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.06);">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-card" style="max-width:580px;width:100%;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(9,9,11,0.06);">
           <tr>
-            <td class="email-header" style="background-color:#0b0d24;background-image:radial-gradient(circle at 50% 0%, #1c1f4a 0%, #0b0d24 72%);padding:24px 28px;">
+            <td class="email-header" style="background-color:#09090b;background-image:radial-gradient(circle at 50% 0%, #18181b 0%, #09090b 72%);border-bottom:1px solid #27272a;padding:22px 28px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
-                  <td style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#ffffff;vertical-align:middle;">Revlet</td>
+                  <td style="vertical-align:middle;"><img src="https://app.revlet.me/brand/revlet-email-logo.png" alt="Revlet" height="28" style="display:block;height:28px;width:auto;border:0;outline:none;text-decoration:none;font-size:18px;font-weight:700;color:#ffffff;" /></td>
                   <td align="right" style="vertical-align:middle;">
                     <span style="display:inline-block;background-color:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.16);border-radius:999px;padding:4px 12px;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#cbd5e1;white-space:nowrap;">${escapeHtml(senderBadge)}</span>
                   </td>
@@ -295,12 +295,12 @@ function buildInstitutionalEmailContent(
           </tr>
           <tr>
             <td class="email-body" style="padding:28px;">
-              <h1 class="email-title" style="margin:0 0 12px 0;font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-0.015em;line-height:1.3;">${escapeHtml(params.title)}</h1>
+              <h1 class="email-title" style="margin:0 0 12px 0;font-size:20px;font-weight:700;color:#09090b;letter-spacing:-0.015em;line-height:1.3;">${escapeHtml(params.title)}</h1>
               ${summaryHtml}
               ${otpHtml}
               ${
                 detailRowsHtml
-                  ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;background-color:#ffffff;">
+                  ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;border:1px solid #e4e4e7;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;background-color:#ffffff;">
                       ${detailRowsHtml}
                     </table>`
                   : ''
@@ -310,18 +310,18 @@ function buildInstitutionalEmailContent(
             </td>
           </tr>
           <tr>
-            <td class="email-footer" style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 28px;text-align:center;font-size:11.5px;color:#64748b;line-height:1.65;">
+            <td class="email-footer" style="background-color:#fafafa;border-top:1px solid #e4e4e7;padding:20px 28px;text-align:center;font-size:11.5px;color:#71717a;line-height:1.65;">
               <div>${escapeHtml(footerNote)}</div>
-              <div style="margin-top:10px;color:#94a3b8;">
-                <a href="https://revlet.me/support" style="color:#64748b;text-decoration:none;font-weight:500;">Help &amp; Support</a>
+              <div style="margin-top:10px;color:#a1a1aa;">
+                <a href="https://revlet.me/support" style="color:#52525b;text-decoration:none;font-weight:500;">Help &amp; Support</a>
                 &nbsp;&middot;&nbsp;
-                <a href="https://revlet.me/privacy" style="color:#64748b;text-decoration:none;font-weight:500;">Privacy Policy</a>
+                <a href="https://revlet.me/privacy" style="color:#52525b;text-decoration:none;font-weight:500;">Privacy Policy</a>
                 &nbsp;&middot;&nbsp;
-                <a href="https://revlet.me/terms" style="color:#64748b;text-decoration:none;font-weight:500;">Service Terms</a>
+                <a href="https://revlet.me/terms" style="color:#52525b;text-decoration:none;font-weight:500;">Service Terms</a>
                 &nbsp;&middot;&nbsp;
-                <a href="https://revlet.me" style="color:#64748b;text-decoration:none;font-weight:500;">About</a>
+                <a href="https://revlet.me" style="color:#52525b;text-decoration:none;font-weight:500;">About</a>
               </div>
-              <div style="margin-top:10px;font-size:11px;color:#94a3b8;">
+              <div style="margin-top:10px;font-size:11px;color:#a1a1aa;">
                 Revlet Platform &middot; Developed &amp; Managed by Shivam Yadav.
               </div>
             </td>

@@ -26,7 +26,7 @@ export function renderOgImage({ eyebrow, headline, subline }: OgImageOptions) {
           flexDirection: 'column',
           justifyContent: 'space-between',
           padding: '72px 80px',
-          background: 'linear-gradient(135deg, #020617 0%, #0B1B3F 55%, #1D4ED8 130%)',
+          background: 'linear-gradient(135deg, #09090B 0%, #18181B 60%, #27272A 130%)',
           color: '#FFFFFF',
           fontFamily: 'sans-serif',
         }}
@@ -38,10 +38,10 @@ export function renderOgImage({ eyebrow, headline, subline }: OgImageOptions) {
               style={{
                 fontSize: '22px',
                 fontWeight: 600,
-                color: '#BFDBFE',
+                color: '#E4E4E7',
                 padding: '10px 22px',
                 borderRadius: '9999px',
-                border: '1px solid rgba(191, 219, 254, 0.35)',
+                border: '1px solid rgba(228, 228, 231, 0.28)',
               }}
             >
               {eyebrow}
@@ -53,7 +53,7 @@ export function renderOgImage({ eyebrow, headline, subline }: OgImageOptions) {
           <div style={{ fontSize: '64px', fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.03em' }}>
             {headline}
           </div>
-          <div style={{ fontSize: '28px', lineHeight: 1.4, color: '#CBD5E1' }}>{subline}</div>
+          <div style={{ fontSize: '28px', lineHeight: 1.4, color: '#A1A1AA' }}>{subline}</div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -64,7 +64,7 @@ export function renderOgImage({ eyebrow, headline, subline }: OgImageOptions) {
                 style={{
                   fontSize: '20px',
                   fontWeight: 600,
-                  color: '#E2E8F0',
+                  color: '#E4E4E7',
                   padding: '10px 20px',
                   borderRadius: '12px',
                   background: 'rgba(255, 255, 255, 0.08)',
@@ -74,7 +74,7 @@ export function renderOgImage({ eyebrow, headline, subline }: OgImageOptions) {
               </span>
             ))}
           </div>
-          <span style={{ fontSize: '22px', color: '#93C5FD', fontWeight: 600 }}>app.revlet.me</span>
+          <span style={{ fontSize: '22px', color: '#E4E4E7', fontWeight: 600 }}>app.revlet.me</span>
         </div>
       </div>
     ),

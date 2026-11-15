@@ -64,7 +64,7 @@ export function CommandPalette() {
 
         <CommandGroup heading="Navigation">
           <CommandItem onSelect={() => navigate("/account/home")}>
-            <LayoutDashboard className="mr-2 h-4 w-4 text-blue-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
+            <LayoutDashboard className="mr-2 h-4 w-4 text-zinc-900 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Account Home</span>
             <CommandShortcut>Home</CommandShortcut>
           </CommandItem>
@@ -73,7 +73,7 @@ export function CommandPalette() {
             <span>DNS Management</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/services/email")}>
-            <Mail className="mr-2 h-4 w-4 text-blue-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
+            <Mail className="mr-2 h-4 w-4 text-zinc-900 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email Service</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/management/team")}>
@@ -111,7 +111,7 @@ export function CommandPalette() {
 
         <CommandGroup heading="Quick Actions">
           <CommandItem onSelect={() => navigate("/management/team")}>
-            <UserPlus className="mr-2 h-4 w-4 text-blue-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
+            <UserPlus className="mr-2 h-4 w-4 text-zinc-900 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Invite Team Member</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/support")}>
@@ -124,7 +124,7 @@ export function CommandPalette() {
               window.open("https://mail.revlet.me", "_blank", "noopener,noreferrer")
             }}
           >
-            <ExternalLink className="mr-2 h-4 w-4 text-blue-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
+            <ExternalLink className="mr-2 h-4 w-4 text-zinc-900 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Open RevletMail Webmail</span>
             <CommandShortcut>↗</CommandShortcut>
           </CommandItem>

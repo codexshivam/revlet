@@ -185,7 +185,7 @@ export function OrgSelector({
                       <Building2
                         className={cn(
                           "h-3.5 w-3.5 shrink-0 transition-colors group-hover:!text-black group-data-[selected=true]:!text-black",
-                          isSelected ? "text-blue-600" : "text-slate-400"
+                          isSelected ? "text-zinc-900" : "text-slate-400"
                         )}
                       />
                       <div className="flex flex-col min-w-0 flex-1">
@@ -200,7 +200,7 @@ export function OrgSelector({
                       </div>
                     </div>
                     {isSelected && (
-                      <Check className="h-3.5 w-3.5 shrink-0 text-blue-600 ml-auto" />
+                      <Check className="h-3.5 w-3.5 shrink-0 text-zinc-900 ml-auto" />
                     )}
                   </CommandItem>
                 )

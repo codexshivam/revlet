@@ -132,7 +132,7 @@ const CommandShortcut = ({
   return (
     <span
       className={cn(
-        "ml-auto rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-slate-500 transition-colors group-hover:bg-blue-700 group-hover:text-white group-data-[selected='true']:bg-blue-700 group-data-[selected='true']:text-white",
+        "ml-auto rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-slate-500 transition-colors group-hover:bg-zinc-800 group-hover:text-white group-data-[selected='true']:bg-zinc-800 group-data-[selected='true']:text-white",
         className
       )}
       {...props}

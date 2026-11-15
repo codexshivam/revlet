@@ -15,7 +15,7 @@ export function PublicSupportView() {
   const faqs = SUPPORT_FAQS;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-body text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-body text-slate-900 selection:bg-zinc-200 selection:text-zinc-950">
       {/* Top Header */}
       <header className="w-full bg-white border-b border-slate-200/80 sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -53,7 +53,7 @@ export function PublicSupportView() {
             </Link>
             <Link
               href="/support"
-              className="text-blue-600 font-bold"
+              className="text-zinc-900 font-bold"
             >
               Documentation &amp; Support
             </Link>
@@ -82,8 +82,8 @@ export function PublicSupportView() {
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-10 md:py-14 space-y-12">
         {/* Hero Section */}
         <div className="text-center space-y-4 max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 text-xs font-bold tracking-wide">
-            <LifeBuoy className="w-3.5 h-3.5 text-blue-600" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-900 text-xs font-bold tracking-wide">
+            <LifeBuoy className="w-3.5 h-3.5 text-zinc-900" />
             Documentation &amp; Support Center
           </div>
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-headline font-bold text-slate-900 tracking-tight leading-tight">
@@ -120,7 +120,7 @@ export function PublicSupportView() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm space-y-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+              <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-900">
                 <Mail className="w-4 h-4" />
               </div>
               <h3 className="text-sm font-headline font-bold text-slate-900">
@@ -131,7 +131,7 @@ export function PublicSupportView() {
               </p>
               <a
                 href="mailto:hello@revlet.me"
-                className="text-xs font-bold text-blue-600 hover:underline pt-2 block"
+                className="text-xs font-bold text-zinc-900 hover:underline pt-2 block"
               >
                 hello@revlet.me ↗
               </a>
@@ -149,14 +149,14 @@ export function PublicSupportView() {
               </p>
               <Link
                 href="/login"
-                className="text-xs font-bold text-blue-600 hover:underline pt-2 block"
+                className="text-xs font-bold text-zinc-900 hover:underline pt-2 block"
               >
                 Sign in to view tickets ↗
               </Link>
             </div>
 
             <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm space-y-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+              <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-900">
                 <FileCode2 className="w-4 h-4" />
               </div>
               <h3 className="text-sm font-headline font-bold text-slate-900">
@@ -169,7 +169,7 @@ export function PublicSupportView() {
                 href="https://github.com/codexshivam/revlet"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs font-bold text-blue-600 hover:underline pt-2 block"
+                className="text-xs font-bold text-zinc-900 hover:underline pt-2 block"
               >
                 GitHub Repository ↗
               </a>
@@ -189,7 +189,7 @@ export function PublicSupportView() {
             {faqs.map((faq, i) => (
               <div key={i} className="p-5 sm:p-6 space-y-2">
                 <h3 className="text-base font-headline font-bold text-slate-900 flex items-start gap-2.5">
-                  <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-1" />
+                  <HelpCircle className="w-4 h-4 text-zinc-900 shrink-0 mt-1" />
                   <span>{faq.q}</span>
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed pl-6.5">

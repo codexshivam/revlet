@@ -384,6 +384,21 @@ export async function purgeExpiredMailData(): Promise<{
     const ownerEmail = await resolveOrganizationOwnerEmail(orgData);
 
     if (!orgData.mailServiceActive && orgData.mailPurgeScheduledAt) {
+      const activeHoldsSnap = await orgDoc.ref
+        .collection('mailLegalHolds')
+        .where('status', '==', 'active')
+        .limit(1)
+        .get();
+      if (!activeHoldsSnap.empty) {
+        await logMailAuditEvent({
+          orgId,
+          actorUid: 'system-cron',
+          action: 'LEGAL_HOLD_PURGE_BLOCKED',
+          target: orgId,
+          metadata: { reason: 'Active Legal Hold prevented org mail purge' },
+        });
+        continue;
+      }
       const scheduledMs = new Date(orgData.mailPurgeScheduledAt).getTime();
       if (!Number.isNaN(scheduledMs) && scheduledMs <= nowMs) {
         const usersSnap = await orgDoc.ref.collection('mailUsers').get();

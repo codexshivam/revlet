@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { AlertOctagon, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { reportCrashException } from "@/firebase/telemetry"
 
 export default function GlobalError({
   error,
@@ -13,6 +14,11 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error("Revlet Root Global Error:", error)
+    reportCrashException(error, {
+      fatal: true,
+      component: "GlobalError",
+      digest: error.digest,
+    })
   }, [error])
 
   return (

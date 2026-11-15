@@ -1426,11 +1426,11 @@ export default function EmailServiceAdminPage() {
   if (authLoading || (isLoadingOrgs && orgs.length === 0)) {
     return (
       <DashboardShell>
-        <div className="flex flex-col items-center justify-center min-h-[50vh] bg-white">
+        <div className="flex flex-col items-center justify-center min-h-[50vh] bg-white px-6">
           <img
             src="/logo-4k.png"
             alt="Revlet"
-            className="h-14 w-auto object-contain select-none"
+            className="h-20 sm:h-24 w-auto max-w-[82vw] object-contain select-none"
           />
         </div>
       </DashboardShell>

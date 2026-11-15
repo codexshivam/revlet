@@ -19,11 +19,11 @@ export default function RootPage() {
   }, [user, loading, router])
 
   return (
-    <main className="min-h-screen w-full flex items-center justify-center bg-white">
+    <main className="min-h-screen w-full flex items-center justify-center bg-white px-6">
       <img
         src="/logo-4k.png"
         alt="Revlet"
-        className="h-14 w-auto object-contain select-none"
+        className="h-20 sm:h-24 w-auto max-w-[82vw] object-contain select-none"
       />
     </main>
   )

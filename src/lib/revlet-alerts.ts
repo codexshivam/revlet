@@ -93,6 +93,12 @@ export function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function escapeHtmlNeutralizingAutoLinks(str: string): string {
+  return escapeHtml(str)
+    .replace(/@/g, '&#8204;@')
+    .replace(/\./g, '&#8204;.');
+}
+
 export async function resolveOrganizationOwnerEmail(
   orgData: Record<string, any>
 ): Promise<string | null> {
@@ -167,7 +173,7 @@ function buildInstitutionalEmailContent(
 
       const renderedValue = isBadge
         ? `<span style="display:inline-block;background-color:#f4f4f5;color:#18181b;border:1px solid #e4e4e7;font-size:12px;font-weight:600;padding:4px 11px;border-radius:999px;line-height:1.3;">${escapeHtml(d.value)}</span>`
-        : `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:13px;font-weight:600;color:${isEmailOrDomain ? '#09090b' : '#18181b'};word-break:break-word;">${escapeHtml(d.value)}</span>`;
+        : `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:13px;font-weight:600;color:${isEmailOrDomain ? '#09090b' : '#18181b'};text-decoration:none;word-break:break-word;">${isEmailOrDomain ? escapeHtmlNeutralizingAutoLinks(d.value) : escapeHtml(d.value)}</span>`;
 
       return `
       <tr>
@@ -180,7 +186,7 @@ function buildInstitutionalEmailContent(
   const summaryHtml = params.summaryLines
     .map(
       (line) =>
-        `<p style="margin:0 0 12px 0;font-size:14px;line-height:1.65;color:#475569;">${escapeHtml(line)}</p>`
+        `<p style="margin:0 0 12px 0;font-size:14px;line-height:1.65;color:#3f3f46;">${escapeHtml(line)}</p>`
     )
     .join('');
 
@@ -239,6 +245,22 @@ function buildInstitutionalEmailContent(
   <meta name="supported-color-schemes" content="light" />
   <title>${escapeHtml(params.subject)}</title>
   <style>
+    .email-header,
+    .email-header *,
+    .email-header a,
+    .email-header a:link,
+    .email-header a:visited,
+    .email-header a:hover,
+    a[x-apple-data-detectors],
+    u + #body .email-header a {
+      color: #ffffff !important;
+      text-decoration: none !important;
+    }
+    .detail-value a,
+    .detail-value a[x-apple-data-detectors] {
+      color: #09090b !important;
+      text-decoration: none !important;
+    }
     @media only screen and (max-width: 600px) {
       .email-wrapper {
         padding: 12px 8px !important;
@@ -271,24 +293,24 @@ function buildInstitutionalEmailContent(
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<body id="body" style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-wrapper" style="background-color:#f4f4f5;padding:28px 14px;">
     <tr>
       <td align="center">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-card" style="max-width:580px;width:100%;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(9,9,11,0.06);">
           <tr>
-            <td class="email-header" style="background-color:#09090b;background-image:radial-gradient(circle at 50% 0%, #18181b 0%, #09090b 72%);border-bottom:1px solid #27272a;padding:22px 28px;">
+            <td class="email-header" style="background-color:#09090b;background-image:radial-gradient(circle at 50% 0%, #18181b 0%, #09090b 72%);border-bottom:1px solid #27272a;padding:22px 28px;color:#ffffff;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <td style="vertical-align:middle;"><img src="https://app.revlet.me/brand/revlet-email-logo.png" alt="Revlet" height="28" style="display:block;height:28px;width:auto;border:0;outline:none;text-decoration:none;font-size:18px;font-weight:700;color:#ffffff;" /></td>
                   <td align="right" style="vertical-align:middle;">
-                    <span style="display:inline-block;background-color:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.16);border-radius:999px;padding:4px 12px;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#cbd5e1;white-space:nowrap;">${escapeHtml(senderBadge)}</span>
+                    <span style="display:inline-block;background-color:#18181b;border:1px solid #3f3f46;border-radius:999px;padding:4px 12px;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#ffffff;text-decoration:none;white-space:nowrap;">${escapeHtmlNeutralizingAutoLinks(senderBadge)}</span>
                   </td>
                 </tr>
               </table>
               ${
                 params.subtitle
-                  ? `<div style="margin-top:16px;background-color:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;color:#e2e8f0;">${escapeHtml(params.subtitle)}</div>`
+                  ? `<div style="margin-top:16px;background-color:#18181b;border:1px solid #27272a;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;color:#ffffff;">${escapeHtmlNeutralizingAutoLinks(params.subtitle)}</div>`
                   : ''
               }
             </td>

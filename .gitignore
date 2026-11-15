@@ -42,9 +42,11 @@ GoogleService-Info.plist
 *.tsbuildinfo
 next-env.d.ts
 
-# firebase
+# firebase & vercel
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
 .firebase/
+.vercel
 *.code-workspace
+.vercel

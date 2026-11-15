@@ -6,15 +6,16 @@
 
 ---
 
-## Run Your Organization's DNS, Email & Team Access from One Place
+## Run Your Organization's DNS, Email, Governance & Team Access from One Place
 
-**Revlet** (`app.revlet.me`) is a unified, multi-tenant **Cloud IT & Communications Control Plane** built for growing businesses, educational institutions, and distributed teams. Instead of juggling separate registrar dashboards, DNS panels, mail server tools, and spreadsheet-based permission lists, Revlet brings **Custom Domain Email**, **Authoritative DNS Management**, and **Granular Team Delegation** together in one fast, intuitive workspace.
+**Revlet** (`app.revlet.me`) is a unified, multi-tenant **Cloud IT & Communications Control Plane** built for growing businesses, educational institutions, and distributed teams. Instead of juggling separate registrar dashboards, DNS panels, mail server tools, compliance consoles, and spreadsheet-based permission lists, Revlet brings **Custom Domain Email**, **Shared Mailboxes**, **Enterprise Email Governance**, **Authoritative DNS Management**, and **Granular Team Delegation** together in one fast, intuitive workspace.
 
 Modern organizations lose hours every week switching between disconnected infrastructure portals. A single misconfigured `MX` or `TXT` record can silently disrupt company email, while sharing root credentials across IT staff introduces unnecessary security risk. Revlet solves both problems by giving administrators one clean control center:
 
-1. **Professional Email on Your Own Domain**: Launch `@yourdomain.com` mailboxes in minutes with automated SPF, DKIM, and DMARC configuration, bulk CSV onboarding, organizational units, groups, and built-in 14-day recovery protection.
-2. **Effortless DNS Control**: Manage every domain record with instant search, filtering, pagination, proxy control, and point-in-time zone snapshots so changes are always reversible.
-3. **Confident Team Delegation**: Invite colleagues as organization admins or scope their access strictly to DNS or Email per organization—without ever sharing upstream API keys or root passwords.
+1. **Professional Email & Shared Mailboxes on Your Own Domain**: Launch `@yourdomain.com` mailboxes and delegated Shared Mailboxes (`support@`, `billing@`) in minutes with automated SPF, DKIM, and DMARC configuration, bulk CSV onboarding, organizational units, distribution groups, and built-in 14-day recovery protection.
+2. **Enterprise Email Governance & Compliance**: Enforce outbound Data Loss Prevention (DLP) policies, Mail Flow & Transport rules, eDiscovery Legal Holds, Quarantine moderation, and immutable SIEM Audit Logs (`JSON`, `NDJSON`, `CSV`, `CEF`) synchronized in real time with **Revlet Mail**.
+3. **Effortless DNS Control**: Manage every domain record with instant search, filtering, pagination, proxy control, and point-in-time zone snapshots so changes are always reversible.
+4. **Confident Team Delegation & 2-Step Verification**: Invite colleagues as organization admins or scope their access strictly to DNS, Email, Security, Compliance, or Help Desk per organization—protected by Authenticator App (TOTP), Passkey / Security Key (WebAuthn), and Step-Up MFA verification.
 
 ---
 
@@ -22,48 +23,51 @@ Modern organizations lose hours every week switching between disconnected infras
 
 | Capability | Designed for Teams | Powered Under the Hood |
 | :--- | :--- | :--- |
-| **Business Email Service** | Custom `@domain` mailboxes, aliases, mailing groups, catch-all routing, and Organizational Units | Hybrid **Stalwart Mail** (IMAP/JMAP directory) + **Amazon SES v2** outbound relay with 2048-bit RSA DKIM signing |
+| **Business Email Service** | Custom `@domain` mailboxes, 1-to-1 aliases, 1-to-many mailing groups, catch-all routing, and Organizational Units | Hybrid **Stalwart Mail** (JMAP + Principal Directory) + **Amazon SES v2** outbound relay with 2048-bit RSA DKIM signing |
+| **Delegated Shared Mailboxes** | Provision team inboxes (`support@`, `sales@`) with `FULL_ACCESS`, `SEND_AS`, or `READ_ONLY` delegate permissions | Automated **Stalwart** `x:MailingList` routing + live directory synchronization (`/api/mail/v1/directory`) and SES sender authorization |
+| **Enterprise Governance & DLP** | Quarantine Console, outbound DLP rules (SSN, PAN, API keys, regex), Transport rules, eDiscovery Legal Holds, and SIEM exports | Real-time policy synchronization (`/api/mail/v1/governance`), JMAP quarantine release delivery, and `JSON`/`NDJSON`/`CSV`/`CEF` audit streams |
 | **Deliverability & Protection** | Automated DNS health checks with one-click record repair and proactive reputation protection | Live SPF/DKIM/DMARC verification, cryptographically signed **AWS SNS** bounce/complaint webhooks, and auto-pause thresholds |
-| **Data Retention & Recovery** | Safe 14-day recovery window for deleted accounts and deactivated domains, with automated owner alerts | Scheduled purge pipeline (`purgeExpiredMailData`) with branded notifications sent from `alerts@revlet.me` |
+| **Data Retention & Recovery** | Safe 14-day recovery window for deleted accounts and deactivated domains, with Legal Hold purge immunity | Scheduled purge pipeline (`purgeExpiredMailData`) with Legal Hold enforcement and branded owner alerts from `alerts@revlet.me` |
 | **Authoritative DNS Management** | Clean record management (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, `SRV`, `NS`) with search, pagination, and proxy toggles | Authenticated server actions (`dns-service.ts`) with multi-page sync, conflict cleanup, and zone snapshot rollbacks |
-| **Bulk User Operations** | Onboard or audit hundreds of mailboxes in seconds with downloadable CSV templates and password support | Validated CSV batch ingestion (`bulkCreateMailUsers`) and one-click CSV directory export |
-| **Granular Team Management** | Assign `Org: Admin` or service-specific roles (`DNS: Read/Edit/Admin`, `Email: Read/Add/Admin`) per organization | Zero-trust server-side enforcement via `verifyUserOrgAccess` and scoped Firestore team memberships |
-| **Multi-Organization Workspace** | Switch seamlessly across multiple domains and client organizations from a single account | Persistent `OrgProvider` / `useActiveOrg` state engine with real-time tenant synchronization |
+| **2-Step Verification & Step-Up MFA** | Authenticator App (TOTP), Passkeys / Hardware Security Keys, Recovery Email OTP, Backup Codes, and org-wide MFA policies | AES-256-GCM encrypted MFA secrets (`mfa.ts`) and cryptographic Step-Up tokens guarding destructive & compliance actions |
+| **Granular Team Management** | Assign `Org: Admin` or scoped roles (`DNS:*`, `Email:*`, `Security: Admin`, `Compliance: Admin`, `HelpDesk: Admin`) | Zero-trust server-side enforcement via `verifyUserOrgAccess` and scoped Firestore team memberships |
 
 ---
 
 ## How Revlet Works
 
-Revlet coordinates identity verification, DNS automation, and mail provisioning through a resilient server-side pipeline:
+Revlet coordinates identity verification, DNS automation, mail provisioning, and governance sync through a resilient server-side pipeline:
 
 ```text
 [ AUTHENTICATED USER ACTION ]
        │
-       ├──► STAGE 1: ZERO-TRUST TENANCY & PERMISSION CHECK (auth-helper.ts)
+       ├──► STAGE 1: ZERO-TRUST TENANCY, RBAC & STEP-UP MFA (auth-helper.ts / mfa.ts)
        │      ├── Verify Firebase Auth ID token cryptographically
        │      ├── Confirm organization ownership or active, non-suspended team membership
-       │      └── Enforce per-organization service scopes (Org: Admin, DNS:*, Email:*)
+       │      ├── Enforce per-organization service scopes (Org: Admin, DNS:*, Email:*, Security:*, Compliance:*)
+       │      └── Require Step-Up MFA verification token for destructive, DLP, Legal Hold, and SIEM export actions
        │
        ├──► STAGE 2: DNS & DOMAIN ORCHESTRATION (dns-service.ts)
        │      ├── Connect organization-isolated DNS zones (platform-managed or BYOT encrypted keys)
        │      ├── Manage A, AAAA, CNAME, MX, TXT, and SRV records with snapshot protection
        │      └── Automatically clean conflicting MX records and sync Email Service DNS records
        │
-       ├──► STAGE 3: EMAIL & DIRECTORY PROVISIONING (email-service.ts)
+       ├──► STAGE 3: EMAIL, SHARED MAILBOX & DIRECTORY PROVISIONING (email-service.ts / email-governance.ts)
        │      ├── Provision domain identity & 2048-bit RSA DKIM keys in Amazon SES v2
-       │      ├── Synchronize mailboxes, aliases, groups, and passwords with Stalwart Mail via JMAP
+       │      ├── Synchronize mailboxes, aliases, groups, and Shared Mailboxes with Stalwart Mail via JMAP
        │      └── Monitor bounce/complaint rates via signed AWS SNS webhooks (/api/mail/v1/sns-bounce)
        │
-       └──► STAGE 4: AUDIT TRAIL & OWNER ALERTS
-              ├── Record administrative mutations with actor metadata in Firestore
-              └── Deliver branded lifecycle notifications from alerts@revlet.me
+       └──► STAGE 4: GOVERNANCE SYNC, SIEM AUDIT TRAIL & OWNER ALERTS (/api/mail/v1/*)
+              ├── Synchronize DLP rules, Transport rules, Legal Holds, and Shared Mailboxes with Revlet Mail
+              ├── Record immutable administrative & mail security events in Firestore (JSON/NDJSON/CSV/CEF)
+              └── Deliver branded lifecycle notifications from alerts@revlet.me via Amazon SES v2
 ```
 
 ---
 
 ## Security & Zero-Trust Architecture
 
-Revlet is engineered with **Defense-in-Depth** so every organization's domains, mailboxes, and credentials remain strictly isolated:
+Revlet is engineered with **Defense-in-Depth** so every organization's domains, mailboxes, governance policies, and credentials remain strictly isolated:
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -75,7 +79,7 @@ Revlet is engineered with **Defense-in-Depth** so every organization's domains, 
 │                        │ (next.config.ts)            │ Clickjacking & MIME protection  │
 ├────────────────────────┼─────────────────────────────┼─────────────────────────────────┤
 │ 2. Server Tenancy      │ verifyUserOrgAccess         │ Cryptographic token checks,     │
-│                        │ (Server Actions)            │ anti-IDOR & granular RBAC       │
+│                        │ + assertStepUpMfa           │ anti-IDOR, RBAC & Step-Up MFA   │
 ├────────────────────────┼─────────────────────────────┼─────────────────────────────────┤
 │ 3. Webhook Security    │ AWS SNS Signature Verifier  │ RSA-SHA1 / RSA-SHA256 check on  │
 │                        │ (sns-bounce/route.ts)       │ verified amazonaws.com certs    │
@@ -83,8 +87,8 @@ Revlet is engineered with **Defense-in-Depth** so every organization's domains, 
 │ 4. Database Integrity  │ Granular Firestore Rules    │ Blocks client-side elevation of │
 │                        │ (firestore.rules)           │ ownerId, zoneId, or service state│
 ├────────────────────────┼─────────────────────────────┼─────────────────────────────────┤
-│ 5. Secret Quarantine   │ Server-Only Credentials     │ AES-GCM encrypted BYOT tokens & │
-│                        │                             │ server-side SES/Stalwart keys   │
+│ 5. Secret Quarantine   │ Server-Only Credentials     │ AES-GCM encrypted BYOT/MFA keys │
+│                        │                             │ & server-side SES/Stalwart keys │
 └────────────────────────┴─────────────────────────────┴─────────────────────────────────┘
 ```
 
@@ -92,20 +96,29 @@ Revlet is engineered with **Defense-in-Depth** so every organization's domains, 
 
 ## Product Modules
 
-### 1. Business Email Service (`/services/email`)
-* **Everything Teams Expect from Modern Email**: Create `@yourdomain.com` accounts, manage display names and aliases, organize teams with Organizational Units, and configure mailing groups or catch-all routing.
-* **Built-In Deliverability Guardrails**: Missing DNS records are surfaced automatically with one-click repair for managed DNS zones, while Amazon SES DKIM and signed SNS bounce monitoring protect your domain reputation.
-* **Safe Recovery & Automated Retention**: Deleted accounts and deactivated email services enter a 14-day recovery window before permanent removal, with clear alerts sent to the organization owner.
+### 1. Business Email Service, Shared Mailboxes & Governance (`/services/email`)
+* **Directory & Account Management**: Create `@yourdomain.com` accounts, manage display names and aliases, organize teams with Organizational Units, bulk-import users via CSV, and configure distribution groups or catch-all routing.
+* **Delegated Shared Mailboxes**: Create shared team addresses (e.g., `support@example.com`, `billing@example.com`) and assign delegates with `FULL_ACCESS`, `SEND_AS`, or `READ_ONLY` permissions—automatically provisioned on Stalwart Mail Server and synced live to Revlet Mail.
+* **Enterprise Governance Suite**:
+  * **Quarantine Console**: Inspect outbound/inbound messages flagged by DLP or attachment policies, and release (via JMAP + Amazon SES) or permanently delete them after Step-Up MFA verification.
+  * **DLP & Mail Flow Rules**: Block or quarantine messages containing SSNs, credit cards, API keys, keywords, or custom regexes; append legal disclaimers; block risky attachment extensions; sandbox external links; or moderate external recipients.
+  * **eDiscovery & Legal Holds**: Place custodian or organization-wide litigation holds that automatically block both the 14-day account purge and Revlet Mail's 21-day ephemeral purge cron, and export tamper-evident eDiscovery bundles.
+  * **Persistent SIEM & Security Audit Logs**: Filter and export immutable security events in `JSON`, `NDJSON`, `CSV`, or `CEF` (Common Event Format for Splunk, Sentinel, and QRadar).
+* **Built-In Deliverability Guardrails**: Missing DNS records are surfaced automatically with one-click repair for managed DNS zones, while Amazon SES 2048-bit DKIM and signed SNS bounce monitoring protect your domain reputation.
 
 ### 2. Authoritative DNS Management (`/services/dns`)
 * **Fast, Clean Record Control**: Search, filter, paginate, and update DNS records across desktop and mobile without navigating complex legacy screens.
-* **Snapshots & Confidence**: Capture zone snapshots before major changes and roll back if needed.
+* **Snapshots & Confidence**: Capture zone snapshots before major changes and roll back in one click.
 
 ### 3. Team Management (`/management/team`)
-* **Right-Sized Access Per Organization**: Grant trusted colleagues `Org: Admin` access or assign only the specific DNS or Email permissions they need for each organization they manage.
+* **Right-Sized Access Per Organization**: Grant trusted colleagues `Org: Admin` access or assign granular `DNS`, `Email`, `Security: Admin`, `Compliance: Admin`, or `HelpDesk: Admin` permissions for each organization they manage.
 * **Zero Credential Sharing**: Team members sign in with their own Revlet accounts—never with your registrar, Cloudflare, AWS, or mail server root credentials.
 
-### 4. Account Home & Organization Management (`/account/home`)
+### 4. Account Settings & 2-Step Verification (`/management/settings`)
+* **Multi-Factor Authentication (MFA)**: Enroll Authenticator Apps (RFC 6238 TOTP), Passkeys / Hardware Security Keys (WebAuthn), Recovery Email OTP, and one-time Backup Codes.
+* **Organization MFA Enforcement**: Security administrators can require 2-Step Verification across all organization members.
+
+### 5. Account Home & Organization Management (`/account/home`)
 * **Multi-Organization Hub**: Register new organizations, manage domain settings, and switch active workspaces instantaneously.
 
 ---
@@ -130,7 +143,7 @@ npm install
 ```bash
 cp .env.example .env.local
 ```
-Review [`.env.example`](.env.example) and populate `.env.local` with your own credentials for Firebase, Cloudflare, Stalwart Mail, Amazon SES, `REVLET_ALERTS_FROM`, `REVLET_MAIL_INTERNAL_SECRET`, and `CRON_SECRET`. Never commit `.env.local` or any private keys.
+Review [`.env.example`](.env.example) and populate `.env.local` with your credentials for Firebase, Cloudflare, Stalwart Mail, Amazon SES, `TOKEN_ENCRYPTION_SECRET`, `REVLET_MAIL_INTERNAL_SECRET`, `REVLET_ALERTS_FROM`, and `CRON_SECRET`. Never commit `.env.local` or any private keys.
 
 ### 3. Launch Development Server
 ```bash

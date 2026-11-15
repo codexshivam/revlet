@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { purgeExpiredMailData } from '@/app/actions/email-service';
+import { purgeExpiredMailData } from '@/lib/mail-internal';
 
 function verifyCronSecret(req: NextRequest): boolean {
   const configuredSecret = (

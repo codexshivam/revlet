@@ -31,16 +31,41 @@ export async function cfFetch(path: string, options: RequestInit = {}, customTok
     throw new Error("Authorization failed. No active DNS authorization is configured for this organization.");
   }
 
+  const method = (options.method || 'GET').toUpperCase();
+  const maxAttempts = method === 'GET' ? 2 : 1;
+
   try {
     const targetUrl = buildSafeCloudflareUrl(path);
-    const response = await fetch(targetUrl, {
-      ...options,
-      headers: {
-        ...resolvedHeaders,
-        ...options.headers,
-      },
-      cache: 'no-store',
-    });
+    let response: Response | null = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      try {
+        response = await fetch(targetUrl, {
+          ...options,
+          headers: {
+            ...resolvedHeaders,
+            ...options.headers,
+          },
+          signal: options.signal || controller.signal,
+          cache: 'no-store',
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (response.status === 429 && attempt + 1 < maxAttempts) {
+        const retryAfterSec = Number(response.headers.get('retry-after') || '1');
+        const waitMs = Math.min(Math.max(retryAfterSec * 1000, 300), 2000);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      break;
+    }
+
+    if (!response) {
+      throw new Error('Edge network request failed.');
+    }
 
     const contentType = response.headers.get('content-type');
     let data;

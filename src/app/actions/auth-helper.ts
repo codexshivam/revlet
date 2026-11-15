@@ -70,45 +70,56 @@ export async function verifyUserOrgAccess(
   let permissions: string[] = isOwner ? ['*'] : [];
 
   if (!isOwner && userEmail) {
+    if (decodedToken.email_verified !== true) {
+      throw new Error("Unauthorized: Email verification is required to access shared organizations.");
+    }
+
     const emailPermKey = userEmail.replace(/\./g, '__DOT__');
     const orgMemberPerms = orgData?.memberPermissions?.[emailPermKey];
     if (Array.isArray(orgMemberPerms)) {
       permissions = orgMemberPerms;
     }
 
-    if (Array.isArray(orgData?.memberEmails) && orgData.memberEmails.map((e: string) => e.toLowerCase().trim()).includes(userEmail)) {
-      isMember = true;
-    } else {
-      try {
-        const memberSnap = await adminDb.collection('teamMembers')
-          .where('ownerId', '==', orgData?.ownerId)
-          .where('email', '==', userEmail)
-          .limit(1)
-          .get();
+    const inMemberEmails =
+      Array.isArray(orgData?.memberEmails) &&
+      orgData.memberEmails.map((e: string) => e.toLowerCase().trim()).includes(userEmail);
 
-        if (!memberSnap.empty) {
-          const mData = memberSnap.docs[0].data();
-          const mOrgs: string[] = Array.isArray(mData.organizationIds)
-            ? mData.organizationIds
-            : mData.organizationId
-            ? [mData.organizationId]
-            : [];
-          if (mOrgs.includes(orgId)) {
-            if (mData.status === 'Suspended' || mData.status === 'Inactive') {
-              throw new Error("Unauthorized: Your access to this organization has been suspended.");
-            }
-            if (mData.status === 'Active' || mData.status === 'Pending') {
-              isMember = true;
-              if (Array.isArray(mData.permissions)) {
+    try {
+      const memberSnap = await adminDb.collection('teamMembers')
+        .where('ownerId', '==', orgData?.ownerId)
+        .where('email', '==', userEmail)
+        .limit(1)
+        .get();
+
+      if (!memberSnap.empty) {
+        const mData = memberSnap.docs[0].data();
+        const mOrgs: string[] = Array.isArray(mData.organizationIds)
+          ? mData.organizationIds
+          : mData.organizationId
+          ? [mData.organizationId]
+          : [];
+        if (mOrgs.includes(orgId)) {
+          if (mData.status === 'Suspended' || mData.status === 'Inactive') {
+            throw new Error("Unauthorized: Your access to this organization has been suspended.");
+          }
+          if (mData.status === 'Active' || inMemberEmails) {
+            isMember = true;
+            if (permissions.length === 0) {
+              const perOrgPerms = mData.orgPermissions?.[orgId];
+              if (Array.isArray(perOrgPerms)) {
+                permissions = perOrgPerms;
+              } else if (Array.isArray(mData.permissions)) {
                 permissions = mData.permissions;
               }
             }
           }
         }
-      } catch (err: any) {
-        if (err?.message?.includes('suspended')) throw err;
-        console.warn("[Auth Helper] Team member lookup warning:", err?.message);
+      } else if (inMemberEmails) {
+        isMember = true;
       }
+    } catch (err: any) {
+      if (err?.message?.includes('suspended')) throw err;
+      console.warn("[Auth Helper] Team member lookup warning:", err?.message);
     }
   }
 
@@ -120,14 +131,24 @@ export async function verifyUserOrgAccess(
     throw new Error("Unauthorized: Insufficient organization permissions for this action.");
   }
 
-  if (expectedZoneId && orgData?.cloudflareZoneId && orgData.cloudflareZoneId !== expectedZoneId) {
+  if (expectedZoneId && (!orgData?.cloudflareZoneId || orgData.cloudflareZoneId !== expectedZoneId)) {
     throw new Error("Unauthorized: Target zone does not match organization.");
   }
 
   let cfToken: string | undefined = undefined;
-  if (orgData?.cloudflareTokenEncrypted?.ciphertext) {
+  let encryptedTokenEnvelope = orgData?.cloudflareTokenEncrypted;
+  try {
+    const secretSnap = await orgDoc.ref.collection('secrets').doc('cloudflare').get();
+    if (secretSnap.exists && secretSnap.data()?.ciphertext) {
+      encryptedTokenEnvelope = secretSnap.data();
+    }
+  } catch (e: any) {
+    console.warn("[Auth Helper] Failed to read Cloudflare secret subdoc:", e?.message);
+  }
+
+  if (encryptedTokenEnvelope?.ciphertext) {
     try {
-      cfToken = decryptToken(orgData.cloudflareTokenEncrypted);
+      cfToken = decryptToken(encryptedTokenEnvelope);
     } catch (e: any) {
       console.error("[Auth Helper] Failed to decrypt organization Cloudflare token:", e?.message);
     }

@@ -88,9 +88,8 @@ aws lightsail put-instance-public-ports \
     "fromPort=80,toPort=80,protocol=tcp" \
     "fromPort=443,toPort=443,protocol=tcp" \
     "fromPort=465,toPort=465,protocol=tcp" \
-    "fromPort=587,toPort=587,protocol=tcp" \
-    "fromPort=8080,toPort=8080,protocol=tcp" >/dev/null
-echo "  -> Opened TCP ports: 22 (SSH), 25 (SMTP MX), 80/443 (HTTPS/JMAP), 465/587 (Submissions), 8080 (Admin API)."
+    "fromPort=587,toPort=587,protocol=tcp" >/dev/null
+echo "  -> Opened TCP ports: 22 (SSH), 25 (SMTP MX), 80/443 (HTTPS/JMAP), 465/587 (Submissions). Admin API 8080 kept private."
 
 # 5. Configure AWS SES v2 in ap-southeast-2
 echo "[5/5] Configuring AWS SES v2 Outbound Relay (${AWS_REGION})..."
@@ -130,7 +129,7 @@ echo "1. Stalwart Mail Server Host (mx.revlet.me):"
 echo "   - Instance Name : ${INSTANCE_NAME}"
 echo "   - Region / AZ   : ${AVAILABILITY_ZONE}"
 echo "   - Static IPv4   : ${STATIC_IP_ADDRESS}"
-echo "   - JMAP / Admin  : http://${STATIC_IP_ADDRESS}:8080 (or https://mx.revlet.me)"
+echo "   - JMAP / Admin  : https://mx.revlet.me (TLS; port 8080 bound to localhost)"
 echo ""
 echo "2. Required Cloudflare DNS Records on 'revlet.me':"
 echo "   - A     mx.revlet.me       -> ${STATIC_IP_ADDRESS} (DNS Only / Grey Cloud)"

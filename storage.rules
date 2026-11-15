@@ -11,10 +11,7 @@ service firebase.storage {
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.admin == true ||
-        (request.auth.token.email != null && request.auth.token.email.lower() == 'shivam@revlet.me')
-      );
+      return isAuthenticated() && request.auth.token.admin == true;
     }
 
     function isOrgOwnerOrMember(orgId) {
@@ -26,6 +23,7 @@ service firebase.storage {
             firestore.get(/databases/(default)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
             (
               'memberEmails' in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data &&
+              request.auth.token.email_verified == true &&
               request.auth.token.email != null &&
               request.auth.token.email.lower() in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data.memberEmails
             )
@@ -36,7 +34,7 @@ service firebase.storage {
 
     // ─── User Profile Assets ──────────────────────────────────────────────────
     match /users/{userId}/{allPaths=**} {
-      allow read: if isAuthenticated();
+      allow read: if isOwner(userId) || isSuperAdmin();
       allow write: if isOwner(userId)
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|application/pdf');

@@ -121,6 +121,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Invalid or missing AWS SNS signature' }, { status: 403 });
     }
 
+    // Enforce strict TopicArn allowlist (fail closed if unconfigured or mismatched)
+    const allowedTopics = (process.env.AWS_SNS_BOUNCE_TOPIC_ARNS || '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const incomingTopicArn = typeof body.TopicArn === 'string' ? body.TopicArn.trim() : '';
+    if (allowedTopics.length === 0 || !incomingTopicArn || !allowedTopics.includes(incomingTopicArn)) {
+      return NextResponse.json({ ok: false, error: 'Forbidden: Untrusted or unconfigured SNS TopicArn' }, { status: 403 });
+    }
+
     // 1. Handle AWS SNS SubscriptionConfirmation automatically (strictly allowlisted SNS regional host)
     if (body.Type === 'SubscriptionConfirmation' && typeof body.SubscribeURL === 'string') {
       const safeSubUrl = resolveSafeSnsUrl(body.SubscribeURL, false);
@@ -171,7 +181,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, transient: true });
     }
 
+    const messageId = typeof body.MessageId === 'string' ? body.MessageId.trim() : '';
+    if (body.Type === 'Notification' && !messageId) {
+      return NextResponse.json({ ok: false, error: 'Missing SNS MessageId' }, { status: 400 });
+    }
+    const dedupDocId = messageId
+      ? crypto.createHash('sha256').update(messageId).digest('hex')
+      : '';
+    const dedupRef = dedupDocId ? orgRef.collection('snsProcessedEvents').doc(dedupDocId) : null;
+
     const result = await adminDb.runTransaction(async (tx) => {
+      if (dedupRef) {
+        const dedupSnap = await tx.get(dedupRef);
+        if (dedupSnap.exists) {
+          return { duplicate: true, autoPaused: false, wasAlreadyPaused: true, orgData: {} } as any;
+        }
+      }
+
       const snap = await tx.get(orgRef);
       const d = snap.data() || {};
 
@@ -199,7 +225,16 @@ export async function POST(req: NextRequest) {
         updatedAt: FieldValue.serverTimestamp(),
       });
 
+      if (dedupRef) {
+        tx.set(dedupRef, {
+          messageId,
+          notificationType,
+          processedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
       return {
+        duplicate: false,
         domain,
         bounces,
         complaints,
@@ -210,6 +245,10 @@ export async function POST(req: NextRequest) {
         orgData: d,
       };
     });
+
+    if (result.duplicate) {
+      return NextResponse.json({ ok: true, deduplicated: true });
+    }
 
     if (result.autoPaused && !result.wasAlreadyPaused) {
       try {

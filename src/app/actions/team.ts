@@ -8,6 +8,9 @@ import { sendRevletAlertEmail } from '@/lib/revlet-alerts';
 async function verifyCaller(idToken: string) {
   if (!idToken) throw new Error('Unauthorized: Missing credentials.');
   const decoded = await adminAuth.verifyIdToken(idToken);
+  if (decoded.email_verified !== true) {
+    throw new Error('Unauthorized: Email address must be verified.');
+  }
   return {
     uid: decoded.uid,
     email: (decoded.email || '').toLowerCase().trim(),
@@ -263,16 +266,21 @@ export async function inviteTeamMember(
     }
 
     // Allocate organizations (unless suspended)
-    const batch = adminDb.batch();
-    for (const orgDoc of orgDocs) {
-      const orgPerms = resolvedOrgPermissions[orgDoc.id] || permissions;
-      batch.update(orgDoc.ref, {
-        ownerName: ownerDisplayName,
-        memberEmails: FieldValue.arrayUnion(targetEmail),
-        [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]: orgPerms,
-      });
+    const isSuspendedMember =
+      !existingMemberSnap.empty &&
+      existingMemberSnap.docs[0].data()?.status === 'Suspended';
+    if (!isSuspendedMember) {
+      const batch = adminDb.batch();
+      for (const orgDoc of orgDocs) {
+        const orgPerms = resolvedOrgPermissions[orgDoc.id] || permissions;
+        batch.update(orgDoc.ref, {
+          ownerName: ownerDisplayName,
+          memberEmails: FieldValue.arrayUnion(targetEmail),
+          [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]: orgPerms,
+        });
+      }
+      await batch.commit();
     }
-    await batch.commit();
 
     try {
       const orgNames = orgDocs
@@ -348,9 +356,9 @@ export async function updateTeamMemberStatus(
     );
     const canManage =
       data.ownerId === caller.uid ||
-      orgDocs.some((docSnap) => docSnap.exists && callerHasOrgAdmin(docSnap.data(), caller));
+      (orgDocs.length > 0 && orgDocs.every((docSnap) => docSnap.exists && callerHasOrgAdmin(docSnap.data(), caller)));
     if (!canManage) {
-      return { success: false, error: 'Only an organization owner or Admin can modify team member status.' };
+      return { success: false, error: 'Only an organization owner or Admin of all assigned organizations can modify team member status.' };
     }
 
     const targetEmail = (data.email || '').toLowerCase().trim();
@@ -590,9 +598,9 @@ export async function deleteTeamMember(idToken: string, memberId: string) {
     );
     const canManage =
       data.ownerId === caller.uid ||
-      orgDocs.some((docSnap) => docSnap.exists && callerHasOrgAdmin(docSnap.data(), caller));
+      (orgDocs.length > 0 && orgDocs.every((docSnap) => docSnap.exists && callerHasOrgAdmin(docSnap.data(), caller)));
     if (!canManage) {
-      return { success: false, error: 'Only an organization owner or Admin can remove team members.' };
+      return { success: false, error: 'Only an organization owner or Admin of all assigned organizations can remove team members.' };
     }
 
     const targetEmail = (data.email || '').toLowerCase().trim();
@@ -686,10 +694,15 @@ export async function checkAndClaimInvitations(idToken: string) {
       const permKey = `memberPermissions.${caller.email.replace(/\./g, '__DOT__')}`;
       for (const orgId of orgIds) {
         const orgRef = adminDb.collection('organizations').doc(orgId);
+        const orgPerms = Array.isArray(d.orgPermissions?.[orgId])
+          ? d.orgPermissions[orgId]
+          : Array.isArray(d.permissions)
+          ? d.permissions
+          : null;
         batch.update(orgRef, {
           memberEmails: FieldValue.arrayUnion(caller.email),
           ...(d.ownerName ? { ownerName: d.ownerName } : {}),
-          ...(Array.isArray(d.permissions) ? { [permKey]: d.permissions } : {}),
+          ...(orgPerms ? { [permKey]: orgPerms } : {}),
         });
       }
     }

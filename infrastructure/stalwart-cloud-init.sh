@@ -53,7 +53,7 @@ protocol = "smtp"
 tls.implicit = true
 
 [server.listener."http"]
-bind = ["[::]:8080"]
+bind = ["127.0.0.1:8080"]
 protocol = "http"
 
 [store."rocksdb"]
@@ -97,7 +97,7 @@ services:
       - "587:587"
       - "80:80"
       - "443:443"
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - /opt/stalwart/data:/opt/stalwart-mail
     environment:
@@ -116,5 +116,4 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 465/tcp
 ufw allow 587/tcp
-ufw allow 8080/tcp
 ufw --force enable

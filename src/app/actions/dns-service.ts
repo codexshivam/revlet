@@ -209,7 +209,7 @@ export async function deleteDNSRecord(idToken: string, orgId: string, zoneId: st
 export async function createZone(idToken: string, orgId: string, domainName: string) {
   if (!domainName) return { success: false, error: 'No domain name provided' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, undefined, ['DNS: Admin']);
     const targetDomain = verified.orgData?.domain?.toLowerCase()?.trim();
     if (targetDomain && targetDomain !== domainName.toLowerCase().trim()) {
       throw new Error(`Domain "${domainName}" does not match the active organization domain.`);
@@ -335,25 +335,33 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
     // Step 3: Envelope Encryption using AES-256-GCM
     const encrypted = encryptToken(cleanToken);
 
-    // Step 4: Write-only storage in Firestore
+    // Step 4: Store encrypted token in server-only secrets subcollection, and non-sensitive audit metadata on org doc
     const orgRef = adminDb.collection('organizations').doc(orgId);
+    const verifiedAt = new Date().toISOString();
+    const tokenAuditMeta = {
+      masked: encrypted.masked,
+      verifiedAt,
+      expiresOn,
+      zoneId: matchedZone.id,
+      zoneName: matchedZone.name,
+      zoneStatus: matchedZone.status,
+      scopedZoneCount: zones.length
+    };
+
+    await orgRef.collection('secrets').doc('cloudflare').set({
+      ciphertext: encrypted.ciphertext,
+      iv: encrypted.iv,
+      tag: encrypted.tag,
+      ...tokenAuditMeta,
+    });
+
     await orgRef.update({
       cloudflareZoneId: matchedZone.id,
       dnsMode: 'byot',
-      cloudflareTokenEncrypted: {
-        ciphertext: encrypted.ciphertext,
-        iv: encrypted.iv,
-        tag: encrypted.tag,
-        masked: encrypted.masked,
-        verifiedAt: new Date().toISOString(),
-        expiresOn,
-        zoneId: matchedZone.id,
-        zoneName: matchedZone.name,
-        zoneStatus: matchedZone.status,
-        scopedZoneCount: zones.length
-      },
+      cloudflareTokenAudit: tokenAuditMeta,
+      cloudflareTokenEncrypted: FieldValue.delete(),
       dnsRequested: true,
-      updatedAt: new Date().toISOString()
+      updatedAt: verifiedAt
     });
 
     // Step 5: Automatically create an initial baseline snapshot
@@ -413,9 +421,11 @@ export async function disconnectCloudflareToken(idToken: string, orgId: string) 
       if (batchSnap.size < 400) break;
     }
 
-    // 2. Remove all DNS & token fields from the organization document
+    // 2. Remove all DNS & token fields from the organization document and secrets subcollection
+    await orgRef.collection('secrets').doc('cloudflare').delete().catch(() => null);
     await orgRef.update({
       cloudflareTokenEncrypted: FieldValue.delete(),
+      cloudflareTokenAudit: FieldValue.delete(),
       cloudflareZoneId: FieldValue.delete(),
       cloudflareTokenVerifiedAt: FieldValue.delete(),
       cloudflareTokenExpiresOn: FieldValue.delete(),
@@ -440,7 +450,7 @@ export async function disconnectCloudflareToken(idToken: string, orgId: string) 
 export async function verifyDnsTokenPermissions(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: true, data: { valid: false, message: 'No active zone configured.' } };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Read', 'DNS: Edit', 'DNS: Admin']);
     const token = verified.cfToken;
     if (!token) {
       return {
@@ -487,9 +497,9 @@ export async function verifyDnsTokenPermissions(idToken: string, orgId: string, 
  */
 export async function getCloudflareTokenAudit(idToken: string, orgId: string) {
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId);
-    const tokenMeta = verified.orgData?.cloudflareTokenEncrypted;
-    if (!tokenMeta || !tokenMeta.ciphertext) {
+    const verified = await verifyUserOrgAccess(idToken, orgId, undefined, ['DNS: Read', 'DNS: Edit', 'DNS: Admin']);
+    const tokenMeta = verified.orgData?.cloudflareTokenAudit || verified.orgData?.cloudflareTokenEncrypted;
+    if (!tokenMeta || (!tokenMeta.masked && !tokenMeta.ciphertext)) {
       return { 
         success: true, 
         data: { 
@@ -549,7 +559,7 @@ function sanitizeDNSRecordsForFirestore(records: any[]) {
 export async function createZoneSnapshot(idToken: string, orgId: string, zoneId: string, reason: string = 'Manual snapshot') {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
     const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!recordsRes.success || !recordsRes.data) throw new Error(recordsRes.error || 'Failed to fetch DNS records');
 
@@ -574,7 +584,7 @@ export async function createZoneSnapshot(idToken: string, orgId: string, zoneId:
  */
 export async function listZoneSnapshots(idToken: string, orgId: string) {
   try {
-    await verifyUserOrgAccess(idToken, orgId);
+    await verifyUserOrgAccess(idToken, orgId, undefined, ['DNS: Read', 'DNS: Edit', 'DNS: Admin']);
     const snap = await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots')
       .orderBy('createdAt', 'desc')
       .limit(10)
@@ -602,7 +612,7 @@ export async function listZoneSnapshots(idToken: string, orgId: string) {
 export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneId: string, snapshotId: string) {
   if (!zoneId || !snapshotId) return { success: false, error: 'Missing parameters' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
     
     // 1. Fetch snapshot
     const snapDoc = await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots').doc(snapshotId).get();
@@ -617,7 +627,7 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
     if (!currentRes.success) throw new Error(currentRes.error);
     const currentRecords: any[] = currentRes.data || [];
 
-    // 3. Pre-rollback safety backup of current state
+    // 3. Pre-rollback safety backup of current state (only after DNS: Admin permission check passed)
     const cleanCurrentRecords = sanitizeDNSRecordsForFirestore(currentRecords);
     await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots').add({
       createdAt: new Date().toISOString(),
@@ -637,7 +647,10 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
         t.content === cur.content
       );
       if (!matchInTarget) {
-        await deleteDNSRecord(idToken, orgId, zoneId, cur.id);
+        const delRes = await deleteDNSRecord(idToken, orgId, zoneId, cur.id);
+        if (!delRes.success) {
+          throw new Error(delRes.error || `Failed to delete DNS record ${cur.name} (${cur.type}) during rollback.`);
+        }
         deletedCount++;
       }
     }
@@ -645,6 +658,9 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
     // Step B: Recreate missing records from snapshot
     let restoredCount = 0;
     const afterDeleteRes = await listDNSRecords(idToken, orgId, zoneId);
+    if (!afterDeleteRes.success) {
+      throw new Error(afterDeleteRes.error || 'Failed to verify remaining DNS records during rollback.');
+    }
     const remainingRecords: any[] = afterDeleteRes.data || [];
 
     for (const target of targetRecords) {
@@ -654,7 +670,7 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
         r.content === target.content
       );
       if (!exists) {
-        await createDNSRecord(idToken, orgId, zoneId, {
+        const createRes = await createDNSRecord(idToken, orgId, zoneId, {
           type: target.type,
           name: target.name,
           content: target.content,
@@ -662,6 +678,9 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
           proxied: target.proxied,
           priority: target.priority
         });
+        if (!createRes.success) {
+          throw new Error(createRes.error || `Failed to restore DNS record ${target.name} (${target.type}) during rollback.`);
+        }
         restoredCount++;
       }
     }
@@ -687,7 +706,7 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
 export async function previewEmailRoutingDNSDiff(idToken: string, orgId: string, zoneId: string, domainName: string) {
   if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
   try {
-    await verifyUserOrgAccess(idToken, orgId, zoneId);
+    await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Read', 'DNS: Edit', 'DNS: Admin']);
     const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!recordsRes.success) throw new Error(recordsRes.error);
     const currentRecords: any[] = recordsRes.data || [];
@@ -731,7 +750,7 @@ export async function previewEmailRoutingDNSDiff(idToken: string, orgId: string,
 export async function enableEmailRouting(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
     const data = await cfFetch(`/zones/${zoneId}/email/routing/enable`, {
       method: 'POST',
       body: JSON.stringify({})
@@ -745,7 +764,7 @@ export async function enableEmailRouting(idToken: string, orgId: string, zoneId:
 export async function disableEmailRouting(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
     const data = await cfFetch(`/zones/${zoneId}/email/routing/disable`, {
       method: 'POST',
       body: JSON.stringify({})
@@ -759,7 +778,7 @@ export async function disableEmailRouting(idToken: string, orgId: string, zoneId
 export async function getEmailRoutingStatus(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId);
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Read', 'DNS: Edit', 'DNS: Admin']);
     const data = await cfFetch(`/zones/${zoneId}/email/routing`, {}, verified.cfToken);
     return { success: true, data: data.result };
   } catch (error: any) {

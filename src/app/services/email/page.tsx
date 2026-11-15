@@ -220,8 +220,25 @@ export default function EmailServiceAdminPage() {
   const [users, setUsers] = useState<MailUserRecord[]>([])
   const [groups, setGroups] = useState<MailGroupRecord[]>([])
 
-  // Active tab & filters
-  const [activeTab, setActiveTab] = useState("users")
+  // Active tab & filters (synced with ?tab= URL parameter)
+  const [activeTab, setActiveTabState] = useState("users")
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const tabParam = new URLSearchParams(window.location.search).get("tab")
+    if (tabParam && ["users", "groups", "suspended", "settings"].includes(tabParam)) {
+      setActiveTabState(tabParam)
+    }
+  }, [])
+
+  const setActiveTab = (nextTab: string) => {
+    setActiveTabState(nextTab)
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      url.searchParams.set("tab", nextTab)
+      window.history.replaceState({}, "", url.toString())
+    }
+  }
   const [selectedUserOu, setSelectedUserOu] = useState<string>("ALL")
   const [userSearchQuery, setUserSearchQuery] = useState("")
   const [selectedGroupOu, setSelectedGroupOu] = useState<string>("ALL")
@@ -2178,6 +2195,7 @@ export default function EmailServiceAdminPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                aria-label="Email item actions"
                                 className="h-8 w-8 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
                               >
                                 <MoreVertical className="w-4 h-4" strokeWidth={1.5} />
@@ -2436,6 +2454,7 @@ export default function EmailServiceAdminPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                aria-label="Email item actions"
                                 className="h-8 w-8 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
                               >
                                 <MoreVertical className="w-4 h-4" strokeWidth={1.5} />
@@ -2578,6 +2597,7 @@ export default function EmailServiceAdminPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                aria-label="Email item actions"
                                 className="h-8 w-8 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
                               >
                                 <MoreVertical className="w-4 h-4" strokeWidth={1.5} />

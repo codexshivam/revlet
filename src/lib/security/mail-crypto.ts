@@ -1,4 +1,7 @@
 import crypto from 'crypto';
+import { promisify } from 'util';
+
+const scryptAsync = promisify(crypto.scrypt);
 
 /**
  * Hashes a mailbox password with a 128-bit random salt using scrypt (64-byte derived key).
@@ -7,6 +10,15 @@ export function hashMailPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
   const derived = crypto.scryptSync(password, salt, 64).toString('hex');
   return `scrypt$${salt}$${derived}`;
+}
+
+/**
+ * Async non-blocking variant of `hashMailPassword` for bulk provisioning loops.
+ */
+export async function hashMailPasswordAsync(password: string): Promise<string> {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `scrypt$${salt}$${derived.toString('hex')}`;
 }
 
 /**

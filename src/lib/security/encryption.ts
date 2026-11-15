@@ -7,11 +7,14 @@ import crypto from 'crypto';
 
 function getMasterKey(): Buffer {
   // Use dedicated secret if provided, or derive deterministically from server credentials
-  const secret = 
-    process.env.TOKEN_ENCRYPTION_SECRET || 
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY || 
-    process.env.CLOUDFLARE_DNS_TOKEN || 
-    'revlet-secure-byot-envelope-encryption-salt-2026';
+  const secret =
+    process.env.TOKEN_ENCRYPTION_SECRET ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+    process.env.CLOUDFLARE_DNS_TOKEN;
+
+  if (!secret || !secret.trim()) {
+    throw new Error('Configuration Error: TOKEN_ENCRYPTION_SECRET (or server secret) must be configured.');
+  }
 
   return crypto.createHash('sha256').update(secret).digest();
 }

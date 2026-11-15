@@ -81,7 +81,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true)
     try {
-      if (claimedUidRef.current !== user.uid) {
+      if (user.emailVerified && claimedUidRef.current !== user.uid) {
         claimedUidRef.current = user.uid
         try {
           const idToken = await user.getIdToken()

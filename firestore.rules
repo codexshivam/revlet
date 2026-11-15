@@ -31,6 +31,7 @@ service cloud.firestore {
         && request.resource.data.contactEmail is string;
       allow read: if isResourceOwner() || isSuperAdmin() || (
         isAuthenticated() &&
+        request.auth.token.email_verified == true &&
         request.auth.token.email != null &&
         'memberEmails' in resource.data &&
         request.auth.token.email.lower() in resource.data.memberEmails
@@ -40,9 +41,21 @@ service cloud.firestore {
         && (
           isSuperAdmin() ||
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'memberEmails', 'updatedAt'])
+            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt'])
         );
       allow delete: if isResourceOwner() || isSuperAdmin();
+
+      match /secrets/{secretId} {
+        allow read, write: if false;
+      }
+
+      match /dns_snapshots/{snapshotId} {
+        allow read, write: if false;
+      }
+
+      match /snsProcessedEvents/{eventId} {
+        allow read, write: if false;
+      }
 
       // Revlet Mail Service subcollections (accessed & mutated exclusively via Server Actions
       // using Firebase Admin SDK so passwordHash and internal routing state are never exposed to client SDKs)

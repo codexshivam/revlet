@@ -25,7 +25,7 @@ export function EmptyOrgState({
           <p className="text-xs text-slate-500">{description}</p>
         </div>
         <Link href="/account/home">
-          <Button className="h-9 px-4 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none">
+          <Button className="h-9 px-4 text-xs font-medium rounded-lg shadow-none">
             Go to Account Home
           </Button>
         </Link>

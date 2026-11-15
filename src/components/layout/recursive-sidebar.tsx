@@ -60,6 +60,7 @@ export function RecursiveSidebar({
             key={idx}
             href={item.href}
             onClick={onNavigate}
+            aria-current={isActive ? "page" : undefined}
             className={cn(
               "w-full flex items-center justify-between px-2.5 h-[34px] rounded-lg text-xs transition-colors group",
               isActive
@@ -69,6 +70,7 @@ export function RecursiveSidebar({
           >
             <div className="flex items-center gap-2.5 truncate">
               <item.icon
+                aria-hidden="true"
                 className={cn(
                   "w-4 h-4 shrink-0 transition-colors",
                   isActive ? "text-slate-950 stroke-[2]" : "text-slate-500 group-hover:text-slate-700"
@@ -105,7 +107,7 @@ export function RecursiveSidebar({
       </div>
 
       {/* Scrollable Navigation Sections */}
-      <nav className="flex-1 min-h-0 overflow-y-auto px-3 custom-scrollbar space-y-4 pb-3">
+      <nav aria-label="Primary navigation" className="flex-1 min-h-0 overflow-y-auto px-3 custom-scrollbar space-y-4 pb-3">
         {/* General */}
         <div>{renderNavList(generalItems)}</div>
 
@@ -128,6 +130,7 @@ export function RecursiveSidebar({
               key={idx}
               href={item.href}
               onClick={onNavigate}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
                 "w-full flex items-center gap-2.5 px-2.5 h-[34px] rounded-lg text-xs transition-colors group",
                 isActive
@@ -136,6 +139,7 @@ export function RecursiveSidebar({
               )}
             >
               <item.icon
+                aria-hidden="true"
                 className={cn(
                   "w-4 h-4 shrink-0 transition-colors",
                   isActive ? "text-slate-950 stroke-[2]" : "text-slate-500 group-hover:text-slate-700"

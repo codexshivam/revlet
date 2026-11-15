@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb, adminAuth } from '@/firebase/admin';
+import { verifyUserOrgAccess } from '@/app/actions/auth-helper';
 
 function verifyInternalServiceSecret(req: NextRequest): boolean {
   const configuredSecret = (process.env.REVLET_MAIL_INTERNAL_SECRET || '').trim();
@@ -29,27 +30,32 @@ function verifyInternalServiceSecret(req: NextRequest): boolean {
  *   - Body: { orgId?: string, domain?: string, fromEmail?: string }
  */
 export async function POST(req: NextRequest) {
-  let isAuthorized = verifyInternalServiceSecret(req);
+  const isInternalSecret = verifyInternalServiceSecret(req);
+  const authHeader = req.headers.get('authorization') || '';
+  const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
 
-  // If not internal secret, verify user Firebase ID token
-  if (!isAuthorized) {
-    const authHeader = req.headers.get('authorization') || '';
-    const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (bearerToken) {
-      try {
-        const decoded = await adminAuth.verifyIdToken(bearerToken);
-        if (decoded.uid) isAuthorized = true;
-      } catch {
-        // invalid token
-      }
+  let decodedToken: any = null;
+  if (!isInternalSecret) {
+    if (!bearerToken) {
+      return NextResponse.json(
+        { ok: false, error: 'Unauthorized: Missing authentication credentials.' },
+        { status: 401 }
+      );
     }
-  }
-
-  if (!isAuthorized) {
-    return NextResponse.json(
-      { ok: false, error: 'Unauthorized: Invalid authentication credentials.' },
-      { status: 401 }
-    );
+    try {
+      decodedToken = await adminAuth.verifyIdToken(bearerToken);
+      if (!decodedToken?.uid) {
+        return NextResponse.json(
+          { ok: false, error: 'Unauthorized: Invalid authentication credentials.' },
+          { status: 401 }
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: 'Unauthorized: Invalid authentication credentials.' },
+        { status: 401 }
+      );
+    }
   }
 
   try {
@@ -85,6 +91,17 @@ export async function POST(req: NextRequest) {
         { ok: false, error: 'Missing organization identifier (orgId, domain, or fromEmail).' },
         { status: 400 }
       );
+    }
+
+    if (!isInternalSecret && decodedToken?.admin !== true) {
+      try {
+        await verifyUserOrgAccess(bearerToken, orgDocId, undefined, ['Email: Admin']);
+      } catch (err: any) {
+        return NextResponse.json(
+          { ok: false, error: err?.message || 'Forbidden: Email Admin permission required.' },
+          { status: 403 }
+        );
+      }
     }
 
     const orgRef = adminDb.collection('organizations').doc(orgDocId);

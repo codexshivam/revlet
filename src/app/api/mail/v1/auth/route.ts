@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { z } from 'zod';
-import { calculateRollingQuota } from '@/app/actions/email-service';
+import { calculateRollingQuota } from '@/lib/mail-internal';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin';
 import {

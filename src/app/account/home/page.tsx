@@ -1,6 +1,12 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
+
+const SetupChecklist = dynamic(
+  () => import("@/components/org/setup-checklist").then((mod) => mod.SetupChecklist),
+  { ssr: false }
+)
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -478,6 +484,7 @@ export default function AccountHomePage() {
                 <Button
                   variant="outline"
                   size="icon"
+                  aria-label="Account actions"
                   className="h-9 w-9 bg-white border-slate-200 hover:bg-slate-50 rounded-lg"
                 >
                   <MoreVertical className="w-4 h-4 text-slate-600" strokeWidth={1.5} />
@@ -514,6 +521,8 @@ export default function AccountHomePage() {
             </Button>
           </div>
         </div>
+
+        <SetupChecklist />
 
         {/* Organizations container */}
         <Card className="bg-white border border-slate-200/80 shadow-none overflow-hidden rounded-xl">
@@ -671,6 +680,7 @@ export default function AccountHomePage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            aria-label={`Organization settings for ${org.name || org.domain}`}
                             className="h-8 w-8 text-slate-500 hover:text-slate-900 rounded-lg"
                             onClick={() => handleOpenEdit(org)}
                           >

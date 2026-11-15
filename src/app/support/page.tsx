@@ -406,6 +406,7 @@ export default function SupportPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    aria-label="Copy full ticket ID"
                                     className="h-6 w-6 text-slate-400 hover:text-slate-900 transition-colors"
                                     onClick={() => handleCopyId(t.id)}
                                     title="Copy full ticket ID"
@@ -529,6 +530,7 @@ export default function SupportPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              aria-label="Copy full ticket ID"
                               className="h-6 w-6 text-slate-400 hover:text-slate-900"
                               onClick={() => handleCopyId(t.id)}
                             >

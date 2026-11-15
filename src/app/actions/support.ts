@@ -1,6 +1,6 @@
 'use server';
 
-import { adminAuth } from '@/firebase/admin';
+import { adminAuth, adminDb } from '@/firebase/admin';
 import { sendRevletAlertEmail } from '@/lib/revlet-alerts';
 
 export async function notifySupportTicketEvent(
@@ -66,8 +66,21 @@ export async function notifySupportTicketEvent(
       return { success: true };
     }
 
-    // Ticket reply event
-    const targetEmail = (params.recipientEmail || callerEmail).toLowerCase().trim();
+    // Ticket reply event: only admins can notify the ticket owner, or the ticket owner can notify supportInbox
+    const ticketSnap = params.ticketId
+      ? await adminDb.collection('supportTickets').doc(params.ticketId).get()
+      : null;
+    const ticketData = ticketSnap?.exists ? ticketSnap.data() : null;
+
+    let targetEmail = '';
+    if (decoded.admin === true) {
+      targetEmail = String(ticketData?.userEmail || '').toLowerCase().trim();
+    } else if (ticketData && ticketData.userId === decoded.uid) {
+      targetEmail = supportInbox;
+    } else {
+      return { success: false };
+    }
+
     if (targetEmail) {
       await sendRevletAlertEmail({
         to: targetEmail,

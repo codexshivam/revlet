@@ -831,6 +831,7 @@ export default function TeamManagementPage() {
                                   onClick={() => handleOpenEdit(member)}
                                   className="h-8 w-8 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
                                   title="Edit organizations and access"
+                                  aria-label={`Edit access for ${member.email}`}
                                 >
                                   <Pencil className="w-3.5 h-3.5" strokeWidth={1.5} />
                                 </Button>
@@ -840,6 +841,7 @@ export default function TeamManagementPage() {
                                   onClick={() => setMemberToDelete(member)}
                                   className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg transition-colors"
                                   title="Revoke access"
+                                  aria-label={`Revoke access for ${member.email}`}
                                 >
                                   <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                                 </Button>
@@ -912,6 +914,7 @@ export default function TeamManagementPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            aria-label={`Edit access for ${member.email}`}
                             onClick={() => handleOpenEdit(member)}
                             className="h-8 w-8 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg"
                           >
@@ -920,6 +923,7 @@ export default function TeamManagementPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            aria-label={`Revoke access for ${member.email}`}
                             onClick={() => setMemberToDelete(member)}
                             className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg"
                           >

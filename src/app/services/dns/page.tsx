@@ -773,6 +773,7 @@ export default function DNSManagementPage() {
                     <Button
                       variant="outline"
                       size="icon"
+                      aria-label="DNS zone actions"
                       className="h-9 w-9 bg-white border-slate-200 hover:bg-slate-50 rounded-lg text-slate-600"
                     >
                       <MoreVertical className="w-4 h-4" />
@@ -1238,6 +1239,7 @@ export default function DNSManagementPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
+                                      aria-label={`Edit ${rec.type} record ${rec.name}`}
                                       disabled={Boolean(permissionWarning)}
                                       className="h-7 w-7 text-slate-400 hover:text-slate-900 transition-colors rounded-lg disabled:opacity-40"
                                       onClick={() => {
@@ -1254,6 +1256,7 @@ export default function DNSManagementPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
+                                      aria-label={`Delete ${rec.type} record ${rec.name}`}
                                       disabled={Boolean(permissionWarning)}
                                       className="h-7 w-7 text-slate-400 hover:text-red-600 transition-colors rounded-lg disabled:opacity-40"
                                       onClick={() => {

@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin';
-import { calculateRollingQuota } from '@/app/actions/email-service';
+import { calculateRollingQuota } from '@/lib/mail-internal';
 import { buildCanonicalStalwartEmails } from '@/lib/security/mail-crypto';
 
 function verifyInternalServiceSecret(req: NextRequest): boolean {

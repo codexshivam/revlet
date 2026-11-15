@@ -141,6 +141,17 @@ export default function SignupPage() {
 
       // Check and claim any pending team invitations for this email
       const idToken = await userCredential.user.getIdToken()
+      void fetch("/api/auth/action-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          type: "verify_email",
+          email: userCredential.user.email || userFormData.email.trim(),
+        }),
+      }).catch(() => {})
       const inviteRes = await checkAndClaimInvitations(idToken)
       if (inviteRes.success && inviteRes.data?.hasInvitations) {
         toast({

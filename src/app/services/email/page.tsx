@@ -131,6 +131,7 @@ export default function EmailServiceAdminPage() {
   const [catchAllUserId, setCatchAllUserId] = useState<string | null>(() => selectedOrg?.mailCatchAllUserId ?? null)
   const [catchAllEmail, setCatchAllEmail] = useState<string | null>(() => selectedOrg?.mailCatchAllEmail ?? null)
   const [requiredDnsRecords, setRequiredDnsRecords] = useState<MailRequiredDnsRecord[]>([])
+  const [hasScannedDns, setHasScannedDns] = useState(false)
 
   useEffect(() => {
     if (selectedOrg) {
@@ -358,6 +359,7 @@ export default function EmailServiceAdminPage() {
     setOrgUnits([])
     setGroups([])
     setRequiredDnsRecords([])
+    setHasScannedDns(false)
     setMailPurgeScheduledAt(null)
     setSelectedUserOu("ALL")
     setIsLoadingDirectory(true)
@@ -653,6 +655,7 @@ export default function EmailServiceAdminPage() {
       }
 
       await loadAllMailData(true)
+      setHasScannedDns(true)
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -712,6 +715,7 @@ export default function EmailServiceAdminPage() {
         })
       }
       await loadAllMailData(true)
+      setHasScannedDns(true)
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -1703,7 +1707,7 @@ export default function EmailServiceAdminPage() {
         />
 
         {/* Missing DNS Records Warning Banner */}
-        {!isLoadingQuota && missingDnsRecords.length > 0 && (
+        {!isLoadingQuota && hasScannedDns && missingDnsRecords.length > 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 sm:p-5 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-start gap-2.5">

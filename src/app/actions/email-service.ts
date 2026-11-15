@@ -108,7 +108,7 @@ const MAX_MAILBOXES_PER_ORG = 1000;
 const MAIL_MX_HOST = (process.env.MAIL_MX_HOST || 'mx.revlet.me').toLowerCase().trim();
 const MAIL_SPF_INCLUDE = (process.env.MAIL_SPF_INCLUDE || '_spf.mx.revlet.me').toLowerCase().trim();
 const MAIL_DKIM_TARGET_DOMAIN = (
-  process.env.MAIL_DKIM_TARGET_DOMAIN || 'dkim.amazonses.com'
+  process.env.MAIL_DKIM_TARGET_DOMAIN || 'dkim.revlet.me'
 )
   .toLowerCase()
   .trim();
@@ -243,6 +243,59 @@ async function syncStalwartGroupPrincipal(params: {
 // so the platform owner never has to add client domains manually in the AWS Console.
 // ============================================================================
 
+async function syncCustomDkimTargetCnames(tokens: string[]): Promise<void> {
+  if (!MAIL_DKIM_TARGET_DOMAIN || MAIL_DKIM_TARGET_DOMAIN === 'dkim.amazonses.com') {
+    return;
+  }
+  const cfToken = (process.env.CLOUDFLARE_DNS_TOKEN || '').trim();
+  if (!cfToken || tokens.length === 0) return;
+
+  const zoneId = (process.env.REVLET_CLOUDFLARE_ZONE_ID || 'b01f5fc25d042b813d59034710fe4476').trim();
+  const headers = {
+    Authorization: `Bearer ${cfToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  for (const token of tokens) {
+    const cleanToken = String(token || '').trim().toLowerCase();
+    if (!cleanToken) continue;
+    const fqdn = `${cleanToken}.${MAIL_DKIM_TARGET_DOMAIN}`;
+    const target = `${cleanToken}.dkim.amazonses.com`;
+    try {
+      const checkRes = await fetch(
+        `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=CNAME&name=${encodeURIComponent(fqdn)}`,
+        { headers, cache: 'no-store' }
+      );
+      const checkData = await checkRes.json().catch(() => ({}));
+      const existing = Array.isArray(checkData?.result) ? checkData.result[0] : null;
+      if (existing && String(existing.content || '').toLowerCase() === target) {
+        continue;
+      }
+      if (existing?.id) {
+        await fetch(
+          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${existing.id}`,
+          {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({ type: 'CNAME', name: fqdn, content: target, ttl: 300, proxied: false }),
+          }
+        );
+      } else {
+        await fetch(
+          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ type: 'CNAME', name: fqdn, content: target, ttl: 300, proxied: false }),
+          }
+        );
+      }
+    } catch {
+      // Non-blocking DNS sync
+    }
+  }
+}
+
 async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | null> {
   const cleanDomain = domain.toLowerCase().trim();
   // Guard: strictly enforce DOMAIN identities only, never individual EMAIL_ADDRESS identities
@@ -253,7 +306,10 @@ async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | n
   const getRes = await callAwsSesV2Api('GET', `/v2/email/identities/${encoded}`);
   if (getRes.ok && Array.isArray(getRes.data?.DkimAttributes?.Tokens)) {
     const tokens = getRes.data.DkimAttributes.Tokens.filter(Boolean);
-    if (tokens.length === 3) return tokens;
+    if (tokens.length === 3) {
+      await syncCustomDkimTargetCnames(tokens);
+      return tokens;
+    }
   }
 
   // 2. Otherwise create the domain identity in AWS SES v2 automatically with 2048-bit RSA DKIM
@@ -265,7 +321,10 @@ async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | n
   });
   if (createRes.ok && Array.isArray(createRes.data?.DkimAttributes?.Tokens)) {
     const tokens = createRes.data.DkimAttributes.Tokens.filter(Boolean);
-    if (tokens.length === 3) return tokens;
+    if (tokens.length === 3) {
+      await syncCustomDkimTargetCnames(tokens);
+      return tokens;
+    }
   }
 
   return null;

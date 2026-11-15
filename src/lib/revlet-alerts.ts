@@ -349,3 +349,55 @@ export async function sendRevletAccountEmail(
 
   return { sent: res.ok, status: res.status };
 }
+
+/**
+ * Sends a Delivery Status Notification (DSN) / bounce report from `mailer-daemon@revlet.me` via AWS SES v2.
+ */
+export async function sendRevletMailerDaemonEmail(
+  params: RevletEmailPayload
+): Promise<{ sent: boolean; status: number }> {
+  const recipients = (Array.isArray(params.to) ? params.to : [params.to])
+    .map((addr) => addr.trim().toLowerCase())
+    .filter((addr) => addr.includes('@'));
+
+  if (recipients.length === 0) {
+    return { sent: false, status: 400 };
+  }
+
+  const fromAddress = (
+    process.env.REVLET_MAILER_DAEMON_FROM ||
+    'Mail Delivery Subsystem <mailer-daemon@revlet.me>'
+  ).trim();
+  const replyToAddress = (
+    process.env.REVLET_SUPPORT_EMAIL || 'support@revlet.me'
+  ).trim();
+
+  const { html, text } = buildInstitutionalEmailContent(
+    params,
+    'mailer-daemon@revlet.me',
+    {
+      url: 'https://mail.revlet.me',
+      label: 'Open RevletMail',
+    }
+  );
+
+  const res = await callAwsSesV2Api('POST', '/v2/email/outbound-emails', {
+    FromEmailAddress: fromAddress,
+    ReplyToAddresses: [replyToAddress],
+    Destination: {
+      ToAddresses: recipients,
+    },
+    Content: {
+      Simple: {
+        Subject: { Data: params.subject, Charset: 'UTF-8' },
+        Body: {
+          Html: { Data: html, Charset: 'UTF-8' },
+          Text: { Data: text, Charset: 'UTF-8' },
+        },
+      },
+    },
+  });
+
+  return { sent: res.ok, status: res.status };
+}
+

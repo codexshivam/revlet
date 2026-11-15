@@ -73,6 +73,11 @@ import { PageHeader } from "@/components/layout/page-header"
 import { EmptyOrgState } from "@/components/services/empty-org-state"
 import { ServiceActivationCard } from "@/components/services/service-activation-card"
 import { EmailGovernancePanel } from "@/components/services/email-governance-panel"
+import { StepUpMfaDialog } from "@/components/security/step-up-mfa-dialog"
+import {
+  getOrganizationSecurityPolicy,
+  setOrganizationEnforceMfa,
+} from "@/app/actions/email-governance"
 import { TablePagination } from "@/components/ui/table-pagination"
 import {
   getMailServiceState,
@@ -226,11 +231,53 @@ export default function EmailServiceAdminPage() {
 
   // Active tab & filters (synced with ?tab= URL parameter)
   const [activeTab, setActiveTabState] = useState("users")
+  const [enforceMfa, setEnforceMfa] = useState(false)
+  const [isUpdatingEnforceMfa, setIsUpdatingEnforceMfa] = useState(false)
+  const [mfaStepUpOpen, setMfaStepUpOpen] = useState(false)
+  const [pendingEnforceValue, setPendingEnforceValue] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!user || !selectedOrgId) return
+    user.getIdToken().then((idToken) => {
+      getOrganizationSecurityPolicy(idToken, selectedOrgId).then((res) => {
+        if (res.success && typeof res.enforceMfa === "boolean") {
+          setEnforceMfa(res.enforceMfa)
+        }
+      })
+    }).catch(() => {})
+  }, [user, selectedOrgId])
+
+  const handleToggleEnforceMfa = async (nextVal: boolean, stepUpToken?: string) => {
+    if (!user || !selectedOrgId) return
+    setIsUpdatingEnforceMfa(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await setOrganizationEnforceMfa(idToken, selectedOrgId, nextVal, stepUpToken)
+      if (!res.success && typeof res.error === "string" && res.error.includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingEnforceValue(nextVal)
+        setMfaStepUpOpen(true)
+        return
+      }
+      if (!res.success) {
+        toast({ variant: "destructive", title: "Policy update failed", description: res.error })
+        return
+      }
+      setEnforceMfa(Boolean(res.enforceMfa))
+      toast({
+        title: res.enforceMfa ? "MFA Enforced" : "MFA Enforcement Disabled",
+        description: res.enforceMfa
+          ? "All organization users must verify or enroll MFA on sign-in."
+          : "MFA is now optional for users who have not enrolled.",
+      })
+    } finally {
+      setIsUpdatingEnforceMfa(false)
+    }
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return
     const tabParam = new URLSearchParams(window.location.search).get("tab")
-    if (tabParam && ["users", "groups", "suspended", "settings"].includes(tabParam)) {
+    if (tabParam && ["users", "groups", "suspended", "governance", "settings"].includes(tabParam)) {
       setActiveTabState(tabParam)
     }
   }, [])
@@ -1936,45 +1983,17 @@ export default function EmailServiceAdminPage() {
               </TabsTrigger>
 
               <TabsTrigger
+                value="governance"
+                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
+              >
+                Governance &amp; Security
+              </TabsTrigger>
+
+              <TabsTrigger
                 value="settings"
                 className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
               >
                 Settings
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="shared"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                Shared Mailboxes
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="quarantine"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                Quarantine
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="dlp"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                DLP &amp; Mail Flow
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="ediscovery"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                eDiscovery &amp; Legal Hold
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="audit"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                SIEM &amp; Audit Logs
               </TabsTrigger>
             </TabsList>
           </div>
@@ -3007,6 +3026,23 @@ export default function EmailServiceAdminPage() {
               </Table>
             </div>
 
+            {/* Enforce MFA Policy */}
+            <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-headline font-semibold text-slate-900">
+                  Enforce Multi-Factor Authentication (MFA)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Require all users in {selectedOrg.domain} to enroll and verify 2-Step Verification (Authenticator App, Passkey, or Secondary Email) on sign-in to Revlet and Revlet Mail.
+                </p>
+              </div>
+              <Switch
+                checked={enforceMfa}
+                disabled={isUpdatingEnforceMfa}
+                onCheckedChange={(checked) => handleToggleEnforceMfa(checked)}
+              />
+            </div>
+
             {/* Service deactivation */}
             <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -3028,36 +3064,24 @@ export default function EmailServiceAdminPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="shared" className="mt-0">
+          <TabsContent value="governance" className="mt-0">
             {selectedOrgId && (
-              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="shared" />
-            )}
-          </TabsContent>
-
-          <TabsContent value="quarantine" className="mt-0">
-            {selectedOrgId && (
-              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="quarantine" />
-            )}
-          </TabsContent>
-
-          <TabsContent value="dlp" className="mt-0">
-            {selectedOrgId && (
-              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="dlp" />
-            )}
-          </TabsContent>
-
-          <TabsContent value="ediscovery" className="mt-0">
-            {selectedOrgId && (
-              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="ediscovery" />
-            )}
-          </TabsContent>
-
-          <TabsContent value="audit" className="mt-0">
-            {selectedOrgId && (
-              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="audit" />
+              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} />
             )}
           </TabsContent>
         </Tabs>
+
+        <StepUpMfaDialog
+          open={mfaStepUpOpen}
+          onOpenChange={setMfaStepUpOpen}
+          actionLabel="Update Organization MFA Enforcement"
+          onVerified={async (freshToken) => {
+            if (pendingEnforceValue !== null) {
+              await handleToggleEnforceMfa(pendingEnforceValue, freshToken)
+              setPendingEnforceValue(null)
+            }
+          }}
+        />
 
         {/* =========================================================================
             DIALOGS

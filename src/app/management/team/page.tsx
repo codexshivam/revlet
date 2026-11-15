@@ -17,6 +17,7 @@ import {
   PERMISSION_GROUPS,
   ORG_ADMIN_PERMISSION,
   ADMIN_ALL_PERMISSIONS,
+  RBAC_ROLE_PRESETS,
 } from "@/lib/team-permissions"
 import {
   Card,
@@ -565,6 +566,30 @@ export default function TeamManagementPage() {
                       </p>
                     ) : (
                       <div className="space-y-2.5 pt-1">
+                        <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mr-1">
+                            Role Presets:
+                          </span>
+                          {RBAC_ROLE_PRESETS.filter((r) => r.id !== "ORG_ADMIN" && r.id !== "CUSTOM").map((preset) => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() =>
+                                setOrgAccessMap((prev) => ({
+                                  ...prev,
+                                  [oid]: {
+                                    mode: "services",
+                                    permissions: [...preset.permissions],
+                                  },
+                                }))
+                              }
+                              title={preset.description}
+                              className="px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100 text-[11px] font-medium text-slate-700 transition-colors"
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
                         {PERMISSION_GROUPS.map((group) => {
                           const groupOptions = SERVICE_PERMISSION_OPTIONS.filter(
                             (opt) => opt.group === group

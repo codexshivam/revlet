@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import net from 'net';
+import tls from 'tls';
 import { adminAuth, adminDb } from '@/firebase/admin';
 
 function awsHmac(key: crypto.BinaryLike, data: string): Buffer {
@@ -183,7 +185,7 @@ function buildInstitutionalEmailContent(
 
   const footerNote =
     params.footerNote ||
-    `Automated security & platform notification from Revlet (${senderBadge}).`;
+    `Automated no-reply notification from Revlet (${senderBadge}). Please do not reply directly to this email.`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -259,8 +261,241 @@ function buildInstitutionalEmailContent(
   return { html, text };
 }
 
+function extractEmailAddress(formatted: string): string {
+  const match = formatted.match(/<([^>]+)>/);
+  return (match ? match[1] : formatted).trim().toLowerCase();
+}
+
+function encodeMimeHeader(value: string): string {
+  if (/^[\x20-\x7e]*$/.test(value)) return value;
+  return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
+}
+
+function dotStuffSmtpBody(raw: string): string {
+  return raw
+    .replace(/\r?\n/g, '\r\n')
+    .replace(/^\./gm, '..');
+}
+
+async function sendViaAwsSesSmtp(params: {
+  fromAddress: string;
+  recipients: string[];
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<boolean> {
+  const host = (process.env.AWS_SES_SMTP_HOST || 'email-smtp.ap-southeast-2.amazonaws.com').trim();
+  const port = Number.parseInt((process.env.AWS_SES_SMTP_PORT || '465').trim(), 10) || 465;
+  const user = (process.env.AWS_SES_SMTP_USER || '').trim();
+  const password = (process.env.AWS_SES_SMTP_PASSWORD || '').trim();
+
+  if (!host || !user || !password || params.recipients.length === 0) {
+    return false;
+  }
+
+  const envelopeFrom = extractEmailAddress(params.fromAddress);
+  const boundary = `revlet_${crypto.randomBytes(12).toString('hex')}`;
+  const messageId = `<${crypto.randomUUID()}@revlet.me>`;
+  const mimePayload = [
+    `From: ${params.fromAddress}`,
+    `To: ${params.recipients.join(', ')}`,
+    `Subject: ${encodeMimeHeader(params.subject)}`,
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: ${messageId}`,
+    `MIME-Version: 1.0`,
+    `Auto-Submitted: auto-generated`,
+    `X-Auto-Response-Suppress: All`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/plain; charset=UTF-8`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    Buffer.from(params.text, 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n'),
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/html; charset=UTF-8`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    Buffer.from(params.html, 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n'),
+    ``,
+    `--${boundary}--`,
+    ``,
+  ].join('\r\n');
+
+  const runSmtpSession = (useImplicitTls: boolean, targetPort: number) =>
+    new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        try {
+          socket.destroy();
+        } catch {
+          // ignore
+        }
+        resolve(ok);
+      };
+
+      let socket: net.Socket | tls.TLSSocket = useImplicitTls
+        ? tls.connect(targetPort, host, { servername: host, rejectUnauthorized: true })
+        : net.connect(targetPort, host);
+
+      socket.setTimeout(12000, () => finish(false));
+      socket.on('error', () => finish(false));
+
+      let buffer = '';
+      let stage = useImplicitTls ? 'greeting' : 'plain_greeting';
+      let rcptIndex = 0;
+
+      const writeLine = (line: string) => {
+        socket.write(`${line}\r\n`);
+      };
+
+      const attachDataHandler = (sock: net.Socket | tls.TLSSocket) => {
+        sock.on('data', (chunk) => {
+          buffer += chunk.toString('utf8');
+          if (!buffer.includes('\n')) return;
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (!line || /^\d{3}-/.test(line)) continue;
+            const code = Number.parseInt(line.slice(0, 3), 10);
+            if (Number.isNaN(code) || code >= 400) {
+              finish(false);
+              return;
+            }
+            if (stage === 'plain_greeting' && code === 220) {
+              stage = 'plain_ehlo';
+              writeLine('EHLO app.revlet.me');
+            } else if (stage === 'plain_ehlo' && code === 250) {
+              stage = 'starttls';
+              writeLine('STARTTLS');
+            } else if (stage === 'starttls' && code === 220) {
+              stage = 'greeting_tls';
+              const upgraded = tls.connect({
+                socket: sock as net.Socket,
+                servername: host,
+                rejectUnauthorized: true,
+              });
+              upgraded.setTimeout(12000, () => finish(false));
+              upgraded.on('error', () => finish(false));
+              socket = upgraded;
+              buffer = '';
+              attachDataHandler(upgraded);
+              stage = 'ehlo';
+              writeLine('EHLO app.revlet.me');
+              return;
+            } else if (stage === 'greeting' && code === 220) {
+              stage = 'ehlo';
+              writeLine('EHLO app.revlet.me');
+            } else if (stage === 'ehlo' && code === 250) {
+              stage = 'auth';
+              writeLine('AUTH LOGIN');
+            } else if (stage === 'auth' && code === 334) {
+              stage = 'auth_user';
+              writeLine(Buffer.from(user, 'utf8').toString('base64'));
+            } else if (stage === 'auth_user' && code === 334) {
+              stage = 'auth_pass';
+              writeLine(Buffer.from(password, 'utf8').toString('base64'));
+            } else if (stage === 'auth_pass' && code === 235) {
+              stage = 'mail_from';
+              writeLine(`MAIL FROM:<${envelopeFrom}>`);
+            } else if (stage === 'mail_from' && code === 250) {
+              stage = 'rcpt_to';
+              rcptIndex = 0;
+              writeLine(`RCPT TO:<${params.recipients[rcptIndex]}>`);
+            } else if (stage === 'rcpt_to' && (code === 250 || code === 251)) {
+              rcptIndex += 1;
+              if (rcptIndex < params.recipients.length) {
+                writeLine(`RCPT TO:<${params.recipients[rcptIndex]}>`);
+              } else {
+                stage = 'data';
+                writeLine('DATA');
+              }
+            } else if (stage === 'data' && code === 354) {
+              stage = 'body';
+              socket.write(`${dotStuffSmtpBody(mimePayload)}\r\n.\r\n`);
+            } else if (stage === 'body' && code === 250) {
+              stage = 'quit';
+              writeLine('QUIT');
+              finish(true);
+              return;
+            }
+          }
+        });
+      };
+
+      attachDataHandler(socket);
+    });
+
+  // Prefer implicit TLS on 465 for lowest serverless latency; fallback to STARTTLS if configured port differs
+  if (port === 465) {
+    return runSmtpSession(true, 465);
+  }
+  const ok = await runSmtpSession(false, port);
+  if (ok) return true;
+  return runSmtpSession(true, 465);
+}
+
+async function dispatchRevletSesEmail(params: {
+  payload: RevletEmailPayload;
+  fromAddress: string;
+  senderBadge: string;
+  defaultCta?: { url: string; label: string };
+}): Promise<{ sent: boolean; status: number }> {
+  const recipients = (Array.isArray(params.payload.to) ? params.payload.to : [params.payload.to])
+    .map((addr) => addr.trim().toLowerCase())
+    .filter((addr) => addr.includes('@'));
+
+  if (recipients.length === 0) {
+    return { sent: false, status: 400 };
+  }
+
+  const { html, text } = buildInstitutionalEmailContent(
+    params.payload,
+    params.senderBadge,
+    params.defaultCta
+  );
+
+  // Try AWS SES v2 API first, then fallback to authenticated AWS SES SMTP relay
+  const apiRes = await callAwsSesV2Api('POST', '/v2/email/outbound-emails', {
+    FromEmailAddress: params.fromAddress,
+    Destination: {
+      ToAddresses: recipients,
+    },
+    Content: {
+      Simple: {
+        Subject: { Data: params.payload.subject, Charset: 'UTF-8' },
+        Body: {
+          Html: { Data: html, Charset: 'UTF-8' },
+          Text: { Data: text, Charset: 'UTF-8' },
+        },
+        Headers: [
+          { Name: 'Auto-Submitted', Value: 'auto-generated' },
+          { Name: 'X-Auto-Response-Suppress', Value: 'All' },
+        ],
+      },
+    },
+  });
+
+  if (apiRes.ok) {
+    return { sent: true, status: apiRes.status };
+  }
+
+  const smtpOk = await sendViaAwsSesSmtp({
+    fromAddress: params.fromAddress,
+    recipients,
+    subject: params.payload.subject,
+    html,
+    text,
+  });
+
+  return { sent: smtpOk, status: smtpOk ? 200 : apiRes.status || 502 };
+}
+
 /**
- * Sends a branded Revlet operational/governance alert email from `alerts@revlet.me` via AWS SES v2.
+ * Sends a branded Revlet operational/governance alert email from `alerts@revlet.me` (no-reply).
  */
 export async function sendRevletAlertEmail(params: {
   to: string;
@@ -272,132 +507,59 @@ export async function sendRevletAlertEmail(params: {
   ctaUrl?: string;
   ctaLabel?: string;
 }): Promise<boolean> {
-  const to = (params.to || '').trim().toLowerCase();
-  if (!to || !to.includes('@')) return false;
-
   const fromAddress = (
     process.env.REVLET_ALERTS_FROM || 'Revlet Alerts <alerts@revlet.me>'
   ).trim();
-  const replyToAddress = (
-    process.env.REVLET_SUPPORT_EMAIL || 'support@revlet.me'
-  ).trim();
 
-  const { html, text } = buildInstitutionalEmailContent(params, 'alerts@revlet.me', {
-    url: 'https://app.revlet.me/services/email',
-    label: 'Open Revlet Console',
-  });
-
-  const res = await callAwsSesV2Api('POST', '/v2/email/outbound-emails', {
-    FromEmailAddress: fromAddress,
-    ReplyToAddresses: [replyToAddress],
-    Destination: {
-      ToAddresses: [to],
-    },
-    Content: {
-      Simple: {
-        Subject: { Data: params.subject, Charset: 'UTF-8' },
-        Body: {
-          Html: { Data: html, Charset: 'UTF-8' },
-          Text: { Data: text, Charset: 'UTF-8' },
-        },
-      },
+  const res = await dispatchRevletSesEmail({
+    payload: params,
+    fromAddress,
+    senderBadge: 'alerts@revlet.me',
+    defaultCta: {
+      url: 'https://app.revlet.me/services/email',
+      label: 'Open Revlet Console',
     },
   });
 
-  return res.ok;
+  return res.sent;
 }
 
 /**
- * Sends a branded Revlet Authentication / MFA Security email from `accounts@revlet.me` via AWS SES v2.
+ * Sends a branded Revlet Authentication / MFA Security email from `accounts@revlet.me` (no-reply).
  */
 export async function sendRevletAccountEmail(
   params: RevletEmailPayload
 ): Promise<{ sent: boolean; status: number }> {
-  const recipients = (Array.isArray(params.to) ? params.to : [params.to])
-    .map((addr) => addr.trim().toLowerCase())
-    .filter((addr) => addr.includes('@'));
-
-  if (recipients.length === 0) {
-    return { sent: false, status: 400 };
-  }
-
   const fromAddress = (
     process.env.REVLET_ACCOUNTS_FROM || 'Revlet Accounts <accounts@revlet.me>'
   ).trim();
-  const replyToAddress = (
-    process.env.REVLET_SUPPORT_EMAIL || 'support@revlet.me'
-  ).trim();
 
-  const { html, text } = buildInstitutionalEmailContent(params, 'accounts@revlet.me');
-
-  const res = await callAwsSesV2Api('POST', '/v2/email/outbound-emails', {
-    FromEmailAddress: fromAddress,
-    ReplyToAddresses: [replyToAddress],
-    Destination: {
-      ToAddresses: recipients,
-    },
-    Content: {
-      Simple: {
-        Subject: { Data: params.subject, Charset: 'UTF-8' },
-        Body: {
-          Html: { Data: html, Charset: 'UTF-8' },
-          Text: { Data: text, Charset: 'UTF-8' },
-        },
-      },
-    },
+  return dispatchRevletSesEmail({
+    payload: params,
+    fromAddress,
+    senderBadge: 'accounts@revlet.me',
   });
-
-  return { sent: res.ok, status: res.status };
 }
 
 /**
- * Sends a Delivery Status Notification (DSN) / bounce report from `mailer-daemon@revlet.me` via AWS SES v2.
+ * Sends a Delivery Status Notification (DSN) / bounce report from `mailer-daemon@revlet.me` (no-reply).
  */
 export async function sendRevletMailerDaemonEmail(
   params: RevletEmailPayload
 ): Promise<{ sent: boolean; status: number }> {
-  const recipients = (Array.isArray(params.to) ? params.to : [params.to])
-    .map((addr) => addr.trim().toLowerCase())
-    .filter((addr) => addr.includes('@'));
-
-  if (recipients.length === 0) {
-    return { sent: false, status: 400 };
-  }
-
   const fromAddress = (
     process.env.REVLET_MAILER_DAEMON_FROM ||
     'Mail Delivery Subsystem <mailer-daemon@revlet.me>'
   ).trim();
-  const replyToAddress = (
-    process.env.REVLET_SUPPORT_EMAIL || 'support@revlet.me'
-  ).trim();
 
-  const { html, text } = buildInstitutionalEmailContent(
-    params,
-    'mailer-daemon@revlet.me',
-    {
+  return dispatchRevletSesEmail({
+    payload: params,
+    fromAddress,
+    senderBadge: 'mailer-daemon@revlet.me',
+    defaultCta: {
       url: 'https://mail.revlet.me',
       label: 'Open RevletMail',
-    }
-  );
-
-  const res = await callAwsSesV2Api('POST', '/v2/email/outbound-emails', {
-    FromEmailAddress: fromAddress,
-    ReplyToAddresses: [replyToAddress],
-    Destination: {
-      ToAddresses: recipients,
-    },
-    Content: {
-      Simple: {
-        Subject: { Data: params.subject, Charset: 'UTF-8' },
-        Body: {
-          Html: { Data: html, Charset: 'UTF-8' },
-          Text: { Data: text, Charset: 'UTF-8' },
-        },
-      },
     },
   });
-
-  return { sent: res.ok, status: res.status };
 }
 

@@ -37,8 +37,14 @@ export function DashboardShell({
         aria-label="Loading workspace"
         className="min-h-screen w-full flex items-center justify-center bg-white"
       >
-        <div className="font-headline font-bold text-[30px] tracking-tight text-slate-950 select-none">
-          Revlet
+        <div className="flex flex-col items-center gap-3 animate-fade-up-in">
+          <div className="font-headline font-bold text-[30px] tracking-tight text-slate-950 select-none">
+            Revlet
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+            <span>Loading workspace...</span>
+          </div>
         </div>
       </div>
     )
@@ -67,7 +73,7 @@ export function DashboardShell({
               className
             )}
           >
-            <div className="space-y-6 sm:space-y-8 flex-1">{children}</div>
+            <div className="space-y-6 sm:space-y-8 flex-1 animate-fade-up-in">{children}</div>
           </div>
         </main>
       </div>

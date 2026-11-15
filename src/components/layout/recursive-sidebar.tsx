@@ -62,7 +62,7 @@ export function RecursiveSidebar({
             onClick={onNavigate}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "w-full flex items-center justify-between px-2.5 h-[34px] rounded-lg text-xs transition-colors group",
+              "w-full flex items-center justify-between px-2.5 h-[34px] rounded-lg text-xs transition-all duration-150 active:scale-[0.98] group",
               isActive
                 ? "bg-white text-slate-950 font-semibold border border-slate-200 shadow-xs"
                 : "text-slate-700 hover:bg-slate-100 hover:text-slate-950 font-medium"
@@ -72,7 +72,7 @@ export function RecursiveSidebar({
               <item.icon
                 aria-hidden="true"
                 className={cn(
-                  "w-4 h-4 shrink-0 transition-colors",
+                  "w-4 h-4 shrink-0 transition-all duration-150 group-hover:scale-110",
                   isActive ? "text-slate-950 stroke-[2]" : "text-slate-500 group-hover:text-slate-700"
                 )}
               />
@@ -132,7 +132,7 @@ export function RecursiveSidebar({
               onClick={onNavigate}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "w-full flex items-center gap-2.5 px-2.5 h-[34px] rounded-lg text-xs transition-colors group",
+                "w-full flex items-center gap-2.5 px-2.5 h-[34px] rounded-lg text-xs transition-all duration-150 active:scale-[0.98] group",
                 isActive
                   ? "bg-white text-slate-950 font-semibold border border-slate-200 shadow-xs"
                   : "text-slate-700 hover:bg-slate-100 hover:text-slate-950 font-medium"
@@ -141,7 +141,7 @@ export function RecursiveSidebar({
               <item.icon
                 aria-hidden="true"
                 className={cn(
-                  "w-4 h-4 shrink-0 transition-colors",
+                  "w-4 h-4 shrink-0 transition-all duration-150 group-hover:scale-110",
                   isActive ? "text-slate-950 stroke-[2]" : "text-slate-500 group-hover:text-slate-700"
                 )}
               />
@@ -154,14 +154,14 @@ export function RecursiveSidebar({
           href="https://mail.revlet.me"
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full flex items-center justify-between px-2.5 h-[34px] rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950 transition-colors group"
+          className="w-full flex items-center justify-between px-2.5 h-[34px] rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950 transition-all duration-150 active:scale-[0.98] group"
           title="Open RevletMail Webmail"
         >
           <div className="flex items-center gap-2.5 truncate">
-            <Mail className="w-4 h-4 shrink-0 text-slate-500 group-hover:text-slate-700 transition-colors" />
+            <Mail className="w-4 h-4 shrink-0 text-slate-500 group-hover:text-slate-700 group-hover:scale-110 transition-all duration-150" />
             <span className="truncate">RevletMail</span>
           </div>
-          <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+          <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-150" />
         </a>
       </div>
     </aside>

@@ -53,11 +53,11 @@ export function TopHeader() {
           size="sm"
           onClick={() => window.dispatchEvent(new CustomEvent("revlet:open-command-palette"))}
           aria-label="Open quick navigation command palette"
-          className="hidden md:inline-flex h-8 px-2.5 text-xs font-normal gap-2 text-slate-500 border-slate-200 bg-slate-50/70 hover:bg-slate-100 hover:text-slate-900 rounded-lg transition-colors"
+          className="group hidden md:inline-flex h-8 px-2.5 text-xs font-normal gap-2 text-slate-500 border-slate-200 bg-slate-50/70 hover:bg-slate-100 hover:text-slate-900 rounded-lg transition-all duration-150"
         >
-          <Search className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+          <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 group-hover:scale-110 transition-all duration-150" aria-hidden="true" />
           <span>Quick jump</span>
-          <kbd className="ml-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+          <kbd className="ml-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500 group-hover:border-slate-300 group-hover:text-slate-700 transition-colors duration-150">
             ⌘K
           </kbd>
         </Button>
@@ -65,9 +65,9 @@ export function TopHeader() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2.5 text-xs font-medium gap-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className="group h-8 px-2.5 text-xs font-medium gap-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all duration-150"
           >
-            <LifeBuoy className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+            <LifeBuoy className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 group-hover:rotate-12 transition-all duration-200" aria-hidden="true" />
             <span className="hidden sm:inline">Support</span>
           </Button>
         </Link>

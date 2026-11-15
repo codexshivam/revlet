@@ -64,24 +64,24 @@ export function CommandPalette() {
 
         <CommandGroup heading="Navigation">
           <CommandItem onSelect={() => navigate("/account/home")}>
-            <LayoutDashboard className="mr-2 h-4 w-4 text-blue-600" />
+            <LayoutDashboard className="mr-2 h-4 w-4 text-blue-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Account Home</span>
             <CommandShortcut>Home</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/services/dns")}>
-            <Globe className="mr-2 h-4 w-4 text-emerald-600" />
+            <Globe className="mr-2 h-4 w-4 text-emerald-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>DNS Management</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/services/email")}>
-            <Mail className="mr-2 h-4 w-4 text-blue-600" />
+            <Mail className="mr-2 h-4 w-4 text-blue-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email Service</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/management/team")}>
-            <Users className="mr-2 h-4 w-4 text-slate-600" />
+            <Users className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Team Management</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/management/settings")}>
-            <Settings className="mr-2 h-4 w-4 text-slate-600" />
+            <Settings className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Account Settings</span>
           </CommandItem>
         </CommandGroup>
@@ -90,19 +90,19 @@ export function CommandPalette() {
 
         <CommandGroup heading="Email Directory">
           <CommandItem onSelect={() => navigate("/services/email?tab=users")}>
-            <Mail className="mr-2 h-4 w-4 text-slate-600" />
+            <Mail className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email: Users Directory</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/services/email?tab=groups")}>
-            <Users className="mr-2 h-4 w-4 text-slate-600" />
+            <Users className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email: Groups</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/services/email?tab=suspended")}>
-            <ShieldAlert className="mr-2 h-4 w-4 text-amber-600" />
+            <ShieldAlert className="mr-2 h-4 w-4 text-amber-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email: Suspended Accounts</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/services/email?tab=settings")}>
-            <Settings className="mr-2 h-4 w-4 text-slate-600" />
+            <Settings className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email: Settings &amp; DNS</span>
           </CommandItem>
         </CommandGroup>
@@ -111,11 +111,11 @@ export function CommandPalette() {
 
         <CommandGroup heading="Quick Actions">
           <CommandItem onSelect={() => navigate("/management/team")}>
-            <UserPlus className="mr-2 h-4 w-4 text-blue-600" />
+            <UserPlus className="mr-2 h-4 w-4 text-blue-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Invite Team Member</span>
           </CommandItem>
           <CommandItem onSelect={() => navigate("/support")}>
-            <LifeBuoy className="mr-2 h-4 w-4 text-slate-600" />
+            <LifeBuoy className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Help &amp; Support</span>
           </CommandItem>
           <CommandItem
@@ -124,7 +124,7 @@ export function CommandPalette() {
               window.open("https://mail.revlet.me", "_blank", "noopener,noreferrer")
             }}
           >
-            <ExternalLink className="mr-2 h-4 w-4 text-blue-600" />
+            <ExternalLink className="mr-2 h-4 w-4 text-blue-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Open RevletMail Webmail</span>
             <CommandShortcut>↗</CommandShortcut>
           </CommandItem>
@@ -149,14 +149,16 @@ export function CommandPalette() {
                       })
                     }}
                   >
-                    <Building2 className="mr-2 h-4 w-4 text-slate-500" />
+                    <Building2 className="mr-2 h-4 w-4 text-slate-500 group-hover:!text-white group-data-[selected='true']:!text-white" />
                     <span className="truncate font-medium">{org.name}</span>
                     {org.domain && (
                       <span className="ml-2 text-xs text-slate-400 group-hover:text-white/85 group-data-[selected='true']:text-white/85 truncate transition-colors">
                         {org.domain}
                       </span>
                     )}
-                    {isActive && <Check className="ml-auto h-4 w-4 text-primary" />}
+                    {isActive && (
+                      <Check className="ml-auto h-4 w-4 text-primary group-hover:!text-white group-data-[selected='true']:!text-white" />
+                    )}
                   </CommandItem>
                 )
               })}

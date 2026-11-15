@@ -5,6 +5,7 @@ import { adminDb } from '@/firebase/admin';
 import {
   resolveOrganizationOwnerEmail,
   sendRevletAlertEmail,
+  sendRevletMailerDaemonEmail,
 } from '@/lib/revlet-alerts';
 
 const snsCertCache = new Map<string, string>();
@@ -248,6 +249,47 @@ export async function POST(req: NextRequest) {
 
     if (result.duplicate) {
       return NextResponse.json({ ok: true, deduplicated: true });
+    }
+
+    if (
+      isBounce &&
+      sourceEmail &&
+      sourceEmail !== 'mailer-daemon@revlet.me' &&
+      !sourceEmail.startsWith('mailer-daemon@')
+    ) {
+      try {
+        const bouncedRecipients: string[] = Array.isArray(
+          sesEvent.bounce?.bouncedRecipients
+        )
+          ? sesEvent.bounce.bouncedRecipients
+              .map((r: any) => String(r?.emailAddress || '').trim())
+              .filter(Boolean)
+          : [];
+        const diagnosticCode =
+          sesEvent.bounce?.bouncedRecipients?.[0]?.diagnosticCode ||
+          sesEvent.bounce?.bounceSubType ||
+          'Permanent delivery failure';
+
+        await sendRevletMailerDaemonEmail({
+          to: sourceEmail,
+          subject: 'Delivery Status Notification (Failure)',
+          title: 'Delivery Status Notification (Failure)',
+          subtitle: 'Mail Delivery Subsystem · mailer-daemon@revlet.me',
+          summaryLines: [
+            'An error occurred while trying to deliver your message to the following recipient(s):',
+            ...(bouncedRecipients.length > 0
+              ? bouncedRecipients
+              : ['Unknown recipient']),
+          ],
+          details: [
+            { label: 'Reporting MTA', value: 'mx.revlet.me (mailer-daemon@revlet.me)' },
+            { label: 'Bounce Type', value: String(sesEvent.bounce?.bounceType || 'Permanent') },
+            { label: 'Diagnostic', value: String(diagnosticCode) },
+          ],
+        });
+      } catch {
+        // Non-blocking DSN notification
+      }
     }
 
     if (result.autoPaused && !result.wasAlreadyPaused) {

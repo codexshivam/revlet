@@ -1,11 +1,22 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { loadEnvConfig } from '@next/env';
+import * as fs from 'fs';
+
+if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY && !process.env.FIREBASE_PRIVATE_KEY) {
+  try {
+    loadEnvConfig(process.cwd());
+  } catch {
+    // Ignore env loading errors in edge/restricted runtimes
+  }
+}
 
 const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+const googleAppCredsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 const firebaseClientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 const firebasePrivateKey = process.env.FIREBASE_PRIVATE_KEY;
-const firebaseProjectId = process.env.FIREBASE_PROJECT_ID;
+const firebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'revlet';
 
 const apps = getApps();
 let app;
@@ -26,10 +37,23 @@ if (!apps.length) {
 
       const credentials = JSON.parse(jsonStr);
       app = initializeApp({
-        credential: cert(credentials)
+        credential: cert(credentials),
+        projectId: credentials.project_id || firebaseProjectId,
       });
     } catch (e) {
       console.warn("Could not parse FIREBASE_SERVICE_ACCOUNT_KEY, trying fallback credentials", e);
+    }
+  }
+
+  if (!app && googleAppCredsPath && fs.existsSync(googleAppCredsPath)) {
+    try {
+      const credentials = JSON.parse(fs.readFileSync(googleAppCredsPath, 'utf-8'));
+      app = initializeApp({
+        credential: cert(credentials),
+        projectId: credentials.project_id || firebaseProjectId,
+      });
+    } catch (e) {
+      console.warn("Could not initialize Firebase Admin from GOOGLE_APPLICATION_CREDENTIALS", e);
     }
   }
 

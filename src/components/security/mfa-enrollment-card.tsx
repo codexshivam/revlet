@@ -2,49 +2,85 @@
 
 import { useCallback, useEffect, useState } from "react"
 import QRCode from "qrcode"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Smartphone, KeyRound, Mail, Loader2, Trash2, Copy, Check } from "lucide-react"
 import { useUser } from "@/firebase"
 import { toast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Smartphone,
+  KeyRound,
+  Mail,
+  Trash2,
+  Loader2,
+  Copy,
+  Check,
+  Plus,
+} from "lucide-react"
 
-function bufferToBase64Url(buf: ArrayBuffer): string {
+function sanitizeMfaMessage(input: unknown, fallback = "Action could not be completed. Please try again."): string {
+  const raw = typeof input === "string" ? input : (input as any)?.message || ""
+  if (!raw) return fallback
+  if (/webauthn|fido2|totp|firebase|firestore|stalwart|jmap|notallowederror|abort|securityerror/i.test(raw)) {
+    if (/cancel|notallowederror|abort/i.test(raw)) {
+      return "Verification was cancelled or timed out."
+    }
+    return fallback
+  }
+  return raw
+}
+
+function b64uToBuf(s: string): ArrayBuffer {
+  const b = atob((s + "=".repeat((4 - (s.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"))
+  const a = new Uint8Array(b.length)
+  for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i)
+  return a.buffer
+}
+
+function bufToB64u(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf)
   let str = ""
   for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i])
   return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
-function base64UrlToBuffer(b64u: string): ArrayBuffer {
-  const pad = "=".repeat((4 - (b64u.length % 4)) % 4)
-  const b64 = (b64u + pad).replace(/-/g, "+").replace(/_/g, "/")
-  const bin = atob(b64)
-  const arr = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
-  return arr.buffer
-}
-
 export function MfaEnrollmentCard() {
   const { user } = useUser()
   const [loading, setLoading] = useState(true)
-  const [totpEnabled, setTotpEnabled] = useState(false)
-  const [totpSecret, setTotpSecret] = useState<string | null>(null)
-  const [totpUri, setTotpUri] = useState<string | null>(null)
-  const [totpQrDataUrl, setTotpQrDataUrl] = useState<string | null>(null)
-  const [totpCode, setTotpCode] = useState("")
-  const [passkeys, setPasskeys] = useState<Array<{ id: string; label: string; createdAt: string }>>([])
-  const [passkeyLabel, setPasskeyLabel] = useState("MacBook / Security Key")
-  const [secondaryEmail, setSecondaryEmail] = useState("")
-  const [secondaryEmailVerified, setSecondaryEmailVerified] = useState(false)
-  const [emailOtpSent, setEmailOtpSent] = useState(false)
-  const [emailOtpCode, setEmailOtpCode] = useState("")
-  const [showDisableTotp, setShowDisableTotp] = useState(false)
-  const [showAddPasskey, setShowAddPasskey] = useState(false)
-  const [showEditEmail, setShowEditEmail] = useState(false)
-  const [copiedSecret, setCopiedSecret] = useState(false)
-  const [busy, setBusy] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  const loadMfaStatus = useCallback(async () => {
+  // TOTP
+  const [totpEnabled, setTotpEnabled] = useState(false)
+  const [pendingSecret, setPendingSecret] = useState<string | null>(null)
+  const [otpauthUri, setOtpauthUri] = useState<string | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [totpVerifyCode, setTotpVerifyCode] = useState("")
+  const [secretCopied, setSecretCopied] = useState(false)
+
+  useEffect(() => {
+    if (!otpauthUri) {
+      setQrDataUrl(null)
+      return
+    }
+    QRCode.toDataURL(otpauthUri, { width: 176, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null))
+  }, [otpauthUri])
+
+  // Passkeys
+  const [passkeys, setPasskeys] = useState<Array<{ id: string; label: string; createdAt: string }>>([])
+  const [passkeyLabel, setPasskeyLabel] = useState("")
+  const [showAddPasskey, setShowAddPasskey] = useState(false)
+
+  // Secondary email
+  const [secondaryEmail, setSecondaryEmail] = useState("")
+  const [secondaryVerified, setSecondaryVerified] = useState(false)
+  const [emailCodeSent, setEmailCodeSent] = useState(false)
+  const [emailVerifyCode, setEmailVerifyCode] = useState("")
+
+  const loadStatus = useCallback(async () => {
     if (!user) return
     setLoading(true)
     try {
@@ -57,7 +93,7 @@ export function MfaEnrollmentCard() {
         setTotpEnabled(Boolean(data.mfa.totpEnabled))
         setPasskeys(Array.isArray(data.mfa.passkeys) ? data.mfa.passkeys : [])
         setSecondaryEmail(data.mfa.secondaryEmail || "")
-        setSecondaryEmailVerified(Boolean(data.mfa.secondaryEmailVerified))
+        setSecondaryVerified(Boolean(data.mfa.secondaryEmailVerified))
       }
     } catch {
       // ignore
@@ -67,8 +103,8 @@ export function MfaEnrollmentCard() {
   }, [user])
 
   useEffect(() => {
-    loadMfaStatus()
-  }, [loadMfaStatus])
+    loadStatus()
+  }, [loadStatus])
 
   const callMfa = async (payload: Record<string, unknown>) => {
     if (!user) throw new Error("Not signed in")
@@ -82,76 +118,87 @@ export function MfaEnrollmentCard() {
       body: JSON.stringify(payload),
     })
     const data = await res.json()
-    if (!res.ok || !data.ok) throw new Error(data.error || "MFA action failed")
+    if (!res.ok || !data.ok) {
+      throw new Error(sanitizeMfaMessage(data.error, "Verification request failed."))
+    }
     return data
   }
 
   const handleStartTotp = async () => {
-    setBusy("totp")
+    setBusy(true)
     try {
       const data = await callMfa({ action: "totp_setup" })
-      setTotpSecret(data.secret)
-      setTotpUri(data.otpauthUri)
-      if (data.otpauthUri) {
-        const qr = await QRCode.toDataURL(data.otpauthUri, { width: 176, margin: 1 })
-        setTotpQrDataUrl(qr)
-      }
+      setPendingSecret(data.secret)
+      setOtpauthUri(data.otpauthUri)
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err?.message })
+      toast({
+        variant: "destructive",
+        title: "Setup Failed",
+        description: sanitizeMfaMessage(err, "Could not start authenticator setup."),
+      })
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
   const handleEnableTotp = async () => {
-    setBusy("totp")
+    setBusy(true)
     try {
-      await callMfa({ action: "totp_enable", code: totpCode })
-      setTotpSecret(null)
-      setTotpUri(null)
-      setTotpQrDataUrl(null)
-      setTotpCode("")
-      toast({ title: "Authenticator App Enabled" })
-      await loadMfaStatus()
+      await callMfa({ action: "totp_enable", code: totpVerifyCode })
+      setPendingSecret(null)
+      setOtpauthUri(null)
+      setTotpVerifyCode("")
+      toast({
+        title: "Authenticator Enabled",
+        description: "6-digit verification codes are now active on your account.",
+      })
+      await loadStatus()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Invalid code", description: err?.message })
+      toast({
+        variant: "destructive",
+        title: "Invalid Code",
+        description: sanitizeMfaMessage(err, "Invalid 6-digit verification code."),
+      })
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
   const handleDisableTotp = async () => {
-    if (!totpCode.trim()) {
-      toast({ variant: "destructive", title: "Code required", description: "Enter your current 6-digit code to disable." })
-      return
-    }
-    setBusy("totp")
+    setBusy(true)
     try {
-      await callMfa({ action: "totp_disable", code: totpCode })
-      setTotpCode("")
-      toast({ title: "Authenticator App Disabled" })
-      await loadMfaStatus()
+      await callMfa({ action: "totp_disable" })
+      toast({ title: "Authenticator Disabled" })
+      await loadStatus()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err?.message })
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: sanitizeMfaMessage(err, "Could not disable authenticator."),
+      })
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
   const handleRegisterPasskey = async () => {
     if (typeof window === "undefined" || !window.PublicKeyCredential) {
-      toast({ variant: "destructive", title: "Unsupported", description: "WebAuthn passkeys are not supported in this browser." })
+      toast({
+        variant: "destructive",
+        title: "Unsupported Browser",
+        description: "Passkeys are not supported in this browser.",
+      })
       return
     }
-    setBusy("passkey")
+    setBusy(true)
     try {
       const opt = await callMfa({ action: "passkey_register_options" })
       const cred = (await navigator.credentials.create({
         publicKey: {
-          challenge: base64UrlToBuffer(opt.challenge),
+          challenge: b64uToBuf(opt.challenge),
           rp: opt.rp,
           user: {
-            id: base64UrlToBuffer(opt.user.id),
+            id: b64uToBuf(opt.user.id),
             name: opt.user.name,
             displayName: opt.user.displayName,
           },
@@ -163,473 +210,468 @@ export function MfaEnrollmentCard() {
           timeout: 60000,
         },
       })) as PublicKeyCredential | null
-
-      if (!cred) throw new Error("Passkey creation cancelled.")
-      const response = cred.response as AuthenticatorAttestationResponse
-
+      if (!cred) throw new Error("Cancelled")
+      const resp = cred.response as AuthenticatorAttestationResponse
       await callMfa({
         action: "passkey_register_verify",
-        credentialId: bufferToBase64Url(cred.rawId),
-        clientDataJSON: bufferToBase64Url(response.clientDataJSON),
-        label: passkeyLabel.trim() || "Security Passkey",
+        credentialId: bufToB64u(cred.rawId),
+        clientDataJSON: bufToB64u(resp.clientDataJSON),
+        label: passkeyLabel.trim() || "Security Key",
       })
-      toast({ title: "Passkey Registered" })
-      await loadMfaStatus()
+      toast({
+        title: "Passkey Registered",
+        description: "Your passkey is ready for sign-in and verification.",
+      })
+      setPasskeyLabel("")
+      setShowAddPasskey(false)
+      await loadStatus()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Passkey Error", description: err?.message })
+      toast({
+        variant: "destructive",
+        title: "Passkey Registration Failed",
+        description: sanitizeMfaMessage(err, "Could not register passkey."),
+      })
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
-  const handleRemovePasskey = async (credentialId: string) => {
-    setBusy(`pk-${credentialId}`)
+  const handleRemovePasskey = async (id: string) => {
+    setBusy(true)
     try {
-      await callMfa({ action: "passkey_remove", credentialId })
+      await callMfa({ action: "passkey_remove", credentialId: id })
       toast({ title: "Passkey Removed" })
-      await loadMfaStatus()
+      await loadStatus()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err?.message })
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: sanitizeMfaMessage(err, "Could not remove passkey."),
+      })
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
   const handleSendSecondaryEmail = async () => {
-    if (!secondaryEmail.includes("@")) {
-      toast({ variant: "destructive", title: "Invalid email", description: "Enter a valid secondary email address." })
-      return
-    }
-    setBusy("email")
+    setBusy(true)
     try {
       await callMfa({ action: "secondary_email_send", secondaryEmail })
-      setEmailOtpSent(true)
-      toast({ title: "Verification code sent", description: `Check ${secondaryEmail}` })
+      setEmailCodeSent(true)
+      toast({
+        title: "Verification Code Sent",
+        description: `Sent a 6-digit code to ${secondaryEmail}.`,
+      })
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err?.message })
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: sanitizeMfaMessage(err, "Could not send verification email."),
+      })
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
   const handleVerifySecondaryEmail = async () => {
-    setBusy("email")
+    setBusy(true)
     try {
-      await callMfa({ action: "secondary_email_verify", code: emailOtpCode })
-      setEmailOtpSent(false)
-      setEmailOtpCode("")
-      toast({ title: "Secondary Email Verified" })
-      await loadMfaStatus()
+      await callMfa({ action: "secondary_email_verify", code: emailVerifyCode })
+      setEmailCodeSent(false)
+      setEmailVerifyCode("")
+      toast({
+        title: "Secondary Email Verified",
+        description: "Backup email is now active for verification.",
+      })
+      await loadStatus()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Invalid code", description: err?.message })
+      toast({
+        variant: "destructive",
+        title: "Invalid Code",
+        description: sanitizeMfaMessage(err, "Invalid verification code."),
+      })
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
-  const activeFactorCount =
-    (totpEnabled ? 1 : 0) + (passkeys.length > 0 ? 1 : 0) + (secondaryEmailVerified ? 1 : 0)
-
-  const handleCopySecret = async () => {
-    if (!totpSecret) return
-    try {
-      await navigator.clipboard.writeText(totpSecret)
-      setCopiedSecret(true)
-      setTimeout(() => setCopiedSecret(false), 1800)
-    } catch {
-      // ignore
-    }
-  }
+  const enrolledCount =
+    (totpEnabled ? 1 : 0) + (passkeys.length > 0 ? 1 : 0) + (secondaryVerified ? 1 : 0)
 
   return (
-    <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-medium text-slate-900">Multi-Factor Authentication</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Verify sign-ins and sensitive admin actions with a second factor
-          </p>
+    <Card className="bg-white border border-slate-200/80 shadow-none rounded-xl overflow-hidden">
+      <CardHeader className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-1">
+          <CardTitle className="text-sm font-headline font-semibold text-slate-900">
+            2-Step Verification (MFA)
+          </CardTitle>
+          <CardDescription className="text-xs text-slate-500">
+            Protect your account and sensitive administrative actions with a second verification step
+          </CardDescription>
         </div>
-        <div className="inline-flex items-center gap-2 text-xs text-slate-600 tabular-nums shrink-0">
-          <span
-            className={`h-2 w-2 rounded-full ${
-              activeFactorCount > 0 ? "bg-emerald-500" : "bg-slate-300"
-            }`}
-            aria-hidden="true"
-          />
-          <span>
-            {activeFactorCount > 0
-              ? `${activeFactorCount} ${activeFactorCount === 1 ? "factor" : "factors"} active`
-              : "No factors configured"}
-          </span>
-        </div>
-      </div>
+        {loading ? (
+          <Skeleton className="h-5 w-32 rounded-md" />
+        ) : (
+          <div className="flex items-center gap-2 shrink-0">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                enrolledCount > 0 ? "bg-emerald-600" : "bg-amber-500"
+              }`}
+            />
+            <span className="text-xs font-medium text-slate-700">
+              {enrolledCount > 0
+                ? `${enrolledCount} ${enrolledCount === 1 ? "method" : "methods"} active`
+                : "No methods enrolled"}
+            </span>
+          </div>
+        )}
+      </CardHeader>
 
-      {loading ? (
-        <div className="px-5 py-8 flex items-center gap-2 text-xs text-slate-500">
-          <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
-          <span>Loading security factors</span>
-        </div>
-      ) : (
-        <div className="divide-y divide-slate-200/80">
-          {/* 1. Authenticator App (TOTP) */}
-          <div className="p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
-                  <Smartphone className="w-4 h-4 text-slate-600" strokeWidth={1.5} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-900">Authenticator app</span>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          totpEnabled ? "bg-emerald-500" : "bg-slate-300"
-                        }`}
-                      />
-                      {totpEnabled ? "Active" : "Not set up"}
-                    </span>
+      <CardContent className="p-0 divide-y divide-slate-100">
+        {loading ? (
+          <div className="divide-y divide-slate-100">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div key={idx} className="p-6 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                  <Skeleton className="w-9 h-9 rounded-lg shrink-0" />
+                  <div className="space-y-2 flex-1 max-w-md">
+                    <Skeleton className="h-4 w-44" />
+                    <Skeleton className="h-3 w-72" />
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Time-based codes from Google Authenticator, 1Password, or Authy
-                  </p>
+                </div>
+                <Skeleton className="h-8 w-24 rounded-lg shrink-0" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* 1. Authenticator App */}
+            <div className="p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
+                    <Smartphone className="w-4 h-4 text-slate-700" strokeWidth={1.5} />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-900">
+                        Authenticator App
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 text-[11px] font-mono ${
+                          totpEnabled ? "text-emerald-700" : "text-slate-400"
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            totpEnabled ? "bg-emerald-600" : "bg-slate-300"
+                          }`}
+                        />
+                        {totpEnabled ? "Configured" : "Not configured"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Generate time-based 6-digit verification codes using your mobile or desktop authenticator app
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 sm:pl-4 shrink-0">
+                  {totpEnabled ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleDisableTotp}
+                      disabled={busy}
+                      className="h-8 text-xs border-slate-200 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                    >
+                      Remove
+                    </Button>
+                  ) : !pendingSecret ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleStartTotp}
+                      disabled={busy}
+                      className="h-8 text-xs border-slate-200"
+                    >
+                      Set up authenticator
+                    </Button>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="shrink-0 pl-11 sm:pl-0">
-                {!totpEnabled && !totpSecret && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs rounded-lg border-slate-200"
-                    onClick={handleStartTotp}
-                    disabled={busy === "totp"}
-                  >
-                    {busy === "totp" ? "Starting..." : "Set up"}
-                  </Button>
-                )}
-                {totpEnabled && !showDisableTotp && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 text-xs text-slate-600 hover:text-rose-600 rounded-lg"
-                    onClick={() => {
-                      setTotpCode("")
-                      setShowDisableTotp(true)
-                    }}
-                  >
-                    Disable
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {totpSecret && (
-              <div className="ml-0 sm:ml-11 p-4 rounded-xl border border-slate-200/80 bg-slate-50/70 space-y-4">
-                <div className="flex flex-col sm:flex-row items-start gap-5">
-                  {totpQrDataUrl && (
-                    <div className="p-2.5 rounded-lg bg-white border border-slate-200/80 shrink-0">
-                      <img src={totpQrDataUrl} alt="Authenticator QR Code" className="w-36 h-36" />
-                    </div>
-                  )}
-                  <div className="space-y-3 flex-1 min-w-0">
-                    <div>
-                      <p className="text-xs font-medium text-slate-900">1. Scan QR code or copy setup key</p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Open your authenticator app and scan the code, or paste the key below
+              {pendingSecret && (
+                <div className="ml-0 sm:ml-12 p-4 rounded-xl border border-slate-200/80 bg-slate-50/60 space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    {qrDataUrl && (
+                      <div className="p-2 rounded-lg bg-white border border-slate-200 shrink-0">
+                        <img
+                          src={qrDataUrl}
+                          alt="Authenticator QR Code"
+                          className="w-36 h-36"
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-2 flex-1 min-w-0">
+                      <p className="text-xs font-medium text-slate-800">
+                        1. Scan the QR code with your authenticator app
                       </p>
+                      <p className="text-xs text-slate-500">
+                        Can’t scan the barcode? Enter this setup key manually:
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <code className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 font-mono text-xs text-slate-800 select-all break-all">
+                          {pendingSecret}
+                        </code>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 shrink-0 border-slate-200"
+                          onClick={() => {
+                            navigator.clipboard.writeText(pendingSecret)
+                            setSecretCopied(true)
+                            setTimeout(() => setSecretCopied(false), 1500)
+                          }}
+                        >
+                          {secretCopied ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-slate-600" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-200/70 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                    <div className="space-y-1.5 flex-1 max-w-xs">
+                      <Label className="text-xs font-medium text-slate-700">
+                        2. Enter the 6-digit code shown in your app
+                      </Label>
+                      <Input
+                        value={totpVerifyCode}
+                        onChange={(e) => setTotpVerifyCode(e.target.value)}
+                        placeholder="000000"
+                        maxLength={6}
+                        className="h-9 font-mono text-xs tracking-widest bg-white border-slate-200"
+                      />
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200/80 font-mono text-xs text-slate-700 break-all select-all flex-1">
-                        {totpSecret}
-                      </div>
                       <Button
                         type="button"
                         size="sm"
-                        variant="outline"
-                        className="h-8 px-2.5 text-xs border-slate-200 shrink-0"
-                        onClick={handleCopySecret}
+                        variant="ghost"
+                        onClick={() => {
+                          setPendingSecret(null)
+                          setOtpauthUri(null)
+                          setTotpVerifyCode("")
+                        }}
+                        className="h-9 text-xs text-slate-600"
                       >
-                        {copiedSecret ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.5} />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.5} />
-                        )}
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleEnableTotp}
+                        disabled={busy || totpVerifyCode.trim().length < 6}
+                        className="h-9 text-xs bg-primary hover:bg-primary/90 text-white"
+                      >
+                        Verify & Save
                       </Button>
                     </div>
-                    <div className="pt-1 space-y-2">
-                      <p className="text-xs font-medium text-slate-900">2. Enter the 6-digit code</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Input
-                          value={totpCode}
-                          onChange={(e) => setTotpCode(e.target.value)}
-                          placeholder="000000"
-                          maxLength={6}
-                          className="w-32 h-8 text-xs font-mono tabular-nums bg-white"
-                        />
-                        <Button
-                          size="sm"
-                          className="h-8 text-xs rounded-lg"
-                          onClick={handleEnableTotp}
-                          disabled={busy === "totp"}
-                        >
-                          Verify and enable
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-xs text-slate-500"
-                          onClick={() => {
-                            setTotpSecret(null)
-                            setTotpUri(null)
-                            setTotpQrDataUrl(null)
-                            setTotpCode("")
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Passkeys & Security Keys */}
+            <div className="p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
+                    <KeyRound className="w-4 h-4 text-slate-700" strokeWidth={1.5} />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-900">
+                        Passkeys & Security Keys
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-500 tabular-nums">
+                        {passkeys.length} registered
+                      </span>
                     </div>
+                    <p className="text-xs text-slate-500">
+                      Sign in with Touch ID, Face ID, Windows Hello, or a hardware security key
+                    </p>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {totpEnabled && showDisableTotp && (
-              <div className="ml-0 sm:ml-11 p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 flex flex-wrap items-center gap-2">
-                <Input
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value)}
-                  placeholder="Current 6-digit code"
-                  maxLength={6}
-                  className="w-40 h-8 text-xs font-mono tabular-nums bg-white"
-                />
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="h-8 text-xs rounded-lg"
-                  onClick={async () => {
-                    await handleDisableTotp()
-                    setShowDisableTotp(false)
-                  }}
-                  disabled={busy === "totp"}
-                >
-                  Confirm disable
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 text-xs text-slate-500"
-                  onClick={() => {
-                    setShowDisableTotp(false)
-                    setTotpCode("")
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* 2. Passkeys (WebAuthn) */}
-          <div className="p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
-                  <KeyRound className="w-4 h-4 text-slate-600" strokeWidth={1.5} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-900">Passkeys &amp; security keys</span>
-                    <span className="text-xs font-mono tabular-nums text-slate-500">
-                      {passkeys.length} registered
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Sign in with Touch ID, Face ID, or a FIDO2 hardware key
-                  </p>
-                </div>
-              </div>
-
-              <div className="shrink-0 pl-11 sm:pl-0">
                 {!showAddPasskey && (
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs rounded-lg border-slate-200"
-                    onClick={() => setShowAddPasskey(true)}
+                    onClick={() => {
+                      setPasskeyLabel("")
+                      setShowAddPasskey(true)
+                    }}
+                    disabled={busy}
+                    className="h-8 text-xs border-slate-200 shrink-0"
                   >
-                    Add passkey
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    Add a passkey
                   </Button>
                 )}
               </div>
-            </div>
 
-            {passkeys.length > 0 && (
-              <div className="ml-0 sm:ml-11 divide-y divide-slate-200/80 rounded-lg border border-slate-200/80 bg-slate-50/40">
-                {passkeys.map((pk) => (
-                  <div key={pk.id} className="flex items-center justify-between px-3 py-2 text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-medium text-slate-800 truncate">{pk.label}</span>
-                      {pk.createdAt && (
-                        <span className="text-slate-400 font-mono text-[11px] tabular-nums hidden sm:inline">
-                          {new Date(pk.createdAt).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
+              {showAddPasskey && (
+                <div className="ml-0 sm:ml-12 p-4 rounded-xl border border-slate-200/80 bg-slate-50/60 flex flex-col sm:flex-row sm:items-end gap-3">
+                  <div className="space-y-1.5 flex-1">
+                    <Label className="text-xs font-medium text-slate-700">
+                      Passkey or device name
+                    </Label>
+                    <Input
+                      value={passkeyLabel}
+                      onChange={(e) => setPasskeyLabel(e.target.value)}
+                      placeholder="Enter device name"
+                      className="h-9 text-xs bg-white border-slate-200"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Button
-                      size="icon"
+                      type="button"
+                      size="sm"
                       variant="ghost"
-                      className="h-7 w-7 text-slate-400 hover:text-rose-600"
-                      onClick={() => handleRemovePasskey(pk.id)}
-                      disabled={busy === `pk-${pk.id}`}
-                      title="Remove passkey"
+                      onClick={() => {
+                        setPasskeyLabel("")
+                        setShowAddPasskey(false)
+                      }}
+                      className="h-9 text-xs text-slate-600"
                     >
-                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleRegisterPasskey}
+                      disabled={busy}
+                      className="h-9 text-xs bg-primary hover:bg-primary/90 text-white"
+                    >
+                      Continue
                     </Button>
                   </div>
-                ))}
-              </div>
-            )}
-
-            {showAddPasskey && (
-              <div className="ml-0 sm:ml-11 p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 flex flex-wrap items-center gap-2">
-                <Input
-                  value={passkeyLabel}
-                  onChange={(e) => setPasskeyLabel(e.target.value)}
-                  placeholder="Device name (e.g. MacBook Pro)"
-                  className="w-56 h-8 text-xs bg-white"
-                />
-                <Button
-                  size="sm"
-                  className="h-8 text-xs rounded-lg"
-                  onClick={async () => {
-                    await handleRegisterPasskey()
-                    setShowAddPasskey(false)
-                  }}
-                  disabled={busy === "passkey"}
-                >
-                  {busy === "passkey" ? "Waiting for device..." : "Register"}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 text-xs text-slate-500"
-                  onClick={() => setShowAddPasskey(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* 3. Secondary Recovery Email */}
-          <div className="p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
-                  <Mail className="w-4 h-4 text-slate-600" strokeWidth={1.5} />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-900">Secondary recovery email</span>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          secondaryEmailVerified ? "bg-emerald-500" : "bg-slate-300"
-                        }`}
-                      />
-                      {secondaryEmailVerified ? "Verified" : "Not verified"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {secondaryEmailVerified && secondaryEmail
-                      ? `Backup 6-digit codes sent to ${secondaryEmail}`
-                      : "Receive a backup 6-digit verification code by email"}
-                  </p>
-                </div>
-              </div>
+              )}
 
-              <div className="shrink-0 pl-11 sm:pl-0">
-                {!showEditEmail && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs rounded-lg border-slate-200"
-                    onClick={() => setShowEditEmail(true)}
-                  >
-                    {secondaryEmailVerified ? "Change" : "Add email"}
-                  </Button>
-                )}
-              </div>
+              {passkeys.length > 0 && (
+                <div className="ml-0 sm:ml-12 divide-y divide-slate-100 rounded-xl border border-slate-200/80 bg-white">
+                  {passkeys.map((pk) => (
+                    <div
+                      key={pk.id}
+                      className="px-3.5 py-2.5 flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <KeyRound className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="font-medium text-slate-800 truncate">{pk.label}</span>
+                        {pk.createdAt && (
+                          <span className="text-[11px] font-mono text-slate-400">
+                            Added {new Date(pk.createdAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-slate-400 hover:text-rose-600"
+                        onClick={() => handleRemovePasskey(pk.id)}
+                        disabled={busy}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {showEditEmail && (
-              <div className="ml-0 sm:ml-11 p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/70 space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
+            {/* 3. Backup Recovery Email */}
+            <div className="p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg border border-slate-200/80 bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
+                    <Mail className="w-4 h-4 text-slate-700" strokeWidth={1.5} />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-900">
+                        Recovery Email
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 text-[11px] font-mono ${
+                          secondaryVerified ? "text-emerald-700" : "text-slate-400"
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            secondaryVerified ? "bg-emerald-600" : "bg-slate-300"
+                          }`}
+                        />
+                        {secondaryVerified ? "Verified" : "Unverified"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Receive one-time verification codes at a secondary email address if you don’t have your device
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="ml-0 sm:ml-12 space-y-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md">
                   <Input
                     type="email"
                     value={secondaryEmail}
                     onChange={(e) => setSecondaryEmail(e.target.value)}
-                    placeholder="backup@domain.com"
-                    className="w-60 h-8 text-xs bg-white"
+                    placeholder="backup@example.com"
+                    className="h-9 text-xs bg-white border-slate-200"
                   />
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs border-slate-200 bg-white"
                     onClick={handleSendSecondaryEmail}
-                    disabled={busy === "email"}
+                    disabled={busy || !secondaryEmail.includes("@")}
+                    className="h-9 text-xs border-slate-200 shrink-0"
                   >
-                    Send code
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 text-xs text-slate-500"
-                    onClick={() => {
-                      setShowEditEmail(false)
-                      setEmailOtpSent(false)
-                      setEmailOtpCode("")
-                    }}
-                  >
-                    Cancel
+                    {secondaryVerified ? "Update & Verify" : "Send Verification Code"}
                   </Button>
                 </div>
 
-                {emailOtpSent && (
-                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
+                {emailCodeSent && (
+                  <div className="flex items-center gap-2 max-w-xs">
                     <Input
-                      value={emailOtpCode}
-                      onChange={(e) => setEmailOtpCode(e.target.value)}
+                      value={emailVerifyCode}
+                      onChange={(e) => setEmailVerifyCode(e.target.value)}
                       placeholder="6-digit code"
                       maxLength={6}
-                      className="w-36 h-8 text-xs font-mono tabular-nums bg-white"
+                      className="h-9 font-mono text-xs tracking-widest bg-white border-slate-200"
                     />
                     <Button
                       size="sm"
-                      className="h-8 text-xs rounded-lg"
-                      onClick={async () => {
-                        await handleVerifySecondaryEmail()
-                        setShowEditEmail(false)
-                      }}
-                      disabled={busy === "email"}
+                      onClick={handleVerifySecondaryEmail}
+                      disabled={busy || emailVerifyCode.trim().length < 6}
+                      className="h-9 text-xs bg-primary hover:bg-primary/90 text-white shrink-0"
                     >
-                      Verify email
+                      Verify
                     </Button>
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }

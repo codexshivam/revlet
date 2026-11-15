@@ -644,3 +644,48 @@ export async function exportSiemAuditLogs(
     return { success: false, error: err?.message || 'Failed to export SIEM audit logs.' };
   }
 }
+
+export async function getOrganizationSecurityPolicy(idToken: string, orgId: string) {
+  try {
+    await verifyUserOrgAccess(idToken, orgId, SECURITY_ADMIN_PERMISSION);
+    const snap = await adminDb.collection('organizations').doc(orgId).get();
+    if (!snap.exists) return { success: false, error: 'Organization not found.' };
+    const data = snap.data() || {};
+    return {
+      success: true,
+      enforceMfa: Boolean(data.enforceMfa),
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to load security policy.' };
+  }
+}
+
+export async function setOrganizationEnforceMfa(
+  idToken: string,
+  orgId: string,
+  enforceMfa: boolean,
+  stepUpToken?: string
+) {
+  try {
+    const { uid, email } = await verifyUserOrgAccess(idToken, orgId, SECURITY_ADMIN_PERMISSION);
+    await assertStepUpMfa(uid, stepUpToken);
+    await adminDb.collection('organizations').doc(orgId).set(
+      {
+        enforceMfa: Boolean(enforceMfa),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email || undefined,
+      action: enforceMfa ? 'ORG_MFA_ENFORCED' : 'ORG_MFA_RELAXED',
+      target: orgId,
+      metadata: { enforceMfa: Boolean(enforceMfa) },
+    });
+    return { success: true, enforceMfa: Boolean(enforceMfa) };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update MFA enforcement policy.' };
+  }
+}

@@ -3,7 +3,14 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
 import { verifyUserOrgAccess, assertStepUpMfa } from './auth-helper';
-import { logMailAuditEvent } from '@/lib/mail-internal';
+import {
+  logMailAuditEvent,
+  syncStalwartSharedMailboxPrincipal,
+  deleteStalwartSharedMailboxPrincipal,
+  findStalwartAccountByEmail,
+  callStalwartJmap,
+} from '@/lib/mail-internal';
+import { isEmailAddressTakenInOrg } from './email-service';
 import { validateAndSanitizeInput } from '@/lib/security/sanitize';
 import {
   COMPLIANCE_ADMIN_PERMISSION,
@@ -98,6 +105,25 @@ export async function getGovernanceOverview(idToken: string, orgId: string) {
       orgRef.collection('mailAuditLogs').orderBy('createdAt', 'desc').limit(150).get(),
     ]);
 
+    const sharedMailboxes = sharedSnap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as any),
+    })) as SharedMailboxRecord[];
+
+    // Non-blocking self-healing reconciliation to ensure all shared mailboxes in Firestore
+    // are automatically synchronized in Stalwart Mail Server
+    if (sharedMailboxes.length > 0) {
+      Promise.allSettled(
+        sharedMailboxes.map((sm) =>
+          syncStalwartSharedMailboxPrincipal({
+            email: sm.email,
+            displayName: sm.displayName,
+            delegates: Array.isArray(sm.delegates) ? sm.delegates : [],
+          })
+        )
+      ).catch(() => {});
+    }
+
     return {
       success: true,
       data: {
@@ -105,7 +131,7 @@ export async function getGovernanceOverview(idToken: string, orgId: string) {
         dlpRules: dlpSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as DlpRuleRecord[],
         transportRules: transportSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as TransportRuleRecord[],
         quarantineItems: quarSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as QuarantineItemRecord[],
-        sharedMailboxes: sharedSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as SharedMailboxRecord[],
+        sharedMailboxes,
         auditLogs: auditSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as AuditLogRecord[],
       },
     };
@@ -461,23 +487,91 @@ export async function resolveQuarantineItem(
     ]);
     assertStepUpMfa(auth.uid, stepUpToken);
 
-    await adminDb
+    const itemRef = adminDb
       .collection('organizations')
       .doc(orgId)
       .collection('mailQuarantine')
-      .doc(itemId)
-      .update({
-        status: decision,
-        resolvedBy: auth.email || auth.uid,
-        resolvedAt: new Date().toISOString(),
-      });
+      .doc(itemId);
+    const itemSnap = await itemRef.get();
+    const itemData = itemSnap.data() || {};
+
+    await itemRef.update({
+      status: decision,
+      resolvedBy: auth.email || auth.uid,
+      resolvedAt: new Date().toISOString(),
+    });
+
+    // When an admin releases a quarantined message, attempt JMAP delivery via Stalwart + AWS SES
+    if (decision === 'released' && itemData.sender && Array.isArray(itemData.recipients) && itemData.recipients.length > 0) {
+      try {
+        const senderEmail = String(itemData.sender).toLowerCase().trim();
+        const recipients: string[] = itemData.recipients
+          .map((r: unknown) => String(r || '').toLowerCase().trim())
+          .filter((r: string) => r.includes('@'));
+        const acc = await findStalwartAccountByEmail(senderEmail);
+        if (acc?.id && recipients.length > 0) {
+          const metaRes = await callStalwartJmap([
+            ['Mailbox/get', { accountId: acc.id, ids: null }, 'mb'],
+            ['Identity/get', { accountId: acc.id, ids: null }, 'id'],
+          ]);
+          const mbList: any[] = metaRes.find((r) => r[0] === 'Mailbox/get')?.[1]?.list || [];
+          const idList: any[] = metaRes.find((r) => r[0] === 'Identity/get')?.[1]?.list || [];
+          const sentMb =
+            mbList.find((m) => (m.role || '').toLowerCase() === 'sent') ||
+            mbList.find((m) => (m.role || '').toLowerCase() === 'inbox') ||
+            mbList[0];
+          const sentMailboxId = sentMb?.id || 'e';
+          const identityId = idList[0]?.id || 'b';
+          const bodyText = String(itemData.bodyText || itemData.snippet || '');
+          await callStalwartJmap([
+            [
+              'Email/set',
+              {
+                accountId: acc.id,
+                create: {
+                  relMsg: {
+                    mailboxIds: { [sentMailboxId]: true },
+                    keywords: { $seen: true },
+                    from: [{ name: senderEmail.split('@')[0], email: senderEmail }],
+                    to: recipients.map((email) => ({ name: email.split('@')[0], email })),
+                    subject: String(itemData.subject || '(Released Message)'),
+                    bodyValues: { text: { value: bodyText } },
+                    textBody: [{ partId: 'text', type: 'text/plain' }],
+                  },
+                },
+              },
+              'cRel',
+            ],
+            [
+              'EmailSubmission/set',
+              {
+                accountId: acc.id,
+                create: {
+                  relSub: {
+                    emailId: '#relMsg',
+                    identityId,
+                    envelope: {
+                      mailFrom: { email: senderEmail, parameters: null },
+                      rcptTo: recipients.map((email) => ({ email, parameters: null })),
+                    },
+                  },
+                },
+              },
+              'sRel',
+            ],
+          ]);
+        }
+      } catch (releaseErr) {
+        console.warn('[Quarantine Release] Delivery attempt warning:', releaseErr);
+      }
+    }
 
     await logMailAuditEvent({
       orgId,
       actorUid: auth.uid,
       actorEmail: auth.email,
       action: decision === 'released' ? 'QUARANTINE_RELEASED' : 'QUARANTINE_DELETED',
-      target: itemId,
+      target: itemData.subject ? `${itemId} (${itemData.subject})` : itemId,
     });
 
     return { success: true };
@@ -507,18 +601,38 @@ export async function createSharedMailbox(
 
     const dnRes = validateAndSanitizeInput(input.displayName || '', 'Display name');
     const displayName = (dnRes.sanitized || '').slice(0, 80);
-    const localPart = input.localPart.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+    const localPart = input.localPart
+      .trim()
+      .toLowerCase()
+      .replace(/@.*$/, '')
+      .replace(/[^a-z0-9._-]/g, '');
     if (!displayName || !localPart) {
       throw new Error('Display name and email local part are required.');
     }
 
     const email = `${localPart}@${domain}`;
-    const delegates: SharedMailboxDelegate[] = (input.delegates || [])
-      .map((d) => ({
-        email: d.email.trim().toLowerCase(),
-        accessLevel: d.accessLevel || 'FULL_ACCESS',
-      }))
-      .filter((d) => d.email.includes('@'));
+    const conflict = await isEmailAddressTakenInOrg(orgId, email);
+    if (conflict) {
+      throw new Error(conflict);
+    }
+
+    const seenDelegates = new Map<string, SharedMailboxDelegate>();
+    for (const d of input.delegates || []) {
+      const dEmail = (d.email || '').trim().toLowerCase();
+      if (dEmail && dEmail.includes('@') && dEmail !== email) {
+        seenDelegates.set(dEmail, {
+          email: dEmail,
+          accessLevel: d.accessLevel || 'FULL_ACCESS',
+        });
+      }
+    }
+    const delegates = Array.from(seenDelegates.values());
+
+    await syncStalwartSharedMailboxPrincipal({
+      email,
+      displayName,
+      delegates,
+    });
 
     const record: Omit<SharedMailboxRecord, 'id'> = {
       displayName,
@@ -548,6 +662,74 @@ export async function createSharedMailbox(
   }
 }
 
+export async function updateSharedMailboxDelegates(
+  idToken: string,
+  orgId: string,
+  mailboxId: string,
+  delegatesInput: SharedMailboxDelegate[],
+  stepUpToken?: string
+) {
+  try {
+    const auth = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    assertStepUpMfa(auth.uid, stepUpToken);
+
+    const docRef = adminDb
+      .collection('organizations')
+      .doc(orgId)
+      .collection('mailSharedMailboxes')
+      .doc(mailboxId);
+    const snap = await docRef.get();
+    if (!snap.exists) {
+      throw new Error('Shared mailbox not found.');
+    }
+    const existing = snap.data() as Omit<SharedMailboxRecord, 'id'>;
+    const mailboxEmail = (existing.email || '').toLowerCase().trim();
+
+    const seenDelegates = new Map<string, SharedMailboxDelegate>();
+    for (const d of delegatesInput || []) {
+      const dEmail = (d.email || '').trim().toLowerCase();
+      if (dEmail && dEmail.includes('@') && dEmail !== mailboxEmail) {
+        seenDelegates.set(dEmail, {
+          email: dEmail,
+          accessLevel: d.accessLevel || 'FULL_ACCESS',
+        });
+      }
+    }
+    const delegates = Array.from(seenDelegates.values());
+
+    await syncStalwartSharedMailboxPrincipal({
+      email: mailboxEmail,
+      displayName: existing.displayName || mailboxEmail.split('@')[0],
+      delegates,
+    });
+
+    await docRef.update({
+      delegates,
+      updatedAt: new Date().toISOString(),
+    });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: auth.uid,
+      actorEmail: auth.email,
+      action: 'SHARED_MAILBOX_DELEGATES_UPDATED',
+      target: mailboxEmail || mailboxId,
+      metadata: { delegates },
+    });
+
+    return {
+      success: true,
+      data: {
+        id: mailboxId,
+        ...existing,
+        delegates,
+      } as SharedMailboxRecord,
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update shared mailbox delegates.' };
+  }
+}
+
 export async function deleteSharedMailbox(
   idToken: string,
   orgId: string,
@@ -558,19 +740,26 @@ export async function deleteSharedMailbox(
     const auth = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
     assertStepUpMfa(auth.uid, stepUpToken);
 
-    await adminDb
+    const docRef = adminDb
       .collection('organizations')
       .doc(orgId)
       .collection('mailSharedMailboxes')
-      .doc(mailboxId)
-      .delete();
+      .doc(mailboxId);
+    const snap = await docRef.get();
+    const mailboxEmail = snap.exists ? String(snap.data()?.email || '').toLowerCase().trim() : '';
+
+    if (mailboxEmail) {
+      await deleteStalwartSharedMailboxPrincipal(mailboxEmail);
+    }
+
+    await docRef.delete();
 
     await logMailAuditEvent({
       orgId,
       actorUid: auth.uid,
       actorEmail: auth.email,
       action: 'SHARED_MAILBOX_DELETED',
-      target: mailboxId,
+      target: mailboxEmail || mailboxId,
     });
     return { success: true };
   } catch (err: any) {

@@ -22,14 +22,42 @@ export function DashboardShell({
 }) {
   const { user, loading } = useUser()
   const router = useRouter()
+  const [mfaAllowed, setMfaAllowed] = React.useState(false)
 
   React.useEffect(() => {
     if (!loading && !user) {
       router.push("/login")
+      return
+    }
+    if (!loading && user) {
+      let cancelled = false
+      user
+        .getIdToken()
+        .then((token) =>
+          fetch("/api/auth/mfa", {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          })
+        )
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled) return
+          if (data?.ok && (data.hasEnrolledMfa || data.enforceMfa) && !data.mfaSessionVerified) {
+            router.replace("/login?mfa=1")
+            return
+          }
+          setMfaAllowed(true)
+        })
+        .catch(() => {
+          if (!cancelled) setMfaAllowed(true)
+        })
+      return () => {
+        cancelled = true
+      }
     }
   }, [user, loading, router])
 
-  if (loading || !user) {
+  if (loading || !user || !mfaAllowed) {
     return (
       <div
         role="status"

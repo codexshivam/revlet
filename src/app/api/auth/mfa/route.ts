@@ -9,7 +9,7 @@ import {
   verifyStepUpToken,
   verifyTotpCode,
 } from '@/lib/mfa';
-import { sendRevletAlertEmail } from '@/lib/revlet-alerts';
+import { sendRevletAccountEmail } from '@/lib/revlet-alerts';
 
 const MFA_SESSION_COOKIE = 'revlet_mfa_session';
 
@@ -267,18 +267,19 @@ export async function POST(req: NextRequest) {
         { merge: true }
       );
 
-      await sendRevletAlertEmail({
+      await sendRevletAccountEmail({
         to: sendTo,
-        subject: 'Your Revlet Security Verification Code',
-        title: 'Step-Up MFA Verification Code',
-        subtitle: 'Use this one-time code to verify your secondary recovery email.',
+        subject: `${code} is your Revlet verification code`,
+        title: 'Verification Required',
+        subtitle: 'Use this 6-digit verification code to verify your recovery email or complete 2-Step Verification.',
+        otpCode: code,
         summaryLines: [
-          `Verification Code: ${code}`,
-          'This code expires in 10 minutes.',
+          'Enter the 6-digit verification code below in your active Revlet session.',
+          'For your security, this one-time code expires in 10 minutes.',
         ],
         details: [
           { label: 'Account', value: email || uid },
-          { label: 'Verification Code', value: code },
+          { label: 'Recovery Email', value: sendTo },
         ],
       });
 

@@ -13,6 +13,31 @@ const CommandPalette = dynamic(
   { ssr: false }
 )
 
+const verifiedMfaUids = new Set<string>()
+
+function isMfaCachedForUser(uid: string): boolean {
+  if (verifiedMfaUids.has(uid)) return true
+  if (typeof window !== "undefined") {
+    try {
+      return sessionStorage.getItem("revlet_mfa_verified_uid") === uid
+    } catch {
+      return false
+    }
+  }
+  return false
+}
+
+function cacheMfaForUser(uid: string) {
+  verifiedMfaUids.add(uid)
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.setItem("revlet_mfa_verified_uid", uid)
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export function DashboardShell({
   children,
   className,
@@ -22,7 +47,9 @@ export function DashboardShell({
 }) {
   const { user, loading } = useUser()
   const router = useRouter()
-  const [mfaAllowed, setMfaAllowed] = React.useState(false)
+  const [mfaAllowed, setMfaAllowed] = React.useState(() =>
+    user ? isMfaCachedForUser(user.uid) : false
+  )
 
   React.useEffect(() => {
     if (!loading && !user) {
@@ -30,6 +57,9 @@ export function DashboardShell({
       return
     }
     if (!loading && user) {
+      if (isMfaCachedForUser(user.uid)) {
+        setMfaAllowed(true)
+      }
       let cancelled = false
       user
         .getIdToken()
@@ -42,10 +72,19 @@ export function DashboardShell({
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (cancelled) return
-          if (data?.ok && (data.hasEnrolledMfa || data.enforceMfa) && !data.mfaSessionVerified) {
+          if (data?.ok && data.hasEnrolledMfa && !data.mfaSessionVerified) {
+            verifiedMfaUids.delete(user.uid)
+            if (typeof window !== "undefined") {
+              try {
+                sessionStorage.removeItem("revlet_mfa_verified_uid")
+              } catch {
+                // ignore
+              }
+            }
             router.replace("/login?mfa=1")
             return
           }
+          cacheMfaForUser(user.uid)
           setMfaAllowed(true)
         })
         .catch(() => {
@@ -65,14 +104,8 @@ export function DashboardShell({
         aria-label="Loading workspace"
         className="min-h-screen w-full flex items-center justify-center bg-white"
       >
-        <div className="flex flex-col items-center gap-3 animate-fade-up-in">
-          <div className="font-headline font-bold text-[30px] tracking-tight text-slate-950 select-none">
-            Revlet
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" aria-hidden="true" />
-            <span>Loading workspace...</span>
-          </div>
+        <div className="font-headline font-bold text-[30px] tracking-tight text-slate-950 select-none">
+          Revlet
         </div>
       </div>
     )

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import QRCode from "qrcode"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,6 +33,7 @@ export function MfaEnrollmentCard() {
   const [totpEnabled, setTotpEnabled] = useState(false)
   const [totpSecret, setTotpSecret] = useState<string | null>(null)
   const [totpUri, setTotpUri] = useState<string | null>(null)
+  const [totpQrDataUrl, setTotpQrDataUrl] = useState<string | null>(null)
   const [totpCode, setTotpCode] = useState("")
   const [passkeys, setPasskeys] = useState<Array<{ id: string; label: string; createdAt: string }>>([])
   const [passkeyLabel, setPasskeyLabel] = useState("MacBook / Security Key")
@@ -89,6 +91,10 @@ export function MfaEnrollmentCard() {
       const data = await callMfa({ action: "totp_setup" })
       setTotpSecret(data.secret)
       setTotpUri(data.otpauthUri)
+      if (data.otpauthUri) {
+        const qr = await QRCode.toDataURL(data.otpauthUri, { width: 176, margin: 1 })
+        setTotpQrDataUrl(qr)
+      }
     } catch (err: any) {
       toast({ variant: "destructive", title: "Error", description: err?.message })
     } finally {
@@ -102,6 +108,7 @@ export function MfaEnrollmentCard() {
       await callMfa({ action: "totp_enable", code: totpCode })
       setTotpSecret(null)
       setTotpUri(null)
+      setTotpQrDataUrl(null)
       setTotpCode("")
       toast({ title: "Authenticator App Enabled" })
       await loadMfaStatus()
@@ -262,14 +269,21 @@ export function MfaEnrollmentCard() {
               {totpSecret && (
                 <div className="space-y-3 pt-2 border-t">
                   <p className="text-xs text-muted-foreground">
-                    Add this secret key in your authenticator app or scan the URI:
+                    Scan this QR code with your authenticator app, or enter the setup key manually:
                   </p>
-                  <div className="p-2.5 rounded bg-background border font-mono text-xs break-all select-all">
-                    {totpSecret}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    {totpQrDataUrl && (
+                      <div className="p-2 rounded-lg bg-white border border-slate-200 shrink-0">
+                        <img src={totpQrDataUrl} alt="Authenticator QR Code" className="w-40 h-40" />
+                      </div>
+                    )}
+                    <div className="space-y-2 flex-1 min-w-0">
+                      <div className="text-[11px] font-medium text-slate-600">Manual Setup Key</div>
+                      <div className="p-2.5 rounded bg-background border font-mono text-xs break-all select-all">
+                        {totpSecret}
+                      </div>
+                    </div>
                   </div>
-                  {totpUri && (
-                    <p className="text-[11px] font-mono text-muted-foreground break-all">{totpUri}</p>
-                  )}
                   <div className="flex items-center gap-2">
                     <Input
                       value={totpCode}

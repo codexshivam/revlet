@@ -1427,9 +1427,11 @@ export default function EmailServiceAdminPage() {
     return (
       <DashboardShell>
         <div className="flex flex-col items-center justify-center min-h-[50vh] bg-white">
-          <span className="text-[30px] font-bold tracking-tight text-slate-950 font-headline select-none">
-            Revlet
-          </span>
+          <img
+            src="/logo-4k.png"
+            alt="Revlet"
+            className="h-14 w-auto object-contain select-none"
+          />
         </div>
       </DashboardShell>
     )

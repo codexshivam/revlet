@@ -174,16 +174,31 @@ export async function POST(req: NextRequest) {
         };
       });
 
+    const mfaSnap = await orgDoc.ref
+      .collection('mailUserMfa')
+      .doc(encodeURIComponent(primaryLower))
+      .get();
+    const mfaData = mfaSnap.exists ? mfaSnap.data() || {} : {};
+    const enrolledMethods: string[] = [];
+    if (mfaData.totpEnabled && mfaData.totpSecret) enrolledMethods.push('totp');
+    if (Array.isArray(mfaData.passkeys) && mfaData.passkeys.length > 0) enrolledMethods.push('passkey');
+    if (mfaData.secondaryEmailVerified && mfaData.secondaryEmail) enrolledMethods.push('secondary_email');
+
     return NextResponse.json({
       ok: true,
       organization: {
         id: orgDoc.id,
         name: orgData.name,
         domain,
+        enforceMfa: Boolean(orgData.enforceMfa),
         monthlyOutboundLimit: orgData.mailMonthlyLimit ?? 1000,
         dailyOutboundLimit: orgData.mailDailyLimit ?? 100,
         monthlySentCount: rolling.monthlySentCount,
         dailySentCount: rolling.dailySentCount,
+      },
+      mfa: {
+        enabled: enrolledMethods.length > 0,
+        methods: enrolledMethods,
       },
       mailbox: {
         id: matchedDoc.id,

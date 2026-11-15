@@ -6,6 +6,15 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "hosting": {
+    "site": "revlet",
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
   "apphosting": {
     "backendId": "revlet",
     "rootDir": "./"

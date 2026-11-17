@@ -381,6 +381,7 @@ export default function EmailServiceAdminPage() {
 
   const [membersTargetGroup, setMembersTargetGroup] = useState<MailGroupRecord | null>(null)
   const [groupMemberInput, setGroupMemberInput] = useState("")
+  const [showGroupMemberSuggestions, setShowGroupMemberSuggestions] = useState(false)
   const [isUpdatingGroupMembers, setIsUpdatingGroupMembers] = useState(false)
 
   const [deletingGroup, setDeletingGroup] = useState<MailGroupRecord | null>(null)
@@ -4080,18 +4081,75 @@ export default function EmailServiceAdminPage() {
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-slate-700">Member Address</Label>
                 <div className="flex items-center gap-2">
-                  <Input
-                    value={groupMemberInput}
-                    onChange={(e) => setGroupMemberInput(e.target.value)}
-                    placeholder="user@example.com"
-                    className="h-9 text-xs font-mono border-slate-200 rounded-lg"
-                  />
+                  <div className="relative flex-1">
+                    <Input
+                      value={groupMemberInput}
+                      onFocus={() => setShowGroupMemberSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowGroupMemberSuggestions(false), 150)}
+                      onChange={(e) => {
+                        setGroupMemberInput(e.target.value)
+                        setShowGroupMemberSuggestions(true)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && groupMemberInput.trim().includes("@") && membersTargetGroup) {
+                          e.preventDefault()
+                          const clean = groupMemberInput.toLowerCase().trim()
+                          const next = Array.from(new Set([...membersTargetGroup.memberEmails, clean]))
+                          handleUpdateGroupMembersList(next)
+                          setShowGroupMemberSuggestions(false)
+                        }
+                      }}
+                      placeholder="Search directory user or enter email..."
+                      className="h-9 text-xs font-mono border-slate-200 rounded-lg w-full"
+                    />
+                    {showGroupMemberSuggestions && (() => {
+                      const q = groupMemberInput.trim().toLowerCase()
+                      const existing = new Set((membersTargetGroup?.memberEmails || []).map((m) => m.toLowerCase()))
+                      const matches = activeUsers
+                        .filter((u) => !existing.has(u.primaryEmail.toLowerCase()))
+                        .filter(
+                          (u) =>
+                            !q ||
+                            u.primaryEmail.toLowerCase().includes(q) ||
+                            (u.displayName || "").toLowerCase().includes(q)
+                        )
+                        .slice(0, 6)
+                      if (matches.length === 0) return null
+                      return (
+                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto divide-y divide-slate-100">
+                          {matches.map((u) => (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                if (!membersTargetGroup) return
+                                const next = Array.from(
+                                  new Set([...membersTargetGroup.memberEmails, u.primaryEmail.toLowerCase()])
+                                )
+                                handleUpdateGroupMembersList(next)
+                                setShowGroupMemberSuggestions(false)
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between gap-2"
+                            >
+                              <span className="text-xs font-medium text-slate-800 truncate">
+                                {u.displayName || u.firstName || u.primaryEmail.split("@")[0]}
+                              </span>
+                              <span className="text-[11px] font-mono text-slate-500 truncate">
+                                {u.primaryEmail}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
                   <Button
                     size="sm"
                     disabled={
                       isUpdatingGroupMembers ||
                       !groupMemberInput.trim() ||
-                      !groupMemberInput.includes("@")
+                      !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(groupMemberInput.trim())
                     }
                     onClick={() => {
                       if (!membersTargetGroup) return
@@ -4100,6 +4158,7 @@ export default function EmailServiceAdminPage() {
                         new Set([...membersTargetGroup.memberEmails, clean])
                       )
                       handleUpdateGroupMembersList(next)
+                      setShowGroupMemberSuggestions(false)
                     }}
                     className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0"
                   >

@@ -1797,6 +1797,63 @@ export async function resetMailUserPassword(
   }
 }
 
+export async function resetMailUserMfa(
+  idToken: string,
+  orgId: string,
+  userId: string
+) {
+  if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
+  try {
+    const { uid, email } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+
+    const orgRef = adminDb.collection('organizations').doc(orgId);
+    const userDoc = await orgRef.collection('mailUsers').doc(userId).get();
+    if (!userDoc.exists) {
+      return { success: false, error: 'Email account not found.' };
+    }
+
+    const userData = userDoc.data()!;
+    const targetEmail = (userData.primaryEmail || '').toLowerCase().trim();
+    if (!targetEmail) {
+      return { success: false, error: 'Mailbox email address is missing.' };
+    }
+
+    const nowIso = new Date().toISOString();
+    await orgRef
+      .collection('mailUserMfa')
+      .doc(encodeURIComponent(targetEmail))
+      .set({
+        email: targetEmail,
+        totpEnabled: false,
+        totpSecret: null,
+        totpPendingSecret: null,
+        passkeys: [],
+        pendingChallenge: null,
+        secondaryEmail: null,
+        secondaryEmailVerified: false,
+        secondaryOtpHash: null,
+        secondaryOtpExpiresAt: null,
+        backupCodes: [],
+        updatedAt: nowIso,
+        adminResetAt: nowIso,
+        adminResetBy: email,
+      });
+
+    await logMailAuditEvent({
+      orgId,
+      actorUid: uid,
+      actorEmail: email,
+      action: 'MAIL_USER_MFA_RESET',
+      target: targetEmail,
+      metadata: { userId },
+    });
+
+    return { success: true, email: targetEmail };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to remove MFA settings.' };
+  }
+}
+
 export async function manageMailUserAlias(
   idToken: string,
   orgId: string,

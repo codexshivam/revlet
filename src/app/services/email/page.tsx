@@ -65,6 +65,7 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  ShieldOff,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { toast } from "@/hooks/use-toast"
@@ -94,6 +95,7 @@ import {
   createMailUser,
   updateMailUserAccount,
   resetMailUserPassword,
+  resetMailUserMfa,
   manageMailUserAlias,
   toggleMailUserSuspend,
   deleteMailUserAccount,
@@ -348,6 +350,8 @@ export default function EmailServiceAdminPage() {
   const [showResetPassword, setShowResetPassword] = useState(false)
   const [copiedResetPassword, setCopiedResetPassword] = useState(false)
   const [isResettingPassword, setIsResettingPassword] = useState(false)
+  const [mfaResetTargetUser, setMfaResetTargetUser] = useState<MailUserRecord | null>(null)
+  const [isResettingMfa, setIsResettingMfa] = useState(false)
 
   const [aliasTargetUser, setAliasTargetUser] = useState<MailUserRecord | null>(null)
   const [newAliasPrefix, setNewAliasPrefix] = useState("")
@@ -1046,6 +1050,30 @@ export default function EmailServiceAdminPage() {
       })
     } finally {
       setIsResettingPassword(false)
+    }
+  }
+
+  const handleResetUserMfa = async () => {
+    if (!user || !selectedOrgId || !mfaResetTargetUser) return
+    setIsResettingMfa(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await resetMailUserMfa(idToken, selectedOrgId, mfaResetTargetUser.id)
+      if (!res.success) throw new Error(res.error)
+
+      toast({
+        title: "MFA settings removed",
+        description: `All 2-Step Verification factors cleared for ${mfaResetTargetUser.primaryEmail}.`,
+      })
+      setMfaResetTargetUser(null)
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to remove MFA settings",
+        description: err.message || "Could not remove MFA settings.",
+      })
+    } finally {
+      setIsResettingMfa(false)
     }
   }
 
@@ -2351,6 +2379,14 @@ export default function EmailServiceAdminPage() {
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
+                                onSelect={() => setMfaResetTargetUser(u)}
+                                className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-rose-600 focus:text-white data-[highlighted]:bg-rose-600 data-[highlighted]:text-white [&>svg]:text-slate-400 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
+                              >
+                                <ShieldOff className="w-4 h-4" strokeWidth={1.5} />
+                                <span>Remove MFA Settings</span>
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
                                 onSelect={() => {
                                   setAliasTargetUser(u)
                                   setNewAliasPrefix("")
@@ -3569,6 +3605,46 @@ export default function EmailServiceAdminPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* 4b. Remove user MFA settings confirmation dialog */}
+        <AlertDialog
+          open={Boolean(mfaResetTargetUser)}
+          onOpenChange={(open) => {
+            if (!open && !isResettingMfa) setMfaResetTargetUser(null)
+          }}
+        >
+          <AlertDialogContent className="max-w-md bg-white rounded-xl border border-slate-200">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
+                Remove MFA Settings?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-slate-600 leading-relaxed">
+                This will remove all enrolled 2-Step Verification methods (Authenticator App, Passkeys, Secondary Recovery Email, and Backup Codes) for{" "}
+                <span className="font-mono font-semibold text-slate-800">{mfaResetTargetUser?.primaryEmail}</span>.
+                The user can re-enroll MFA from RevletMail Settings.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel
+                disabled={isResettingMfa}
+                className="h-9 px-4 text-xs font-medium rounded-lg"
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault()
+                  void handleResetUserMfa()
+                }}
+                disabled={isResettingMfa}
+                className="bg-rose-600 hover:bg-rose-700 text-white h-9 px-4 text-xs font-medium rounded-lg"
+              >
+                {isResettingMfa && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                Remove MFA Settings
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* 5. Manage user email aliases dialog */}
         <Dialog

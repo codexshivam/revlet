@@ -66,6 +66,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Organization not found.' }, { status: 404 });
     }
 
+    if (req.nextUrl.searchParams.get('auditLogs') === '1') {
+      const auditSnap = await orgDoc.ref
+        .collection('mailAuditLogs')
+        .orderBy('createdAt', 'desc')
+        .limit(500)
+        .get();
+      return NextResponse.json({
+        ok: true,
+        orgId: orgDoc.id,
+        auditLogs: auditSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      });
+    }
+
     const [holdsSnap, dlpSnap, transportSnap, sharedSnap] = await Promise.all([
       orgDoc.ref.collection('mailLegalHolds').where('status', '==', 'active').get(),
       orgDoc.ref.collection('mailDlpRules').where('enabled', '==', true).get(),

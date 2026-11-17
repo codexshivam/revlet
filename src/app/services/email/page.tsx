@@ -157,13 +157,7 @@ export default function EmailServiceAdminPage() {
   // Pre-computed fallback DNS records for immediate display before network resolution
   const fallbackDnsRecords = useMemo<MailRequiredDnsRecord[]>(() => {
     const domain = (selectedOrg?.domain || "revlet.me").toLowerCase().trim()
-    const tokens =
-      selectedOrg?.mailDkimTokens &&
-      Array.isArray(selectedOrg.mailDkimTokens) &&
-      selectedOrg.mailDkimTokens.length === 3
-        ? selectedOrg.mailDkimTokens
-        : ["ses1", "ses2", "ses3"]
-    return [
+    const baseRecords: MailRequiredDnsRecord[] = [
       {
         id: "mx-primary",
         purpose: "Inbound Mail Routing (MX)",
@@ -192,37 +186,61 @@ export default function EmailServiceAdminPage() {
         ttl: "Auto",
         verified: false,
       },
+    ]
+
+    if (
+      selectedOrg?.mailDkimMode === "easydkim" &&
+      selectedOrg?.mailDkimTokens &&
+      Array.isArray(selectedOrg.mailDkimTokens) &&
+      selectedOrg.mailDkimTokens.length === 3
+    ) {
+      return [
+        ...baseRecords,
+        ...selectedOrg.mailDkimTokens.map((tok, idx) => ({
+          id: `cname-dkim-${idx + 1}`,
+          purpose: `Domain Signing Key #${idx + 1} (DKIM)`,
+          type: "CNAME" as const,
+          name: `${tok}._domainkey.${domain}`,
+          content: `${tok}.dkim.amazonses.com`,
+          ttl: "Auto",
+          verified: false,
+        })),
+      ]
+    }
+
+    const selector = selectedOrg?.mailDkimSelector || "revlet"
+    const publicKey = selectedOrg?.mailDkimPublicKey || ""
+    return [
+      ...baseRecords,
       {
-        id: "cname-dkim-1",
-        purpose: "Domain Signing Key #1 (DKIM)",
-        type: "CNAME",
-        name: `${tokens[0]}._domainkey.${domain}`,
-        content: `${tokens[0]}.dkim.amazonses.com`,
-        ttl: "Auto",
-        verified: false,
-      },
-      {
-        id: "cname-dkim-2",
-        purpose: "Domain Signing Key #2 (DKIM)",
-        type: "CNAME",
-        name: `${tokens[1]}._domainkey.${domain}`,
-        content: `${tokens[1]}.dkim.amazonses.com`,
-        ttl: "Auto",
-        verified: false,
-      },
-      {
-        id: "cname-dkim-3",
-        purpose: "Domain Signing Key #3 (DKIM)",
-        type: "CNAME",
-        name: `${tokens[2]}._domainkey.${domain}`,
-        content: `${tokens[2]}.dkim.amazonses.com`,
+        id: "txt-dkim-1",
+        purpose: "Outbound Mail Signing (DKIM)",
+        type: "TXT",
+        name: `${selector}._domainkey.${domain}`,
+        content: publicKey ? `v=DKIM1; k=rsa; p=${publicKey}` : "v=DKIM1; k=rsa; p=...",
         ttl: "Auto",
         verified: false,
       },
     ]
-  }, [selectedOrg?.domain, selectedOrg?.mailDkimTokens])
+  }, [
+    selectedOrg?.domain,
+    selectedOrg?.mailDkimMode,
+    selectedOrg?.mailDkimSelector,
+    selectedOrg?.mailDkimPublicKey,
+    selectedOrg?.mailDkimTokens,
+  ])
 
   const displayDnsRecords = requiredDnsRecords.length > 0 ? requiredDnsRecords : fallbackDnsRecords
+  const coreDnsRecords = useMemo(
+    () => displayDnsRecords.filter((r) => r.id !== "txt-spf" && r.id !== "txt-dmarc"),
+    [displayDnsRecords]
+  )
+  const verifiedCoreDnsCount = useMemo(
+    () => coreDnsRecords.filter((r) => r.verified).length,
+    [coreDnsRecords]
+  )
+  const areCoreRecordsVerified =
+    coreDnsRecords.length > 0 && verifiedCoreDnsCount === coreDnsRecords.length
 
   // Directory collections
   const [orgUnits, setOrgUnits] = useState<MailOrgUnit[]>([])
@@ -666,11 +684,7 @@ export default function EmailServiceAdminPage() {
 
   const handleCopyAllRecords = () => {
     if (!selectedOrg?.domain) return
-    const recordsToCopy = requiredDnsRecords.length > 0 ? requiredDnsRecords : [
-      { purpose: "Inbound Mail Routing (MX)", type: "MX", name: selectedOrg.domain, content: "mx.revlet.me", priority: 10 },
-      { purpose: "Sender Policy Framework (SPF)", type: "TXT", name: selectedOrg.domain, content: "v=spf1 mx include:_spf.mx.revlet.me include:amazonses.com ~all" },
-      { purpose: "Domain Authentication Policy (DMARC)", type: "TXT", name: `_dmarc.${selectedOrg.domain}`, content: "v=DMARC1; p=quarantine; pct=100;" },
-    ]
+    const recordsToCopy = serviceActive ? displayDnsRecords : coreDnsRecords
 
     const text = recordsToCopy
       .map((r, i) => {
@@ -689,7 +703,9 @@ export default function EmailServiceAdminPage() {
     setTimeout(() => setCopiedKey(null), 2000)
     toast({
       title: "All DNS records copied",
-      description: "Copied a complete summary of all required MX, SPF, DMARC, and DKIM records to clipboard.",
+      description: serviceActive
+        ? "Copied all MX, DKIM, SPF, and DMARC records to clipboard."
+        : "Copied required Inbound (MX) and Outbound (DKIM) records to clipboard.",
     })
   }
 
@@ -715,6 +731,9 @@ export default function EmailServiceAdminPage() {
       }
 
       setServiceActive(true)
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("revlet-orgs-refresh"))
+      }
 
       if (res.data?.dnsProvisionedAutomatically) {
         toast({
@@ -756,6 +775,9 @@ export default function EmailServiceAdminPage() {
 
       setServiceActive(false)
       setIsDeactivateConfirmOpen(false)
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("revlet-orgs-refresh"))
+      }
       toast({
         title: "Email Service deactivated",
         description: "Email Service has been paused for this organization.",
@@ -1545,38 +1567,33 @@ export default function EmailServiceAdminPage() {
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-semibold text-slate-900">External DNS Setup</p>
                           <span className="font-mono text-[11px] text-slate-500 tabular-nums">
-                            {verifiedDnsCount}/{displayDnsRecords.length} verified
+                            {verifiedCoreDnsCount}/{coreDnsRecords.length} verified
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          Add the required DNS records below at your domain provider, then verify and activate.
+                          Add the required Inbound (MX) and Outbound (DKIM) DNS records below at your domain provider, then verify your domain to activate.
                         </p>
                       </div>
                       <div className="space-y-2">
-                        <Button
-                          onClick={handleActivateService}
-                          disabled={isActivating}
-                          className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
-                        >
-                          {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                          {isActivating
-                            ? "Activating..."
-                            : isMxVerified
-                            ? "Activate"
-                            : "Verify & Activate"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={handleSyncDnsRecords}
-                          disabled={isSyncingDns}
-                          className="w-full h-9 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none flex items-center justify-center gap-2"
-                        >
-                          <RefreshCw
-                            className={cn("w-3.5 h-3.5 text-slate-400", isSyncingDns && "animate-spin")}
-                            strokeWidth={1.5}
-                          />
-                          {isSyncingDns ? "Checking..." : "Check DNS Propagation"}
-                        </Button>
+                        {areCoreRecordsVerified ? (
+                          <Button
+                            onClick={handleActivateService}
+                            disabled={isActivating}
+                            className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+                          >
+                            {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            {isActivating ? "Activating..." : "Verify & Activate"}
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={handleSyncDnsRecords}
+                            disabled={isSyncingDns}
+                            className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
+                          >
+                            {isSyncingDns && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            {isSyncingDns ? "Verifying Domain..." : "Verify Domain"}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1598,7 +1615,7 @@ export default function EmailServiceAdminPage() {
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-xs text-slate-500 tabular-nums mr-1">
-                    {verifiedDnsCount} of {displayDnsRecords.length} verified
+                    {verifiedCoreDnsCount} of {coreDnsRecords.length} verified
                   </span>
                   <Button
                     variant="outline"
@@ -1677,7 +1694,7 @@ export default function EmailServiceAdminPage() {
                         </TableRow>
                       ))
                     ) : (
-                      displayDnsRecords.map((rec) => (
+                      coreDnsRecords.map((rec) => (
                       <TableRow key={rec.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/40">
                         <TableCell className="pl-5 py-3 text-xs font-medium text-slate-800">
                           {rec.purpose}
@@ -2904,23 +2921,43 @@ export default function EmailServiceAdminPage() {
                   </p>
                 </div>
 
-                <Button
-                  size="sm"
-                  onClick={handleSyncDnsRecords}
-                  disabled={isSyncingDns}
-                  className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
-                >
-                  {isSyncingDns ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
-                      {dnsServiceActive ? "Syncing Deliverability Records" : "Verifying Deliverability"}
-                    </>
-                  ) : dnsServiceActive ? (
-                    "Sync Deliverability Records"
-                  ) : (
-                    "Verify Deliverability"
-                  )}
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyAllRecords}
+                    className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none"
+                  >
+                    {copiedKey === "all-records" ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 mr-1.5 text-slate-900" strokeWidth={1.5} />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
+                        Copy All
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSyncDnsRecords}
+                    disabled={isSyncingDns}
+                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
+                  >
+                    {isSyncingDns ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
+                        {dnsServiceActive ? "Syncing Deliverability Records" : "Verifying Deliverability"}
+                      </>
+                    ) : dnsServiceActive ? (
+                      "Sync Deliverability Records"
+                    ) : (
+                      "Verify Deliverability"
+                    )}
+                  </Button>
+                </div>
               </div>
 
               <Table>

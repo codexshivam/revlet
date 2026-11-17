@@ -31,6 +31,25 @@ export default function SignupPage() {
     password: "",
   })
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const raw = sessionStorage.getItem("revlet_prefill_signup")
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (parsed && (parsed.email || parsed.password)) {
+        setUserFormData((prev) => ({
+          ...prev,
+          email: typeof parsed.email === "string" ? parsed.email : prev.email,
+          password: typeof parsed.password === "string" ? parsed.password : prev.password,
+        }))
+      }
+      sessionStorage.removeItem("revlet_prefill_signup")
+    } catch {
+      // Ignore malformed prefill payload
+    }
+  }, [])
+
   // Stored state for created auth credentials across steps
   const [createdUserData, setCreatedUserData] = useState<{
     uid: string
@@ -141,29 +160,34 @@ export default function SignupPage() {
 
       // Check and claim any pending team invitations for this email
       const idToken = await userCredential.user.getIdToken()
-      void fetch("/api/auth/action-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          type: "verify_email",
-          email: userCredential.user.email || userFormData.email.trim(),
+      const userEmail = userCredential.user.email || userFormData.email.trim()
+      await Promise.allSettled([
+        fetch("/api/auth/action-email", {
+          method: "POST",
+          keepalive: true,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            type: "verify_email",
+            email: userEmail,
+          }),
         }),
-      }).catch(() => {})
-      void fetch("/api/auth/action-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          type: "welcome",
-          email: userCredential.user.email || userFormData.email.trim(),
-          displayName: userFormData.name.trim(),
+        fetch("/api/auth/action-email", {
+          method: "POST",
+          keepalive: true,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            type: "welcome",
+            email: userEmail,
+            displayName: userFormData.name.trim(),
+          }),
         }),
-      }).catch(() => {})
+      ])
       const inviteRes = await checkAndClaimInvitations(idToken)
       if (inviteRes.success && inviteRes.data?.hasInvitations) {
         toast({

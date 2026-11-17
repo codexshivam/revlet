@@ -194,6 +194,45 @@ export default function LoginPage() {
 
       await evaluateMfaGate(userCredential.user)
     } catch (error: any) {
+      const code = error?.code || ""
+      if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
+        let emailExists = true
+        if (code === "auth/user-not-found") {
+          emailExists = false
+        } else {
+          try {
+            const checkRes = await fetch("/api/auth/check-email", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: email.trim() }),
+            })
+            if (checkRes.ok) {
+              const checkData = await checkRes.json().catch(() => ({}))
+              if (checkData.ok && checkData.exists === false) {
+                emailExists = false
+              }
+            }
+          } catch {
+            // Fall through to standard error toast if check fails
+          }
+        }
+
+        if (!emailExists) {
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(
+              "revlet_prefill_signup",
+              JSON.stringify({ email: email.trim(), password })
+            )
+          }
+          toast({
+            title: "Account not found",
+            description: "Redirecting to sign up with your email and password prefilled.",
+          })
+          router.push("/signup")
+          return
+        }
+      }
+
       toast({
         variant: "destructive",
         title: "Authentication failed",

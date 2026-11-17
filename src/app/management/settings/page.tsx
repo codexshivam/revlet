@@ -204,14 +204,19 @@ export default function SettingsPage() {
       await updatePassword(user, newPassword)
 
       const idToken = await user.getIdToken()
-      void fetch("/api/auth/action-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ type: "password_updated" }),
-      }).catch(() => {})
+      try {
+        await fetch("/api/auth/action-email", {
+          method: "POST",
+          keepalive: true,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ type: "password_updated" }),
+        })
+      } catch {
+        // Non-blocking notification
+      }
 
       toast({
         title: "Password updated",

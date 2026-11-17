@@ -773,14 +773,14 @@ export default function AccountHomePage() {
 
           {/* Register / edit organization dialog */}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
-              <DialogHeader className="border-b border-slate-100 p-6">
+            <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+              <DialogHeader className="border-b border-slate-100 p-6 shrink-0">
                 <DialogTitle className="font-headline font-semibold text-base text-slate-900">
                   {editingOrg ? "Edit Organization Details" : "Register Organization"}
                 </DialogTitle>
               </DialogHeader>
 
-              <ScrollArea className="max-h-[70vh]">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="p-6 space-y-6">
                   {/* Organization core */}
                   <div className="space-y-4">
@@ -1007,9 +1007,9 @@ export default function AccountHomePage() {
                     </div>
                   )}
                 </div>
-              </ScrollArea>
+              </div>
 
-              <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+              <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2 shrink-0">
                 <Button
                   variant="outline"
                   onClick={() => setIsDialogOpen(false)}

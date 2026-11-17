@@ -209,7 +209,11 @@ export async function POST(req: NextRequest) {
         { merge: true }
       );
       if (!hadEnrolledMfa) {
-        void sendMfaStatusEmail({ to: email, enabled: true }).catch(() => {});
+        try {
+          await sendMfaStatusEmail({ to: email, enabled: true });
+        } catch (mailErr) {
+          console.error('[mfa] Failed to send MFA enrollment email (TOTP):', mailErr);
+        }
       }
       return setMfaSessionCookie(req, NextResponse.json({ ok: true }), uid, email, 'totp');
     }
@@ -227,7 +231,11 @@ export async function POST(req: NextRequest) {
       const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
       await userRef.set({ totpEnabled: false, totpSecret: null }, { merge: true });
       if (hadEnrolledMfa && !(await checkHasEnrolledMfa(userRef))) {
-        void sendMfaStatusEmail({ to: email, enabled: false }).catch(() => {});
+        try {
+          await sendMfaStatusEmail({ to: email, enabled: false });
+        } catch (mailErr) {
+          console.error('[mfa] Failed to send MFA disabled email (TOTP):', mailErr);
+        }
       }
       return NextResponse.json({ ok: true });
     }
@@ -277,7 +285,11 @@ export async function POST(req: NextRequest) {
         createdAt: new Date().toISOString(),
       });
       if (!hadEnrolledMfa) {
-        void sendMfaStatusEmail({ to: email, enabled: true }).catch(() => {});
+        try {
+          await sendMfaStatusEmail({ to: email, enabled: true });
+        } catch (mailErr) {
+          console.error('[mfa] Failed to send MFA enrollment email (Passkey):', mailErr);
+        }
       }
       return setMfaSessionCookie(req, NextResponse.json({ ok: true }), uid, email, 'passkey');
     }
@@ -290,7 +302,11 @@ export async function POST(req: NextRequest) {
       const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
       await userRef.collection('mfaPasskeys').doc(credentialId).delete();
       if (hadEnrolledMfa && !(await checkHasEnrolledMfa(userRef))) {
-        void sendMfaStatusEmail({ to: email, enabled: false }).catch(() => {});
+        try {
+          await sendMfaStatusEmail({ to: email, enabled: false });
+        } catch (mailErr) {
+          console.error('[mfa] Failed to send MFA disabled email (Passkey):', mailErr);
+        }
       }
       return NextResponse.json({ ok: true });
     }
@@ -395,10 +411,14 @@ export async function POST(req: NextRequest) {
         { merge: true }
       );
       if (!hadEnrolledMfa) {
-        void sendMfaStatusEmail({
-          to: email || data.secondaryEmail || '',
-          enabled: true,
-        }).catch(() => {});
+        try {
+          await sendMfaStatusEmail({
+            to: email || data.secondaryEmail || '',
+            enabled: true,
+          });
+        } catch (mailErr) {
+          console.error('[mfa] Failed to send MFA enrollment email (Secondary Email):', mailErr);
+        }
       }
       const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
       return setMfaSessionCookie(

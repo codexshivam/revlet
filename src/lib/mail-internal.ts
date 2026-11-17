@@ -198,7 +198,10 @@ export async function dispatchStalwartApi(
   return { ok: true, status: 200 };
 }
 
-export async function ensureStalwartDomainId(domain: string): Promise<string | null> {
+export async function ensureStalwartDomainId(
+  domain: string,
+  options?: { disableAutoDkim?: boolean }
+): Promise<string | null> {
   const cleanDomain = domain.toLowerCase().trim();
   if (!cleanDomain) return null;
 
@@ -207,7 +210,44 @@ export async function ensureStalwartDomainId(domain: string): Promise<string | n
   ]);
   const domList: any[] = responses.find((r) => r[0] === 'x:Domain/get')?.[1]?.list || [];
   const existing = domList.find((d) => (d.name || '').toLowerCase() === cleanDomain);
-  if (existing?.id) return existing.id;
+  if (existing?.id) {
+    if (options?.disableAutoDkim && existing.dkimManagement?.['@type'] !== 'Disabled') {
+      await callStalwartJmap([
+        [
+          'x:Domain/set',
+          {
+            accountId: 'b',
+            update: {
+              [existing.id]: {
+                dkimManagement: { '@type': 'Disabled' },
+              },
+            },
+          },
+          'updDomDkim',
+        ],
+        [
+          'x:Action/set',
+          {
+            accountId: 'b',
+            create: { act1: { '@type': 'ReloadSettings' } },
+          },
+          'reloadDom',
+        ],
+      ]);
+    }
+    return existing.id;
+  }
+
+  const dkimManagement = options?.disableAutoDkim
+    ? { '@type': 'Disabled' }
+    : {
+        '@type': 'Automatic',
+        algorithms: { Dkim1RsaSha256: true },
+        selectorTemplate: 'v{version}-{algorithm}-{date-%Y%m%d}',
+        rotateAfter: 7776000000,
+        retireAfter: 604800000,
+        deleteAfter: 2592000000,
+      };
 
   const createRes = await callStalwartJmap([
     [
@@ -219,14 +259,7 @@ export async function ensureStalwartDomainId(domain: string): Promise<string | n
             name: cleanDomain,
             enable: true,
             description: `Revlet Managed Domain (${cleanDomain})`,
-            dkimManagement: {
-              '@type': 'Automatic',
-              algorithms: { Dkim1RsaSha256: true },
-              selectorTemplate: 'v{version}-{algorithm}-{date-%Y%m%d}',
-              rotateAfter: 7776000000,
-              retireAfter: 604800000,
-              deleteAfter: 2592000000,
-            },
+            dkimManagement,
             subAddressing: { '@type': 'Enabled' },
           },
         },
@@ -247,8 +280,11 @@ export async function ensureStalwartDomainId(domain: string): Promise<string | n
   return createdId || null;
 }
 
-export async function syncStalwartDomainPrincipal(domain: string) {
-  await ensureStalwartDomainId(domain);
+export async function syncStalwartDomainPrincipal(
+  domain: string,
+  options?: { disableAutoDkim?: boolean }
+) {
+  await ensureStalwartDomainId(domain, options);
 }
 
 export async function syncStalwartUserPrincipal(params: {

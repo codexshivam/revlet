@@ -42,28 +42,38 @@ export async function notifySupportTicketEvent(
         });
       }
 
-      if (supportInbox && supportInbox !== callerEmail) {
-        await sendRevletAlertEmail({
-          to: supportInbox,
-          subject: `[Support Queue] New Ticket: ${params.subject}`,
-          title: 'New Support Ticket Submitted',
-          subtitle: 'Revlet Support Queue',
-          summaryLines: [
-            params.messagePreview
-              ? params.messagePreview.slice(0, 300)
-              : 'A user submitted a new support ticket.',
-          ],
-          details: [
-            { label: 'Ticket ID', value: params.ticketId },
-            { label: 'From', value: callerEmail || decoded.uid },
-            { label: 'Category', value: params.category },
-            { label: 'Subject', value: params.subject },
-          ],
-          ctaUrl: 'https://app.revlet.me/support',
-          ctaLabel: 'Open Support Console',
-        });
+      const reporterName =
+        typeof decoded.name === 'string' && decoded.name.trim()
+          ? decoded.name.trim()
+          : callerEmail.split('@')[0] || 'User';
+      const reportMessage = (params.messagePreview || '').trim();
+
+      const reportSent = await sendRevletAlertEmail({
+        to: 'hello@revlet.me',
+        from: 'Revlet Alerts <alerts@revlet.me>',
+        senderBadge: 'alerts@revlet.me',
+        subject: `[Support Report] Case ${params.ticketId}`,
+        title: 'New Support Report Submitted',
+        subtitle: `Support Center report from ${reporterName} (${callerEmail || decoded.uid})`,
+        summaryLines: [
+          reportMessage || 'A user submitted a new support report.',
+        ],
+        details: [
+          { label: 'Case ID', value: params.ticketId },
+          { label: 'Subject', value: params.subject },
+          { label: 'Category', value: params.category },
+          { label: 'Reporter', value: `${reporterName} (${callerEmail || decoded.uid})` },
+          { label: 'User UID', value: decoded.uid },
+          { label: 'Status', value: 'Open' },
+          { label: 'Portal', value: 'app.revlet.me/support' },
+        ],
+        ctaUrl: 'https://app.revlet.me/support',
+        ctaLabel: 'Open Support Console',
+      });
+      if (!reportSent) {
+        console.error('[support] Failed to send support report email to hello@revlet.me for case:', params.ticketId);
       }
-      return { success: true };
+      return { success: reportSent };
     }
 
     // Ticket reply event: only admins can notify the ticket owner, or the ticket owner can notify supportInbox

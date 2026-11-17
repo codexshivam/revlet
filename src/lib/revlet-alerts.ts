@@ -12,7 +12,7 @@ function awsSha256Hex(data: string): string {
 }
 
 export async function callAwsSesV2Api(
-  method: 'POST' | 'GET',
+  method: 'POST' | 'GET' | 'PUT',
   path: string,
   bodyObj?: Record<string, unknown>
 ): Promise<{ ok: boolean; status: number; data: any }> {
@@ -74,7 +74,7 @@ export async function callAwsSesV2Api(
         'x-amz-date': amzDate,
         Authorization: authorization,
       },
-      body: method === 'POST' ? bodyStr : undefined,
+      body: method === 'POST' || method === 'PUT' ? bodyStr : undefined,
       cache: 'no-store',
     });
     const data = await res.json().catch(() => ({}));
@@ -225,7 +225,7 @@ function buildInstitutionalEmailContent(
     : '';
 
   const defaultSecurityNote =
-    senderBadge === 'accounts@revlet.me'
+    senderBadge === 'account@revlet.me' || senderBadge === 'accounts@revlet.me'
       ? `If you did not initiate this request, no modifications have been made to your account. You can safely disregard this email or report suspicious activity to ${supportEmail}.`
       : `This message was generated automatically by Revlet Platform. If you believe this notification was sent in error, contact ${supportEmail}.`;
   const securityNoteText = params.securityNote || defaultSecurityNote;
@@ -607,6 +607,13 @@ async function dispatchRevletSesEmail(params: {
     return { sent: true, status: apiRes.status };
   }
 
+  console.error('[revlet-alerts] SES v2 API failed:', {
+    status: apiRes.status,
+    from: params.fromAddress,
+    to: recipients,
+    error: apiRes.data,
+  });
+
   const smtpOk = await sendViaAwsSesSmtp({
     fromAddress: params.fromAddress,
     recipients,
@@ -614,6 +621,13 @@ async function dispatchRevletSesEmail(params: {
     html,
     text,
   });
+
+  if (!smtpOk) {
+    console.error('[revlet-alerts] SES SMTP fallback also failed:', {
+      from: params.fromAddress,
+      to: recipients,
+    });
+  }
 
   return { sent: smtpOk, status: smtpOk ? 200 : apiRes.status || 502 };
 }
@@ -623,6 +637,8 @@ async function dispatchRevletSesEmail(params: {
  */
 export async function sendRevletAlertEmail(params: {
   to: string;
+  from?: string;
+  senderBadge?: string;
   subject: string;
   title: string;
   subtitle: string;
@@ -632,13 +648,16 @@ export async function sendRevletAlertEmail(params: {
   ctaLabel?: string;
 }): Promise<boolean> {
   const fromAddress = (
-    process.env.REVLET_ALERTS_FROM || 'Revlet Alerts <alerts@revlet.me>'
+    params.from ||
+    process.env.REVLET_ALERTS_FROM ||
+    'Revlet Alerts <alerts@revlet.me>'
   ).trim();
+  const senderBadge = (params.senderBadge || 'alerts@revlet.me').trim();
 
   const res = await dispatchRevletSesEmail({
     payload: params,
     fromAddress,
-    senderBadge: 'alerts@revlet.me',
+    senderBadge,
     defaultCta: {
       url: 'https://app.revlet.me/services/email',
       label: 'Open Revlet Console',
@@ -649,19 +668,19 @@ export async function sendRevletAlertEmail(params: {
 }
 
 /**
- * Sends a branded Revlet Authentication / MFA Security email from `accounts@revlet.me` (no-reply).
+ * Sends a branded Revlet Authentication / MFA Security email from `account@revlet.me` (no-reply).
  */
 export async function sendRevletAccountEmail(
   params: RevletEmailPayload
 ): Promise<{ sent: boolean; status: number }> {
   const fromAddress = (
-    process.env.REVLET_ACCOUNTS_FROM || 'Revlet Accounts <accounts@revlet.me>'
+    process.env.REVLET_ACCOUNTS_FROM || 'Revlet Account <account@revlet.me>'
   ).trim();
 
   return dispatchRevletSesEmail({
     payload: params,
     fromAddress,
-    senderBadge: 'accounts@revlet.me',
+    senderBadge: 'account@revlet.me',
   });
 }
 

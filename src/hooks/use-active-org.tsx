@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useUser, useFirestore } from "@/firebase"
-import { collection, query, where, or, getDocs } from "firebase/firestore"
+import { collection, query, where, or, getDocs, onSnapshot } from "firebase/firestore"
 import { checkAndClaimInvitations } from "@/app/actions/team"
 
 export interface Organization {
@@ -38,6 +38,9 @@ export interface Organization {
   mailCatchAllUserId?: string | null
   mailCatchAllEmail?: string | null
   mailDkimTokens?: string[]
+  mailDkimMode?: 'byodkim' | 'easydkim'
+  mailDkimSelector?: string
+  mailDkimPublicKey?: string
   createdAt?: any
   updatedAt?: any
 }
@@ -47,6 +50,7 @@ interface OrgContextType {
   activeOrg: Organization | undefined
   activeOrgId: string
   setActiveOrgId: (id: string) => void
+  refreshOrgs: () => Promise<void>
   loading: boolean
 }
 
@@ -129,12 +133,77 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   }, [user, userLoading, db])
 
   useEffect(() => {
-    fetchOrgs()
+    if (userLoading) {
+      setLoading(true)
+      return
+    }
+    if (!user) {
+      setOrgs([])
+      setActiveOrgId("")
+      setLoading(false)
+      claimedUidRef.current = null
+      return
+    }
+
+    // Claim invitations once if verified
+    if (user.emailVerified && claimedUidRef.current !== user.uid) {
+      claimedUidRef.current = user.uid
+      user
+        .getIdToken()
+        .then((idToken) => checkAndClaimInvitations(idToken))
+        .catch((claimErr) => console.error("Failed to check invitations:", claimErr))
+    }
+
+    const q = query(
+      collection(db, "organizations"),
+      or(
+        where("ownerId", "==", user.uid),
+        where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
+      )
+    )
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        const fetched = snap.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((o: any) => o.status !== "Pending Deletion") as Organization[]
+
+        setOrgs(fetched)
+
+        const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
+        const found = fetched.find((o) => o.id === storedId)
+        if (found) {
+          setActiveOrgId(found.id)
+        } else if (fetched.length > 0) {
+          setActiveOrgId(fetched[0].id)
+          if (typeof window !== "undefined") {
+            localStorage.setItem("selectedOrgId", fetched[0].id)
+          }
+        } else {
+          setActiveOrgId("")
+        }
+        setLoading(false)
+      },
+      (error) => {
+        console.error("Error listening to organizations:", error)
+        fetchOrgs()
+      }
+    )
+
     if (typeof window !== "undefined") {
       window.addEventListener("revlet-orgs-refresh", fetchOrgs)
-      return () => window.removeEventListener("revlet-orgs-refresh", fetchOrgs)
     }
-  }, [fetchOrgs])
+    return () => {
+      unsubscribe()
+      if (typeof window !== "undefined") {
+        window.removeEventListener("revlet-orgs-refresh", fetchOrgs)
+      }
+    }
+  }, [user, userLoading, db, fetchOrgs])
 
   useEffect(() => {
     const handleOrgChanged = () => {
@@ -179,9 +248,10 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       activeOrg,
       activeOrgId: effectiveOrgId,
       setActiveOrgId: changeActiveOrg,
+      refreshOrgs: fetchOrgs,
       loading,
     }),
-    [orgs, activeOrg, effectiveOrgId, changeActiveOrg, loading]
+    [orgs, activeOrg, effectiveOrgId, changeActiveOrg, fetchOrgs, loading]
   )
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>
@@ -201,6 +271,7 @@ export function useActiveOrg(): OrgContextType {
           window.dispatchEvent(new Event("active-org-changed"))
         }
       },
+      refreshOrgs: async () => {},
       loading: true,
     }
   }

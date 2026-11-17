@@ -296,6 +296,48 @@ async function syncCustomDkimTargetCnames(tokens: string[]): Promise<void> {
   }
 }
 
+interface OrgDkimConfig {
+  mode: 'byodkim' | 'easydkim';
+  selector: string;
+  publicKey: string;
+  tokens: string[];
+}
+
+async function provisionAwsSesByoDkim(
+  domain: string,
+  selector: string,
+  privateKeyB64: string
+): Promise<boolean> {
+  const cleanDomain = domain.toLowerCase().trim();
+  if (!cleanDomain || cleanDomain.includes('@') || !privateKeyB64) return false;
+
+  const encoded = encodeURIComponent(cleanDomain);
+  const getRes = await callAwsSesV2Api('GET', `/v2/email/identities/${encoded}`);
+
+  if (getRes.ok) {
+    if (getRes.data?.DkimAttributes?.SigningAttributesOrigin === 'EXTERNAL') {
+      return true;
+    }
+    const putRes = await callAwsSesV2Api('PUT', `/v2/email/identities/${encoded}/dkim/signing`, {
+      SigningAttributesOrigin: 'EXTERNAL',
+      SigningAttributes: {
+        DomainSigningSelector: selector,
+        DomainSigningPrivateKey: privateKeyB64,
+      },
+    });
+    return putRes.ok;
+  }
+
+  const createRes = await callAwsSesV2Api('POST', '/v2/email/identities', {
+    EmailIdentity: cleanDomain,
+    DkimSigningAttributes: {
+      DomainSigningSelector: selector,
+      DomainSigningPrivateKey: privateKeyB64,
+    },
+  });
+  return createRes.ok;
+}
+
 async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | null> {
   const cleanDomain = domain.toLowerCase().trim();
   // Guard: strictly enforce DOMAIN identities only, never individual EMAIL_ADDRESS identities
@@ -357,13 +399,16 @@ const publicDnsCache = new Map<
  */
 async function resolvePublicDnsRecords(
   domain: string,
-  dkimTokens: string[],
+  dkimConfig: OrgDkimConfig,
   bypassCache = false
 ): Promise<Array<{ type: string; name: string; content: string; priority?: number }>> {
   const normalizedDomain = domain.toLowerCase().trim();
   if (!normalizedDomain) return [];
 
-  const cacheKey = `${normalizedDomain}:${dkimTokens.slice(0, 3).join(',')}`;
+  const cacheKey =
+    dkimConfig.mode === 'byodkim'
+      ? `${normalizedDomain}:byodkim:${dkimConfig.selector}`
+      : `${normalizedDomain}:${dkimConfig.tokens.slice(0, 3).join(',')}`;
   if (!bypassCache) {
     const cached = publicDnsCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -379,11 +424,45 @@ async function resolvePublicDnsRecords(
       new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
     ]).catch(() => null);
 
+  if (dkimConfig.mode === 'byodkim') {
+    const dkimName = `${dkimConfig.selector}._domainkey.${normalizedDomain}`;
+    const [mxRes, txtRes, dmarcRes, dkimTxtRes] = await Promise.all([
+      withTimeout(dnsPromises.resolveMx(normalizedDomain)),
+      withTimeout(dnsPromises.resolveTxt(normalizedDomain)),
+      withTimeout(dnsPromises.resolveTxt(`_dmarc.${normalizedDomain}`)),
+      withTimeout(dnsPromises.resolveTxt(dkimName)),
+    ]);
+
+    if (Array.isArray(mxRes)) {
+      for (const mx of mxRes) {
+        records.push({ type: 'MX', name: normalizedDomain, content: mx.exchange, priority: mx.priority });
+      }
+    }
+    if (Array.isArray(txtRes)) {
+      for (const chunks of txtRes) {
+        records.push({ type: 'TXT', name: normalizedDomain, content: chunks.join('') });
+      }
+    }
+    if (Array.isArray(dmarcRes)) {
+      for (const chunks of dmarcRes) {
+        records.push({ type: 'TXT', name: `_dmarc.${normalizedDomain}`, content: chunks.join('') });
+      }
+    }
+    if (Array.isArray(dkimTxtRes)) {
+      for (const chunks of dkimTxtRes) {
+        records.push({ type: 'TXT', name: dkimName, content: chunks.join('') });
+      }
+    }
+
+    publicDnsCache.set(cacheKey, { records, expiresAt: Date.now() + PUBLIC_DNS_CACHE_TTL_MS });
+    return records;
+  }
+
   const [mxRes, txtRes, dmarcRes, ...cnameResults] = await Promise.all([
     withTimeout(dnsPromises.resolveMx(normalizedDomain)),
     withTimeout(dnsPromises.resolveTxt(normalizedDomain)),
     withTimeout(dnsPromises.resolveTxt(`_dmarc.${normalizedDomain}`)),
-    ...dkimTokens.slice(0, 3).map((token) =>
+    ...dkimConfig.tokens.slice(0, 3).map((token) =>
       withTimeout(dnsPromises.resolveCname(`${token}._domainkey.${normalizedDomain}`))
     ),
   ]);
@@ -419,7 +498,7 @@ async function resolvePublicDnsRecords(
     }
   }
 
-  dkimTokens.slice(0, 3).forEach((token, idx) => {
+  dkimConfig.tokens.slice(0, 3).forEach((token, idx) => {
     const cnames = cnameResults[idx];
     if (Array.isArray(cnames)) {
       for (const target of cnames) {
@@ -442,7 +521,7 @@ async function resolvePublicDnsRecords(
 
 function buildRequiredDnsRecords(
   domain: string,
-  dkimTokens: string[],
+  dkimConfig: OrgDkimConfig,
   liveRecords: Array<{ type: string; name: string; content: string; priority?: number }> = []
 ): MailRequiredDnsRecord[] {
   const normalizedDomain = domain.toLowerCase().trim();
@@ -497,54 +576,128 @@ function buildRequiredDnsRecords(
     },
   ];
 
-  dkimTokens.slice(0, 3).forEach((token, idx) => {
-    const recordName = `${token}._domainkey.${normalizedDomain}`;
-    const recordTarget = `${token}.${MAIL_DKIM_TARGET_DOMAIN}`;
+  if (dkimConfig.mode === 'byodkim') {
+    const recordName = `${dkimConfig.selector}._domainkey.${normalizedDomain}`;
+    const recordContent = `v=DKIM1; k=rsa; p=${dkimConfig.publicKey}`;
     records.push({
-      id: `cname-dkim-${idx + 1}`,
-      purpose: `Domain Signing Key #${idx + 1} (DKIM)`,
-      type: 'CNAME',
+      id: 'txt-dkim-1',
+      purpose: 'Outbound Mail Signing (DKIM)',
+      type: 'TXT',
       name: recordName,
-      content: recordTarget,
+      content: recordContent,
       ttl: 'Auto',
-      verified:
-        isPresent('CNAME', recordName, recordTarget) ||
-        isPresent('CNAME', recordName, `${token}.dkim.amazonses.com`),
+      verified: isPresent('TXT', recordName, `p=${dkimConfig.publicKey}`),
     });
-  });
+  } else {
+    dkimConfig.tokens.slice(0, 3).forEach((token, idx) => {
+      const recordName = `${token}._domainkey.${normalizedDomain}`;
+      const recordTarget = `${token}.${MAIL_DKIM_TARGET_DOMAIN}`;
+      records.push({
+        id: `cname-dkim-${idx + 1}`,
+        purpose: `Domain Signing Key #${idx + 1} (DKIM)`,
+        type: 'CNAME',
+        name: recordName,
+        content: recordTarget,
+        ttl: 'Auto',
+        verified:
+          isPresent('CNAME', recordName, recordTarget) ||
+          isPresent('CNAME', recordName, `${token}.dkim.amazonses.com`),
+      });
+    });
+  }
 
   return records;
 }
 
-async function ensureOrgDkimTokens(
+async function ensureOrgDkimConfig(
   orgId: string,
   orgData: FirebaseFirestore.DocumentData
-): Promise<string[]> {
+): Promise<OrgDkimConfig> {
   const domain = (orgData.domain || '').toLowerCase().trim();
 
-  // Attempt automatic AWS SES v2 Domain Identity registration & Easy DKIM token fetch
-  if (domain) {
-    const sesTokens = await provisionAwsSesDomainTokens(domain);
-    if (sesTokens && sesTokens.length === 3) {
-      if (!orgData.mailSesIdentityProvisioned || JSON.stringify(orgData.mailDkimTokens) !== JSON.stringify(sesTokens)) {
-        await adminDb.collection('organizations').doc(orgId).update({
-          mailDkimTokens: sesTokens,
-          mailSesIdentityProvisioned: true,
-          updatedAt: new Date().toISOString(),
-        }).catch(() => {});
-      }
-      return sesTokens;
+  // Preserve legacy active Easy DKIM domains that already verified 3 CNAMEs
+  if (
+    orgData.mailServiceActive === true &&
+    orgData.mailDkimMode !== 'byodkim' &&
+    !orgData.mailDkimPublicKey &&
+    Array.isArray(orgData.mailDkimTokens) &&
+    orgData.mailDkimTokens.length === 3
+  ) {
+    const sesTokens = domain ? await provisionAwsSesDomainTokens(domain) : null;
+    return {
+      mode: 'easydkim',
+      selector: 'revlet',
+      publicKey: '',
+      tokens: sesTokens && sesTokens.length === 3 ? sesTokens : orgData.mailDkimTokens,
+    };
+  }
+
+  const orgRef = adminDb.collection('organizations').doc(orgId);
+  const secretRef = orgRef.collection('privateSecrets').doc('dkim');
+  let selector = (typeof orgData.mailDkimSelector === 'string' && orgData.mailDkimSelector.trim()) || 'revlet';
+  let publicKey = typeof orgData.mailDkimPublicKey === 'string' ? orgData.mailDkimPublicKey.trim() : '';
+  let privateKey = '';
+
+  const secretSnap = await secretRef.get().catch(() => null);
+  if (secretSnap?.exists) {
+    const sData = secretSnap.data() || {};
+    if (typeof sData.privateKey === 'string' && sData.privateKey.trim()) {
+      privateKey = sData.privateKey.trim();
+    }
+    if (!publicKey && typeof sData.publicKey === 'string' && sData.publicKey.trim()) {
+      publicKey = sData.publicKey.trim();
     }
   }
 
-  if (Array.isArray(orgData.mailDkimTokens) && orgData.mailDkimTokens.length === 3) {
-    return orgData.mailDkimTokens;
+  if (!publicKey || !privateKey) {
+    const pair = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'der' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'der' },
+    });
+    publicKey = pair.publicKey.toString('base64');
+    privateKey = pair.privateKey.toString('base64');
+    selector = 'revlet';
+
+    await Promise.all([
+      secretRef.set({
+        selector,
+        publicKey,
+        privateKey,
+        updatedAt: new Date().toISOString(),
+      }),
+      orgRef.update({
+        mailDkimMode: 'byodkim',
+        mailDkimSelector: selector,
+        mailDkimPublicKey: publicKey,
+        updatedAt: new Date().toISOString(),
+      }),
+    ]).catch(() => {});
+  } else if (orgData.mailDkimMode !== 'byodkim' || orgData.mailDkimPublicKey !== publicKey) {
+    await orgRef.update({
+      mailDkimMode: 'byodkim',
+      mailDkimSelector: selector,
+      mailDkimPublicKey: publicKey,
+    }).catch(() => {});
   }
-  const tokens = generateDeterministicDkimTokens(orgId, domain || orgId);
-  await adminDb.collection('organizations').doc(orgId).update({
-    mailDkimTokens: tokens,
-  }).catch(() => {});
-  return tokens;
+
+  if (domain && (!orgData.mailSesIdentityProvisioned || orgData.mailDkimMode !== 'byodkim')) {
+    const provisioned = await provisionAwsSesByoDkim(domain, selector, privateKey);
+    if (provisioned) {
+      await orgRef.update({
+        mailSesIdentityProvisioned: true,
+        mailDkimMode: 'byodkim',
+        updatedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+  }
+
+  return {
+    mode: 'byodkim',
+    selector,
+    publicKey,
+    tokens: [],
+  };
 }
 
 async function provisionRequiredDnsRecordsOnZone(
@@ -552,7 +705,7 @@ async function provisionRequiredDnsRecordsOnZone(
   orgId: string,
   zoneId: string,
   domainName: string,
-  dkimTokens: string[]
+  dkimConfig: OrgDkimConfig
 ): Promise<{ success: boolean; addedCount: number; error?: string }> {
   try {
     const existingRes = await listDNSRecords(idToken, orgId, zoneId);
@@ -612,7 +765,7 @@ async function provisionRequiredDnsRecordsOnZone(
     const refreshedRes = await listDNSRecords(idToken, orgId, zoneId);
     const liveAfterDelete: any[] = refreshedRes.success ? refreshedRes.data || [] : currentRecords;
 
-    const requiredRecords = buildRequiredDnsRecords(normalizedDomain, dkimTokens, liveAfterDelete);
+    const requiredRecords = buildRequiredDnsRecords(normalizedDomain, dkimConfig, liveAfterDelete);
     let addedCount = 0;
 
     for (const req of requiredRecords) {
@@ -697,7 +850,7 @@ export async function getMailServiceState(idToken: string, orgId: string) {
   try {
     const { orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Read', 'Email: Add', 'Email: Admin']);
     const domain = (orgData.domain || '').toLowerCase().trim();
-    const dkimTokens = await ensureOrgDkimTokens(orgId, orgData);
+    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData);
 
     let liveRecords: any[] = [];
     const dnsServiceActive = Boolean(orgData.cloudflareZoneId);
@@ -711,10 +864,10 @@ export async function getMailServiceState(idToken: string, orgId: string) {
 
     // Fallback to live public DNS resolution if Cloudflare zone is not linked or returned empty
     if (liveRecords.length === 0 && domain) {
-      liveRecords = await resolvePublicDnsRecords(domain, dkimTokens);
+      liveRecords = await resolvePublicDnsRecords(domain, dkimConfig);
     }
 
-    const requiredDnsRecords = buildRequiredDnsRecords(domain, dkimTokens, liveRecords);
+    const requiredDnsRecords = buildRequiredDnsRecords(domain, dkimConfig, liveRecords);
     const rolling = await calculateRollingQuota(orgData);
 
     // Do NOT silently auto-activate organizations on read; require explicit activation via Email Service page.
@@ -771,7 +924,7 @@ export async function activateMailService(idToken: string, orgId: string) {
       return { success: false, error: 'Organization does not have a valid domain configured.' };
     }
 
-    const dkimTokens = await ensureOrgDkimTokens(orgId, orgData);
+    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData);
     let dnsProvisionedAutomatically = false;
     let dnsAddedCount = 0;
     let dnsWarning: string | undefined;
@@ -782,17 +935,31 @@ export async function activateMailService(idToken: string, orgId: string) {
         orgId,
         orgData.cloudflareZoneId,
         domain,
-        dkimTokens
+        dkimConfig
       );
       dnsProvisionedAutomatically = dnsResult.success;
       dnsAddedCount = dnsResult.addedCount;
       if (!dnsResult.success) {
         dnsWarning = dnsResult.error;
       }
+    } else {
+      const livePublic = await resolvePublicDnsRecords(domain, dkimConfig, true);
+      const checkedRecords = buildRequiredDnsRecords(domain, dkimConfig, livePublic);
+      const coreRequired = checkedRecords.filter((r) => r.id !== 'txt-spf' && r.id !== 'txt-dmarc');
+      const allCoreVerified = coreRequired.length > 0 && coreRequired.every((r) => r.verified);
+      if (!allCoreVerified) {
+        return {
+          success: false,
+          error:
+            'Please publish and verify both required DNS records (Inbound MX and Outbound DKIM) before activating Email Service.',
+        };
+      }
     }
 
-    // Ensure domain principal exists on Stalwart Mail Server
-    await syncStalwartDomainPrincipal(domain);
+    // Ensure domain principal exists on Stalwart Mail Server (disable Stalwart Auto-DKIM when SES BYODKIM signs outbound)
+    await syncStalwartDomainPrincipal(domain, {
+      disableAutoDkim: dkimConfig.mode === 'byodkim',
+    });
 
     await adminDb.collection('organizations').doc(orgId).update({
       mailServiceActive: true,
@@ -876,12 +1043,16 @@ export async function syncMailDnsRecords(idToken: string, orgId: string) {
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
     const domain = (orgData.domain || '').toLowerCase().trim();
-    const dkimTokens = await ensureOrgDkimTokens(orgId, orgData);
+    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData);
+
+    await syncStalwartDomainPrincipal(domain, {
+      disableAutoDkim: dkimConfig.mode === 'byodkim',
+    }).catch(() => {});
 
     if (!orgData.cloudflareZoneId) {
       // Perform live DNS verification against public resolvers
-      const livePublic = await resolvePublicDnsRecords(domain, dkimTokens);
-      const verifiedRecords = buildRequiredDnsRecords(domain, dkimTokens, livePublic);
+      const livePublic = await resolvePublicDnsRecords(domain, dkimConfig);
+      const verifiedRecords = buildRequiredDnsRecords(domain, dkimConfig, livePublic);
       const verifiedCount = verifiedRecords.filter((r) => r.verified).length;
       return {
         success: true,
@@ -894,7 +1065,7 @@ export async function syncMailDnsRecords(idToken: string, orgId: string) {
       orgId,
       orgData.cloudflareZoneId,
       domain,
-      dkimTokens
+      dkimConfig
     );
 
     if (!result.success) {

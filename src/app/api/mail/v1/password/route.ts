@@ -6,6 +6,7 @@ import {
   hashMailPassword,
 } from '@/lib/security/mail-crypto';
 import { syncStalwartUserPrincipal } from '@/lib/mail-internal';
+import { sendRevletAccountEmail } from '@/lib/revlet-alerts';
 
 function verifyInternalServiceSecret(req: NextRequest): boolean {
   const configuredSecret = (process.env.REVLET_MAIL_INTERNAL_SECRET || '').trim();
@@ -60,6 +61,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (newPassword.length > 128) {
+      return NextResponse.json(
+        { ok: false, error: 'New password must not exceed 128 characters.' },
+        { status: 400 }
+      );
+    }
+
+    if (!/[A-Za-z]/.test(newPassword) || !/[\d\W_]/.test(newPassword)) {
+      return NextResponse.json(
+        { ok: false, error: 'New password must include at least one letter and one number or symbol.' },
+        { status: 400 }
+      );
+    }
+
+    if (newPassword === currentPassword) {
+      return NextResponse.json(
+        { ok: false, error: 'New password must be different from your current password.' },
+        { status: 400 }
+      );
+    }
+
     const orgRef = adminDb.collection('organizations').doc(orgId);
     const orgDoc = await orgRef.get();
     if (!orgDoc.exists) {
@@ -108,6 +130,7 @@ export async function POST(req: NextRequest) {
     await userRef.update({
       passwordHash: newHash,
       updatedAt: nowIso,
+      passwordUpdatedAt: nowIso,
     });
 
     // Synchronize new credentials to Stalwart Mail Server
@@ -126,6 +149,35 @@ export async function POST(req: NextRequest) {
       });
     } catch (stalwartErr: any) {
       console.error('Failed to sync updated password to Stalwart:', stalwartErr);
+    }
+
+    // Send branded security notification email from accounts@revlet.me
+    const targetEmail = (userData.primaryEmail || '').trim().toLowerCase();
+    if (targetEmail) {
+      await sendRevletAccountEmail({
+        from: 'Revlet Accounts <accounts@revlet.me>',
+        senderBadge: 'accounts@revlet.me',
+        to: targetEmail,
+        subject: 'Your RevletMail password was updated',
+        title: 'Password Updated',
+        subtitle: 'Your RevletMail account password was recently changed.',
+        summaryLines: [
+          'The password for your RevletMail account has been updated. Your new password is active immediately across RevletMail webmail, IMAP, and SMTP.',
+          'All previous active sessions have been signed out for your security.',
+        ],
+        details: [
+          { label: 'Mailbox Account', value: targetEmail },
+          { label: 'Changed Via', value: 'RevletMail (mail.revlet.me)' },
+          { label: 'Status', value: 'Active' },
+          { label: 'Updated At', value: new Date(nowIso).toUTCString() },
+        ],
+        ctaUrl: 'https://mail.revlet.me',
+        ctaLabel: 'Open RevletMail',
+        securityNote:
+          'If you did not make this password change, contact your organization administrator or hello@revlet.me immediately to secure your account.',
+      }).catch((mailErr) => {
+        console.warn('Failed to send password updated notification email:', mailErr);
+      });
     }
 
     return NextResponse.json({

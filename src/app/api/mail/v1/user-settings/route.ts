@@ -176,7 +176,7 @@ export async function PUT(req: NextRequest) {
             ? incoming.undoSendSeconds
             : typeof prevSettings.undoSendSeconds === 'number'
               ? prevSettings.undoSendSeconds
-              : 10,
+              : 5,
         defaultReplyMode:
           incoming.defaultReplyMode === 'reply_all'
             ? 'reply_all'
@@ -218,6 +218,20 @@ export async function PUT(req: NextRequest) {
     }
     if (body.identityOverrides && typeof body.identityOverrides === 'object') {
       updatePayload.identityOverrides = body.identityOverrides;
+      const primaryOverride = (body.identityOverrides as Record<string, any>)[resolved.email];
+      if (primaryOverride && typeof primaryOverride.name === 'string' && primaryOverride.name.trim()) {
+        const mailUsersSnap = await resolved.orgDoc.ref
+          .collection('mailUsers')
+          .where('primaryEmail', '==', resolved.email)
+          .limit(1)
+          .get();
+        if (!mailUsersSnap.empty) {
+          await mailUsersSnap.docs[0].ref.update({
+            displayName: primaryOverride.name.trim(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
     }
 
     await docRef.set(updatePayload, { merge: true });

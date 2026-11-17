@@ -63,6 +63,8 @@ import {
   Upload,
   Download,
   AlertTriangle,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { toast } from "@/hooks/use-toast"
@@ -343,6 +345,8 @@ export default function EmailServiceAdminPage() {
 
   const [passwordTargetUser, setPasswordTargetUser] = useState<MailUserRecord | null>(null)
   const [newPasswordValue, setNewPasswordValue] = useState("")
+  const [showResetPassword, setShowResetPassword] = useState(false)
+  const [copiedResetPassword, setCopiedResetPassword] = useState(false)
   const [isResettingPassword, setIsResettingPassword] = useState(false)
 
   const [aliasTargetUser, setAliasTargetUser] = useState<MailUserRecord | null>(null)
@@ -3447,7 +3451,12 @@ export default function EmailServiceAdminPage() {
         <Dialog
           open={Boolean(passwordTargetUser)}
           onOpenChange={(open) => {
-            if (!open) setPasswordTargetUser(null)
+            if (!open) {
+              setPasswordTargetUser(null)
+              setNewPasswordValue("")
+              setShowResetPassword(false)
+              setCopiedResetPassword(false)
+            }
           }}
         >
           <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
@@ -3463,14 +3472,71 @@ export default function EmailServiceAdminPage() {
 
             <div className="p-6 space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">New Password</Label>
-                <Input
-                  type="password"
-                  value={newPasswordValue}
-                  onChange={(e) => setNewPasswordValue(e.target.value)}
-                  placeholder="8+ chars, letter & number/symbol"
-                  className="h-9 text-xs border-slate-200 rounded-lg"
-                />
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs font-medium text-slate-700">New Password</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
+                        const bytes = new Uint8Array(14)
+                        crypto.getRandomValues(bytes)
+                        const generated = Array.from(bytes, (b) => chars[b % chars.length]).join("")
+                        setNewPasswordValue(generated)
+                        setShowResetPassword(true)
+                      }}
+                      className="h-6 px-2 text-[11px] text-slate-600 hover:text-slate-900 gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Generate
+                    </Button>
+                    {newPasswordValue && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(newPasswordValue)
+                          setCopiedResetPassword(true)
+                          setTimeout(() => setCopiedResetPassword(false), 1800)
+                        }}
+                        className="h-6 px-2 text-[11px] text-slate-600 hover:text-slate-900 gap-1"
+                      >
+                        {copiedResetPassword ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        {copiedResetPassword ? "Copied" : "Copy"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="relative">
+                  <Input
+                    type={showResetPassword ? "text" : "password"}
+                    value={newPasswordValue}
+                    onChange={(e) => setNewPasswordValue(e.target.value)}
+                    placeholder="8+ chars, letter & number/symbol"
+                    className="h-9 text-xs border-slate-200 rounded-lg pr-9 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPassword((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    aria-label={showResetPassword ? "Hide password" : "Show password"}
+                  >
+                    {showResetPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <div className="pt-1 space-y-1 text-[11px]">
+                  <div className={cn("flex items-center gap-1.5", newPasswordValue.length >= 8 && newPasswordValue.length <= 128 ? "text-emerald-600" : "text-slate-400")}>
+                    <Check className="w-3 h-3" />
+                    <span>8–128 characters</span>
+                  </div>
+                  <div className={cn("flex items-center gap-1.5", /[A-Za-z]/.test(newPasswordValue) && /[\d\W_]/.test(newPasswordValue) ? "text-emerald-600" : "text-slate-400")}>
+                    <Check className="w-3 h-3" />
+                    <span>At least one letter and one number or symbol</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3486,7 +3552,13 @@ export default function EmailServiceAdminPage() {
               <Button
                 size="sm"
                 onClick={handleResetUserPassword}
-                disabled={isResettingPassword || newPasswordValue.length < 8}
+                disabled={
+                  isResettingPassword ||
+                  newPasswordValue.length < 8 ||
+                  newPasswordValue.length > 128 ||
+                  !/[A-Za-z]/.test(newPasswordValue) ||
+                  !/[\d\W_]/.test(newPasswordValue)
+                }
                 className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
               >
                 {isResettingPassword && (

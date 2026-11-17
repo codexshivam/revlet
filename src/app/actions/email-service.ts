@@ -1764,9 +1764,12 @@ export async function resetMailUserPassword(
 
     const userData = userDoc.data()!;
 
+    const nowIso = new Date().toISOString();
     await userRef.update({
       passwordHash: hashMailPassword(newPassword),
-      updatedAt: new Date().toISOString(),
+      updatedAt: nowIso,
+      passwordUpdatedAt: nowIso,
+      passwordUpdatedBy: email,
     });
 
     await syncStalwartUserPrincipal({

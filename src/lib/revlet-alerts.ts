@@ -671,16 +671,19 @@ export async function sendRevletAlertEmail(params: {
  * Sends a branded Revlet Authentication / MFA Security email from `account@revlet.me` (no-reply).
  */
 export async function sendRevletAccountEmail(
-  params: RevletEmailPayload
+  params: RevletEmailPayload & { from?: string; senderBadge?: string }
 ): Promise<{ sent: boolean; status: number }> {
   const fromAddress = (
-    process.env.REVLET_ACCOUNTS_FROM || 'Revlet Account <account@revlet.me>'
+    params.from ||
+    process.env.REVLET_ACCOUNTS_FROM ||
+    'Revlet Account <account@revlet.me>'
   ).trim();
+  const senderBadge = (params.senderBadge || 'account@revlet.me').trim();
 
   return dispatchRevletSesEmail({
     payload: params,
     fromAddress,
-    senderBadge: 'account@revlet.me',
+    senderBadge,
   });
 }
 

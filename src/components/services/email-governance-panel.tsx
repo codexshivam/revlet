@@ -78,6 +78,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   const [transportRules, setTransportRules] = useState<TransportRuleRecord[]>([])
   const [quarantineItems, setQuarantineItems] = useState<QuarantineItemRecord[]>([])
   const [sharedMailboxes, setSharedMailboxes] = useState<SharedMailboxRecord[]>([])
+  const [domainUsers, setDomainUsers] = useState<Array<{ email: string; displayName: string }>>([])
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([])
 
   // Step-Up MFA state
@@ -97,6 +98,38 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   const [editingDelegates, setEditingDelegates] = useState<SharedMailboxDelegate[]>([])
   const [newDelegateEmail, setNewDelegateEmail] = useState("")
   const [newDelegateAccess, setNewDelegateAccess] = useState<"FULL_ACCESS" | "SEND_AS" | "READ_ONLY">("FULL_ACCESS")
+  const [showNewDelegateSuggestions, setShowNewDelegateSuggestions] = useState(false)
+  const [showSmDelegateSuggestions, setShowSmDelegateSuggestions] = useState(false)
+
+  const activeDomainUserSet = new Set(domainUsers.map((u) => u.email.toLowerCase()))
+  const getDelegateValidationError = (rawEmail: string, selfEmail?: string) => {
+    const clean = rawEmail.trim().toLowerCase()
+    if (!clean) return null
+    if (!clean.includes("@")) return "Enter a valid email address."
+    if (domain && !clean.endsWith(`@${domain.toLowerCase()}`)) {
+      return `Must belong to @${domain}.`
+    }
+    if (selfEmail && clean === selfEmail.toLowerCase()) {
+      return "Shared mailbox cannot be its own delegate."
+    }
+    if (domainUsers.length > 0 && !activeDomainUserSet.has(clean)) {
+      return `No active user found with this email in @${domain || "your domain"}.`
+    }
+    return null
+  }
+  const filterDomainUserSuggestions = (query: string, excludedEmails: string[] = []) => {
+    const q = query.trim().toLowerCase()
+    const excluded = new Set(excludedEmails.map((e) => e.toLowerCase()))
+    return domainUsers
+      .filter((u) => !excluded.has(u.email.toLowerCase()))
+      .filter(
+        (u) =>
+          !q ||
+          u.email.toLowerCase().includes(q) ||
+          u.displayName.toLowerCase().includes(q)
+      )
+      .slice(0, 6)
+  }
 
   // Legal Hold form
   const [holdMatter, setHoldMatter] = useState("")
@@ -132,6 +165,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
         setTransportRules(res.data.transportRules)
         setQuarantineItems(res.data.quarantineItems)
         setSharedMailboxes(res.data.sharedMailboxes)
+        setDomainUsers(Array.isArray(res.data.domainUsers) ? res.data.domainUsers : [])
         setAuditLogs(res.data.auditLogs)
       }
     } catch {
@@ -435,41 +469,85 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
               </DialogHeader>
 
               <div className="space-y-3 py-2">
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={newDelegateEmail}
-                    onChange={(e) => setNewDelegateEmail(e.target.value)}
-                    placeholder="colleague@example.com"
-                    className="h-9 text-xs flex-1"
-                  />
-                  <Select value={newDelegateAccess} onValueChange={(v) => setNewDelegateAccess(v as any)}>
-                    <SelectTrigger className="h-9 text-xs w-[140px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="FULL_ACCESS">Full Access</SelectItem>
-                      <SelectItem value="SEND_AS">Send As</SelectItem>
-                      <SelectItem value="READ_ONLY">Read Only</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-9 text-xs"
-                    disabled={!newDelegateEmail.trim().includes("@")}
-                    onClick={() => {
-                      const clean = newDelegateEmail.trim().toLowerCase()
-                      if (!clean.includes("@")) return
-                      setEditingDelegates((prev) => {
-                        const filtered = prev.filter((d) => d.email.toLowerCase() !== clean)
-                        return [...filtered, { email: clean, accessLevel: newDelegateAccess }]
-                      })
-                      setNewDelegateEmail("")
-                    }}
-                  >
-                    Add
-                  </Button>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        value={newDelegateEmail}
+                        onFocus={() => setShowNewDelegateSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowNewDelegateSuggestions(false), 150)}
+                        onChange={(e) => {
+                          setNewDelegateEmail(e.target.value)
+                          setShowNewDelegateSuggestions(true)
+                        }}
+                        placeholder={`Search user in @${domain || "domain.com"}...`}
+                        className="h-9 text-xs w-full"
+                      />
+                      {showNewDelegateSuggestions && (() => {
+                        const suggestions = filterDomainUserSuggestions(newDelegateEmail, [
+                          editingSharedMailbox?.email || "",
+                          ...editingDelegates.map((d) => d.email),
+                        ])
+                        if (suggestions.length === 0) return null
+                        return (
+                          <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto divide-y divide-slate-100">
+                            {suggestions.map((u) => (
+                              <button
+                                key={u.email}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault()
+                                  setNewDelegateEmail(u.email)
+                                  setShowNewDelegateSuggestions(false)
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between gap-2"
+                              >
+                                <span className="text-xs font-medium text-slate-800 truncate">{u.displayName}</span>
+                                <span className="text-[11px] font-mono text-slate-500 truncate">{u.email}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )
+                      })()}
+                    </div>
+                    <Select value={newDelegateAccess} onValueChange={(v) => setNewDelegateAccess(v as any)}>
+                      <SelectTrigger className="h-9 text-xs w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="FULL_ACCESS">Full Access</SelectItem>
+                        <SelectItem value="SEND_AS">Send As</SelectItem>
+                        <SelectItem value="READ_ONLY">Read Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9 text-xs"
+                      disabled={
+                        !newDelegateEmail.trim() ||
+                        Boolean(getDelegateValidationError(newDelegateEmail, editingSharedMailbox?.email))
+                      }
+                      onClick={() => {
+                        const clean = newDelegateEmail.trim().toLowerCase()
+                        if (getDelegateValidationError(clean, editingSharedMailbox?.email)) return
+                        setEditingDelegates((prev) => {
+                          const filtered = prev.filter((d) => d.email.toLowerCase() !== clean)
+                          return [...filtered, { email: clean, accessLevel: newDelegateAccess }]
+                        })
+                        setNewDelegateEmail("")
+                        setShowNewDelegateSuggestions(false)
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  {newDelegateEmail.trim() && getDelegateValidationError(newDelegateEmail, editingSharedMailbox?.email) && (
+                    <p className="text-[11px] text-rose-600">
+                      {getDelegateValidationError(newDelegateEmail, editingSharedMailbox?.email)}
+                    </p>
+                  )}
                 </div>
 
                 <div className="border border-slate-200/80 rounded-lg divide-y divide-slate-100 max-h-48 overflow-y-auto">
@@ -479,16 +557,36 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                     </p>
                   ) : (
                     editingDelegates.map((del) => (
-                      <div key={del.email} className="flex items-center justify-between px-3 py-2">
-                        <div className="min-w-0">
+                      <div key={del.email} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <div className="min-w-0 flex-1">
                           <p className="text-xs font-mono text-slate-800 truncate">{del.email}</p>
-                          <p className="text-[10px] text-slate-500">{del.accessLevel}</p>
                         </div>
+                        <Select
+                          value={del.accessLevel}
+                          onValueChange={(v) =>
+                            setEditingDelegates((prev) =>
+                              prev.map((d) =>
+                                d.email.toLowerCase() === del.email.toLowerCase()
+                                  ? { ...d, accessLevel: v as SharedMailboxDelegate["accessLevel"] }
+                                  : d
+                              )
+                            )
+                          }
+                        >
+                          <SelectTrigger className="h-7 text-[11px] w-[125px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="FULL_ACCESS">Full Access</SelectItem>
+                            <SelectItem value="SEND_AS">Send As</SelectItem>
+                            <SelectItem value="READ_ONLY">Read Only</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <Button
                           type="button"
                           size="icon"
                           variant="ghost"
-                          className="h-7 w-7 text-slate-400 hover:text-destructive"
+                          className="h-7 w-7 text-slate-400 hover:text-destructive shrink-0"
                           onClick={() =>
                             setEditingDelegates((prev) =>
                               prev.filter((d) => d.email.toLowerCase() !== del.email.toLowerCase())
@@ -501,6 +599,11 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                     ))
                   )}
                 </div>
+                <p className="text-[11px] text-slate-500">
+                  <strong>Full Access:</strong> Read incoming mail &amp; send as address.{" "}
+                  <strong>Send As:</strong> Send only.{" "}
+                  <strong>Read Only:</strong> Receive &amp; read only.
+                </p>
               </div>
 
               <DialogFooter className="gap-2">
@@ -570,14 +673,48 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                     </span>
                   </div>
                 </div>
-                <div>
+                <div className="relative">
                   <Label className="text-xs">Initial Delegate Email</Label>
                   <Input
                     value={smDelegateEmail}
-                    onChange={(e) => setSmDelegateEmail(e.target.value)}
-                    placeholder="alice@example.com"
+                    onFocus={() => setShowSmDelegateSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSmDelegateSuggestions(false), 150)}
+                    onChange={(e) => {
+                      setSmDelegateEmail(e.target.value)
+                      setShowSmDelegateSuggestions(true)
+                    }}
+                    placeholder={`Search user in @${domain || "domain.com"}...`}
                     className="h-9 text-xs mt-1"
                   />
+                  {showSmDelegateSuggestions && (() => {
+                    const smEmail = smLocalPart.trim() && domain ? `${smLocalPart.trim().toLowerCase()}@${domain.toLowerCase()}` : ""
+                    const suggestions = filterDomainUserSuggestions(smDelegateEmail, smEmail ? [smEmail] : [])
+                    if (suggestions.length === 0) return null
+                    return (
+                      <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto divide-y divide-slate-100">
+                        {suggestions.map((u) => (
+                          <button
+                            key={u.email}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              setSmDelegateEmail(u.email)
+                              setShowSmDelegateSuggestions(false)
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between gap-2"
+                          >
+                            <span className="text-xs font-medium text-slate-800 truncate">{u.displayName}</span>
+                            <span className="text-[11px] font-mono text-slate-500 truncate">{u.email}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                  {smDelegateEmail.trim() && getDelegateValidationError(smDelegateEmail) && (
+                    <p className="text-[11px] text-rose-600 mt-1">
+                      {getDelegateValidationError(smDelegateEmail)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs">Delegate Access Level</Label>
@@ -586,9 +723,9 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="FULL_ACCESS">Full Access (Read & Manage)</SelectItem>
-                      <SelectItem value="SEND_AS">Send As</SelectItem>
-                      <SelectItem value="READ_ONLY">Read Only</SelectItem>
+                      <SelectItem value="FULL_ACCESS">Full Access (Read &amp; Send As)</SelectItem>
+                      <SelectItem value="SEND_AS">Send As (Outbound Only)</SelectItem>
+                      <SelectItem value="READ_ONLY">Read Only (Inbound Read Only)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -606,7 +743,13 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                 </Button>
                 <Button
                   size="sm"
-                  disabled={busy || !user || !smDisplayName.trim() || !smLocalPart.trim()}
+                  disabled={
+                    busy ||
+                    !user ||
+                    !smDisplayName.trim() ||
+                    !smLocalPart.trim() ||
+                    Boolean(smDelegateEmail.trim() && getDelegateValidationError(smDelegateEmail))
+                  }
                   onClick={async () => {
                     if (!user) return
                     setBusy(true)

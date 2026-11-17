@@ -85,6 +85,68 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 1b. Password Updated Confirmation Email (Authenticated via Bearer token, or unauthenticated right after confirmPasswordReset)
+    if (type === 'password_updated') {
+      const authHeader = req.headers.get('authorization') || '';
+      const idToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+      let targetEmail = '';
+
+      if (idToken) {
+        const decoded = await adminAuth.verifyIdToken(idToken);
+        targetEmail = (decoded.email || '').trim().toLowerCase();
+      } else {
+        const requestedEmail =
+          typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+        if (!requestedEmail || !requestedEmail.includes('@')) {
+          return NextResponse.json(
+            { ok: false, error: 'Valid account email is required.' },
+            { status: 400 }
+          );
+        }
+        const userRecord = await adminAuth.getUserByEmail(requestedEmail);
+        const validAfterMs = userRecord.tokensValidAfterTime
+          ? Date.parse(userRecord.tokensValidAfterTime)
+          : 0;
+        if (!validAfterMs || Date.now() - validAfterMs > 5 * 60 * 1000) {
+          return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+        }
+        targetEmail = (userRecord.email || requestedEmail).trim().toLowerCase();
+      }
+
+      if (!targetEmail) {
+        return NextResponse.json(
+          { ok: false, error: 'Account email is required.' },
+          { status: 400 }
+        );
+      }
+
+      const sendResult = await sendRevletAccountEmail({
+        to: targetEmail,
+        subject: 'Your Revlet account password was updated',
+        title: 'Password Updated',
+        subtitle: `The password for your Revlet account (${targetEmail}) on app.revlet.me was recently changed.`,
+        summaryLines: [
+          'This is a security confirmation that your Revlet account password has been updated.',
+          'If you made this change, no further action is needed. If you did not update your password, please reset it immediately or contact support.',
+        ],
+        ctaLabel: 'Review Account Security',
+        ctaUrl: `${baseUrl}/management/settings`,
+        regards: 'Regards, Revlet Account Team',
+        details: [
+          { label: 'Account Email', value: targetEmail },
+          { label: 'Portal', value: 'app.revlet.me' },
+          { label: 'Action Type', value: 'Password Updated' },
+        ],
+      });
+
+      return NextResponse.json(
+        sendResult.sent
+          ? { ok: true, sent: true }
+          : { ok: false, sent: false, error: 'Failed to dispatch password updated email.' },
+        { status: sendResult.sent ? 200 : 502 }
+      );
+    }
+
     // Authenticated actions below require a valid Firebase ID token
     const authHeader = req.headers.get('authorization') || '';
     const idToken = authHeader.replace(/^Bearer\s+/i, '').trim();
@@ -93,6 +155,52 @@ export async function POST(req: NextRequest) {
     }
     const decoded = await adminAuth.verifyIdToken(idToken);
     const currentEmail = (decoded.email || '').trim().toLowerCase();
+
+    // 2a. Welcome Email on Account Creation
+    if (type === 'welcome') {
+      const targetEmail =
+        currentEmail ||
+        (typeof body.email === 'string' && body.email.includes('@')
+          ? body.email.trim().toLowerCase()
+          : '');
+      if (!targetEmail) {
+        return NextResponse.json(
+          { ok: false, error: 'Account email is required.' },
+          { status: 400 }
+        );
+      }
+
+      const displayName =
+        typeof body.displayName === 'string' && body.displayName.trim()
+          ? body.displayName.trim()
+          : (typeof decoded.name === 'string' && decoded.name.trim()) || targetEmail;
+
+      const sendResult = await sendRevletAccountEmail({
+        to: targetEmail,
+        subject: 'Welcome to Revlet (app.revlet.me)',
+        title: 'Welcome to Revlet',
+        subtitle: `Your Revlet administrative account (${targetEmail}) has been created on app.revlet.me.`,
+        summaryLines: [
+          `Hi ${displayName},`,
+          'Welcome to Revlet! Your account on app.revlet.me is now active. You can register your organization, configure DNS and email routing, and manage team security from your control plane.',
+        ],
+        ctaLabel: 'Open Revlet Console',
+        ctaUrl: `${baseUrl}/account/home`,
+        regards: 'Regards, Shivam Yadav',
+        details: [
+          { label: 'Account Email', value: targetEmail },
+          { label: 'Portal', value: 'app.revlet.me' },
+          { label: 'Action Type', value: 'Account Created' },
+        ],
+      });
+
+      return NextResponse.json(
+        sendResult.sent
+          ? { ok: true, sent: true }
+          : { ok: false, sent: false, error: 'Failed to dispatch welcome email.' },
+        { status: sendResult.sent ? 200 : 502 }
+      );
+    }
 
     // 2. Verify Primary Account Email
     if (type === 'verify_email') {

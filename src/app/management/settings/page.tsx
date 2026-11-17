@@ -203,6 +203,16 @@ export default function SettingsPage() {
 
       await updatePassword(user, newPassword)
 
+      const idToken = await user.getIdToken()
+      void fetch("/api/auth/action-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ type: "password_updated" }),
+      }).catch(() => {})
+
       toast({
         title: "Password updated",
         description: "Your password has been changed.",

@@ -152,6 +152,18 @@ export default function SignupPage() {
           email: userCredential.user.email || userFormData.email.trim(),
         }),
       }).catch(() => {})
+      void fetch("/api/auth/action-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          type: "welcome",
+          email: userCredential.user.email || userFormData.email.trim(),
+          displayName: userFormData.name.trim(),
+        }),
+      }).catch(() => {})
       const inviteRes = await checkAndClaimInvitations(idToken)
       if (inviteRes.success && inviteRes.data?.hasInvitations) {
         toast({

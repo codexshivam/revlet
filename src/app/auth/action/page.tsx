@@ -141,6 +141,16 @@ function AuthActionContent() {
     setStatus("submitting")
     try {
       await confirmPasswordReset(auth, oobCode, newPassword)
+      if (accountEmail) {
+        void fetch("/api/auth/action-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "password_updated",
+            email: accountEmail,
+          }),
+        }).catch(() => {})
+      }
       setSuccessTitle("Password Updated")
       setSuccessDescription(
         accountEmail

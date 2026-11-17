@@ -137,6 +137,7 @@ export interface RevletEmailPayload {
   otpCode?: string;
   ctaUrl?: string;
   ctaLabel?: string;
+  regards?: string;
   securityNote?: string;
   footerNote?: string;
 }
@@ -217,6 +218,11 @@ function buildInstitutionalEmailContent(
         </div>
       </div>`
       : '';
+
+  const regardsText = (params.regards || '').trim();
+  const regardsHtml = regardsText
+    ? `<div style="margin-top:22px;font-size:14px;line-height:1.6;color:#18181b;font-weight:500;">${escapeHtml(regardsText).replace(/\r?\n/g, '<br />')}</div>`
+    : '';
 
   const defaultSecurityNote =
     senderBadge === 'accounts@revlet.me'
@@ -328,6 +334,7 @@ function buildInstitutionalEmailContent(
                   : ''
               }
               ${ctaHtml}
+              ${regardsHtml}
               ${securityNoticeHtml}
             </td>
           </tr>
@@ -364,6 +371,7 @@ function buildInstitutionalEmailContent(
     '',
     ...(params.details || []).map((d) => `${d.label}: ${d.value}`),
     ...(ctaUrl && ctaLabel ? ['', `${ctaLabel}: ${ctaUrl}`] : []),
+    ...(regardsText ? ['', regardsText] : []),
     '',
     `Security Notice: ${securityNoteText}`,
     '',

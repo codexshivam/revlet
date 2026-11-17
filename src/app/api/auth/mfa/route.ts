@@ -13,6 +13,69 @@ import { sendRevletAccountEmail } from '@/lib/revlet-alerts';
 
 const MFA_SESSION_COOKIE = 'revlet_mfa_session';
 
+async function checkHasEnrolledMfa(
+  userRef: FirebaseFirestore.DocumentReference
+): Promise<boolean> {
+  const [userSnap, passkeysSnap] = await Promise.all([
+    userRef.get(),
+    userRef.collection('mfaPasskeys').limit(1).get(),
+  ]);
+  const u = userSnap.exists ? userSnap.data() || {} : {};
+  const totpEnabled = Boolean(u.totpEnabled && u.totpSecret);
+  const secondaryEmailVerified = Boolean(u.secondaryEmailVerified && u.secondaryEmail);
+  return totpEnabled || !passkeysSnap.empty || secondaryEmailVerified;
+}
+
+async function sendMfaStatusEmail(params: {
+  to: string;
+  enabled: boolean;
+}): Promise<void> {
+  if (!params.to || !params.to.includes('@')) return;
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.revlet.me')
+    .trim()
+    .replace(/\/$/, '');
+
+  await sendRevletAccountEmail(
+    params.enabled
+      ? {
+          to: params.to,
+          subject: '2-Step Verification (MFA) enrolled on your Revlet account',
+          title: 'MFA Enrollment Confirmed',
+          subtitle: `2-Step Verification (MFA) has been enabled on your Revlet account (${params.to}).`,
+          summaryLines: [
+            'Your Revlet account on app.revlet.me is now protected with Multi-Factor Authentication (MFA).',
+            'If you did not enable 2-Step Verification, please review your security settings immediately.',
+          ],
+          ctaLabel: 'Manage Security Settings',
+          ctaUrl: `${baseUrl}/management/settings`,
+          regards: 'Regards, Revlet Account Team',
+          details: [
+            { label: 'Account Email', value: params.to },
+            { label: 'Portal', value: 'app.revlet.me' },
+            { label: 'Action Type', value: 'MFA Enrolled' },
+          ],
+        }
+      : {
+          to: params.to,
+          subject: '2-Step Verification (MFA) disabled on your Revlet account',
+          title: 'MFA Disabled',
+          subtitle: `2-Step Verification (MFA) has been disabled on your Revlet account (${params.to}).`,
+          summaryLines: [
+            'All Multi-Factor Authentication (MFA) factors have been removed from your Revlet account on app.revlet.me.',
+            'If you did not disable 2-Step Verification, please secure your account and re-enable MFA immediately.',
+          ],
+          ctaLabel: 'Manage Security Settings',
+          ctaUrl: `${baseUrl}/management/settings`,
+          regards: 'Regards, Revlet Account Team',
+          details: [
+            { label: 'Account Email', value: params.to },
+            { label: 'Portal', value: 'app.revlet.me' },
+            { label: 'Action Type', value: 'MFA Disabled' },
+          ],
+        }
+  );
+}
+
 function setMfaSessionCookie(
   req: NextRequest,
   res: NextResponse,
@@ -136,6 +199,7 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
       await userRef.set(
         {
           totpSecret: pendingSecret,
@@ -144,6 +208,9 @@ export async function POST(req: NextRequest) {
         },
         { merge: true }
       );
+      if (!hadEnrolledMfa) {
+        void sendMfaStatusEmail({ to: email, enabled: true }).catch(() => {});
+      }
       return setMfaSessionCookie(req, NextResponse.json({ ok: true }), uid, email, 'totp');
     }
 
@@ -157,7 +224,11 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
       await userRef.set({ totpEnabled: false, totpSecret: null }, { merge: true });
+      if (hadEnrolledMfa && !(await checkHasEnrolledMfa(userRef))) {
+        void sendMfaStatusEmail({ to: email, enabled: false }).catch(() => {});
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -198,12 +269,16 @@ export async function POST(req: NextRequest) {
       if (clientData.type !== 'webauthn.create' || clientData.challenge !== chData.challenge) {
         return NextResponse.json({ ok: false, error: 'Passkey challenge mismatch.' }, { status: 400 });
       }
+      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
       await userRef.collection('mfaChallenges').doc('current').delete().catch(() => {});
       await userRef.collection('mfaPasskeys').doc(credentialId).set({
         credentialId,
         label,
         createdAt: new Date().toISOString(),
       });
+      if (!hadEnrolledMfa) {
+        void sendMfaStatusEmail({ to: email, enabled: true }).catch(() => {});
+      }
       return setMfaSessionCookie(req, NextResponse.json({ ok: true }), uid, email, 'passkey');
     }
 
@@ -212,7 +287,11 @@ export async function POST(req: NextRequest) {
       if (!credentialId) {
         return NextResponse.json({ ok: false, error: 'credentialId required.' }, { status: 400 });
       }
+      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
       await userRef.collection('mfaPasskeys').doc(credentialId).delete();
+      if (hadEnrolledMfa && !(await checkHasEnrolledMfa(userRef))) {
+        void sendMfaStatusEmail({ to: email, enabled: false }).catch(() => {});
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -306,6 +385,7 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
       await userRef.set(
         {
           secondaryEmailVerified: true,
@@ -314,6 +394,12 @@ export async function POST(req: NextRequest) {
         },
         { merge: true }
       );
+      if (!hadEnrolledMfa) {
+        void sendMfaStatusEmail({
+          to: email || data.secondaryEmail || '',
+          enabled: true,
+        }).catch(() => {});
+      }
       const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
       return setMfaSessionCookie(
         req,

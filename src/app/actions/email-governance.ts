@@ -96,14 +96,32 @@ export async function getGovernanceOverview(idToken: string, orgId: string) {
     ]);
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
-    const [holdsSnap, dlpSnap, transportSnap, quarSnap, sharedSnap, auditSnap] = await Promise.all([
+    const [holdsSnap, dlpSnap, transportSnap, quarSnap, sharedSnap, auditSnap, usersSnap] = await Promise.all([
       orgRef.collection('mailLegalHolds').orderBy('createdAt', 'desc').get(),
       orgRef.collection('mailDlpRules').orderBy('createdAt', 'desc').get(),
       orgRef.collection('mailTransportRules').orderBy('createdAt', 'desc').get(),
       orgRef.collection('mailQuarantine').orderBy('receivedAt', 'desc').limit(100).get(),
       orgRef.collection('mailSharedMailboxes').orderBy('createdAt', 'desc').get(),
       orgRef.collection('mailAuditLogs').orderBy('createdAt', 'desc').limit(150).get(),
+      orgRef.collection('mailUsers').get(),
     ]);
+
+    const domainUsers = usersSnap.docs
+      .map((d) => {
+        const u = d.data() || {};
+        const email = String(u.primaryEmail || u.email || '').trim().toLowerCase();
+        const displayName = String(
+          u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || email.split('@')[0]
+        ).trim();
+        return {
+          email,
+          displayName,
+          status: String(u.status || 'active'),
+        };
+      })
+      .filter((u) => u.email && u.status === 'active')
+      .map(({ email, displayName }) => ({ email, displayName }))
+      .sort((a, b) => a.email.localeCompare(b.email));
 
     const sharedMailboxes = sharedSnap.docs.map((d) => ({
       id: d.id,
@@ -132,6 +150,7 @@ export async function getGovernanceOverview(idToken: string, orgId: string) {
         transportRules: transportSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as TransportRuleRecord[],
         quarantineItems: quarSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as QuarantineItemRecord[],
         sharedMailboxes,
+        domainUsers,
         auditLogs: auditSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as AuditLogRecord[],
       },
     };
@@ -616,15 +635,40 @@ export async function createSharedMailbox(
       throw new Error(conflict);
     }
 
+    const usersSnap = await adminDb
+      .collection('organizations')
+      .doc(orgId)
+      .collection('mailUsers')
+      .get();
+    const activeUserEmails = new Set(
+      usersSnap.docs
+        .map((d) => d.data() || {})
+        .filter((u) => (u.status || 'active') === 'active')
+        .map((u) => String(u.primaryEmail || u.email || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+
     const seenDelegates = new Map<string, SharedMailboxDelegate>();
     for (const d of input.delegates || []) {
       const dEmail = (d.email || '').trim().toLowerCase();
-      if (dEmail && dEmail.includes('@') && dEmail !== email) {
-        seenDelegates.set(dEmail, {
-          email: dEmail,
-          accessLevel: d.accessLevel || 'FULL_ACCESS',
-        });
+      if (!dEmail) continue;
+      if (!dEmail.includes('@') || !dEmail.endsWith(`@${domain}`)) {
+        throw new Error(`Delegate "${dEmail}" must belong to @${domain}.`);
       }
+      if (dEmail === email) {
+        throw new Error('A shared mailbox cannot be added as its own delegate.');
+      }
+      if (!activeUserEmails.has(dEmail)) {
+        throw new Error(`Delegate "${dEmail}" is not an active mailbox user in @${domain}.`);
+      }
+      const level: SharedMailboxDelegate['accessLevel'] =
+        d.accessLevel === 'SEND_AS' || d.accessLevel === 'READ_ONLY'
+          ? d.accessLevel
+          : 'FULL_ACCESS';
+      seenDelegates.set(dEmail, {
+        email: dEmail,
+        accessLevel: level,
+      });
     }
     const delegates = Array.from(seenDelegates.values());
 
@@ -685,15 +729,41 @@ export async function updateSharedMailboxDelegates(
     const existing = snap.data() as Omit<SharedMailboxRecord, 'id'>;
     const mailboxEmail = (existing.email || '').toLowerCase().trim();
 
+    const orgRef = adminDb.collection('organizations').doc(orgId);
+    const [orgSnap, usersSnap] = await Promise.all([
+      orgRef.get(),
+      orgRef.collection('mailUsers').get(),
+    ]);
+    const orgDomain = String(orgSnap.data()?.domain || '').trim().toLowerCase();
+    const activeUserEmails = new Set(
+      usersSnap.docs
+        .map((d) => d.data() || {})
+        .filter((u) => (u.status || 'active') === 'active')
+        .map((u) => String(u.primaryEmail || u.email || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+
     const seenDelegates = new Map<string, SharedMailboxDelegate>();
     for (const d of delegatesInput || []) {
       const dEmail = (d.email || '').trim().toLowerCase();
-      if (dEmail && dEmail.includes('@') && dEmail !== mailboxEmail) {
-        seenDelegates.set(dEmail, {
-          email: dEmail,
-          accessLevel: d.accessLevel || 'FULL_ACCESS',
-        });
+      if (!dEmail) continue;
+      if (!dEmail.includes('@') || (orgDomain && !dEmail.endsWith(`@${orgDomain}`))) {
+        throw new Error(`Delegate "${dEmail}" must belong to @${orgDomain || 'your organization domain'}.`);
       }
+      if (dEmail === mailboxEmail) {
+        throw new Error('A shared mailbox cannot be added as its own delegate.');
+      }
+      if (!activeUserEmails.has(dEmail)) {
+        throw new Error(`Delegate "${dEmail}" is not an active mailbox user in this domain.`);
+      }
+      const level: SharedMailboxDelegate['accessLevel'] =
+        d.accessLevel === 'SEND_AS' || d.accessLevel === 'READ_ONLY'
+          ? d.accessLevel
+          : 'FULL_ACCESS';
+      seenDelegates.set(dEmail, {
+        email: dEmail,
+        accessLevel: level,
+      });
     }
     const delegates = Array.from(seenDelegates.values());
 

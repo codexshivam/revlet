@@ -47,12 +47,28 @@ async function resolveOrgAndVerifyUser(orgIdInput: string, emailInput: string) {
     return { error: 'Organization not found', status: 404 as const };
   }
 
-  // Verify user exists in the organization's mail directory and is not suspended
-  const userSnap = await orgDoc.ref
+  // Verify user exists in the organization's mail directory (by primaryEmail, email, or alias) and is not suspended
+  let userSnap = await orgDoc.ref
     .collection('mailUsers')
-    .where('email', '==', email)
+    .where('primaryEmail', '==', email)
     .limit(1)
     .get();
+
+  if (userSnap.empty) {
+    userSnap = await orgDoc.ref
+      .collection('mailUsers')
+      .where('email', '==', email)
+      .limit(1)
+      .get();
+  }
+
+  if (userSnap.empty) {
+    userSnap = await orgDoc.ref
+      .collection('mailUsers')
+      .where('aliases', 'array-contains', email)
+      .limit(1)
+      .get();
+  }
 
   if (userSnap.empty) {
     return { error: 'Mailbox user not found in organization', status: 403 as const };

@@ -325,6 +325,13 @@ async function provisionAwsSesByoDkim(
         DomainSigningPrivateKey: privateKeyB64,
       },
     });
+    if (!putRes.ok) {
+      console.error('[BYODKIM] PUT /v2/email/identities/{domain}/dkim/signing failed:', {
+        domain: cleanDomain,
+        status: putRes.status,
+        data: putRes.data,
+      });
+    }
     return putRes.ok;
   }
 
@@ -335,6 +342,13 @@ async function provisionAwsSesByoDkim(
       DomainSigningPrivateKey: privateKeyB64,
     },
   });
+  if (!createRes.ok) {
+    console.error('[BYODKIM] POST /v2/email/identities failed:', {
+      domain: cleanDomain,
+      status: createRes.status,
+      data: createRes.data,
+    });
+  }
   return createRes.ok;
 }
 
@@ -611,7 +625,8 @@ function buildRequiredDnsRecords(
 
 async function ensureOrgDkimConfig(
   orgId: string,
-  orgData: FirebaseFirestore.DocumentData
+  orgData: FirebaseFirestore.DocumentData,
+  options?: { forceVerifySes?: boolean }
 ): Promise<OrgDkimConfig> {
   const domain = (orgData.domain || '').toLowerCase().trim();
 
@@ -667,25 +682,30 @@ async function ensureOrgDkimConfig(
         updatedAt: new Date().toISOString(),
       }),
       orgRef.update({
-        mailDkimMode: 'byodkim',
         mailDkimSelector: selector,
         mailDkimPublicKey: publicKey,
         updatedAt: new Date().toISOString(),
       }),
     ]).catch(() => {});
-  } else if (orgData.mailDkimMode !== 'byodkim' || orgData.mailDkimPublicKey !== publicKey) {
+  } else if (orgData.mailDkimSelector !== selector || orgData.mailDkimPublicKey !== publicKey) {
     await orgRef.update({
-      mailDkimMode: 'byodkim',
       mailDkimSelector: selector,
       mailDkimPublicKey: publicKey,
     }).catch(() => {});
   }
 
-  if (domain && (!orgData.mailSesIdentityProvisioned || orgData.mailDkimMode !== 'byodkim')) {
+  const needsSesProvision =
+    !orgData.mailSesVerifiedInByo ||
+    !orgData.mailSesIdentityProvisioned ||
+    orgData.mailDkimMode !== 'byodkim' ||
+    Boolean(options?.forceVerifySes);
+
+  if (domain && needsSesProvision) {
     const provisioned = await provisionAwsSesByoDkim(domain, selector, privateKey);
     if (provisioned) {
       await orgRef.update({
         mailSesIdentityProvisioned: true,
+        mailSesVerifiedInByo: true,
         mailDkimMode: 'byodkim',
         updatedAt: new Date().toISOString(),
       }).catch(() => {});
@@ -850,7 +870,9 @@ export async function getMailServiceState(idToken: string, orgId: string) {
   try {
     const { orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Read', 'Email: Add', 'Email: Admin']);
     const domain = (orgData.domain || '').toLowerCase().trim();
-    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData);
+    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData, {
+      forceVerifySes: !orgData.mailSesVerifiedInByo,
+    });
 
     let liveRecords: any[] = [];
     const dnsServiceActive = Boolean(orgData.cloudflareZoneId);
@@ -924,7 +946,9 @@ export async function activateMailService(idToken: string, orgId: string) {
       return { success: false, error: 'Organization does not have a valid domain configured.' };
     }
 
-    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData);
+    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData, {
+      forceVerifySes: !orgData.mailSesVerifiedInByo,
+    });
     let dnsProvisionedAutomatically = false;
     let dnsAddedCount = 0;
     let dnsWarning: string | undefined;
@@ -1043,7 +1067,9 @@ export async function syncMailDnsRecords(idToken: string, orgId: string) {
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
     const domain = (orgData.domain || '').toLowerCase().trim();
-    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData);
+    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData, {
+      forceVerifySes: !orgData.mailSesVerifiedInByo,
+    });
 
     await syncStalwartDomainPrincipal(domain, {
       disableAutoDkim: dkimConfig.mode === 'byodkim',

@@ -838,6 +838,11 @@ export default function AccountHomePage() {
                         {errors.domain && (
                           <span className="text-[11px] text-destructive block">{errors.domain}</span>
                         )}
+                        {!editingOrg && (
+                          <span className="text-[11px] text-amber-700 font-medium block">
+                            This domain name cannot be changed later after registration.
+                          </span>
+                        )}
                       </div>
                     </div>
 

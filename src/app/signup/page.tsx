@@ -103,7 +103,7 @@ export default function SignupPage() {
     }
   }, [user, authLoading, router, step, createdUserData, db])
 
-  // Handle Step 1: Create User in Firebase Auth and Firestore
+  // Handle Step 1: Validate User Details and proceed to Step 2 (account is created after Step 2)
   const handleUserSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userFormData.name.trim() || !userFormData.email.trim() || !userFormData.password) {
@@ -126,127 +126,34 @@ export default function SignupPage() {
 
     setIsLoading(true)
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        userFormData.email.trim(),
-        userFormData.password
-      )
-
-      await updateProfile(userCredential.user, {
-        displayName: userFormData.name.trim(),
+      const checkRes = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userFormData.email.trim() }),
       })
-
-      if (db) {
-        const userRef = doc(db, "users", userCredential.user.uid)
-        await setDoc(
-          userRef,
-          {
-            uid: userCredential.user.uid,
-            email: userCredential.user.email || userFormData.email.trim(),
-            displayName: userFormData.name.trim(),
-            numOrganizations: 0,
-            organizations: [],
-            createdAt: serverTimestamp(),
-          },
-          { merge: true }
-        )
+      if (checkRes.ok) {
+        const checkData = await checkRes.json().catch(() => ({}))
+        if (checkData.ok && checkData.exists === true) {
+          toast({
+            variant: "destructive",
+            title: "Email already registered",
+            description: "This email is already registered. Try signing in instead.",
+          })
+          return
+        }
       }
-
-      setCreatedUserData({
-        uid: userCredential.user.uid,
-        email: userCredential.user.email || userFormData.email.trim(),
-        displayName: userFormData.name.trim(),
-      })
-
-      // Check and claim any pending team invitations for this email
-      const idToken = await userCredential.user.getIdToken()
-      const userEmail = userCredential.user.email || userFormData.email.trim()
-      await Promise.allSettled([
-        fetch("/api/auth/action-email", {
-          method: "POST",
-          keepalive: true,
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
-            type: "verify_email",
-            email: userEmail,
-          }),
-        }),
-        fetch("/api/auth/action-email", {
-          method: "POST",
-          keepalive: true,
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
-            type: "welcome",
-            email: userEmail,
-            displayName: userFormData.name.trim(),
-          }),
-        }),
-      ])
-      const inviteRes = await checkAndClaimInvitations(idToken)
-      if (inviteRes.success && inviteRes.data?.hasInvitations) {
-        toast({
-          title: "Account activated",
-          description: "Your invited organizations have been allocated to your workspace.",
-        })
-        router.push("/account/home")
-        return
-      }
-
-      toast({
-        title: "Account created",
-        description: "Now let's configure your primary organization.",
-      })
 
       setStep(2)
-    } catch (error: any) {
-      let friendlyError = "Unable to register your account. Please try again."
-      if (error.code === "auth/email-already-in-use") {
-        friendlyError = "This email is already registered. Try signing in instead."
-      } else if (error.code === "auth/invalid-email") {
-        friendlyError = "Please enter a valid email address."
-      } else if (error.code === "auth/weak-password") {
-        friendlyError = "Your password must be at least 6 characters long."
-      }
-
-      toast({
-        variant: "destructive",
-        title: "Registration failed",
-        description: friendlyError,
-      })
+    } catch {
+      setStep(2)
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Handle Step 2: Create First Organization in Firestore
+  // Handle Step 2: Create User Account + First Organization together, then send welcome email
   const handleOrgCreation = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    const activeUser =
-      createdUserData ||
-      (user
-        ? {
-            uid: user.uid,
-            email: user.email || "",
-            displayName: user.displayName || "",
-          }
-        : null)
-
-    if (!activeUser) {
-      toast({
-        variant: "destructive",
-        title: "Session expired",
-        description: "Please sign in again to complete organization setup.",
-      })
-      router.push("/login")
-      return
-    }
 
     if (!orgFormData.name.trim()) {
       toast({
@@ -257,16 +164,87 @@ export default function SignupPage() {
       return
     }
 
+    const cleanName = orgFormData.name.trim()
+    const rawDomain = orgFormData.domain
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/.*$/, "")
+
+    if (!rawDomain || !rawDomain.includes(".")) {
+      toast({
+        variant: "destructive",
+        title: "Valid domain required",
+        description: "Please enter your primary domain name (e.g. example.com).",
+      })
+      return
+    }
+
     setIsLoading(true)
     try {
       if (!db) throw new Error("Database connection unavailable")
 
-      const cleanName = orgFormData.name.trim()
-      const rawDomain = orgFormData.domain
-        .trim()
-        .toLowerCase()
-        .replace(/^https?:\/\//, "")
-        .replace(/\/.*$/, "")
+      let activeUser =
+        createdUserData ||
+        (user
+          ? {
+              uid: user.uid,
+              email: user.email || "",
+              displayName: user.displayName || "",
+            }
+          : null)
+      let idToken = ""
+
+      if (!activeUser) {
+        if (!userFormData.name.trim() || !userFormData.email.trim() || !userFormData.password) {
+          toast({
+            variant: "destructive",
+            title: "Missing account details",
+            description: "Please complete your account details first.",
+          })
+          setStep(1)
+          return
+        }
+
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          userFormData.email.trim(),
+          userFormData.password
+        )
+
+        await updateProfile(userCredential.user, {
+          displayName: userFormData.name.trim(),
+        })
+
+        const userEmail = userCredential.user.email || userFormData.email.trim()
+        const displayName = userFormData.name.trim()
+
+        const userRef = doc(db, "users", userCredential.user.uid)
+        await setDoc(
+          userRef,
+          {
+            uid: userCredential.user.uid,
+            email: userEmail,
+            displayName,
+            numOrganizations: 0,
+            organizations: [],
+            createdAt: serverTimestamp(),
+          },
+          { merge: true }
+        )
+
+        activeUser = {
+          uid: userCredential.user.uid,
+          email: userEmail,
+          displayName,
+        }
+        setCreatedUserData(activeUser)
+        idToken = await userCredential.user.getIdToken()
+        await checkAndClaimInvitations(idToken).catch(() => {})
+      } else if (user) {
+        idToken = await user.getIdToken()
+      }
+
       const codePrefix = cleanName
         .substring(0, 3)
         .toUpperCase()
@@ -299,21 +277,62 @@ export default function SignupPage() {
         activeUser.displayName
       )
 
+      if (idToken) {
+        await Promise.allSettled([
+          fetch("/api/auth/action-email", {
+            method: "POST",
+            keepalive: true,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              type: "verify_email",
+              email: activeUser.email,
+            }),
+          }),
+          fetch("/api/auth/action-email", {
+            method: "POST",
+            keepalive: true,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              type: "welcome",
+              email: activeUser.email,
+              displayName: activeUser.displayName || cleanName,
+            }),
+          }),
+        ])
+      }
+
       if (typeof window !== "undefined") {
         localStorage.setItem("revlet_active_org_id", newOrgDoc.id)
       }
 
       toast({
-        title: "Organization ready",
+        title: "Account & organization ready",
         description: `Welcome to Revlet. ${cleanName} is ready for management.`,
       })
 
       router.push("/account/home")
-    } catch {
+    } catch (error: any) {
+      let friendlyError = "We could not complete registration. Please check your details and try again."
+      if (error?.code === "auth/email-already-in-use") {
+        friendlyError = "This email is already registered. Try signing in instead."
+        setStep(1)
+      } else if (error?.code === "auth/invalid-email") {
+        friendlyError = "Please enter a valid email address."
+        setStep(1)
+      } else if (error?.code === "auth/weak-password") {
+        friendlyError = "Your password must be at least 6 characters long."
+        setStep(1)
+      }
       toast({
         variant: "destructive",
         title: "Setup failed",
-        description: "We could not register your organization. Please check details and try again.",
+        description: friendlyError,
       })
     } finally {
       setIsLoading(false)
@@ -407,7 +426,7 @@ export default function SignupPage() {
                 disabled={isLoading}
               >
                 {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isLoading ? "Creating Account..." : "Continue to Organization Setup"}
+                {isLoading ? "Checking..." : "Continue to Organization Setup"}
               </Button>
             </form>
 
@@ -474,15 +493,19 @@ export default function SignupPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="org-domain" className="text-xs font-medium text-slate-700">
-                  Primary Domain (Optional)
+                  Primary Domain <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="org-domain"
                   placeholder="example.com"
+                  required
                   className="h-10 text-sm border-slate-200 focus-visible:ring-primary/20 bg-white rounded-lg font-mono"
                   value={orgFormData.domain}
                   onChange={(e) => setOrgFormData({ ...orgFormData, domain: e.target.value })}
                 />
+                <p className="text-[11px] text-amber-700 font-medium">
+                  This domain name cannot be changed later after registration.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

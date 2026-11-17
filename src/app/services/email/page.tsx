@@ -1655,10 +1655,7 @@ export default function EmailServiceAdminPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200/80">
-                      <TableHead className="text-xs font-medium py-2.5 pl-5 text-slate-500 w-[140px]">
-                        Purpose
-                      </TableHead>
-                      <TableHead className="text-xs font-medium py-2.5 text-slate-500 w-[80px]">
+                      <TableHead className="text-xs font-medium py-2.5 pl-5 text-slate-500 w-[80px]">
                         Type
                       </TableHead>
                       <TableHead className="text-xs font-medium py-2.5 text-slate-500 min-w-[200px]">
@@ -1667,6 +1664,9 @@ export default function EmailServiceAdminPage() {
                       <TableHead className="text-xs font-medium py-2.5 text-slate-500 min-w-[260px]">
                         Target / Value
                       </TableHead>
+                      <TableHead className="text-xs font-medium py-2.5 text-slate-500 w-[80px]">
+                        Priority
+                      </TableHead>
                       <TableHead className="text-xs font-medium py-2.5 text-right pr-5 text-slate-500 w-[90px]">
                         Status
                       </TableHead>
@@ -1674,12 +1674,9 @@ export default function EmailServiceAdminPage() {
                   </TableHeader>
                   <TableBody>
                     {isLoadingQuota || isSyncingDns ? (
-                      [...Array(5)].map((_, idx) => (
+                      [...Array(2)].map((_, idx) => (
                         <TableRow key={idx} className="border-b border-slate-100 last:border-0">
                           <TableCell className="pl-5 py-3">
-                            <Skeleton className="h-3.5 w-32 bg-slate-100" />
-                          </TableCell>
-                          <TableCell className="py-3">
                             <Skeleton className="h-5 w-12 bg-slate-100" />
                           </TableCell>
                           <TableCell className="py-3">
@@ -1687,6 +1684,9 @@ export default function EmailServiceAdminPage() {
                           </TableCell>
                           <TableCell className="py-3">
                             <Skeleton className="h-3.5 w-56 bg-slate-100" />
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Skeleton className="h-3.5 w-10 bg-slate-100" />
                           </TableCell>
                           <TableCell className="text-right pr-5 py-3">
                             <Skeleton className="h-3.5 w-16 ml-auto bg-slate-100" />
@@ -1696,13 +1696,9 @@ export default function EmailServiceAdminPage() {
                     ) : (
                       coreDnsRecords.map((rec) => (
                       <TableRow key={rec.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/40">
-                        <TableCell className="pl-5 py-3 text-xs font-medium text-slate-800">
-                          {rec.purpose}
-                        </TableCell>
-                        <TableCell className="py-3">
+                        <TableCell className="pl-5 py-3">
                           <span className="font-mono text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
                             {rec.type}
-                            {rec.priority !== undefined ? ` ${rec.priority}` : ""}
                           </span>
                         </TableCell>
                         <TableCell className="py-3">
@@ -1742,6 +1738,9 @@ export default function EmailServiceAdminPage() {
                               )}
                             </button>
                           </div>
+                        </TableCell>
+                        <TableCell className="py-3 font-mono text-xs text-slate-600 tabular-nums">
+                          {rec.priority !== undefined ? rec.priority : "—"}
                         </TableCell>
                         <TableCell className="text-right pr-5 py-3">
                           <span className="inline-flex items-center justify-end gap-1.5 font-mono text-xs text-slate-600">

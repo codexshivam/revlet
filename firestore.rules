@@ -26,9 +26,12 @@ service cloud.firestore {
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
         && request.resource.data.domain is string
+        && request.resource.data.domain.size() > 0
         && request.resource.data.contactName is string
-        && request.resource.data.contactEmail is string;
+        && request.resource.data.contactEmail is string
+        && (!('mailServiceActive' in request.resource.data) || request.resource.data.mailServiceActive == false);
       allow read: if isResourceOwner() || isSuperAdmin() || (
         isAuthenticated() &&
         request.auth.token.email != null &&
@@ -41,12 +44,19 @@ service cloud.firestore {
         && request.resource.data.ownerId == resource.data.ownerId
         && (
           isSuperAdmin() ||
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt', 'memberEmails', 'memberIds', 'adminEmails', 'memberPermissions'])
+          (
+            request.resource.data.domain == resource.data.domain &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt', 'memberEmails', 'memberIds', 'adminEmails', 'memberPermissions'])
+          )
         );
       allow delete: if isResourceOwner() || isSuperAdmin();
 
       match /secrets/{secretId} {
+        allow read, write: if false;
+      }
+
+      match /privateSecrets/{secretId} {
         allow read, write: if false;
       }
 

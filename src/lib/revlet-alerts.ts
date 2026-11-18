@@ -676,9 +676,9 @@ export async function sendRevletAccountEmail(
   const fromAddress = (
     params.from ||
     process.env.REVLET_ACCOUNTS_FROM ||
-    'Revlet Account <account@revlet.me>'
+    'Revlet Accounts <accounts@revlet.me>'
   ).trim();
-  const senderBadge = (params.senderBadge || 'account@revlet.me').trim();
+  const senderBadge = (params.senderBadge || 'accounts@revlet.me').trim();
 
   return dispatchRevletSesEmail({
     payload: params,

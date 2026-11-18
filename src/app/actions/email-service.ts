@@ -41,6 +41,7 @@ export interface MailRequiredDnsRecord {
   priority?: number;
   ttl: string;
   verified: boolean;
+  required?: boolean;
 }
 
 export interface MailOrgUnit {
@@ -337,9 +338,11 @@ async function provisionAwsSesByoDkim(
 
   const createRes = await callAwsSesV2Api('POST', '/v2/email/identities', {
     EmailIdentity: cleanDomain,
+    ConfigurationSetName: 'revlet-ses-cfg-default',
     DkimSigningAttributes: {
       DomainSigningSelector: selector,
       DomainSigningPrivateKey: privateKeyB64,
+      DomainSigningAttributesOrigin: 'EXTERNAL',
     },
   });
   if (!createRes.ok) {
@@ -556,7 +559,8 @@ function buildRequiredDnsRecords(
     });
   };
 
-  const records: MailRequiredDnsRecord[] = [
+  // Core Required Record 1: Inbound MX
+  const coreRecords: MailRequiredDnsRecord[] = [
     {
       id: 'mx-primary',
       purpose: 'Inbound Mail Routing (MX)',
@@ -566,34 +570,15 @@ function buildRequiredDnsRecords(
       priority: 10,
       ttl: 'Auto',
       verified: isPresent('MX', normalizedDomain, MAIL_MX_HOST),
-    },
-    {
-      id: 'txt-spf',
-      purpose: 'Sender Policy Authorization (SPF)',
-      type: 'TXT',
-      name: normalizedDomain,
-      content: `v=spf1 mx include:${MAIL_SPF_INCLUDE} include:amazonses.com ~all`,
-      ttl: 'Auto',
-      verified:
-        isPresent('TXT', normalizedDomain, `include:${MAIL_SPF_INCLUDE}`) ||
-        isPresent('TXT', normalizedDomain, 'include:amazonses.com') ||
-        isPresent('TXT', normalizedDomain, 'v=spf1 mx'),
-    },
-    {
-      id: 'txt-dmarc',
-      purpose: 'Domain Authentication Policy (DMARC)',
-      type: 'TXT',
-      name: `_dmarc.${normalizedDomain}`,
-      content: 'v=DMARC1; p=quarantine; pct=100;',
-      ttl: 'Auto',
-      verified: isPresent('TXT', `_dmarc.${normalizedDomain}`, 'v=dmarc1'),
+      required: true,
     },
   ];
 
+  // Core Required Record 2: Outbound DKIM (BYODKIM single TXT or EasyDKIM CNAMEs)
   if (dkimConfig.mode === 'byodkim') {
     const recordName = `${dkimConfig.selector}._domainkey.${normalizedDomain}`;
     const recordContent = `v=DKIM1; k=rsa; p=${dkimConfig.publicKey}`;
-    records.push({
+    coreRecords.push({
       id: 'txt-dkim-1',
       purpose: 'Outbound Mail Signing (DKIM)',
       type: 'TXT',
@@ -601,12 +586,13 @@ function buildRequiredDnsRecords(
       content: recordContent,
       ttl: 'Auto',
       verified: isPresent('TXT', recordName, `p=${dkimConfig.publicKey}`),
+      required: true,
     });
   } else {
     dkimConfig.tokens.slice(0, 3).forEach((token, idx) => {
       const recordName = `${token}._domainkey.${normalizedDomain}`;
       const recordTarget = `${token}.${MAIL_DKIM_TARGET_DOMAIN}`;
-      records.push({
+      coreRecords.push({
         id: `cname-dkim-${idx + 1}`,
         purpose: `Domain Signing Key #${idx + 1} (DKIM)`,
         type: 'CNAME',
@@ -616,11 +602,39 @@ function buildRequiredDnsRecords(
         verified:
           isPresent('CNAME', recordName, recordTarget) ||
           isPresent('CNAME', recordName, `${token}.dkim.amazonses.com`),
+        required: true,
       });
     });
   }
 
-  return records;
+  // Optional Deliverability Hardening Records (SPF and DMARC)
+  const optionalRecords: MailRequiredDnsRecord[] = [
+    {
+      id: 'txt-spf',
+      purpose: 'Sender Policy Authorization (SPF)',
+      type: 'TXT',
+      name: normalizedDomain,
+      content: `v=spf1 include:${MAIL_SPF_INCLUDE} include:amazonses.com ~all`,
+      ttl: 'Auto',
+      verified:
+        isPresent('TXT', normalizedDomain, `include:${MAIL_SPF_INCLUDE}`) ||
+        isPresent('TXT', normalizedDomain, 'include:amazonses.com') ||
+        isPresent('TXT', normalizedDomain, 'v=spf1 mx'),
+      required: false,
+    },
+    {
+      id: 'txt-dmarc',
+      purpose: 'Domain Authentication Policy (DMARC)',
+      type: 'TXT',
+      name: `_dmarc.${normalizedDomain}`,
+      content: 'v=DMARC1; p=quarantine; pct=100;',
+      ttl: 'Auto',
+      verified: isPresent('TXT', `_dmarc.${normalizedDomain}`, 'v=dmarc1'),
+      required: false,
+    },
+  ];
+
+  return [...coreRecords, ...optionalRecords];
 }
 
 async function ensureOrgDkimConfig(
@@ -789,7 +803,7 @@ async function provisionRequiredDnsRecordsOnZone(
     let addedCount = 0;
 
     for (const req of requiredRecords) {
-      if (!req.verified) {
+      if (req.required !== false && !req.verified) {
         const createRes = await createDNSRecord(idToken, orgId, zoneId, {
           type: req.type,
           name: req.name,

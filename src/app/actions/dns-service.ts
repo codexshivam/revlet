@@ -818,12 +818,10 @@ export async function autoConfigureEmailDNS(idToken: string, orgId: string, zone
       await deleteDNSRecord(idToken, orgId, zoneId, r.id);
     }
 
-    // Create required records
+    // Create required records for Revlet Mail Server + AWS SES Outbound
     const requiredRecords = [
-      { type: 'MX', name: domainName, content: 'route1.mx.cloudflare.net', priority: 17, ttl: 'Auto', proxied: false },
-      { type: 'MX', name: domainName, content: 'route2.mx.cloudflare.net', priority: 54, ttl: 'Auto', proxied: false },
-      { type: 'MX', name: domainName, content: 'route3.mx.cloudflare.net', priority: 72, ttl: 'Auto', proxied: false },
-      { type: 'TXT', name: domainName, content: 'v=spf1 include:_spf.mx.cloudflare.net ~all', ttl: 'Auto', proxied: false }
+      { type: 'MX', name: domainName, content: 'mx.revlet.me', priority: 10, ttl: 'Auto', proxied: false },
+      { type: 'TXT', name: domainName, content: 'v=spf1 include:_spf.mx.revlet.me include:amazonses.com ~all', ttl: 'Auto', proxied: false }
     ];
 
     for (const rec of requiredRecords) {

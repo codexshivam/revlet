@@ -161,7 +161,7 @@ export default function EmailServiceAdminPage() {
   // Pre-computed fallback DNS records for immediate display before network resolution
   const fallbackDnsRecords = useMemo<MailRequiredDnsRecord[]>(() => {
     const domain = (selectedOrg?.domain || "revlet.me").toLowerCase().trim()
-    const baseRecords: MailRequiredDnsRecord[] = [
+    const baseCoreRecords: MailRequiredDnsRecord[] = [
       {
         id: "mx-primary",
         purpose: "Inbound Mail Routing (MX)",
@@ -171,15 +171,54 @@ export default function EmailServiceAdminPage() {
         priority: 10,
         ttl: "Auto",
         verified: false,
+        required: true,
       },
+    ]
+
+    let dkimRecords: MailRequiredDnsRecord[] = []
+    if (
+      selectedOrg?.mailDkimMode === "easydkim" &&
+      selectedOrg?.mailDkimTokens &&
+      Array.isArray(selectedOrg.mailDkimTokens) &&
+      selectedOrg.mailDkimTokens.length === 3
+    ) {
+      dkimRecords = selectedOrg.mailDkimTokens.map((tok, idx) => ({
+        id: `cname-dkim-${idx + 1}`,
+        purpose: `Domain Signing Key #${idx + 1} (DKIM)`,
+        type: "CNAME" as const,
+        name: `${tok}._domainkey.${domain}`,
+        content: `${tok}.dkim.amazonses.com`,
+        ttl: "Auto",
+        verified: false,
+        required: true,
+      }))
+    } else {
+      const selector = selectedOrg?.mailDkimSelector || "revlet"
+      const publicKey = selectedOrg?.mailDkimPublicKey || ""
+      dkimRecords = [
+        {
+          id: "txt-dkim-1",
+          purpose: "Outbound Mail Signing (DKIM)",
+          type: "TXT",
+          name: `${selector}._domainkey.${domain}`,
+          content: publicKey ? `v=DKIM1; k=rsa; p=${publicKey}` : "v=DKIM1; k=rsa; p=...",
+          ttl: "Auto",
+          verified: false,
+          required: true,
+        },
+      ]
+    }
+
+    const optionalRecords: MailRequiredDnsRecord[] = [
       {
         id: "txt-spf",
         purpose: "Sender Policy Authorization (SPF)",
         type: "TXT",
         name: domain,
-        content: "v=spf1 mx include:_spf.mx.revlet.me include:amazonses.com ~all",
+        content: "v=spf1 include:_spf.mx.revlet.me include:amazonses.com ~all",
         ttl: "Auto",
         verified: false,
+        required: false,
       },
       {
         id: "txt-dmarc",
@@ -189,43 +228,11 @@ export default function EmailServiceAdminPage() {
         content: "v=DMARC1; p=quarantine; pct=100;",
         ttl: "Auto",
         verified: false,
+        required: false,
       },
     ]
 
-    if (
-      selectedOrg?.mailDkimMode === "easydkim" &&
-      selectedOrg?.mailDkimTokens &&
-      Array.isArray(selectedOrg.mailDkimTokens) &&
-      selectedOrg.mailDkimTokens.length === 3
-    ) {
-      return [
-        ...baseRecords,
-        ...selectedOrg.mailDkimTokens.map((tok, idx) => ({
-          id: `cname-dkim-${idx + 1}`,
-          purpose: `Domain Signing Key #${idx + 1} (DKIM)`,
-          type: "CNAME" as const,
-          name: `${tok}._domainkey.${domain}`,
-          content: `${tok}.dkim.amazonses.com`,
-          ttl: "Auto",
-          verified: false,
-        })),
-      ]
-    }
-
-    const selector = selectedOrg?.mailDkimSelector || "revlet"
-    const publicKey = selectedOrg?.mailDkimPublicKey || ""
-    return [
-      ...baseRecords,
-      {
-        id: "txt-dkim-1",
-        purpose: "Outbound Mail Signing (DKIM)",
-        type: "TXT",
-        name: `${selector}._domainkey.${domain}`,
-        content: publicKey ? `v=DKIM1; k=rsa; p=${publicKey}` : "v=DKIM1; k=rsa; p=...",
-        ttl: "Auto",
-        verified: false,
-      },
-    ]
+    return [...baseCoreRecords, ...dkimRecords, ...optionalRecords]
   }, [
     selectedOrg?.domain,
     selectedOrg?.mailDkimMode,
@@ -236,7 +243,7 @@ export default function EmailServiceAdminPage() {
 
   const displayDnsRecords = requiredDnsRecords.length > 0 ? requiredDnsRecords : fallbackDnsRecords
   const coreDnsRecords = useMemo(
-    () => displayDnsRecords.filter((r) => r.id !== "txt-spf" && r.id !== "txt-dmarc"),
+    () => displayDnsRecords.filter((r) => r.required !== false && r.id !== "txt-spf" && r.id !== "txt-dmarc"),
     [displayDnsRecords]
   )
   const verifiedCoreDnsCount = useMemo(
@@ -1506,7 +1513,7 @@ export default function EmailServiceAdminPage() {
 
   const verifiedDnsCount = displayDnsRecords.filter((r) => r.verified).length
   const isMxVerified = displayDnsRecords.find((r) => r.type === "MX")?.verified
-  const missingDnsRecords = requiredDnsRecords.filter((r) => !r.verified)
+  const missingDnsRecords = coreDnsRecords.filter((r) => !r.verified)
   const purgeDateLabel = mailPurgeScheduledAt
     ? new Date(mailPurgeScheduledAt).toLocaleDateString(undefined, {
         year: "numeric",
@@ -1844,7 +1851,7 @@ export default function EmailServiceAdminPage() {
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.75} />
                 <div className="space-y-0.5">
                   <p className="text-xs font-semibold text-amber-950">
-                    Missing DNS Records ({missingDnsRecords.length} of {requiredDnsRecords.length} unverified)
+                    Missing Required DNS Records ({missingDnsRecords.length} of {coreDnsRecords.length} unverified)
                   </p>
                   <p className="text-xs text-amber-800">
                     Mail delivery and authentication may fail for {selectedOrg.domain} until these records are published.
@@ -1988,7 +1995,7 @@ export default function EmailServiceAdminPage() {
               <>
                 <div className="flex items-center gap-2 pt-0.5">
                   <span className="text-base font-medium text-slate-900 tabular-nums">
-                    {verifiedDnsCount} of {requiredDnsRecords.length} DNS Verified
+                    {verifiedCoreDnsCount} of {coreDnsRecords.length} DNS Verified
                   </span>
                 </div>
                 <div className="text-xs font-mono text-slate-400 truncate">
@@ -2949,15 +2956,15 @@ export default function EmailServiceAdminPage() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
                     <h2 className="text-sm font-headline font-semibold text-slate-900">
-                      Authentication & Deliverability (SPF, DKIM, DMARC)
+                      Authentication & Deliverability (2 Required Records)
                     </h2>
                     <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500 tabular-nums">
-                      {verifiedDnsCount} of {requiredDnsRecords.length} Verified
+                      {verifiedCoreDnsCount} of {coreDnsRecords.length} Required Verified
                     </span>
                   </div>
                   <p className="text-xs text-slate-500">
-                    DNS records for MX inbound routing, SPF authorization, 2048-bit DKIM cryptographic signing, and DMARC policy on{" "}
-                    <span className="font-mono text-slate-700">{selectedOrg.domain}</span>
+                    2 core DNS records (Inbound MX and Outbound DKIM) are required for full mail sending and receiving on{" "}
+                    <span className="font-mono text-slate-700">{selectedOrg.domain}</span>. SPF and DMARC provide optional hardening.
                   </p>
                 </div>
 
@@ -3045,7 +3052,18 @@ export default function EmailServiceAdminPage() {
                     requiredDnsRecords.map((rec) => (
                     <TableRow key={rec.id} className="border-b border-slate-100 last:border-0">
                       <TableCell className="pl-6 py-3.5 text-xs font-medium text-slate-800">
-                        {rec.purpose}
+                        <div className="flex items-center gap-2">
+                          <span>{rec.purpose}</span>
+                          {rec.required === false ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-500">
+                              Optional
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-white font-medium">
+                              Required
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="py-3.5">
                         <span className="text-xs font-mono text-slate-600 tabular-nums">
@@ -3101,6 +3119,8 @@ export default function EmailServiceAdminPage() {
                           />
                           {rec.verified
                             ? "Verified"
+                            : rec.required === false
+                            ? "Optional"
                             : dnsServiceActive
                             ? "Pending Sync"
                             : "Unverified"}

@@ -1,0 +1,13 @@
+{
+  "name": "revlet-cloudflare-cron",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241112.0",
+    "typescript": "^5.0.0",
+    "wrangler": "^3.86.0"
+  }
+}

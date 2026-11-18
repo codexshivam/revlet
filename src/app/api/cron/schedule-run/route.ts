@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -6,15 +7,32 @@ import { purgeExpiredMailData } from '@/lib/mail-internal';
 export const dynamic = 'force-dynamic';
 
 function isAuthorizedCronRequest(request: NextRequest): boolean {
-  const cronSecret = process.env.CRON_SECRET || process.env.MAIL_INTERNAL_API_SECRET || '';
-  if (!cronSecret) return false;
+  const allowedSecrets = [
+    (process.env.CRON_SECRET || '').trim(),
+    (process.env.REVLET_MAIL_INTERNAL_SECRET || '').trim(),
+    (process.env.MAIL_INTERNAL_API_SECRET || '').trim(),
+  ].filter(Boolean);
+  if (allowedSecrets.length === 0) return false;
 
   const authHeader = request.headers.get('authorization');
   const token = authHeader?.startsWith('Bearer ')
     ? authHeader.slice(7).trim()
     : request.headers.get('x-cron-secret')?.trim();
 
-  return Boolean(token && token === cronSecret);
+  if (!token) return false;
+
+  const b = Buffer.from(token, 'utf8');
+  for (const sec of allowedSecrets) {
+    try {
+      const a = Buffer.from(sec, 'utf8');
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+        return true;
+      }
+    } catch {
+      // Continue checking next secret
+    }
+  }
+  return false;
 }
 
 /**

@@ -12,10 +12,7 @@ import { cfFetch } from './dns-client';
 import { adminDb } from '@/firebase/admin';
 import { encryptToken } from '@/lib/security/encryption';
 import { FieldValue } from 'firebase-admin/firestore';
-import {
-  resolveOrganizationOwnerEmail,
-  sendRevletAlertEmail,
-} from '@/lib/revlet-alerts';
+
 
 export async function getZoneDetails(idToken: string, orgId: string, zoneId: string) {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
@@ -168,36 +165,7 @@ export async function deleteDNSRecord(idToken: string, orgId: string, zoneId: st
         (recType === 'A' || recType === 'AAAA' || recType === 'CNAME') &&
         recName === orgDomain;
 
-      if (isCriticalMail || isRootHost) {
-        try {
-          const ownerEmail =
-            (await resolveOrganizationOwnerEmail(verified.orgData || {})) ||
-            (verified.email ? verified.email.toLowerCase().trim() : null);
-          if (ownerEmail) {
-            await sendRevletAlertEmail({
-              to: ownerEmail,
-              subject: `[Revlet Warning] Critical ${recType} DNS Record Removed (${orgDomain || recName})`,
-              title: 'Critical DNS Record Removed',
-              subtitle: 'DNS Security & Deliverability Warning',
-              summaryLines: [
-                `A critical ${recType} record was removed from your domain DNS zone. Removing mail or root records can disrupt email delivery or website availability.`,
-                'If this was unintended, you can restore a previous zone snapshot from DNS Management.',
-              ],
-              details: [
-                { label: 'Domain', value: orgDomain || recName },
-                { label: 'Record Type', value: recType },
-                { label: 'Host', value: deletedRecord.name || '@' },
-                { label: 'Removed Value', value: String(deletedRecord.content || '').slice(0, 120) },
-                { label: 'Removed By', value: verified.email || 'Authorized User' },
-              ],
-              ctaUrl: 'https://app.revlet.me/services/dns',
-              ctaLabel: 'Review DNS Records',
-            });
-          }
-        } catch {
-          // Non-blocking warning email
-        }
-      }
+      // DNS record deletion audit / removal completed without dispatching email notification
     }
 
     return { success: true, data: data.result };

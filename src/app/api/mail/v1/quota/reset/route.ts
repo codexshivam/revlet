@@ -5,21 +5,29 @@ import { adminDb, adminAuth } from '@/firebase/admin';
 import { verifyUserOrgAccess } from '@/app/actions/auth-helper';
 
 function verifyInternalServiceSecret(req: NextRequest): boolean {
-  const configuredSecret = (process.env.REVLET_MAIL_INTERNAL_SECRET || '').trim();
-  if (!configuredSecret) return false;
+  const allowedSecrets = [
+    (process.env.REVLET_MAIL_INTERNAL_SECRET || '').trim(),
+    (process.env.CRON_SECRET || '').trim(),
+    (process.env.MAIL_INTERNAL_API_SECRET || '').trim(),
+  ].filter(Boolean);
+  if (allowedSecrets.length === 0) return false;
 
   const authHeader = req.headers.get('authorization') || '';
   const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (!bearerToken) return false;
 
-  try {
-    const a = Buffer.from(configuredSecret, 'utf8');
-    const b = Buffer.from(bearerToken, 'utf8');
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-  } catch {
-    return false;
+  const b = Buffer.from(bearerToken, 'utf8');
+  for (const sec of allowedSecrets) {
+    try {
+      const a = Buffer.from(sec, 'utf8');
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+        return true;
+      }
+    } catch {
+      // Continue checking next secret
+    }
   }
+  return false;
 }
 
 /**
@@ -87,6 +95,41 @@ export async function POST(req: NextRequest) {
     }
 
     if (!orgDocId) {
+      if (isInternalSecret) {
+        const now = new Date();
+        const currentDayKey = now.toISOString().slice(0, 10);
+        const currentMonthKey = now.toISOString().slice(0, 7);
+
+        const orgsSnap = await adminDb
+          .collection('organizations')
+          .where('mailServiceActive', '==', true)
+          .get();
+
+        let resetCount = 0;
+        for (const orgDoc of orgsSnap.docs) {
+          await orgDoc.ref.update({
+            mailDailySent: 0,
+            mailMonthlySent: 0,
+            mailHourlyBuckets: {},
+            mailDailyBuckets: {},
+            mailDailyBucket: currentDayKey,
+            mailMonthlyBucket: currentMonthKey,
+            mailQuotaSentToday: 0,
+            mailQuotaLastResetAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          resetCount++;
+        }
+
+        return NextResponse.json({
+          ok: true,
+          message: `System-wide email quotas successfully reset for ${resetCount} organizations.`,
+          resetCount,
+          dailySent: 0,
+          monthlySent: 0,
+        });
+      }
+
       return NextResponse.json(
         { ok: false, error: 'Missing organization identifier (orgId, domain, or fromEmail).' },
         { status: 400 }
@@ -137,4 +180,8 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function GET(req: NextRequest) {
+  return POST(req);
 }

@@ -15,4 +15,4 @@ crons = [
 [vars]
 APP_URL = "https://app.revlet.me"
 WEBMAIL_URL = "https://mail.revlet.me"
-CRON_SECRET = "67991297e93ac94ed81e36855cb40f5acba1b31fae2c1b14fb259f496403bde8"
+# CRON_SECRET is stored as an encrypted Cloudflare Worker secret via `wrangler secret put CRON_SECRET`

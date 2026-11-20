@@ -12,7 +12,19 @@ crons = [
   "*/15 * * * *"
 ]
 
+[[r2_buckets]]
+binding = "BACKUP_BUCKET"
+bucket_name = "revlet-mail-backups"
+
+[[r2_buckets]]
+binding = "BLOB_BUCKET"
+bucket_name = "revlet-mail-blobs"
+
 [vars]
 APP_URL = "https://app.revlet.me"
 WEBMAIL_URL = "https://mail.revlet.me"
-# CRON_SECRET is stored as an encrypted Cloudflare Worker secret via `wrangler secret put CRON_SECRET`
+STALWART_URL = "https://mx.revlet.me"
+# Encrypted secrets configured via `wrangler secret put`:
+#   CRON_SECRET
+#   STALWART_ADMIN_USER
+#   STALWART_ADMIN_TOKEN

@@ -1,0 +1,38 @@
+mx.revlet.me {
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 50mb
+            roll_keep 5
+        }
+        format json
+    }
+
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+
+    # Redirect root requests to webmail on Vercel
+    @root path /
+    redir @root https://mail.revlet.me 302
+
+    # Block public access to Stalwart WebAdmin & Account portals
+    @blocked path /admin* /account* /manage* /login*
+    respond @blocked "Not Found" 404
+
+    # Proxy JMAP, WebSocket, API & Health endpoints to local Stalwart engine
+    @allowed path /jmap* /.well-known/jmap* /api* /healthz* /auth*
+    reverse_proxy @allowed stalwart:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    respond "Not Found" 404
+}

@@ -342,6 +342,54 @@ export default function EmailServiceAdminPage() {
     password: "",
     orgUnitPath: "/",
   })
+  const [showCreatePassword, setShowCreatePassword] = useState(false)
+  const [createdMailboxHandoff, setCreatedMailboxHandoff] = useState<{
+    displayName: string
+    email: string
+    password: string
+  } | null>(null)
+  const [showHandoffPassword, setShowHandoffPassword] = useState(true)
+
+  const generateStrongPassword = () => {
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    const lower = "abcdefghijkmnopqrstuvwxyz"
+    const digits = "23456789"
+    const symbols = "!@#$%&*"
+    const all = upper + lower + digits + symbols
+    const pick = (pool: string) => {
+      if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+        const arr = new Uint32Array(1)
+        window.crypto.getRandomValues(arr)
+        return pool[arr[0] % pool.length]
+      }
+      return pool[Math.floor(Math.random() * pool.length)]
+    }
+    const chars = [pick(upper), pick(lower), pick(digits), pick(symbols)]
+    while (chars.length < 14) chars.push(pick(all))
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j =
+        typeof window !== "undefined" && window.crypto?.getRandomValues
+          ? window.crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1)
+          : Math.floor(Math.random() * (i + 1))
+      ;[chars[i], chars[j]] = [chars[j], chars[i]]
+    }
+    setCreateUserForm((prev) => ({ ...prev, password: chars.join("") }))
+    setShowCreatePassword(true)
+  }
+
+  const handleCopyLoginDetails = (handoff: {
+    displayName: string
+    email: string
+    password: string
+  }) => {
+    const text = [
+      `RevletMail Login Details for ${handoff.displayName}`,
+      `Webmail: https://mail.revlet.me/login`,
+      `Email: ${handoff.email}`,
+      `Temporary Password: ${handoff.password}`,
+    ].join("\n")
+    copyToClipboard(text, "handoff-login-details")
+  }
   const [isCreatingUser, setIsCreatingUser] = useState(false)
 
   const [editingUser, setEditingUser] = useState<MailUserRecord | null>(null)
@@ -956,6 +1004,7 @@ export default function EmailServiceAdminPage() {
     if (!user || !selectedOrgId) return
     setIsCreatingUser(true)
     try {
+      const submittedPassword = createUserForm.password
       const idToken = await user.getIdToken()
       const res = await createMailUser(idToken, selectedOrgId, createUserForm)
       if (!res.success || !res.data) throw new Error(res.error)
@@ -964,12 +1013,19 @@ export default function EmailServiceAdminPage() {
         [...prev, res.data!].sort((a, b) => a.displayName.localeCompare(b.displayName))
       )
       setIsCreateUserOpen(false)
+      setShowCreatePassword(false)
       setCreateUserForm({
         firstName: "",
         lastName: "",
         emailPrefix: "",
         password: "",
         orgUnitPath: "/",
+      })
+      setShowHandoffPassword(true)
+      setCreatedMailboxHandoff({
+        displayName: res.data.displayName,
+        email: res.data.primaryEmail,
+        password: submittedPassword,
       })
       toast({
         title: "Email account created",
@@ -2269,12 +2325,15 @@ export default function EmailServiceAdminPage() {
                   )}
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
-                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                        Account Name
-                      </TableHead>
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                          <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                            Account Name
+                          </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
                         Primary Address
                       </TableHead>
@@ -2434,6 +2493,112 @@ export default function EmailServiceAdminPage() {
                     ))}
                   </TableBody>
                 </Table>
+                  </div>
+
+                  {/* Mobile Card View */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {paginatedActiveUsers.map((u) => (
+                      <div key={u.id} className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold text-slate-900 truncate">
+                              {u.displayName}
+                            </div>
+                            <div className="text-xs font-mono text-slate-600 truncate mt-0.5">
+                              {u.primaryEmail}
+                            </div>
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                            {u.orgUnitPath}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setAliasTargetUser(u)
+                              setNewAliasPrefix("")
+                              setEditingAliasOriginal(null)
+                              setEditingAliasPrefix("")
+                            }}
+                            className="h-8 px-2.5 text-xs font-medium border-slate-200 text-slate-700 rounded-lg"
+                          >
+                            <AtSign className="w-3.5 h-3.5 mr-1 text-slate-500" strokeWidth={1.5} />
+                            Aliases ({(u.aliases || []).length})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setPasswordTargetUser(u)
+                              setNewPasswordValue("")
+                            }}
+                            className="h-8 px-2.5 text-xs font-medium border-slate-200 text-slate-700 rounded-lg"
+                          >
+                            <KeyRound className="w-3.5 h-3.5 mr-1 text-slate-500" strokeWidth={1.5} />
+                            Reset Password
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                aria-label="More account actions"
+                                className="h-8 w-8 ml-auto border-slate-200 text-slate-600 rounded-lg"
+                              >
+                                <MoreVertical className="w-4 h-4" strokeWidth={1.5} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-52 bg-white border border-slate-200 shadow-md rounded-xl p-1"
+                            >
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  setEditingUser(u)
+                                  setEditUserForm({
+                                    firstName: u.firstName,
+                                    lastName: u.lastName,
+                                    orgUnitPath: u.orgUnitPath || "/",
+                                  })
+                                }}
+                                className="gap-2 py-2 text-xs cursor-pointer rounded-md"
+                              >
+                                <UserPen className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <span>Update Account Name</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onSelect={() => setMfaResetTargetUser(u)}
+                                className="gap-2 py-2 text-xs cursor-pointer rounded-md"
+                              >
+                                <ShieldOff className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+                                <span>Remove MFA Settings</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onSelect={() => handleSuspendOrReactivateUser(u, true)}
+                                className="gap-2 py-2 text-xs text-amber-700 cursor-pointer rounded-md"
+                              >
+                                <Ban className="w-4 h-4" strokeWidth={1.5} />
+                                <span>Suspend Account</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onSelect={() => setDeletingUser(u)}
+                                className="gap-2 py-2 text-xs text-destructive cursor-pointer rounded-md"
+                              >
+                                <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                                <span>Delete Email Account</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
               <TablePagination
                 totalItems={filteredActiveUsers.length}
@@ -2555,12 +2720,15 @@ export default function EmailServiceAdminPage() {
                   )}
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
-                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                        Group Name
-                      </TableHead>
+                <>
+                  {/* Desktop Groups Table */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                          <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                            Group Name
+                          </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
                         Group Address
                       </TableHead>
@@ -2671,6 +2839,70 @@ export default function EmailServiceAdminPage() {
                     ))}
                   </TableBody>
                 </Table>
+                  </div>
+
+                  {/* Mobile Groups Card View */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {paginatedGroups.map((g) => (
+                      <div key={g.id} className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold text-slate-900 truncate">
+                              {g.name}
+                            </div>
+                            <div className="text-xs font-mono text-slate-600 truncate mt-0.5">
+                              {g.groupEmail}
+                            </div>
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                            {g.orgUnitPath}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setMembersTargetGroup(g)
+                              setGroupMemberInput("")
+                            }}
+                            className="h-8 px-2.5 text-xs font-medium border-slate-200 text-slate-700 rounded-lg"
+                          >
+                            <Users className="w-3.5 h-3.5 mr-1 text-slate-500" strokeWidth={1.5} />
+                            Members ({g.memberEmails.length})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingGroup(g)
+                              setEditGroupForm({
+                                name: g.name,
+                                orgUnitPath: g.orgUnitPath || "/",
+                              })
+                            }}
+                            className="h-8 px-2.5 text-xs font-medium border-slate-200 text-slate-700 rounded-lg"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 mr-1 text-slate-500" strokeWidth={1.5} />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            aria-label="Delete group"
+                            onClick={() => setDeletingGroup(g)}
+                            className="h-8 w-8 ml-auto border-red-200 text-red-600 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
               <TablePagination
                 totalItems={filteredGroups.length}
@@ -2720,12 +2952,15 @@ export default function EmailServiceAdminPage() {
                   No Suspended Email Accounts
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
-                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                        Account Name
-                      </TableHead>
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                          <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                            Account Name
+                          </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
                         Primary Address
                       </TableHead>
@@ -2792,6 +3027,54 @@ export default function EmailServiceAdminPage() {
                     ))}
                   </TableBody>
                 </Table>
+                  </div>
+
+                  {/* Mobile Suspended Accounts Card View */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {paginatedSuspendedUsers.map((u) => (
+                      <div key={u.id} className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                              <span className="text-sm font-semibold text-slate-900 truncate">
+                                {u.displayName}
+                              </span>
+                            </div>
+                            <div className="text-xs font-mono text-slate-600 truncate mt-0.5">
+                              {u.primaryEmail}
+                            </div>
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                            {u.orgUnitPath}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSuspendOrReactivateUser(u, false)}
+                            className="h-8 px-2.5 text-xs font-medium border-slate-200 text-slate-700 rounded-lg"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-500" strokeWidth={1.5} />
+                            Reactivate
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDeletingUser(u)}
+                            className="h-8 px-2.5 ml-auto text-xs font-medium border-red-200 text-red-600 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" strokeWidth={1.5} />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
               <TablePagination
                 totalItems={filteredSuspendedUsers.length}
@@ -2822,12 +3105,15 @@ export default function EmailServiceAdminPage() {
                   No deleted accounts in the 14-day recovery window
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
-                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                        Account Name
-                      </TableHead>
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
+                          <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                            Account Name
+                          </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
                         Primary Address
                       </TableHead>
@@ -2873,6 +3159,43 @@ export default function EmailServiceAdminPage() {
                     })}
                   </TableBody>
                 </Table>
+                  </div>
+
+                  {/* Mobile Deleted Accounts Card View */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {paginatedDeletedUsers.map((u) => {
+                      const daysLeft = getDaysRemaining(u.recoverableUntil)
+                      return (
+                        <div key={u.id} className="p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-600 shrink-0" />
+                                <span className="text-sm font-semibold text-slate-900 truncate">
+                                  {u.displayName}
+                                </span>
+                              </div>
+                              <div className="text-xs font-mono text-slate-600 truncate mt-0.5">
+                                {u.primaryEmail}
+                              </div>
+                            </div>
+                            <span className="text-[11px] font-mono text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded shrink-0 tabular-nums">
+                              {daysLeft}d left
+                            </span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRecoverDeletedUser(u)}
+                            className="h-8 px-3 text-xs font-medium border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg w-full"
+                          >
+                            Recover Account
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
               )}
               <TablePagination
                 totalItems={filteredDeletedUsers.length}
@@ -3007,12 +3330,13 @@ export default function EmailServiceAdminPage() {
                 </div>
               </div>
 
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50/40 hover:bg-slate-50/40 border-b border-slate-200/80">
-                    <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                      Purpose
-                    </TableHead>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/40 hover:bg-slate-50/40 border-b border-slate-200/80">
+                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
+                        Purpose
+                      </TableHead>
                     <TableHead className="text-xs font-medium py-3 text-slate-500">
                       Type
                     </TableHead>
@@ -3130,6 +3454,93 @@ export default function EmailServiceAdminPage() {
                   )))}
                 </TableBody>
               </Table>
+              </div>
+
+              {/* Mobile DNS Deliverability Card View */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {isLoadingQuota || isSyncingDns
+                  ? [...Array(3)].map((_, idx) => (
+                      <div key={idx} className="p-4 space-y-2.5">
+                        <Skeleton className="h-4 w-40 bg-slate-100" />
+                        <Skeleton className="h-3.5 w-full bg-slate-100" />
+                        <Skeleton className="h-3.5 w-3/4 bg-slate-100" />
+                      </div>
+                    ))
+                  : requiredDnsRecords.map((rec) => (
+                      <div key={rec.id} className="p-4 space-y-2.5 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                            <span className="font-semibold text-slate-900">{rec.purpose}</span>
+                            {rec.required === false ? (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-500">
+                                Optional
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-white font-medium">
+                                Required
+                              </span>
+                            )}
+                          </div>
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-600 shrink-0">
+                            <span
+                              className={cn(
+                                "h-1.5 w-1.5 rounded-full",
+                                rec.verified ? "bg-slate-900" : "bg-amber-500"
+                              )}
+                            />
+                            {rec.verified
+                              ? "Verified"
+                              : rec.required === false
+                              ? "Optional"
+                              : dnsServiceActive
+                              ? "Pending"
+                              : "Unverified"}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5 rounded-lg bg-slate-50 border border-slate-200/70 p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-slate-500 font-medium">
+                              Type: <strong className="font-mono text-slate-800">{rec.type}{rec.priority !== undefined ? ` (${rec.priority})` : ""}</strong>
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-[11px] text-slate-700 truncate">
+                              Host: {rec.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(rec.name, `${rec.id}-name`)}
+                              className="text-slate-400 hover:text-slate-700 shrink-0 p-1"
+                              title="Copy host"
+                            >
+                              {copiedKey === `${rec.id}-name` ? (
+                                <Check className="w-3.5 h-3.5 text-slate-900" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-mono text-[11px] text-slate-600 break-all">
+                              {rec.content}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(rec.content, `${rec.id}-content`)}
+                              className="text-slate-400 hover:text-slate-700 shrink-0 p-1"
+                              title="Copy value"
+                            >
+                              {copiedKey === `${rec.id}-content` ? (
+                                <Check className="w-3.5 h-3.5 text-slate-900" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+              </div>
             </div>
 
             {/* Enforce MFA Policy */}
@@ -3353,16 +3764,40 @@ export default function EmailServiceAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Password</Label>
-                <Input
-                  type="password"
-                  value={createUserForm.password}
-                  onChange={(e) =>
-                    setCreateUserForm((prev) => ({ ...prev, password: e.target.value }))
-                  }
-                  placeholder="8+ chars, letter & number/symbol"
-                  className="h-9 text-xs border-slate-200 rounded-lg"
-                />
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs font-medium text-slate-700">Password</Label>
+                  <button
+                    type="button"
+                    onClick={generateStrongPassword}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" strokeWidth={1.75} />
+                    <span>Generate Strong Password</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <Input
+                    type={showCreatePassword ? "text" : "password"}
+                    value={createUserForm.password}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({ ...prev, password: e.target.value }))
+                    }
+                    placeholder="8+ chars, letter & number/symbol"
+                    className="h-9 pr-9 text-xs font-mono border-slate-200 rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePassword((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
+                    aria-label={showCreatePassword ? "Hide password" : "Show password"}
+                  >
+                    {showCreatePassword ? (
+                      <EyeOff className="w-4 h-4" strokeWidth={1.5} />
+                    ) : (
+                      <Eye className="w-4 h-4" strokeWidth={1.5} />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -3412,6 +3847,106 @@ export default function EmailServiceAdminPage() {
                 )}
                 Create Account
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 2b. Post-creation Mailbox Handoff dialog */}
+        <Dialog
+          open={Boolean(createdMailboxHandoff)}
+          onOpenChange={(open) => {
+            if (!open) setCreatedMailboxHandoff(null)
+          }}
+        >
+          <DialogContent className="w-[94vw] sm:w-full max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+            <DialogHeader className="p-5 sm:p-6 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Check className="w-4 h-4" strokeWidth={2.25} />
+                </div>
+                <div className="min-w-0">
+                  <DialogTitle className="font-headline font-semibold text-base text-slate-900">
+                    Mailbox Ready for Handoff
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500 truncate">
+                    Share these credentials with {createdMailboxHandoff?.displayName}
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            {createdMailboxHandoff && (
+              <div className="p-5 sm:p-6 space-y-3 text-xs">
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 divide-y divide-slate-200/70">
+                  <div className="px-3.5 py-2.5 flex items-center justify-between gap-2">
+                    <span className="text-slate-500 font-medium shrink-0">Webmail URL</span>
+                    <span className="font-mono text-slate-900 truncate">
+                      https://mail.revlet.me/login
+                    </span>
+                  </div>
+                  <div className="px-3.5 py-2.5 flex items-center justify-between gap-2">
+                    <span className="text-slate-500 font-medium shrink-0">Email</span>
+                    <span className="font-mono font-semibold text-slate-950 truncate">
+                      {createdMailboxHandoff.email}
+                    </span>
+                  </div>
+                  <div className="px-3.5 py-2.5 flex items-center justify-between gap-2">
+                    <span className="text-slate-500 font-medium shrink-0">Temp Password</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-mono font-semibold text-slate-950 truncate">
+                        {showHandoffPassword
+                          ? createdMailboxHandoff.password
+                          : "•".repeat(Math.min(createdMailboxHandoff.password.length, 12))}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowHandoffPassword((v) => !v)}
+                        className="text-slate-400 hover:text-slate-700 shrink-0"
+                        aria-label={showHandoffPassword ? "Hide password" : "Show password"}
+                      >
+                        {showHandoffPassword ? (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  The user can sign in immediately and change their password under RevletMail Settings.
+                </p>
+              </div>
+            )}
+
+            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCreatedMailboxHandoff(null)}
+                className="h-9 px-4 text-xs font-medium rounded-lg w-full sm:w-auto"
+              >
+                Done
+              </Button>
+              {createdMailboxHandoff && (
+                <Button
+                  size="sm"
+                  onClick={() => handleCopyLoginDetails(createdMailboxHandoff)}
+                  className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs w-full sm:w-auto"
+                >
+                  {copiedKey === "handoff-login-details" ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 mr-1.5" strokeWidth={2} />
+                      Copied Login Details
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.75} />
+                      Copy Login Details
+                    </>
+                  )}
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>

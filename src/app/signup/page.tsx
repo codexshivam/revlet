@@ -355,7 +355,7 @@ export default function SignupPage() {
           <>
             <div className="space-y-1 text-center sm:text-left">
               <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
-                Create an Account
+                Create your Revlet Platform account
               </h1>
               <p className="text-xs text-slate-500">
                 Register as an administrator to manage your organization.
@@ -433,7 +433,7 @@ export default function SignupPage() {
             <p className="text-xs text-slate-400 text-center leading-relaxed pt-1">
               By continuing, you agree to our{" "}
               <a
-                href="https://revlet.me/terms"
+                href="https://revlet.me/terms/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-slate-700 hover:underline"
@@ -442,7 +442,7 @@ export default function SignupPage() {
               </a>{" "}
               and{" "}
               <a
-                href="https://revlet.me/privacy"
+                href="https://revlet.me/privacy/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-slate-700 hover:underline"

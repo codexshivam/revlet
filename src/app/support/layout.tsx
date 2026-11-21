@@ -29,7 +29,7 @@ const supportPageLd = {
       '@type': 'BreadcrumbList',
       '@id': `${SITE_URL}${page.path}#breadcrumb`,
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'Revlet', item: MARKETING_URL },
+        { '@type': 'ListItem', position: 1, name: 'Revlet Platform', item: `${MARKETING_URL}/` },
         { '@type': 'ListItem', position: 2, name: 'Help & Support', item: `${SITE_URL}${page.path}` },
       ],
     },

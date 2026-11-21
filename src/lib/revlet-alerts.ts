@@ -342,13 +342,13 @@ function buildInstitutionalEmailContent(
             <td class="email-footer" style="background-color:#fafafa;border-top:1px solid #e4e4e7;padding:20px 28px;text-align:center;font-size:11.5px;color:#71717a;line-height:1.65;">
               <div>${escapeHtml(footerNote)}</div>
               <div style="margin-top:10px;color:#a1a1aa;">
-                <a href="https://revlet.me/support" style="color:#52525b;text-decoration:none;font-weight:500;">Help &amp; Support</a>
+                <a href="https://revlet.me/contact/" style="color:#52525b;text-decoration:none;font-weight:500;">Help &amp; Support</a>
                 &nbsp;&middot;&nbsp;
-                <a href="https://revlet.me/privacy" style="color:#52525b;text-decoration:none;font-weight:500;">Privacy Policy</a>
+                <a href="https://revlet.me/privacy/" style="color:#52525b;text-decoration:none;font-weight:500;">Privacy Policy</a>
                 &nbsp;&middot;&nbsp;
-                <a href="https://revlet.me/terms" style="color:#52525b;text-decoration:none;font-weight:500;">Service Terms</a>
+                <a href="https://revlet.me/terms/" style="color:#52525b;text-decoration:none;font-weight:500;">Service Terms</a>
                 &nbsp;&middot;&nbsp;
-                <a href="https://revlet.me" style="color:#52525b;text-decoration:none;font-weight:500;">About</a>
+                <a href="https://revlet.me/about/" style="color:#52525b;text-decoration:none;font-weight:500;">About</a>
               </div>
               <div style="margin-top:10px;font-size:11px;color:#a1a1aa;">
                 Revlet Platform &middot; Developed &amp; Managed by Shivam Yadav.

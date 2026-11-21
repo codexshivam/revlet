@@ -20,4 +20,4 @@ Revlet helps growing businesses, schools, and teams run their cloud infrastructu
   - Instagram: https://www.instagram.com/revlet.me
   - Facebook: https://www.facebook.com/revletplatform
   - X: https://x.com/revletme
-  - LinkedIn: https://www.linkedin.com/company
+  - LinkedIn: https://www.linkedin.com/company/revlet

@@ -16,53 +16,53 @@ export const SITE_DESCRIPTION =
 export const PAGE_SEO = {
   login: {
     path: '/login',
-    title: 'Login | Revlet',
+    title: 'Login | Revlet Platform',
     description:
-      'Sign in to Revlet to manage your business email, domains, and team access from one secure console.',
-    ogTitle: 'Sign in to Revlet',
+      'Sign in to Revlet Platform to manage custom-domain RevletMail, 1-second global DNS records, shared team mailboxes, and passkey security controls.',
+    ogTitle: 'Sign in to Revlet Platform',
     ogDescription: 'Your business email, domains, and team — managed from one secure console.',
     ogEyebrow: 'Sign In',
     ogHeadline: 'Everything your organization runs on, in one place.',
   },
   signup: {
     path: '/signup',
-    title: 'Get Started Free | Revlet',
+    title: 'Get Started Free | Revlet Platform',
     description:
-      'Create your free Revlet account in minutes. Get up to 1,000 custom domain business email mailboxes, fast DNS management, and team access at $0/mo.',
-    ogTitle: 'Get started free with Revlet',
+      'Create your free Revlet Platform account in minutes. Get up to 1,000 custom domain business email mailboxes, fast DNS management, and team access at $0/mo.',
+    ogTitle: 'Get started free with Revlet Platform',
     ogDescription: 'Up to 1,000 custom mailboxes, fast DNS management, and team access — free at $0/mo.',
     ogEyebrow: 'Get Started Free',
     ogHeadline: 'Business email and domains, free for up to 1,000 seats.',
   },
   support: {
     path: '/support',
-    title: 'Help & Support | Revlet',
+    title: 'Help & Support | Revlet Platform',
     description:
-      'Get answers about business email, DNS, and team access in Revlet. Browse FAQs or contact our support team for help.',
-    ogTitle: 'Revlet Help & Support',
+      'Get answers about business email, DNS, and team access in Revlet Platform. Browse FAQs or contact our support team for help.',
+    ogTitle: 'Revlet Platform Help & Support',
     ogDescription: 'Answers about business email, domains, and team access — plus direct help from our team.',
     ogEyebrow: 'Help & Support',
     ogHeadline: 'Answers and help, whenever your team needs it.',
   },
   accountHome: {
-    title: 'Account Home | Revlet',
+    title: 'Account Home | Revlet Platform',
     description: 'See all your organizations and services at a glance, and switch between them in one click.',
   },
   dns: {
-    title: 'DNS Management | Revlet',
+    title: 'DNS Management | Revlet Platform',
     description: 'Keep your website and email online with simple, reliable DNS management and one-click restore points.',
   },
   email: {
-    title: 'Email Service | Revlet',
+    title: 'Email Service | Revlet Platform',
     description: 'Give your team professional email on your own domain, with aliases, groups, and built-in protection.',
   },
   team: {
-    title: 'Team Management | Revlet',
+    title: 'Team Management | Revlet Platform',
     description: 'Invite your team and choose exactly what each person can access, organization by organization.',
   },
   settings: {
-    title: 'Account Settings | Revlet',
-    description: 'Manage your profile, security preferences, and account settings in Revlet.',
+    title: 'Account Settings | Revlet Platform',
+    description: 'Manage your profile, security preferences, and account settings in Revlet Platform.',
   },
   notFound: {
     title: 'Not Found Error',
@@ -107,7 +107,13 @@ export function buildPageMetadata({
   return {
     title: { absolute: title },
     description,
-    alternates: { canonical: canonicalUrl },
+    alternates: {
+      canonical: canonicalUrl,
+      languages: {
+        'en-US': canonicalUrl,
+        'x-default': canonicalUrl,
+      },
+    },
     openGraph: {
       title: socialTitle,
       description: socialDescription,

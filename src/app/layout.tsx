@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Toaster } from '@/components/ui/toaster';
@@ -18,6 +18,12 @@ import {
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
+  display: 'swap',
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
   display: 'swap',
 });
 
@@ -55,12 +61,14 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false, email: false, address: false },
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: '48x48' },
       { url: '/favicon-48x48.png', type: 'image/png', sizes: '48x48' },
+      { url: '/favicon-96x96.png', type: 'image/png', sizes: '96x96' },
+      { url: '/favicon-144x144.png', type: 'image/png', sizes: '144x144' },
       { url: '/favicon-192x192.png', type: 'image/png', sizes: '192x192' },
-      { url: '/favicon-512x512.png', type: 'image/png', sizes: '512x512' },
+      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
     ],
+    shortcut: '/favicon.ico',
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   openGraph: {
@@ -96,35 +104,76 @@ const siteSchema = {
     {
       '@type': 'Organization',
       '@id': `${MARKETING_URL}/#organization`,
-      name: 'Revlet',
-      alternateName: ['Revlet Platform', 'RevletMail', 'Revlet Mail', 'Revlet Cloud Control Plane'],
-      url: MARKETING_URL,
+      name: 'Revlet Platform',
+      legalName: 'Revlet Platform',
+      alternateName: ['Revlet', 'Revlet Cloud', 'RevletMail', 'Revlet Mail', 'Revlet Console'],
+      url: `${MARKETING_URL}/`,
       logo: {
         '@type': 'ImageObject',
         '@id': `${MARKETING_URL}/#logo`,
         url: `${MARKETING_URL}/favicon-512x512.png`,
+        contentUrl: `${MARKETING_URL}/favicon-512x512.png`,
         width: 512,
         height: 512,
-        caption: 'Revlet',
+        caption: 'Revlet Platform',
       },
       image: { '@id': `${MARKETING_URL}/#logo` },
       description:
-        'Revlet helps organizations run their cloud infrastructure with professional business email, simple DNS management, and secure team access in one place.',
+        'Revlet Platform is an enterprise cloud infrastructure platform unifying custom-domain business email (RevletMail), 1-second global DNS management, shared team mailboxes, and organization access controls in one console.',
+      foundingDate: '2024',
       founder: { '@id': `${MARKETING_URL}/about/#shivam-yadav` },
-      contactPoint: {
-        '@type': 'ContactPoint',
-        email: 'hello@revlet.me',
-        contactType: 'customer support',
-        url: `${SITE_URL}${PAGE_SEO.support.path}`,
-        availableLanguage: ['English'],
-      },
+      email: 'hello@revlet.me',
+      publishingPrinciples: `${MARKETING_URL}/privacy/`,
+      contactPoint: [
+        {
+          '@type': 'ContactPoint',
+          email: 'hello@revlet.me',
+          contactType: 'customer support',
+          url: `${MARKETING_URL}/contact/`,
+          availableLanguage: ['English'],
+        },
+        {
+          '@type': 'ContactPoint',
+          email: 'hello@revlet.me',
+          contactType: 'technical support',
+          url: `${SITE_URL}${PAGE_SEO.support.path}`,
+          availableLanguage: ['English'],
+        },
+      ],
       sameAs: [
-        'https://github.com/codexshivam/revlet',
-        'https://github.com/codexshivam/revletmail',
         'https://www.instagram.com/revlet.me',
         'https://www.facebook.com/revletplatform',
         'https://x.com/revletme',
         'https://www.linkedin.com/company/revlet',
+        'https://github.com/codexshivam/revlet',
+        'https://github.com/codexshivam/revletmail',
+      ],
+      brand: [
+        {
+          '@type': 'Brand',
+          name: 'Revlet Platform',
+          alternateName: 'Revlet',
+          url: `${MARKETING_URL}/`,
+          logo: `${MARKETING_URL}/favicon-512x512.png`,
+        },
+        {
+          '@type': 'Brand',
+          name: 'Revlet Console',
+          url: `${SITE_URL}/`,
+          logo: `${SITE_URL}/favicon-512x512.png`,
+        },
+        {
+          '@type': 'Brand',
+          name: 'RevletMail',
+          alternateName: 'Revlet Mail',
+          url: 'https://mail.revlet.me/',
+          logo: 'https://mail.revlet.me/favicon-512x512.png',
+        },
+      ],
+      owns: [
+        { '@id': `${MARKETING_URL}/#application` },
+        { '@id': `${SITE_URL}/#application` },
+        { '@id': 'https://mail.revlet.me/#application' },
       ],
     },
     {
@@ -140,12 +189,11 @@ const siteSchema = {
       '@type': 'WebSite',
       '@id': `${SITE_URL}/#website`,
       name: SITE_NAME,
-      alternateName: ['Revlet Console', 'app.revlet.me'],
-      url: SITE_URL,
+      alternateName: ['Revlet', 'Revlet Console', 'app.revlet.me'],
+      url: `${SITE_URL}/`,
       description: SITE_DESCRIPTION,
-      inLanguage: 'en',
+      inLanguage: 'en-US',
       publisher: { '@id': `${MARKETING_URL}/#organization` },
-      isPartOf: { '@id': `${MARKETING_URL}/#website` },
     },
     {
       '@type': ['SoftwareApplication', 'WebApplication'],
@@ -181,6 +229,30 @@ const siteSchema = {
         'Manage multiple organizations from one account',
       ],
     },
+    {
+      '@type': 'SiteNavigationElement',
+      '@id': `${SITE_URL}/#nav-signup`,
+      name: 'Get Started Free',
+      description: 'Create your free Revlet Platform account for up to 1,000 custom mailboxes and 1-second global DNS at $0/mo.',
+      url: `${SITE_URL}${PAGE_SEO.signup.path}`,
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      '@id': `${SITE_URL}/#nav-login`,
+      name: 'Login',
+      description: 'Sign in to Revlet Platform to manage business email, DNS records, and team access.',
+      url: `${SITE_URL}${PAGE_SEO.login.path}`,
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      '@id': `${SITE_URL}/#nav-support`,
+      name: 'Help & Support',
+      description: 'Best-in-class support and a guided approach to Revlet Platform products, DNS, and RevletMail.',
+      url: `${SITE_URL}${PAGE_SEO.support.path}`,
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+    },
   ],
 };
 
@@ -190,7 +262,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <head>
         <JsonLd data={siteSchema} />
       </head>

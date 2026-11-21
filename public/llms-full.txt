@@ -16,5 +16,5 @@ Revlet brings professional business email, global domain DNS management, and tea
 - **Founder**: Shivam Yadav (`https://revlet.me/about/`)
 - **Webmail App**: `https://mail.revlet.me/login`
 - **Public Console Routes**: `https://app.revlet.me/signup`, `https://app.revlet.me/login`, `https://app.revlet.me/support`
-- **Social Channels**: Instagram (`https://www.instagram.com/revlet.me`), Facebook (`https://www.facebook.com/revletplatform`), X (`https://x.com/revletme`), LinkedIn (`https://www.linkedin.com/company`), GitHub (`https://github.com/codexshivam/revlet`)
+- **Social Channels**: Instagram (`https://www.instagram.com/revlet.me`), Facebook (`https://www.facebook.com/revletplatform`), X (`https://x.com/revletme`), LinkedIn (`https://www.linkedin.com/company/revlet`), GitHub (`https://github.com/codexshivam/revlet`)
 - **Support**: `hello@revlet.me`

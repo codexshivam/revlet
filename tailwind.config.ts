@@ -12,7 +12,7 @@ export default {
       fontFamily: {
         sans: ['var(--font-inter)', 'Inter', 'sans-serif'],
         body: ['var(--font-inter)', 'Inter', 'sans-serif'],
-        headline: ['var(--font-inter)', 'Inter', 'sans-serif'],
+        headline: ['var(--font-space-grotesk)', 'var(--font-inter)', 'Inter', 'sans-serif'],
         mono: ['var(--font-inter)', 'Inter', 'sans-serif'],
         code: ['var(--font-inter)', 'Inter', 'sans-serif'],
       },

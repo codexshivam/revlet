@@ -19,18 +19,19 @@ export function PublicSupportView() {
       {/* Top Header */}
       <header className="w-full bg-white border-b border-slate-200/80 sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link
-            href="/"
+          <a
+            href="https://revlet.me/"
+            aria-label="Revlet Platform"
             className="flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary rounded-lg p-1"
           >
-            <img src="/favicon.svg" alt="" className="w-6 h-6 shrink-0" />
+            <img src="/brand/revlet-mark.svg" alt="Revlet Platform" className="w-6 h-6 shrink-0" />
             <span className="font-semibold text-base tracking-tight text-slate-900">
               Revlet
             </span>
-          </Link>
+          </a>
 
           <nav
-            aria-label="Support Navigation"
+            aria-label="Primary navigation"
             className="hidden md:flex items-center gap-6 text-xs font-semibold text-slate-600"
           >
             <Link
@@ -39,23 +40,29 @@ export function PublicSupportView() {
             >
               Console
             </Link>
-            <Link
-              href="/services/dns"
+            <a
+              href="https://revlet.me/dns/"
               className="hover:text-slate-900 transition-colors"
             >
               DNS Management
-            </Link>
-            <Link
-              href="/services/email"
+            </a>
+            <a
+              href="https://revlet.me/mail/"
               className="hover:text-slate-900 transition-colors"
             >
-              Email Service
-            </Link>
+              RevletMail
+            </a>
+            <a
+              href="https://revlet.me/security/whitepaper/"
+              className="hover:text-slate-900 transition-colors"
+            >
+              Security Whitepaper
+            </a>
             <Link
               href="/support"
               className="text-zinc-900 font-bold"
             >
-              Documentation &amp; Support
+              Help &amp; Support
             </Link>
           </nav>
 
@@ -204,10 +211,20 @@ export function PublicSupportView() {
       {/* Footer */}
       <footer className="w-full bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>Revlet — Open-Source Enterprise IT Management Control Plane</p>
-          <div className="flex items-center gap-4 font-medium text-slate-600">
-            <Link href="/login" className="hover:text-slate-900 transition-colors">Console</Link>
-            <Link href="/support" className="hover:text-slate-900 transition-colors">Support</Link>
+          <p>Revlet Platform &mdash; Enterprise Cloud Infrastructure</p>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-medium text-slate-600">
+            <a href="https://revlet.me/about/" className="hover:text-slate-900 transition-colors">
+              About Revlet Platform
+            </a>
+            <a href="https://revlet.me/contact/" className="hover:text-slate-900 transition-colors">
+              Help &amp; Support
+            </a>
+            <a href="https://revlet.me/privacy/" className="hover:text-slate-900 transition-colors">
+              Privacy Policy
+            </a>
+            <a href="https://revlet.me/terms/" className="hover:text-slate-900 transition-colors">
+              Terms of Service
+            </a>
             <a
               href="https://github.com/codexshivam/revlet"
               target="_blank"

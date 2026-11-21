@@ -146,7 +146,6 @@ const siteSchema = {
         'https://x.com/revletme',
         'https://www.linkedin.com/company/revlet',
         'https://github.com/codexshivam/revlet',
-        'https://github.com/codexshivam/revletmail',
       ],
       brand: [
         {
@@ -183,7 +182,15 @@ const siteSchema = {
       jobTitle: 'Founder & Chief Architect',
       url: `${MARKETING_URL}/about/`,
       worksFor: { '@id': `${MARKETING_URL}/#organization` },
-      sameAs: ['https://github.com/codexshivam'],
+      sameAs: [
+        'https://shivm.co/',
+        'https://shivamyadav.com.np/',
+        'https://www.linkedin.com/in/shivmco/',
+        'https://x.com/shivmco',
+        'https://github.com/codexshivam',
+        'https://www.instagram.com/shvmco/',
+        'https://www.facebook.com/shvmco',
+      ],
     },
     {
       '@type': 'WebSite',

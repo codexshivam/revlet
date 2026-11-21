@@ -1,6 +1,19 @@
 <div align="center">
 
-<img src="public/readme-hero.png" width="100%" alt="Revlet — Unified Cloud Control Plane for Business Email, Global DNS & Team Security" />
+<img src="public/readme-hero.png" width="100%" alt="Revlet Platform — Unified Cloud Control Plane for Business Email, 1-Second Global DNS & Team Security" />
+
+<p>
+  <strong>Revlet Console</strong> (<code>app.revlet.me</code>) — Multi-Organization Cloud IT &amp; Communications Control Plane by <strong>Revlet Platform</strong>
+</p>
+
+<p>
+  <a href="https://revlet.me/"><strong>Website</strong></a> &middot;
+  <a href="https://app.revlet.me/signup"><strong>Get Started Free</strong></a> &middot;
+  <a href="https://app.revlet.me/login"><strong>Console Login</strong></a> &middot;
+  <a href="https://mail.revlet.me/login"><strong>RevletMail</strong></a> &middot;
+  <a href="https://revlet.me/security/whitepaper/"><strong>Security Whitepaper</strong></a> &middot;
+  <a href="https://app.revlet.me/support"><strong>Help &amp; Support</strong></a>
+</p>
 
 </div>
 
@@ -8,7 +21,7 @@
 
 ## Run Your Organization's DNS, Email, Governance & Team Access from One Place
 
-**Revlet** (`app.revlet.me`) is a unified, multi-tenant **Cloud IT & Communications Control Plane** built for growing businesses, educational institutions, and distributed teams. Instead of juggling separate registrar dashboards, DNS panels, mail server tools, compliance consoles, and spreadsheet-based permission lists, Revlet brings **Custom Domain Email**, **Shared Mailboxes**, **Enterprise Email Governance**, **Authoritative DNS Management**, and **Granular Team Delegation** together in one fast, intuitive workspace.
+**Revlet Console** ([`https://app.revlet.me/`](https://app.revlet.me/login)) is the unified, multi-tenant **Cloud IT & Communications Control Plane** for **Revlet Platform** ([`https://revlet.me/`](https://revlet.me/)). Built for startups, enterprises, educational institutions, and distributed teams, Revlet brings **Custom Domain Email (RevletMail / Revlet Mail)**, **Shared Team Mailboxes**, **Enterprise Email Governance**, **1-Second Global DNS Management**, and **Granular Team Delegation** together in one Sovereign Obsidian workspace—free to start at **$0/mo** for up to **1,000 mailboxes**.
 
 Modern organizations lose hours every week switching between disconnected infrastructure portals. A single misconfigured `MX` or `TXT` record can silently disrupt company email, while sharing root credentials across IT staff introduces unnecessary security risk. Revlet solves both problems by giving administrators one clean control center:
 
@@ -173,12 +186,22 @@ npm run build
 
 ---
 
+## Official Ecosystem & Channels
+
+* **Revlet Platform:** [`https://revlet.me/`](https://revlet.me/) ([DNS Management](https://revlet.me/dns/) · [RevletMail](https://revlet.me/mail/) · [Security Whitepaper](https://revlet.me/security/whitepaper/) · [About](https://revlet.me/about/))
+* **Revlet Console:** [`https://app.revlet.me/login`](https://app.revlet.me/login) · [`https://app.revlet.me/signup`](https://app.revlet.me/signup) · [`https://app.revlet.me/support`](https://app.revlet.me/support)
+* **RevletMail (`Revlet Mail`):** [`https://mail.revlet.me/login`](https://mail.revlet.me/login)
+* **Repositories:** [`codexshivam/revlet`](https://github.com/codexshivam/revlet) · [`codexshivam/revletmail`](https://github.com/codexshivam/revletmail) · [`codexshivam/revlet-website`](https://github.com/codexshivam/revlet-website)
+* **Social & Contact:** [`hello@revlet.me`](mailto:hello@revlet.me) · [X (`@revletme`)](https://x.com/revletme) · [Instagram (`@revlet.me`)](https://www.instagram.com/revlet.me) · [LinkedIn](https://www.linkedin.com/company/revlet) · [Facebook](https://www.facebook.com/revletplatform)
+
+---
+
 ## License, Trademarks & Legal Notice
 
-Revlet is open-source software licensed under the **Apache License, Version 2.0**. See the [LICENSE](LICENSE) file for the complete legal text.
+Revlet Platform is open-source software licensed under the **Apache License, Version 2.0**. See the [LICENSE](LICENSE) file for the complete legal text.
 
 ### Trademarks & Brand Assets
-The **Revlet** name, logo, domain (`revlet.me`, `app.revlet.me`), and associated brand assets are trademarks of Revlet. The Apache-2.0 license grants rights to the source code only and does not grant permission to use Revlet trademarks or branding in a manner that suggests endorsement or official affiliation without prior written consent.
+The **Revlet**, **Revlet Platform**, and **RevletMail** names, logos, domains (`revlet.me`, `app.revlet.me`, `mail.revlet.me`), and associated brand assets are trademarks of Revlet Platform. The Apache-2.0 license grants rights to the source code only and does not grant permission to use Revlet trademarks or branding in a manner that suggests endorsement or official affiliation without prior written consent.
 
 ### Third-Party Services & Trademarks
 References to third-party platforms and technologies (such as Cloudflare, Amazon SES, Firebase, Next.js, and Stalwart Mail) are for compatibility and descriptive purposes only. All third-party trademarks remain the property of their respective owners, and use of those services is governed by their own terms and privacy policies.

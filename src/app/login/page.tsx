@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, Loader2, ShieldCheck, Smartphone, KeyRound, Mail, ChevronDown, ArrowLeft } from "lucide-react"
+import { Eye, EyeOff, Loader2, Smartphone, KeyRound, Mail, ChevronDown, ArrowLeft } from "lucide-react"
 import QRCode from "qrcode"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -250,12 +250,12 @@ export default function LoginPage() {
           if (typeof window !== "undefined") {
             sessionStorage.setItem(
               "revlet_prefill_signup",
-              JSON.stringify({ email: email.trim(), password })
+              JSON.stringify({ email: email.trim() })
             )
           }
           toast({
             title: "Account not found",
-            description: "Redirecting to sign up with your email and password prefilled.",
+            description: "Redirecting to sign up with your email prefilled.",
           })
           router.push("/signup")
           return

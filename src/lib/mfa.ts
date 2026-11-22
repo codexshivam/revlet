@@ -87,7 +87,7 @@ function getStepUpSigningKey(): Buffer {
   if (!secret) {
     throw new Error('Server signing secret is not configured for Step-Up MFA.');
   }
-  return crypto.createHash('sha256').update(`revlet-stepup:${secret}`).digest();
+  return Buffer.from(crypto.hkdfSync('sha256', secret, 'revlet-stepup-salt', 'revlet-mfa-key', 32));
 }
 
 export interface StepUpTokenPayload {
@@ -144,8 +144,6 @@ export function verifyStepUpToken(token: string | undefined | null, expectedUid:
 }
 
 export function hashOtpCode(uid: string, code: string): string {
-  return crypto
-    .createHmac('sha256', getStepUpSigningKey())
-    .update(`${uid}:${code.trim()}`)
-    .digest('hex');
+  const salt = Buffer.concat([getStepUpSigningKey(), Buffer.from(`:${uid}`, 'utf8')]);
+  return crypto.scryptSync(code.trim(), salt, 32).toString('hex');
 }

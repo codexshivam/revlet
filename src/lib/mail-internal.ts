@@ -1,4 +1,3 @@
-import https from 'https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
 import {
@@ -28,53 +27,6 @@ async function stalwartJsonRequest(
     const data = await res.json().catch(() => ({}));
     return { ok: res.ok, status: res.status, data };
   } catch (err: any) {
-    const causeCode = err?.cause?.code || err?.code || '';
-    if (
-      causeCode === 'DEPTH_ZERO_SELF_SIGNED_CERT' ||
-      causeCode === 'SELF_SIGNED_CERT_IN_CHAIN' ||
-      causeCode === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
-    ) {
-      return new Promise((resolve) => {
-        const parsed = new URL(urlStr);
-        const req = https.request(
-          {
-            hostname: parsed.hostname,
-            port: parsed.port || 443,
-            path: parsed.pathname + parsed.search,
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: authHeader,
-              'Content-Length': Buffer.byteLength(bodyStr),
-            },
-            rejectUnauthorized: false,
-            timeout: timeoutMs,
-          },
-          (res) => {
-            const chunks: Buffer[] = [];
-            res.on('data', (c) => chunks.push(Buffer.from(c)));
-            res.on('end', () => {
-              const raw = Buffer.concat(chunks).toString('utf8');
-              let parsedData = {};
-              try {
-                parsedData = JSON.parse(raw);
-              } catch {
-                parsedData = {};
-              }
-              const status = res.statusCode || 500;
-              resolve({ ok: status >= 200 && status < 300, status, data: parsedData });
-            });
-          }
-        );
-        req.on('error', () => resolve({ ok: false, status: 503, data: {} }));
-        req.on('timeout', () => {
-          req.destroy();
-          resolve({ ok: false, status: 504, data: {} });
-        });
-        req.write(bodyStr);
-        req.end();
-      });
-    }
     console.warn('[Stalwart JMAP] Call deferred:', err?.message || err);
     return { ok: false, status: 503, data: {} };
   } finally {

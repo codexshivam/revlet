@@ -3,21 +3,18 @@
 import crypto from 'crypto';
 import dns from 'dns';
 import { FieldValue } from 'firebase-admin/firestore';
-import { adminAuth, adminDb } from '@/firebase/admin';
+import { adminDb } from '@/firebase/admin';
 import { verifyUserOrgAccess } from './auth-helper';
 import {
   listDNSRecords,
   createDNSRecord,
   deleteDNSRecord,
 } from './dns-service';
-import { cfFetch } from './dns-client';
 import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
 import { hashMailPassword, hashMailPasswordAsync } from '@/lib/security/mail-crypto';
 import {
   logMailAuditEvent,
-  getStalwartConfig,
   callStalwartJmap,
-  findStalwartAccountByEmail,
   dispatchStalwartApi,
   ensureStalwartDomainId,
   syncStalwartDomainPrincipal,
@@ -392,16 +389,6 @@ async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | n
 // ============================================================================
 // DNS RECORDS & LIVE PUBLIC DNS VERIFICATION
 // ============================================================================
-
-function generateDeterministicDkimTokens(orgId: string, domain: string): string[] {
-  return [1, 2, 3].map((index) =>
-    crypto
-      .createHash('sha256')
-      .update(`revlet-mail-dkim-${orgId}-${domain}-${index}`)
-      .digest('hex')
-      .slice(0, 24)
-  );
-}
 
 const PUBLIC_DNS_CACHE_TTL_MS = 60_000;
 const publicDnsCache = new Map<

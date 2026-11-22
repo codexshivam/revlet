@@ -27,7 +27,8 @@ interface StalwartHealthReport {
 
 async function checkStalwartHealthAndQueue(env: Env): Promise<StalwartHealthReport> {
   const checkedAt = new Date().toISOString();
-  const baseUrl = (env.STALWART_URL || 'https://mx.revlet.me').replace(/\/+$/, '');
+  let baseUrl = env.STALWART_URL || 'https://mx.revlet.me';
+  while (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
 
   let healthzOk = false;
   let healthzStatus = 0;

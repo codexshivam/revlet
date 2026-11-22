@@ -71,7 +71,8 @@ export async function notifySupportTicketEvent(
         ctaLabel: 'Open Support Console',
       });
       if (!reportSent) {
-        console.error('[support] Failed to send support report email to hello@revlet.me for case:', params.ticketId);
+        const safeTicketId = String(params.ticketId || '').replace(/[\r\n]/g, '');
+        console.error('[support] Failed to send support report email to hello@revlet.me for case:', safeTicketId);
       }
       return { success: reportSent };
     }

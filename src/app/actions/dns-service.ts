@@ -149,25 +149,6 @@ export async function deleteDNSRecord(idToken: string, orgId: string, zoneId: st
       method: 'DELETE',
     }, verified.cfToken);
 
-    if (deletedRecord) {
-      const recType = String(deletedRecord.type || '').toUpperCase();
-      const recName = String(deletedRecord.name || '').toLowerCase();
-      const recContent = String(deletedRecord.content || '').toLowerCase();
-      const orgDomain = String(verified.orgData?.domain || '').toLowerCase().trim();
-
-      const isCriticalMail =
-        recType === 'MX' ||
-        (recType === 'TXT' &&
-          (recContent.includes('v=spf1') || recName.includes('_dmarc') || recName.includes('_domainkey'))) ||
-        (recType === 'CNAME' && recName.includes('_domainkey'));
-      const isRootHost =
-        Boolean(orgDomain) &&
-        (recType === 'A' || recType === 'AAAA' || recType === 'CNAME') &&
-        recName === orgDomain;
-
-      // DNS record deletion audit / removal completed without dispatching email notification
-    }
-
     return { success: true, data: data.result };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to remove domain setting' };

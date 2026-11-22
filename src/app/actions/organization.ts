@@ -109,8 +109,15 @@ export async function deleteOrganization(idToken: string, orgId: string) {
       if (remainingOrgIds.length === 0) {
         ops.push((b) => b.delete(memberDoc.ref));
       } else {
-        const nextOrgPermissions: Record<string, string[]> = { ...(mData.orgPermissions || {}) };
-        delete nextOrgPermissions[orgId];
+        const rawOrgPerms =
+          mData.orgPermissions && typeof mData.orgPermissions === 'object'
+            ? (mData.orgPermissions as Record<string, string[]>)
+            : {};
+        const nextOrgPermissions: Record<string, string[]> = Object.fromEntries(
+          Object.entries(rawOrgPerms).filter(
+            ([k]) => k !== orgId && k !== '__proto__' && k !== 'constructor' && k !== 'prototype'
+          )
+        );
         const nextFlatPerms = Array.from(new Set(Object.values(nextOrgPermissions).flat()));
         const nextAccessMode = nextFlatPerms.includes(ORG_ADMIN_PERMISSION) ? 'admin' : 'services';
         ops.push((b) =>

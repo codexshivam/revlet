@@ -356,21 +356,24 @@ export default function EmailServiceAdminPage() {
     const digits = "23456789"
     const symbols = "!@#$%&*"
     const all = upper + lower + digits + symbols
-    const pick = (pool: string) => {
+    const randomIndex = (max: number) => {
       if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+        const limit = Math.floor(0x100000000 / max) * max
         const arr = new Uint32Array(1)
-        window.crypto.getRandomValues(arr)
-        return pool[arr[0] % pool.length]
+        let value = limit
+        while (value >= limit) {
+          window.crypto.getRandomValues(arr)
+          value = arr[0]
+        }
+        return value % max
       }
-      return pool[Math.floor(Math.random() * pool.length)]
+      return Math.floor(Math.random() * max)
     }
+    const pick = (pool: string) => pool[randomIndex(pool.length)]
     const chars = [pick(upper), pick(lower), pick(digits), pick(symbols)]
     while (chars.length < 14) chars.push(pick(all))
     for (let i = chars.length - 1; i > 0; i--) {
-      const j =
-        typeof window !== "undefined" && window.crypto?.getRandomValues
-          ? window.crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1)
-          : Math.floor(Math.random() * (i + 1))
+      const j = randomIndex(i + 1)
       ;[chars[i], chars[j]] = [chars[j], chars[i]]
     }
     setCreateUserForm((prev) => ({ ...prev, password: chars.join("") }))
@@ -1567,8 +1570,6 @@ export default function EmailServiceAdminPage() {
     )
   }
 
-  const verifiedDnsCount = displayDnsRecords.filter((r) => r.verified).length
-  const isMxVerified = displayDnsRecords.find((r) => r.type === "MX")?.verified
   const missingDnsRecords = coreDnsRecords.filter((r) => !r.verified)
   const purgeDateLabel = mailPurgeScheduledAt
     ? new Date(mailPurgeScheduledAt).toLocaleDateString(undefined, {
@@ -1979,7 +1980,7 @@ export default function EmailServiceAdminPage() {
         <div className="rounded-xl border border-slate-200/80 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="p-4 sm:p-5 space-y-1">
             <div className="text-xs text-slate-500">Active Mailboxes</div>
-            {isLoadingDirectory || !hasLoadedDirectory || isLoadingOrgs || authLoading ? (
+            {isLoadingDirectory || !hasLoadedDirectory ? (
               <div className="space-y-1.5 pt-1">
                 <Skeleton className="h-7 w-16" />
                 <Skeleton className="h-3.5 w-32" />
@@ -2250,7 +2251,7 @@ export default function EmailServiceAdminPage() {
               </div>
 
               {/* Users table */}
-              {isLoadingDirectory || !hasLoadedDirectory || isLoadingOrgs || authLoading ? (
+              {isLoadingDirectory || !hasLoadedDirectory ? (
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">

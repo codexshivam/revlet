@@ -1,14 +1,28 @@
 const CLOUDFLARE_API_ORIGIN = 'https://api.cloudflare.com';
 
+const ALLOWED_CF_PATHS: RegExp[] = [
+  /^\/user\/tokens\/verify$/,
+  /^\/accounts$/,
+  /^\/zones$/,
+  /^\/zones\/[a-f0-9]{32}$/i,
+  /^\/zones\/[a-f0-9]{32}\/dns_records$/i,
+  /^\/zones\/[a-f0-9]{32}\/dns_records\/[a-f0-9]{32}$/i,
+];
+
 function buildSafeCloudflareUrl(path: string): string {
   if (!path || !path.startsWith('/') || path.startsWith('//') || path.includes('..') || path.includes('\\')) {
     throw new Error('Invalid DNS API path.');
   }
-  const target = new URL(`/client/v4${path}`, CLOUDFLARE_API_ORIGIN);
-  if (target.origin !== CLOUDFLARE_API_ORIGIN) {
-    throw new Error('Invalid DNS API origin.');
+  const [rawPathname, rawQuery = ''] = path.split('?', 2);
+  if (!ALLOWED_CF_PATHS.some((re) => re.test(rawPathname))) {
+    throw new Error('Disallowed DNS API endpoint.');
   }
-  return target.toString();
+  const safePath = rawPathname
+    .split('/')
+    .map((seg, i) => (i === 0 ? '' : encodeURIComponent(seg)))
+    .join('/');
+  const querySuffix = rawQuery ? `?${new URLSearchParams(rawQuery).toString()}` : '';
+  return `${CLOUDFLARE_API_ORIGIN}/client/v4${safePath}${querySuffix}`;
 }
 
 export async function cfFetch(path: string, options: RequestInit = {}, customToken?: string) {

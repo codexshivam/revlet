@@ -5,7 +5,6 @@
 
 // Patterns matching executable scripts and dangerous pseudo-protocols
 const SCRIPT_TAG_REGEX = /<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\b[^>]*>/gi;
-const GENERIC_HTML_TAG_REGEX = /<[^>]*>?/g;
 const JAVASCRIPT_PROTOCOL_REGEX = /(?:javascript|vbscript|data\s*:\s*text\/html)\s*:/gi;
 const INLINE_EVENT_HANDLER_REGEX = /\bon[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
 const DANGEROUS_EXPRESSIONS_REGEX = /(?:eval|new\s+Function|document\s*\.\s*cookie|window\s*\.\s*localStorage|document\s*\.\s*location)\b/gi;
@@ -24,6 +23,25 @@ export function containsMaliciousScript(input: string): boolean {
 }
 
 /**
+ * Character-level HTML tag stripper (avoids incomplete multi-character regex sanitization).
+ */
+function stripHtmlTagsLinear(input: string): string {
+  let out = '';
+  let inTag = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (ch === '<') {
+      inTag = true;
+    } else if (ch === '>') {
+      inTag = false;
+    } else if (!inTag) {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+/**
  * Aggressively strips script tags, event handlers, and dangerous protocols from input.
  * Preserves normal text, punctuation, emails, URLs, and multi-line formatting.
  */
@@ -31,20 +49,24 @@ export function stripScripts(input: string, options?: { allowHtml?: boolean; max
   if (!input || typeof input !== 'string') return '';
 
   let sanitized = input;
-  let previous = '';
 
-  // Repeatedly strip until fixed point to prevent nested multi-character bypasses
+  if (!options?.allowHtml) {
+    sanitized = stripHtmlTagsLinear(sanitized).replace(/[<>]/g, '');
+  } else {
+    let previous = '';
+    do {
+      previous = sanitized;
+      sanitized = sanitized
+        .replace(SCRIPT_TAG_REGEX, '')
+        .replace(INLINE_EVENT_HANDLER_REGEX, '');
+    } while (sanitized !== previous);
+  }
+
+  let prevProto = '';
   do {
-    previous = sanitized;
-    sanitized = sanitized
-      .replace(SCRIPT_TAG_REGEX, '')
-      .replace(JAVASCRIPT_PROTOCOL_REGEX, '')
-      .replace(INLINE_EVENT_HANDLER_REGEX, '');
-
-    if (!options?.allowHtml) {
-      sanitized = sanitized.replace(GENERIC_HTML_TAG_REGEX, '');
-    }
-  } while (sanitized !== previous);
+    prevProto = sanitized;
+    sanitized = sanitized.replace(JAVASCRIPT_PROTOCOL_REGEX, '');
+  } while (sanitized !== prevProto);
 
   // 5. Normalize null bytes and invisible control characters (preserve newlines/tabs)
   sanitized = sanitized.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');

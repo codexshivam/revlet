@@ -180,7 +180,7 @@ export default function TeamManagementPage() {
     }
 
     try {
-      if (db && user) {
+      if (db) {
         const ownedQ = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
         const ownedSnap = await getDocs(ownedQ)
         const orgMapLocal = new Map<string, Organization>()
@@ -313,7 +313,7 @@ export default function TeamManagementPage() {
       })
 
       if (!res.success) {
-        if (db && user) {
+        if (db) {
           const normalizedEmail = inviteEmail.trim().toLowerCase()
           const emailKey = normalizedEmail.replace(/\./g, "__DOT__")
           const nowIso = new Date().toISOString()
@@ -425,7 +425,7 @@ export default function TeamManagementPage() {
       })
 
       if (!res.success) {
-        if (db && user) {
+        if (db) {
           await updateDoc(doc(db, "teamMembers", memberToEdit.id), {
             organizationId: editOrgIds[0],
             organizationIds: editOrgIds,
@@ -482,7 +482,7 @@ export default function TeamManagementPage() {
       const idToken = await user.getIdToken()
       const res = await updateTeamMemberStatus(idToken, member.id, newStatus)
       if (!res.success) {
-        if (db && user) {
+        if (db) {
           await updateDoc(doc(db, "teamMembers", member.id), {
             status: newStatus,
             updatedAt: new Date().toISOString(),
@@ -522,7 +522,7 @@ export default function TeamManagementPage() {
       const idToken = await user.getIdToken()
       const res = await deleteTeamMember(idToken, member.id)
       if (!res.success) {
-        if (db && user) {
+        if (db) {
           await deleteDoc(doc(db, "teamMembers", member.id))
           for (const oid of getMemberOrgIds(member)) {
             try {

@@ -14,7 +14,6 @@ import {
   KeyRound,
   Mail,
   Trash2,
-  Loader2,
   Copy,
   Check,
   Plus,

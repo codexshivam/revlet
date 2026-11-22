@@ -7,7 +7,6 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import { GoogleAuth } from 'google-auth-library';
 import { loadEnvConfig } from '@next/env';
 

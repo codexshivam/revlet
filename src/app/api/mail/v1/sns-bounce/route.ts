@@ -42,11 +42,30 @@ function resolveSafeSnsUrl(rawUrl: string, requirePem: boolean): string | null {
   try {
     const parsed = new URL(rawUrl);
     if (parsed.protocol !== 'https:') return null;
-    if (parsed.pathname.includes('..')) return null;
-    if (requirePem && !parsed.pathname.endsWith('.pem')) return null;
+    if (parsed.port && parsed.port !== '443') return null;
     const safeOrigin = AWS_SNS_HOSTS.get(parsed.hostname.toLowerCase());
     if (!safeOrigin) return null;
-    return new URL(`${parsed.pathname}${parsed.search}`, safeOrigin).toString();
+
+    if (requirePem) {
+      // Strictly allow only top-level .pem certificate filenames on official SNS regional hosts
+      const match = /^\/([A-Za-z0-9._-]+\.pem)$/.exec(parsed.pathname);
+      if (!match || match[1].includes('..')) return null;
+      return `${safeOrigin}/${encodeURIComponent(match[1])}`;
+    }
+
+    // Strictly reconstruct SubscribeURL from validated query parameters only
+    const action = parsed.searchParams.get('Action');
+    const topicArn = parsed.searchParams.get('TopicArn');
+    const token = parsed.searchParams.get('Token');
+    if (action !== 'ConfirmSubscription' || !topicArn || !token) return null;
+    if (!/^arn:aws:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]+$/.test(topicArn)) return null;
+    if (!/^[A-Za-z0-9+/=_-]+$/.test(token)) return null;
+    const params = new URLSearchParams({
+      Action: 'ConfirmSubscription',
+      TopicArn: topicArn,
+      Token: token,
+    });
+    return `${safeOrigin}/?${params.toString()}`;
   } catch {
     return null;
   }

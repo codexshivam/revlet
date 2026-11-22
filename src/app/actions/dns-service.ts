@@ -667,96 +667,6 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
   }
 }
 
-/**
- * Pre-Flight Diff Preview: Shows exactly what records will be modified/added/deleted
- * before executing the automated Email Routing setup.
- */
-export async function previewEmailRoutingDNSDiff(idToken: string, orgId: string, zoneId: string, domainName: string) {
-  if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
-  try {
-    await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Read', 'DNS: Edit', 'DNS: Admin']);
-    const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
-    if (!recordsRes.success) throw new Error(recordsRes.error);
-    const currentRecords: any[] = recordsRes.data || [];
-
-    // Conflicting records that will be removed
-    const toDelete = currentRecords.filter((r: any) => {
-      const isRoot = r.name === domainName || r.name === `@`;
-      if (!isRoot) return false;
-      if (r.type === 'MX') return true;
-      if (r.type === 'TXT' && r.content.includes('v=spf1')) return true;
-      return false;
-    });
-
-    // Required records to be added
-    const toAdd = [
-      { type: 'MX', name: domainName, content: 'route1.mx.cloudflare.net', priority: 17, ttl: 'Auto', proxied: false },
-      { type: 'MX', name: domainName, content: 'route2.mx.cloudflare.net', priority: 54, ttl: 'Auto', proxied: false },
-      { type: 'MX', name: domainName, content: 'route3.mx.cloudflare.net', priority: 72, ttl: 'Auto', proxied: false },
-      { type: 'TXT', name: domainName, content: 'v=spf1 include:_spf.mx.cloudflare.net ~all', ttl: 'Auto', proxied: false }
-    ];
-
-    // Non-conflicting records that are kept untouched
-    const untouched = currentRecords.filter((r: any) => !toDelete.some(d => d.id === r.id));
-
-    return {
-      success: true,
-      data: {
-        toDelete,
-        toAdd,
-        untouchedCount: untouched.length,
-        domainName
-      }
-    };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to generate diff preview' };
-  }
-}
-
-// --- Email Routing Automation ---
-
-export async function enableEmailRouting(idToken: string, orgId: string, zoneId: string) {
-  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
-  try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
-    const data = await cfFetch(`/zones/${zoneId}/email/routing/enable`, {
-      method: 'POST',
-      body: JSON.stringify({})
-    }, verified.cfToken);
-    return { success: true, data: data.result };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to enable email routing' };
-  }
-}
-
-export async function disableEmailRouting(idToken: string, orgId: string, zoneId: string) {
-  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
-  try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
-    const data = await cfFetch(`/zones/${zoneId}/email/routing/disable`, {
-      method: 'POST',
-      body: JSON.stringify({})
-    }, verified.cfToken);
-    return { success: true, data: data.result };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to disable email routing' };
-  }
-}
-
-export async function getEmailRoutingStatus(idToken: string, orgId: string, zoneId: string) {
-  if (!zoneId) return { success: false, error: 'No Zone ID provided' };
-  try {
-    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Read', 'DNS: Edit', 'DNS: Admin']);
-    const data = await cfFetch(`/zones/${zoneId}/email/routing`, {}, verified.cfToken);
-    return { success: true, data: data.result };
-  } catch (error: any) {
-    if (error.status === 404 || (error.message && error.message.includes("not found"))) {
-      return { success: true, data: { status: "unconfigured" } };
-    }
-    return { success: false, error: error.message || 'Failed to get email routing status' };
-  }
-}
-
 export async function autoConfigureEmailDNS(idToken: string, orgId: string, zoneId: string, domainName: string) {
   if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
   try {
@@ -764,7 +674,7 @@ export async function autoConfigureEmailDNS(idToken: string, orgId: string, zone
     
     // Automatically snapshot before auto-configuring email DNS
     try {
-      await createZoneSnapshot(idToken, orgId, zoneId, 'Pre-email routing auto-configuration backup');
+      await createZoneSnapshot(idToken, orgId, zoneId, 'Pre-email DNS auto-configuration backup');
     } catch (snapErr) {
       console.warn('[Safety] Snapshot warning prior to email DNS config:', snapErr);
     }
@@ -789,7 +699,7 @@ export async function autoConfigureEmailDNS(idToken: string, orgId: string, zone
     // Create required records for Revlet Mail Server + AWS SES Outbound
     const requiredRecords = [
       { type: 'MX', name: domainName, content: 'mx.revlet.me', priority: 10, ttl: 'Auto', proxied: false },
-      { type: 'TXT', name: domainName, content: 'v=spf1 include:_spf.mx.revlet.me include:amazonses.com ~all', ttl: 'Auto', proxied: false }
+      { type: 'TXT', name: domainName, content: 'v=spf1 include:_spf.mx.revlet.me ~all', ttl: 'Auto', proxied: false }
     ];
 
     for (const rec of requiredRecords) {
@@ -799,30 +709,5 @@ export async function autoConfigureEmailDNS(idToken: string, orgId: string, zone
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to configure DNS records' };
-  }
-}
-
-export async function removeEmailRoutingDNS(idToken: string, orgId: string, zoneId: string, domainName: string) {
-  if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
-  try {
-    await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
-    const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
-    if (!recordsRes.success) throw new Error(recordsRes.error);
-    
-    const cfRecords = (recordsRes.data || []).filter((r: any) => {
-      const isRoot = r.name === domainName || r.name === `@`;
-      if (!isRoot) return false;
-      const cleanContent = String(r.content || '').toLowerCase().trim();
-      if (r.type === 'MX' && /^[a-z0-9-]+\.mx\.cloudflare\.net$/i.test(cleanContent)) return true;
-      if (r.type === 'TXT' && r.content === 'v=spf1 include:_spf.mx.cloudflare.net ~all') return true;
-      return false;
-    });
-
-    for (const r of cfRecords) {
-      await deleteDNSRecord(idToken, orgId, zoneId, r.id);
-    }
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to remove DNS records' };
   }
 }

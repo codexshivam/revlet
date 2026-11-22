@@ -755,14 +755,6 @@ async function provisionRequiredDnsRecordsOnZone(
     const normalizedDomain = domainName.toLowerCase().replace(/\.$/, '').trim();
     const expectedMxHost = MAIL_MX_HOST.toLowerCase().replace(/\.$/, '').trim();
 
-    // Disable conflicting Cloudflare Email Routing if present on zone so it does not intercept MX records
-    try {
-      const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['Email: Admin']);
-      await cfFetch(`/zones/${zoneId}/email/routing/disable`, { method: 'POST' }, verified.cfToken);
-    } catch {
-      // Non-fatal if Email Routing is not configured on zone
-    }
-
     // Remove conflicting root MX records (any MX that does not point to mx.revlet.me) and conflicting SPF records
     const conflictingRootRecords = currentRecords.filter((r: any) => {
       const rType = (r.type || '').toUpperCase();

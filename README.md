@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="public/readme-hero.png" width="100%" alt="Revlet Platform — Unified Cloud Control Plane for Business Email, 1-Second Global DNS & Team Security" />
-
 <p>
   <strong>Revlet Console</strong> (<code>app.revlet.me</code>) — Multi-Organization Cloud IT &amp; Communications Control Plane by <strong>Revlet Platform</strong>
 </p>

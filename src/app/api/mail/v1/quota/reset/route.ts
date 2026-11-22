@@ -94,11 +94,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const requestedScope =
+      body.scope === 'daily' || body.scope === 'monthly' || body.scope === 'all'
+        ? (body.scope as 'daily' | 'monthly' | 'all')
+        : null;
+
     if (!orgDocId) {
       if (isInternalSecret) {
         const now = new Date();
         const currentDayKey = now.toISOString().slice(0, 10);
         const currentMonthKey = now.toISOString().slice(0, 7);
+        const systemScope = requestedScope || 'daily';
 
         const orgsSnap = await adminDb
           .collection('organizations')
@@ -106,27 +112,47 @@ export async function POST(req: NextRequest) {
           .get();
 
         let resetCount = 0;
+        let monthlyRolloverCount = 0;
         for (const orgDoc of orgsSnap.docs) {
-          await orgDoc.ref.update({
-            mailDailySent: 0,
-            mailMonthlySent: 0,
-            mailHourlyBuckets: {},
-            mailDailyBuckets: {},
-            mailDailyBucket: currentDayKey,
-            mailMonthlyBucket: currentMonthKey,
-            mailQuotaSentToday: 0,
+          const orgData = orgDoc.data() || {};
+          const isNewMonth = Boolean(
+            orgData.mailMonthlyBucket && orgData.mailMonthlyBucket !== currentMonthKey
+          );
+          const shouldResetMonthly =
+            systemScope === 'all' || systemScope === 'monthly' || isNewMonth;
+          const shouldResetDaily = systemScope === 'all' || systemScope === 'daily';
+
+          const updatePayload: Record<string, any> = {
             mailQuotaLastResetAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
-          });
+          };
+
+          if (shouldResetDaily) {
+            updatePayload.mailDailySent = 0;
+            updatePayload.mailHourlyBuckets = {};
+            updatePayload.mailDailyBucket = currentDayKey;
+            updatePayload.mailQuotaSentToday = 0;
+          }
+
+          if (shouldResetMonthly) {
+            updatePayload.mailMonthlySent = 0;
+            updatePayload.mailDailyBuckets = {};
+            updatePayload.mailMonthlyBucket = currentMonthKey;
+            monthlyRolloverCount++;
+          } else if (!orgData.mailMonthlyBucket) {
+            updatePayload.mailMonthlyBucket = currentMonthKey;
+          }
+
+          await orgDoc.ref.update(updatePayload);
           resetCount++;
         }
 
         return NextResponse.json({
           ok: true,
-          message: `System-wide email quotas successfully reset for ${resetCount} organizations.`,
+          scope: systemScope,
+          message: `System-wide email quotas reset (${systemScope}) for ${resetCount} organizations (${monthlyRolloverCount} monthly rollovers).`,
           resetCount,
-          dailySent: 0,
-          monthlySent: 0,
+          monthlyRolloverCount,
         });
       }
 
@@ -156,23 +182,36 @@ export async function POST(req: NextRequest) {
     const now = new Date();
     const currentDayKey = now.toISOString().slice(0, 10);
     const currentMonthKey = now.toISOString().slice(0, 7);
+    const orgScope = requestedScope || 'all';
+    const existingData = orgSnap.data() || {};
 
-    await orgRef.update({
-      mailDailySent: 0,
-      mailMonthlySent: 0,
-      mailHourlyBuckets: {},
-      mailDailyBuckets: {},
-      mailDailyBucket: currentDayKey,
-      mailMonthlyBucket: currentMonthKey,
+    const orgUpdate: Record<string, any> = {
+      mailQuotaLastResetAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+
+    if (orgScope === 'all' || orgScope === 'daily') {
+      orgUpdate.mailDailySent = 0;
+      orgUpdate.mailHourlyBuckets = {};
+      orgUpdate.mailDailyBucket = currentDayKey;
+      orgUpdate.mailQuotaSentToday = 0;
+    }
+
+    if (orgScope === 'all' || orgScope === 'monthly') {
+      orgUpdate.mailMonthlySent = 0;
+      orgUpdate.mailDailyBuckets = {};
+      orgUpdate.mailMonthlyBucket = currentMonthKey;
+    }
+
+    await orgRef.update(orgUpdate);
 
     return NextResponse.json({
       ok: true,
-      message: '24-hour and 30-day email quotas have been successfully reset to 0.',
+      scope: orgScope,
+      message: `Email quota (${orgScope}) has been successfully reset to 0.`,
       orgId: orgDocId,
-      dailySent: 0,
-      monthlySent: 0,
+      dailySent: orgScope === 'all' || orgScope === 'daily' ? 0 : (existingData.mailDailySent ?? 0),
+      monthlySent: orgScope === 'all' || orgScope === 'monthly' ? 0 : (existingData.mailMonthlySent ?? 0),
     });
   } catch (err: any) {
     return NextResponse.json(

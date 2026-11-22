@@ -21,6 +21,7 @@ import { useState, useEffect } from "react"
 import { useAuth, useUser } from "@/firebase"
 import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "firebase/auth"
 import { AuthFrame } from "@/components/layout/auth-frame"
+import { TurnstileWidget } from "@/components/security/turnstile-widget"
 
 function sanitizeMfaError(input: unknown, fallback = "Verification failed. Please try again."): string {
   const raw = typeof input === "string" ? input : (input as any)?.message || ""
@@ -58,6 +59,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState("")
   const [isResetOpen, setIsResetOpen] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0)
   const [isResetLoading, setIsResetLoading] = useState(false)
 
   // Google-inspired 2-Step Verification / Enforce MFA state
@@ -173,8 +176,33 @@ export default function LoginPage() {
       return
     }
 
+    if (!turnstileToken) {
+      toast({
+        variant: "destructive",
+        title: "Security check required",
+        description: "Please complete the Cloudflare Turnstile verification before signing in.",
+      })
+      return
+    }
+
     setIsLoading(true)
     try {
+      const verifyRes = await fetch("/api/auth/turnstile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: turnstileToken, action: "login" }),
+      })
+      const verifyData = await verifyRes.json().catch(() => ({}))
+      if (!verifyRes.ok || !verifyData.ok) {
+        setTurnstileResetKey((k) => k + 1)
+        toast({
+          variant: "destructive",
+          title: "Security verification failed",
+          description: verifyData.error || "Please complete the security check again.",
+        })
+        return
+      }
+
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password)
 
       // Reactive Sync: Keep user profile index up to date
@@ -194,6 +222,7 @@ export default function LoginPage() {
 
       await evaluateMfaGate(userCredential.user)
     } catch (error: any) {
+      setTurnstileResetKey((k) => k + 1)
       const code = error?.code || ""
       if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
         let emailExists = true
@@ -717,6 +746,12 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+
+          <TurnstileWidget
+            action="login"
+            resetKey={turnstileResetKey}
+            onToken={setTurnstileToken}
+          />
 
           <Button
             type="submit"

@@ -12,6 +12,7 @@ import { useAuth, useUser, useFirestore, syncUserOrganizations } from "@/firebas
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
 import { collection, addDoc, doc, setDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore"
 import { AuthFrame } from "@/components/layout/auth-frame"
+import { TurnstileWidget } from "@/components/security/turnstile-widget"
 import { checkAndClaimInvitations } from "@/app/actions/team"
 
 export default function SignupPage() {
@@ -23,6 +24,8 @@ export default function SignupPage() {
   const [step, setStep] = useState<1 | 2>(1)
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0)
 
   // Step 1: User Account Form
   const [userFormData, setUserFormData] = useState({
@@ -124,8 +127,33 @@ export default function SignupPage() {
       return
     }
 
+    if (!turnstileToken) {
+      toast({
+        variant: "destructive",
+        title: "Security check required",
+        description: "Please complete the Cloudflare Turnstile verification to continue.",
+      })
+      return
+    }
+
     setIsLoading(true)
     try {
+      const verifyRes = await fetch("/api/auth/turnstile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: turnstileToken, action: "signup" }),
+      })
+      const verifyData = await verifyRes.json().catch(() => ({}))
+      if (!verifyRes.ok || !verifyData.ok) {
+        setTurnstileResetKey((k) => k + 1)
+        toast({
+          variant: "destructive",
+          title: "Security verification failed",
+          description: verifyData.error || "Please complete the security check again.",
+        })
+        return
+      }
+
       const checkRes = await fetch("/api/auth/check-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -419,6 +447,12 @@ export default function SignupPage() {
                   </button>
                 </div>
               </div>
+
+              <TurnstileWidget
+                action="signup"
+                resetKey={turnstileResetKey}
+                onToken={setTurnstileToken}
+              />
 
               <Button
                 type="submit"

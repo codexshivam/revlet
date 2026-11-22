@@ -48,19 +48,7 @@ function stripHtmlTagsLinear(input: string): string {
 export function stripScripts(input: string, options?: { allowHtml?: boolean; maxLength?: number }): string {
   if (!input || typeof input !== 'string') return '';
 
-  let sanitized = input;
-
-  if (!options?.allowHtml) {
-    sanitized = stripHtmlTagsLinear(sanitized).replace(/[<>]/g, '');
-  } else {
-    let previous = '';
-    do {
-      previous = sanitized;
-      sanitized = sanitized
-        .replace(SCRIPT_TAG_REGEX, '')
-        .replace(INLINE_EVENT_HANDLER_REGEX, '');
-    } while (sanitized !== previous);
-  }
+  let sanitized = stripHtmlTagsLinear(input).replace(/[<>]/g, '');
 
   let prevProto = '';
   do {

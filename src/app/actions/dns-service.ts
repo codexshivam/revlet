@@ -136,15 +136,6 @@ export async function deleteDNSRecord(idToken: string, orgId: string, zoneId: st
   try {
     const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
 
-    // Fetch record metadata prior to deletion to detect critical mail/root records
-    let deletedRecord: { type?: string; name?: string; content?: string } | null = null;
-    try {
-      const existing = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, { method: 'GET' }, verified.cfToken);
-      deletedRecord = existing?.result || null;
-    } catch {
-      // Proceed with deletion even if pre-fetch fails
-    }
-
     const data = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {
       method: 'DELETE',
     }, verified.cfToken);

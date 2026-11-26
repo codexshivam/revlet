@@ -21,6 +21,7 @@ import {
 import {
   listTeamManagementData,
   inviteTeamMember,
+  resendTeamInvitation,
   updateTeamMemberStatus,
   updateTeamMemberAccess,
   deleteTeamMember,
@@ -170,9 +171,10 @@ export default function TeamManagementPage() {
     try {
       const idToken = await user.getIdToken()
       const res = await listTeamManagementData(idToken)
-      if (res.success && res.data && res.data.orgs.length > 0) {
+      if (res.success && res.data) {
         setOrgs(res.data.orgs)
         setMembers(res.data.members)
+        setIsLoading(false)
         return
       }
     } catch {
@@ -343,9 +345,18 @@ export default function TeamManagementPage() {
         return
       }
 
+      const inviteUrl = res.data?.inviteUrl
+      const emailSent = res.data?.emailSent
+      if (inviteUrl && typeof navigator !== "undefined" && navigator.clipboard) {
+        navigator.clipboard.writeText(inviteUrl).catch(() => {})
+      }
       toast({
-        title: "Invitation sent",
-        description: `${inviteEmail.trim().toLowerCase()} is Pending acceptance across ${inviteOrgIds.length} organization(s).`,
+        variant: emailSent === false ? "destructive" : "default",
+        title: emailSent === false ? "Invitation created (email delivery failed)" : "Invitation sent",
+        description:
+          emailSent === false
+            ? `Invitation created for ${inviteEmail.trim().toLowerCase()}, but email delivery failed. The invite link was copied to your clipboard — or use Resend.`
+            : `${inviteEmail.trim().toLowerCase()} has been emailed an invite link (also copied to clipboard).`,
       })
 
       setIsInviteOpen(false)
@@ -432,13 +443,37 @@ export default function TeamManagementPage() {
     }
   }
 
+  const handleResendInvite = async (member: TeamMember) => {
+    if (!user) return
+    try {
+      const idToken = await user.getIdToken()
+      const res = await resendTeamInvitation(idToken, member.id)
+      if (!res.success || !res.data) {
+        throw new Error(res.error || "Could not resend invitation.")
+      }
+      if (res.data.inviteUrl && typeof navigator !== "undefined" && navigator.clipboard) {
+        navigator.clipboard.writeText(res.data.inviteUrl).catch(() => {})
+      }
+      toast({
+        variant: res.data.emailSent ? "default" : "destructive",
+        title: res.data.emailSent ? "Invitation resent" : "Link rotated (email delivery failed)",
+        description: res.data.emailSent
+          ? `Sent a fresh invitation link to ${member.email} (and copied it to clipboard).`
+          : `Email delivery failed, but the fresh invite link for ${member.email} was copied to your clipboard.`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Resend failed",
+        description: err?.message || "Could not resend invitation.",
+      })
+    }
+  }
+
   const handleToggleStatus = async (member: TeamMember) => {
     if (!user) return
     if (member.status === "Pending") {
-      toast({
-        title: "Pending activation",
-        description: `${member.email} must sign up or sign in first to activate their account.`,
-      })
+      await handleResendInvite(member)
       return
     }
 

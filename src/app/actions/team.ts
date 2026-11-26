@@ -1,13 +1,22 @@
 'use server';
 
+import crypto from 'crypto';
 import { adminAuth, adminDb } from '@/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { ORG_ADMIN_PERMISSION, ADMIN_ALL_PERMISSIONS } from '@/lib/team-permissions';
 import { sendRevletAlertEmail } from '@/lib/revlet-alerts';
 
+function hashInviteToken(rawToken: string): string {
+  return crypto.createHash('sha256').update(rawToken.trim()).digest('hex');
+}
+
+function getInviteBaseUrl(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL || 'https://app.revlet.me').trim().replace(/\/$/, '');
+}
+
 async function verifyCaller(idToken: string) {
   if (!idToken) throw new Error('Unauthorized: Missing credentials.');
-  const decoded = await adminAuth.verifyIdToken(idToken);
+  const decoded = await adminAuth.verifyIdToken(idToken, true);
   return {
     uid: decoded.uid,
     email: (decoded.email || '').toLowerCase().trim(),
@@ -17,34 +26,23 @@ async function verifyCaller(idToken: string) {
 }
 
 /**
- * Verifies whether the caller is the organization owner OR holds an Active, UID-bound
+ * Verifies whether a UID is the organization owner OR holds an Active, UID-bound
  * teamMembers record with ORG_ADMIN_PERMISSION for this specific organization.
  */
-async function callerHasOrgAdmin(
-  orgId: string,
-  orgData: any,
-  caller: { uid: string; email: string; emailVerified: boolean }
-): Promise<boolean> {
-  if (!orgData) return false;
-  if (orgData.ownerId === caller.uid) return true;
-  if (!caller.emailVerified || !caller.email) return false;
+async function uidHasOrgAdmin(orgId: string, orgData: any, uid: string): Promise<boolean> {
+  if (!orgData || !uid) return false;
+  if (orgData.ownerId === uid) return true;
 
   const snap = await adminDb
     .collection('teamMembers')
-    .where('ownerId', '==', orgData.ownerId)
-    .where('memberUid', '==', caller.uid)
+    .where('organizationIds', 'array-contains', orgId)
+    .where('memberUid', '==', uid)
     .limit(5)
     .get();
 
   for (const doc of snap.docs) {
     const d = doc.data();
     if (d.status !== 'Active') continue;
-    const mOrgs: string[] = Array.isArray(d.organizationIds)
-      ? d.organizationIds
-      : d.organizationId
-      ? [d.organizationId]
-      : [];
-    if (!mOrgs.includes(orgId)) continue;
     const perms: string[] = Array.isArray(d.orgPermissions?.[orgId])
       ? d.orgPermissions[orgId]
       : Array.isArray(d.permissions)
@@ -55,6 +53,17 @@ async function callerHasOrgAdmin(
     }
   }
   return false;
+}
+
+async function callerHasOrgAdmin(
+  orgId: string,
+  orgData: any,
+  caller: { uid: string; email: string; emailVerified: boolean }
+): Promise<boolean> {
+  if (!orgData) return false;
+  if (orgData.ownerId === caller.uid) return true;
+  if (!caller.emailVerified || !caller.email) return false;
+  return uidHasOrgAdmin(orgId, orgData, caller.uid);
 }
 
 /**
@@ -113,14 +122,33 @@ export async function listTeamManagementData(idToken: string) {
       for (const doc of snap.docs) {
         const data = doc.data();
         if ((data.email || '').toLowerCase().trim() === caller.email) continue;
+        const rawOrgIds: string[] = Array.isArray(data.organizationIds)
+          ? data.organizationIds
+          : data.organizationId
+          ? [data.organizationId]
+          : [];
+        // Strictly scope returned orgs & permissions to organizations this caller can manage
+        const visibleOrgIds = rawOrgIds.filter((oid) => manageableOrgIds.has(oid));
+        if (visibleOrgIds.length === 0) continue;
+
+        const scopedOrgPerms: Record<string, string[]> = {};
+        for (const oid of visibleOrgIds) {
+          if (Array.isArray(data.orgPermissions?.[oid])) {
+            scopedOrgPerms[oid] = data.orgPermissions[oid];
+          } else if (Array.isArray(data.permissions)) {
+            scopedOrgPerms[oid] = data.permissions;
+          }
+        }
+        const scopedFlatPerms = Array.from(new Set(Object.values(scopedOrgPerms).flat()));
+
         memberDocsMap.set(doc.id, {
           id: doc.id,
           email: data.email,
-          organizationId: data.organizationId,
-          organizationIds: data.organizationIds || (data.organizationId ? [data.organizationId] : []),
-          permissions: data.permissions || [],
-          orgPermissions: data.orgPermissions || undefined,
-          accessMode: data.accessMode || ((data.permissions || []).includes(ORG_ADMIN_PERMISSION) ? 'admin' : 'services'),
+          organizationId: visibleOrgIds[0],
+          organizationIds: visibleOrgIds,
+          permissions: scopedFlatPerms,
+          orgPermissions: scopedOrgPerms,
+          accessMode: scopedFlatPerms.includes(ORG_ADMIN_PERMISSION) ? 'admin' : 'services',
           status: data.status || 'Pending',
           invitedBy: data.invitedBy,
         });
@@ -226,118 +254,59 @@ export async function inviteTeamMember(
       // Fallback to token name/email
     }
 
-    // Invitations ALWAYS start as Pending (even for existing Revlet accounts)
-    // and never grant organization access until explicitly claimed/accepted by a verified email.
+    // Every invitation is created as an explicit Pending offer with an opaque token.
+    // Never silently merge into or expand an existing Active membership.
     const initialStatus: 'Pending' = 'Pending';
+    const rawToken = crypto.randomBytes(24).toString('base64url');
+    const inviteTokenHash = hashInviteToken(rawToken);
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const inviteUrl = `${getInviteBaseUrl()}/invite/${rawToken}`;
 
-    // Check if this owner already has a teamMembers record for this email
-    const existingMemberSnap = await adminDb
-      .collection('teamMembers')
-      .where('ownerId', '==', caller.uid)
-      .where('email', '==', targetEmail)
-      .limit(1)
-      .get();
+    const createdRef = await adminDb.collection('teamMembers').add({
+      email: targetEmail,
+      organizationIds: orgIds,
+      organizationId: orgIds[0],
+      ownerId: caller.uid,
+      ownerName: ownerDisplayName,
+      invitedByUid: caller.uid,
+      invitedBy: caller.email,
+      accessMode,
+      permissions,
+      orgPermissions: resolvedOrgPermissions,
+      status: initialStatus,
+      inviteTokenHash,
+      expiresAt,
+      revoked: false,
+      invitedAt: FieldValue.serverTimestamp(),
+    });
+    const memberId = createdRef.id;
 
-    let memberId: string;
-    if (!existingMemberSnap.empty) {
-      const existingDoc = existingMemberSnap.docs[0];
-      const existingData = existingDoc.data();
-      const mergedOrgIds = Array.from(
-        new Set([
-          ...(Array.isArray(existingData.organizationIds)
-            ? existingData.organizationIds
-            : existingData.organizationId
-            ? [existingData.organizationId]
-            : []),
-          ...orgIds,
-        ])
-      );
-      const mergedOrgPermissions: Record<string, string[]> = {
-        ...(existingData.orgPermissions || {}),
-        ...resolvedOrgPermissions,
-      };
-      const mergedFlatPerms = Array.from(new Set(Object.values(mergedOrgPermissions).flat()));
-      const nextStatus =
-        existingData.status === 'Suspended'
-          ? 'Suspended'
-          : existingData.status === 'Active'
-          ? 'Active'
-          : 'Pending';
-      await existingDoc.ref.update({
-        organizationIds: mergedOrgIds,
-        organizationId: mergedOrgIds[0],
-        accessMode: mergedFlatPerms.includes(ORG_ADMIN_PERMISSION) ? 'admin' : 'services',
-        permissions: mergedFlatPerms,
-        orgPermissions: mergedOrgPermissions,
-        ownerName: ownerDisplayName,
-        invitedByUid: caller.uid,
-        invitedBy: caller.email,
-        status: nextStatus,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      memberId = existingDoc.id;
-
-      // Only update organization membership arrays if member is ALREADY Active (never for Pending/Suspended)
-      if (nextStatus === 'Active' && existingData.memberUid) {
-        const batch = adminDb.batch();
-        for (const orgDoc of orgDocs) {
-          const orgPerms = resolvedOrgPermissions[orgDoc.id] || permissions;
-          batch.update(orgDoc.ref, {
-            ownerName: ownerDisplayName,
-            memberIds: FieldValue.arrayUnion(existingData.memberUid),
-            memberEmails: FieldValue.arrayUnion(targetEmail),
-            [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]: orgPerms,
-          });
-        }
-        await batch.commit();
-      }
-    } else {
-      const createdRef = await adminDb.collection('teamMembers').add({
-        email: targetEmail,
-        organizationIds: orgIds,
-        organizationId: orgIds[0],
-        ownerId: caller.uid,
-        ownerName: ownerDisplayName,
-        invitedByUid: caller.uid,
-        invitedBy: caller.email,
-        accessMode,
-        permissions,
-        orgPermissions: resolvedOrgPermissions,
-        status: initialStatus,
-        invitedAt: FieldValue.serverTimestamp(),
-      });
-      memberId = createdRef.id;
-    }
-
+    let emailSent = false;
     try {
       const orgNames = orgDocs
         .map((d) => String(d.data()?.name || d.data()?.domain || d.id))
         .join(', ');
-      await sendRevletAlertEmail({
+      const mailRes = await sendRevletAlertEmail({
         to: targetEmail,
-        subject: `You've been invited to ${orgNames} on Revlet`,
-        title: 'Team Invitation',
-        subtitle: 'Workspace Access & Team Invitations',
+        subject: `You've been invited to join ${orgNames} on Revlet`,
+        title: 'Workspace Invitation',
+        subtitle: 'Join Workspace on Revlet',
         summaryLines: [
-          `${ownerDisplayName} (${caller.email}) invited you to collaborate on Revlet.`,
-          initialStatus === 'Pending'
-            ? 'Create or sign in to your Revlet account using this email address to activate access.'
-            : 'Your workspace access is active now.',
+          `${ownerDisplayName} (${caller.email}) invited you to join ${orgNames} on Revlet.`,
+          'Open the invitation link below to review the offered permissions and accept.',
         ],
         details: [
-          { label: 'Organizations', value: orgNames },
+          { label: 'Workspaces', value: orgNames },
           { label: 'Invited By', value: caller.email },
           { label: 'Access Mode', value: accessMode === 'admin' ? 'Administrator' : 'Scoped Services' },
-          { label: 'Status', value: initialStatus },
+          { label: 'Expires In', value: '7 days' },
         ],
-        ctaUrl:
-          initialStatus === 'Pending'
-            ? 'https://app.revlet.me/signup'
-            : 'https://app.revlet.me/account/home',
-        ctaLabel: initialStatus === 'Pending' ? 'Accept Invitation' : 'Open Revlet Console',
+        ctaUrl: inviteUrl,
+        ctaLabel: 'Review & Accept Invitation',
       });
+      emailSent = Boolean(mailRes);
     } catch {
-      // Non-blocking invitation email
+      emailSent = false;
     }
 
     return {
@@ -348,6 +317,8 @@ export async function inviteTeamMember(
         status: initialStatus,
         organizationIds: orgIds,
         permissions,
+        inviteUrl,
+        emailSent,
       },
     };
   } catch (err: any) {
@@ -524,15 +495,32 @@ export async function updateTeamMemberAccess(
       }
     }
 
-    // Verify caller is owner or Org Admin of all new orgs
-    const nextOrgDocs = await Promise.all(
-      nextOrgIds.map((id) => adminDb.collection('organizations').doc(id).get())
+    // Authorize EVERY added, kept, AND removed organization before modifying grants
+    const removedOrgIds = prevOrgIds.filter((oid) => !nextOrgIds.includes(oid));
+    const allAffectedOrgIds = Array.from(new Set([...nextOrgIds, ...removedOrgIds]));
+    const allAffectedOrgDocs = await Promise.all(
+      allAffectedOrgIds.map((id) => adminDb.collection('organizations').doc(id).get())
     );
-    for (const docSnap of nextOrgDocs) {
-      if (!docSnap.exists || !(await callerHasOrgAdmin(docSnap.id, docSnap.data(), caller))) {
-        return { success: false, error: 'Only an organization owner or Admin can assign organization access.' };
+    const affectedOrgMap = new Map(allAffectedOrgDocs.map((d) => [d.id, d]));
+
+    for (const docSnap of allAffectedOrgDocs) {
+      if (!docSnap.exists) {
+        if (nextOrgIds.includes(docSnap.id)) {
+          return { success: false, error: 'One or more selected organizations no longer exist.' };
+        }
+        continue;
+      }
+      if (!(await callerHasOrgAdmin(docSnap.id, docSnap.data(), caller))) {
+        return {
+          success: false,
+          error: 'Only an organization owner or Admin can modify or revoke access for each affected organization.',
+        };
       }
     }
+
+    const nextOrgDocs = nextOrgIds
+      .map((id) => affectedOrgMap.get(id))
+      .filter((d): d is FirebaseFirestore.DocumentSnapshot => Boolean(d && d.exists));
 
     const targetEmail = (data.email || '').toLowerCase().trim();
     const permKey = `memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`;
@@ -546,27 +534,29 @@ export async function updateTeamMemberAccess(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    const batch = adminDb.batch();
-    // Remove access from unselected orgs
-    for (const oldId of prevOrgIds) {
-      if (!nextOrgIds.includes(oldId)) {
-        const oldRef = adminDb.collection('organizations').doc(oldId);
-        batch.update(oldRef, {
-          memberEmails: FieldValue.arrayRemove(targetEmail),
-          [permKey]: FieldValue.delete(),
-        });
+    // Only sync organization-level membership indexes for ACTIVE, UID-bound members.
+    // Editing a Pending invite updates ONLY the pending offer, never granting org visibility.
+    if (data.status === 'Active' && data.memberUid) {
+      const batch = adminDb.batch();
+      for (const oldId of removedOrgIds) {
+        const oldDoc = affectedOrgMap.get(oldId);
+        if (oldDoc?.exists) {
+          batch.update(oldDoc.ref, {
+            memberIds: FieldValue.arrayRemove(data.memberUid),
+            memberEmails: FieldValue.arrayRemove(targetEmail),
+            [permKey]: FieldValue.delete(),
+          });
+        }
       }
-    }
-    // Grant/update access on selected orgs (unless suspended)
-    if (data.status !== 'Suspended') {
       for (const orgDoc of nextOrgDocs) {
         batch.update(orgDoc.ref, {
+          memberIds: FieldValue.arrayUnion(data.memberUid),
           memberEmails: FieldValue.arrayUnion(targetEmail),
           [permKey]: resolvedOrgPermissions[orgDoc.id] || nextPermissions,
         });
       }
+      await batch.commit();
     }
-    await batch.commit();
 
     if (targetEmail) {
       try {
@@ -684,9 +674,287 @@ export async function deleteTeamMember(idToken: string, memberId: string) {
 }
 
 /**
- * Transactionally claims pending team invitations for a verified email user.
- * Requires server-verified email_verified === true and validates every invited
- * organization against the inviter's current authority before granting membership.
+ * Rotates an invitation's opaque token and resends the invitation email.
+ */
+export async function resendTeamInvitation(idToken: string, memberId: string) {
+  try {
+    const caller = await verifyCaller(idToken);
+    const memberRef = adminDb.collection('teamMembers').doc(memberId);
+    const memberSnap = await memberRef.get();
+    if (!memberSnap.exists) {
+      return { success: false, error: 'Invitation not found.' };
+    }
+    const data = memberSnap.data()!;
+    if (data.status !== 'Pending') {
+      return { success: false, error: 'Only pending invitations can be resent.' };
+    }
+    const orgIds: string[] = Array.isArray(data.organizationIds)
+      ? data.organizationIds
+      : data.organizationId
+      ? [data.organizationId]
+      : [];
+    const orgDocs = await Promise.all(
+      orgIds.map((id) => adminDb.collection('organizations').doc(id).get())
+    );
+    for (const docSnap of orgDocs) {
+      if (!docSnap.exists || !(await callerHasOrgAdmin(docSnap.id, docSnap.data(), caller))) {
+        return { success: false, error: 'Unauthorized to resend this invitation.' };
+      }
+    }
+
+    const rawToken = crypto.randomBytes(24).toString('base64url');
+    const inviteTokenHash = hashInviteToken(rawToken);
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const inviteUrl = `${getInviteBaseUrl()}/invite/${rawToken}`;
+
+    await memberRef.update({
+      inviteTokenHash,
+      expiresAt,
+      revoked: false,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    let emailSent = false;
+    try {
+      const orgNames = orgDocs
+        .map((d) => String(d.data()?.name || d.data()?.domain || d.id))
+        .join(', ');
+      const mailRes = await sendRevletAlertEmail({
+        to: data.email,
+        subject: `Reminder: You've been invited to join ${orgNames} on Revlet`,
+        title: 'Workspace Invitation Reminder',
+        subtitle: 'Join Workspace on Revlet',
+        summaryLines: [
+          `${data.ownerName || caller.name} (${caller.email}) invited you to join ${orgNames} on Revlet.`,
+          'Open the link below to review and accept your workspace invitation.',
+        ],
+        details: [
+          { label: 'Workspaces', value: orgNames },
+          { label: 'Invited By', value: caller.email },
+          { label: 'Expires In', value: '7 days' },
+        ],
+        ctaUrl: inviteUrl,
+        ctaLabel: 'Review & Accept Invitation',
+      });
+      emailSent = Boolean(mailRes);
+    } catch {
+      emailSent = false;
+    }
+
+    return { success: true, data: { inviteUrl, emailSent } };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to resend invitation.' };
+  }
+}
+
+/**
+ * Read-only lookup of a specific opaque invitation token for the /invite/[token] Join Workspace page.
+ */
+export async function getInvitationByToken(rawToken: string) {
+  try {
+    if (!rawToken || rawToken.trim().length < 16) {
+      return { success: true, data: { state: 'not_found' as const } };
+    }
+    const tokenHash = hashInviteToken(rawToken);
+    const snap = await adminDb
+      .collection('teamMembers')
+      .where('inviteTokenHash', '==', tokenHash)
+      .limit(1)
+      .get();
+
+    if (snap.empty) {
+      return { success: true, data: { state: 'not_found' as const } };
+    }
+
+    const doc = snap.docs[0];
+    const d = doc.data();
+    if (d.revoked === true || d.status === 'Suspended' || d.status === 'Inactive') {
+      return { success: true, data: { state: 'revoked' as const } };
+    }
+    if (d.status === 'Active') {
+      return {
+        success: true,
+        data: {
+          state: 'accepted' as const,
+          orgId: d.organizationId || (Array.isArray(d.organizationIds) ? d.organizationIds[0] : undefined),
+        },
+      };
+    }
+    if (typeof d.expiresAt === 'number' && d.expiresAt < Date.now()) {
+      return { success: true, data: { state: 'expired' as const } };
+    }
+
+    const orgIds: string[] = Array.isArray(d.organizationIds)
+      ? d.organizationIds
+      : d.organizationId
+      ? [d.organizationId]
+      : [];
+    const orgDocs = await Promise.all(
+      orgIds.map((id) => adminDb.collection('organizations').doc(id).get())
+    );
+    const orgs = orgDocs
+      .filter((o) => o.exists)
+      .map((o) => ({
+        id: o.id,
+        name: String(o.data()?.name || o.data()?.domain || o.id),
+        domain: String(o.data()?.domain || ''),
+        permissions: Array.isArray(d.orgPermissions?.[o.id])
+          ? (d.orgPermissions[o.id] as string[])
+          : Array.isArray(d.permissions)
+          ? (d.permissions as string[])
+          : [],
+      }));
+
+    if (orgs.length === 0) {
+      return { success: true, data: { state: 'revoked' as const } };
+    }
+
+    return {
+      success: true,
+      data: {
+        state: 'valid' as const,
+        inviteId: doc.id,
+        email: String(d.email || '').toLowerCase().trim(),
+        inviterName: String(d.ownerName || d.invitedBy || 'Workspace Admin'),
+        inviterEmail: String(d.invitedBy || ''),
+        orgs,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Could not load invitation details.' };
+  }
+}
+
+/**
+ * Explicitly accepts a specific invitation token in a transaction.
+ * Requires a revocation-checked verified email matching the invitation and
+ * validates the inviter's current authority (owner OR delegated Org Admin) for each org.
+ */
+export async function acceptInvitationByToken(idToken: string, rawToken: string) {
+  try {
+    const caller = await verifyCaller(idToken);
+    if (!caller.email || !caller.emailVerified) {
+      return {
+        success: false,
+        error: 'Please verify your email address before accepting this workspace invitation.',
+      };
+    }
+    if (!rawToken || rawToken.trim().length < 16) {
+      return { success: false, error: 'Invalid invitation link.' };
+    }
+
+    const tokenHash = hashInviteToken(rawToken);
+    const snap = await adminDb
+      .collection('teamMembers')
+      .where('inviteTokenHash', '==', tokenHash)
+      .limit(1)
+      .get();
+
+    if (snap.empty) {
+      return { success: false, error: 'This invitation link is invalid or has already been used.' };
+    }
+
+    const inviteRef = snap.docs[0].ref;
+    const preData = snap.docs[0].data();
+
+    if ((preData.email || '').toLowerCase().trim() !== caller.email) {
+      return {
+        success: false,
+        error: `This invitation was sent to ${preData.email}. Sign in with that address to accept.`,
+      };
+    }
+
+    const inviterUid = String(preData.invitedByUid || preData.ownerId || '');
+    const candidateOrgIds: string[] = Array.isArray(preData.organizationIds)
+      ? preData.organizationIds
+      : preData.organizationId
+      ? [preData.organizationId]
+      : [];
+
+    // Validate inviter's current authority (owner OR active delegated Org Admin) for each org
+    const authorizedOrgIds: string[] = [];
+    for (const orgId of candidateOrgIds) {
+      const orgSnap = await adminDb.collection('organizations').doc(orgId).get();
+      if (!orgSnap.exists) continue;
+      if (await uidHasOrgAdmin(orgId, orgSnap.data(), inviterUid)) {
+        authorizedOrgIds.push(orgId);
+      }
+    }
+
+    if (authorizedOrgIds.length === 0) {
+      return {
+        success: false,
+        error: 'The inviter no longer has permission to grant access to this workspace.',
+      };
+    }
+
+    const acceptedOrgIds = await adminDb.runTransaction(async (tx) => {
+      const freshSnap = await tx.get(inviteRef);
+      if (!freshSnap.exists) throw new Error('Invitation no longer exists.');
+      const d = freshSnap.data() || {};
+      if (d.revoked === true || d.status === 'Suspended' || d.status === 'Inactive') {
+        throw new Error('This invitation has been revoked.');
+      }
+      if (d.status === 'Active') {
+        return authorizedOrgIds;
+      }
+      if (typeof d.expiresAt === 'number' && d.expiresAt < Date.now()) {
+        throw new Error('This invitation has expired. Ask your admin to resend it.');
+      }
+      if ((d.email || '').toLowerCase().trim() !== caller.email) {
+        throw new Error('Signed-in email does not match this invitation.');
+      }
+
+      tx.update(inviteRef, {
+        status: 'Active',
+        memberUid: caller.uid,
+        organizationIds: authorizedOrgIds,
+        organizationId: authorizedOrgIds[0],
+        inviteTokenHash: FieldValue.delete(),
+        activatedAt: FieldValue.serverTimestamp(),
+        acceptedAt: FieldValue.serverTimestamp(),
+      });
+
+      const permKey = `memberPermissions.${caller.email.replace(/\./g, '__DOT__')}`;
+      for (const orgId of authorizedOrgIds) {
+        const orgRef = adminDb.collection('organizations').doc(orgId);
+        const orgPerms = Array.isArray(d.orgPermissions?.[orgId])
+          ? d.orgPermissions[orgId]
+          : Array.isArray(d.permissions)
+          ? d.permissions
+          : [];
+        tx.update(orgRef, {
+          memberIds: FieldValue.arrayUnion(caller.uid),
+          memberEmails: FieldValue.arrayUnion(caller.email),
+          ...(orgPerms.length > 0 ? { [permKey]: orgPerms } : {}),
+        });
+      }
+
+      return authorizedOrgIds;
+    });
+
+    const primaryOrgId = acceptedOrgIds[0];
+    const primaryPerms: string[] = Array.isArray(preData.orgPermissions?.[primaryOrgId])
+      ? preData.orgPermissions[primaryOrgId]
+      : Array.isArray(preData.permissions)
+      ? preData.permissions
+      : [];
+
+    return {
+      success: true,
+      data: {
+        orgIds: acceptedOrgIds,
+        primaryOrgId,
+        primaryPerms,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Could not accept invitation.' };
+  }
+}
+
+/**
+ * Read-only check for pending invitations (replaces silent background auto-claim).
  */
 export async function checkAndClaimInvitations(idToken: string) {
   try {
@@ -694,91 +962,27 @@ export async function checkAndClaimInvitations(idToken: string) {
     if (!caller.email || !caller.emailVerified) {
       return { success: true, data: { hasInvitations: false, orgIds: [] as string[] } };
     }
-
-    const memberSnap = await adminDb
+    const snap = await adminDb
       .collection('teamMembers')
       .where('email', '==', caller.email)
+      .where('status', '==', 'Pending')
+      .limit(10)
       .get();
 
-    if (memberSnap.empty) {
-      return { success: true, data: { hasInvitations: false, orgIds: [] as string[] } };
-    }
+    const pendingOrgIds = snap.docs.flatMap((d) => {
+      const data = d.data();
+      return Array.isArray(data.organizationIds)
+        ? data.organizationIds
+        : data.organizationId
+        ? [data.organizationId]
+        : [];
+    });
 
-    const allocatedOrgIds: string[] = [];
-
-    for (const docSnap of memberSnap.docs) {
-      const claimedForDoc = await adminDb.runTransaction(async (tx) => {
-        const freshMemberSnap = await tx.get(docSnap.ref);
-        if (!freshMemberSnap.exists) return [] as string[];
-        const d = freshMemberSnap.data() || {};
-        if (d.status === 'Suspended' || d.status === 'Inactive') return [] as string[];
-        if ((d.email || '').toLowerCase().trim() !== caller.email) return [] as string[];
-        if (d.memberUid && d.memberUid !== caller.uid) return [] as string[];
-
-        const candidateOrgIds: string[] = Array.isArray(d.organizationIds)
-          ? d.organizationIds
-          : d.organizationId
-          ? [d.organizationId]
-          : [];
-
-        const validOrgIds: string[] = [];
-        const validOrgUpdates: Array<{
-          ref: FirebaseFirestore.DocumentReference;
-          perms: string[] | null;
-        }> = [];
-
-        for (const orgId of candidateOrgIds) {
-          if (!orgId || typeof orgId !== 'string') continue;
-          const orgRef = adminDb.collection('organizations').doc(orgId);
-          const orgSnap = await tx.get(orgRef);
-          if (!orgSnap.exists) continue;
-          const orgData = orgSnap.data() || {};
-          // Validate inviter still owns this organization (prevents cross-tenant injection)
-          if (orgData.ownerId !== d.ownerId) continue;
-
-          validOrgIds.push(orgId);
-          const orgPerms = Array.isArray(d.orgPermissions?.[orgId])
-            ? d.orgPermissions[orgId]
-            : Array.isArray(d.permissions)
-            ? d.permissions
-            : null;
-          validOrgUpdates.push({ ref: orgRef, perms: orgPerms });
-        }
-
-        if (validOrgIds.length === 0) return [] as string[];
-
-        if (d.status === 'Pending' || !d.memberUid) {
-          tx.update(docSnap.ref, {
-            status: 'Active',
-            memberUid: caller.uid,
-            organizationIds: validOrgIds,
-            organizationId: validOrgIds[0],
-            activatedAt: FieldValue.serverTimestamp(),
-          });
-        }
-
-        const permKey = `memberPermissions.${caller.email.replace(/\./g, '__DOT__')}`;
-        for (const item of validOrgUpdates) {
-          tx.update(item.ref, {
-            memberIds: FieldValue.arrayUnion(caller.uid),
-            memberEmails: FieldValue.arrayUnion(caller.email),
-            ...(d.ownerName ? { ownerName: d.ownerName } : {}),
-            ...(item.perms ? { [permKey]: item.perms } : {}),
-          });
-        }
-
-        return validOrgIds;
-      });
-
-      allocatedOrgIds.push(...claimedForDoc);
-    }
-
-    const uniqueOrgIds = Array.from(new Set(allocatedOrgIds));
     return {
       success: true,
       data: {
-        hasInvitations: uniqueOrgIds.length > 0,
-        orgIds: uniqueOrgIds,
+        hasInvitations: pendingOrgIds.length > 0,
+        orgIds: Array.from(new Set(pendingOrgIds)),
       },
     };
   } catch (err: any) {

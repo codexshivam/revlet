@@ -251,12 +251,10 @@ export default function SignupPage() {
         await setDoc(
           userRef,
           {
-            uid: userCredential.user.uid,
             email: userEmail,
             displayName,
-            numOrganizations: 0,
-            organizations: [],
             createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
           },
           { merge: true }
         )
@@ -268,7 +266,6 @@ export default function SignupPage() {
         }
         setCreatedUserData(activeUser)
         idToken = await userCredential.user.getIdToken()
-        await checkAndClaimInvitations(idToken).catch(() => {})
       } else if (user) {
         idToken = await user.getIdToken()
       }
@@ -294,7 +291,6 @@ export default function SignupPage() {
         code: orgCode,
         ownerId: activeUser.uid,
         status: "Active",
-        memberEmails: [activeUser.email.toLowerCase().trim()],
         createdAt: serverTimestamp(),
       })
 

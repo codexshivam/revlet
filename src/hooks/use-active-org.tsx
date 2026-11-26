@@ -148,23 +148,8 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
 
     let active = true
     const currentUid = user.uid
-    let inviteTimer: ReturnType<typeof setTimeout> | null = null
-
-    const runInviteClaim = () => {
-      if (!active || !user.emailVerified || claimedUidRef.current === currentUid) return
-      claimedUidRef.current = currentUid
-      user
-        .getIdToken()
-        .then((idToken) => checkAndClaimInvitations(idToken))
-        .catch((claimErr) => console.error("Failed to check invitations:", claimErr))
-    }
-
-    const hasInviteHint =
-      typeof window !== "undefined" &&
-      (window.location.search.includes("invite=") || window.location.pathname.includes("/invite"))
-    if (hasInviteHint) {
-      runInviteClaim()
-    }
+    // Invitations are explicitly accepted via /invite/[token] — never silently claimed in the background.
+    const inviteTimer: ReturnType<typeof setTimeout> | null = null
 
     const q = query(
       collection(db, "organizations"),
@@ -190,15 +175,6 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
           })
 
         setOrgs(fetched)
-
-        // First-time users with 0 orgs claim invitations immediately; existing members defer off first paint
-        if (user.emailVerified && claimedUidRef.current !== currentUid) {
-          if (fetched.length === 0) {
-            runInviteClaim()
-          } else if (!inviteTimer) {
-            inviteTimer = setTimeout(runInviteClaim, 2000)
-          }
-        }
 
         const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
         const found = fetched.find((o) => o.id === storedId)

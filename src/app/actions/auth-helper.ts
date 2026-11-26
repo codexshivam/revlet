@@ -143,21 +143,14 @@ export async function verifyUserOrgAccess(
     throw new Error("Unauthorized: Insufficient organization permissions for this action.");
   }
 
-  if (expectedZoneId) {
-    if (!orgData?.cloudflareZoneId || orgData.cloudflareZoneId !== expectedZoneId) {
-      throw new Error("Unauthorized: Target zone does not match organization.");
-    }
-    if (orgData?.dnsMode !== 'byot' && orgData?.dnsMode !== 'managed') {
-      throw new Error("Unauthorized: Organization does not have a verified server-managed DNS binding.");
-    }
-  }
-
   let cfToken: string | undefined = undefined;
+  let secretData: any = null;
   let encryptedTokenEnvelope = orgData?.cloudflareTokenEncrypted;
   try {
     const secretSnap = await orgDoc.ref.collection('secrets').doc('cloudflare').get();
     if (secretSnap.exists && secretSnap.data()?.ciphertext) {
-      encryptedTokenEnvelope = secretSnap.data();
+      secretData = secretSnap.data();
+      encryptedTokenEnvelope = secretData;
     }
   } catch (e: any) {
     console.warn("[Auth Helper] Failed to read Cloudflare secret subdoc:", e?.message);
@@ -171,9 +164,36 @@ export async function verifyUserOrgAccess(
     }
   }
 
+  // Derive effective DNS mode while supporting legacy orgs created before dnsMode was persisted:
+  // - Server-only secrets/cloudflare subdoc => 'byot'
+  // - Legacy managed org with cloudflareZoneId + dnsRequested => 'managed'
+  const hasServerByotSecret = Boolean(secretData?.ciphertext || orgData?.cloudflareTokenAudit?.zoneId);
+  const resolvedDnsMode: 'byot' | 'managed' | null =
+    orgData?.dnsMode === 'byot' || hasServerByotSecret
+      ? 'byot'
+      : orgData?.dnsMode === 'managed' || (Boolean(orgData?.cloudflareZoneId) && Boolean(orgData?.dnsRequested))
+      ? 'managed'
+      : null;
+
+  if (expectedZoneId) {
+    if (!orgData?.cloudflareZoneId || orgData.cloudflareZoneId !== expectedZoneId) {
+      throw new Error("Unauthorized: Target zone does not match organization.");
+    }
+    if (!resolvedDnsMode) {
+      throw new Error("Unauthorized: Organization does not have a verified server-managed DNS binding.");
+    }
+    if (resolvedDnsMode === 'byot' && secretData?.zoneId && secretData.zoneId !== expectedZoneId) {
+      throw new Error("Unauthorized: Stored BYOT credential is not bound to this zone.");
+    }
+    // Lazily backfill dnsMode on legacy organizations so future checks are direct
+    if (!orgData?.dnsMode && resolvedDnsMode) {
+      orgDoc.ref.update({ dnsMode: resolvedDnsMode }).catch(() => {});
+    }
+  }
+
   // Strictly scope credential resolution to the organization's dnsMode:
   // BYOT orgs MUST NEVER fall back to the platform Cloudflare token.
-  if (orgData?.dnsMode === 'byot') {
+  if (resolvedDnsMode === 'byot') {
     if (!cfToken && expectedZoneId) {
       throw new Error("Cloudflare BYOT credential is unavailable for this organization. Please reconnect your token.");
     }

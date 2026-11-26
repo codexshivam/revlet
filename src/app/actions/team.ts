@@ -11,17 +11,50 @@ async function verifyCaller(idToken: string) {
   return {
     uid: decoded.uid,
     email: (decoded.email || '').toLowerCase().trim(),
+    emailVerified: decoded.email_verified === true,
     name: decoded.name || decoded.email || 'Organization Owner',
   };
 }
 
-function callerHasOrgAdmin(orgData: any, caller: { uid: string; email: string }): boolean {
+/**
+ * Verifies whether the caller is the organization owner OR holds an Active, UID-bound
+ * teamMembers record with ORG_ADMIN_PERMISSION for this specific organization.
+ */
+async function callerHasOrgAdmin(
+  orgId: string,
+  orgData: any,
+  caller: { uid: string; email: string; emailVerified: boolean }
+): Promise<boolean> {
   if (!orgData) return false;
   if (orgData.ownerId === caller.uid) return true;
-  if (!caller.email) return false;
-  const emailKey = caller.email.replace(/\./g, '__DOT__');
-  const perms: string[] = orgData.memberPermissions?.[emailKey] || [];
-  return Array.isArray(perms) && perms.includes(ORG_ADMIN_PERMISSION);
+  if (!caller.emailVerified || !caller.email) return false;
+
+  const snap = await adminDb
+    .collection('teamMembers')
+    .where('ownerId', '==', orgData.ownerId)
+    .where('memberUid', '==', caller.uid)
+    .limit(5)
+    .get();
+
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    if (d.status !== 'Active') continue;
+    const mOrgs: string[] = Array.isArray(d.organizationIds)
+      ? d.organizationIds
+      : d.organizationId
+      ? [d.organizationId]
+      : [];
+    if (!mOrgs.includes(orgId)) continue;
+    const perms: string[] = Array.isArray(d.orgPermissions?.[orgId])
+      ? d.orgPermissions[orgId]
+      : Array.isArray(d.permissions)
+      ? d.permissions
+      : [];
+    if (perms.includes(ORG_ADMIN_PERMISSION)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -48,7 +81,7 @@ export async function listTeamManagementData(idToken: string) {
     if (memberSnap) {
       for (const doc of memberSnap.docs) {
         const data = doc.data();
-        if (data.status !== 'Pending Deletion' && callerHasOrgAdmin(data, caller)) {
+        if (data.status !== 'Pending Deletion' && (await callerHasOrgAdmin(doc.id, data, caller))) {
           orgMap.set(doc.id, { id: doc.id, name: data.name, domain: data.domain, ownerId: data.ownerId });
         }
       }
@@ -175,7 +208,7 @@ export async function inviteTeamMember(
       if (!orgDoc.exists) {
         return { success: false, error: 'One or more selected organizations no longer exist.' };
       }
-      if (!callerHasOrgAdmin(orgDoc.data(), caller)) {
+      if (!(await callerHasOrgAdmin(orgDoc.id, orgDoc.data(), caller))) {
         return {
           success: false,
           error: 'Only an organization owner or Admin can invite team members.',
@@ -193,18 +226,9 @@ export async function inviteTeamMember(
       // Fallback to token name/email
     }
 
-    // Check if the invited email already has an activated Revlet account
-    let existingUserUid: string | null = null;
-    try {
-      const existingAuthUser = await adminAuth.getUserByEmail(targetEmail);
-      if (existingAuthUser?.uid) {
-        existingUserUid = existingAuthUser.uid;
-      }
-    } catch {
-      // User does not exist yet -> invitation starts as Pending
-    }
-
-    const initialStatus: 'Active' | 'Pending' = existingUserUid ? 'Active' : 'Pending';
+    // Invitations ALWAYS start as Pending (even for existing Revlet accounts)
+    // and never grant organization access until explicitly claimed/accepted by a verified email.
+    const initialStatus: 'Pending' = 'Pending';
 
     // Check if this owner already has a teamMembers record for this email
     const existingMemberSnap = await adminDb
@@ -233,6 +257,12 @@ export async function inviteTeamMember(
         ...resolvedOrgPermissions,
       };
       const mergedFlatPerms = Array.from(new Set(Object.values(mergedOrgPermissions).flat()));
+      const nextStatus =
+        existingData.status === 'Suspended'
+          ? 'Suspended'
+          : existingData.status === 'Active'
+          ? 'Active'
+          : 'Pending';
       await existingDoc.ref.update({
         organizationIds: mergedOrgIds,
         organizationId: mergedOrgIds[0],
@@ -240,11 +270,27 @@ export async function inviteTeamMember(
         permissions: mergedFlatPerms,
         orgPermissions: mergedOrgPermissions,
         ownerName: ownerDisplayName,
-        status: existingData.status === 'Suspended' ? 'Suspended' : initialStatus,
-        ...(existingUserUid ? { memberUid: existingUserUid } : {}),
+        invitedByUid: caller.uid,
+        invitedBy: caller.email,
+        status: nextStatus,
         updatedAt: FieldValue.serverTimestamp(),
       });
       memberId = existingDoc.id;
+
+      // Only update organization membership arrays if member is ALREADY Active (never for Pending/Suspended)
+      if (nextStatus === 'Active' && existingData.memberUid) {
+        const batch = adminDb.batch();
+        for (const orgDoc of orgDocs) {
+          const orgPerms = resolvedOrgPermissions[orgDoc.id] || permissions;
+          batch.update(orgDoc.ref, {
+            ownerName: ownerDisplayName,
+            memberIds: FieldValue.arrayUnion(existingData.memberUid),
+            memberEmails: FieldValue.arrayUnion(targetEmail),
+            [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]: orgPerms,
+          });
+        }
+        await batch.commit();
+      }
     } else {
       const createdRef = await adminDb.collection('teamMembers').add({
         email: targetEmail,
@@ -252,31 +298,15 @@ export async function inviteTeamMember(
         organizationId: orgIds[0],
         ownerId: caller.uid,
         ownerName: ownerDisplayName,
+        invitedByUid: caller.uid,
+        invitedBy: caller.email,
         accessMode,
         permissions,
         orgPermissions: resolvedOrgPermissions,
         status: initialStatus,
-        ...(existingUserUid ? { memberUid: existingUserUid } : {}),
         invitedAt: FieldValue.serverTimestamp(),
       });
       memberId = createdRef.id;
-    }
-
-    // Allocate organizations (unless suspended)
-    const isSuspendedMember =
-      !existingMemberSnap.empty &&
-      existingMemberSnap.docs[0].data()?.status === 'Suspended';
-    if (!isSuspendedMember) {
-      const batch = adminDb.batch();
-      for (const orgDoc of orgDocs) {
-        const orgPerms = resolvedOrgPermissions[orgDoc.id] || permissions;
-        batch.update(orgDoc.ref, {
-          ownerName: ownerDisplayName,
-          memberEmails: FieldValue.arrayUnion(targetEmail),
-          [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]: orgPerms,
-        });
-      }
-      await batch.commit();
     }
 
     try {
@@ -351,25 +381,23 @@ export async function updateTeamMemberStatus(
     const orgDocs = await Promise.all(
       orgIds.map((id) => adminDb.collection('organizations').doc(id).get())
     );
+    const adminChecks = await Promise.all(
+      orgDocs.map((docSnap) =>
+        docSnap.exists ? callerHasOrgAdmin(docSnap.id, docSnap.data(), caller) : Promise.resolve(false)
+      )
+    );
     const canManage =
       data.ownerId === caller.uid ||
-      (orgDocs.length > 0 && orgDocs.every((docSnap) => docSnap.exists && callerHasOrgAdmin(docSnap.data(), caller)));
+      (orgDocs.length > 0 && adminChecks.every(Boolean));
     if (!canManage) {
       return { success: false, error: 'Only an organization owner or Admin of all assigned organizations can modify team member status.' };
     }
 
     const targetEmail = (data.email || '').toLowerCase().trim();
 
-    // If reactivating a user who never signed up yet, keep as Pending
-    let resolvedStatus: 'Active' | 'Pending' | 'Suspended' = newStatus;
-    if (newStatus === 'Active' && !data.memberUid) {
-      try {
-        const authUser = await adminAuth.getUserByEmail(targetEmail);
-        if (!authUser?.uid) resolvedStatus = 'Pending';
-      } catch {
-        resolvedStatus = 'Pending';
-      }
-    }
+    // If reactivating a user who never accepted/bound a UID, keep as Pending
+    const resolvedStatus: 'Active' | 'Pending' | 'Suspended' =
+      newStatus === 'Active' && !data.memberUid ? 'Pending' : newStatus;
 
     await memberRef.update({
       status: resolvedStatus,
@@ -379,13 +407,15 @@ export async function updateTeamMemberStatus(
     const batch = adminDb.batch();
     for (const orgId of orgIds) {
       const orgRef = adminDb.collection('organizations').doc(orgId);
-      if (resolvedStatus === 'Suspended') {
+      if (resolvedStatus === 'Suspended' || resolvedStatus === 'Pending') {
         batch.update(orgRef, {
           memberEmails: FieldValue.arrayRemove(targetEmail),
+          ...(data.memberUid ? { memberIds: FieldValue.arrayRemove(data.memberUid) } : {}),
         });
       } else {
         batch.update(orgRef, {
           memberEmails: FieldValue.arrayUnion(targetEmail),
+          ...(data.memberUid ? { memberIds: FieldValue.arrayUnion(data.memberUid) } : {}),
           [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]:
             data.orgPermissions?.[orgId] || data.permissions || [],
         });
@@ -499,7 +529,7 @@ export async function updateTeamMemberAccess(
       nextOrgIds.map((id) => adminDb.collection('organizations').doc(id).get())
     );
     for (const docSnap of nextOrgDocs) {
-      if (!docSnap.exists || !callerHasOrgAdmin(docSnap.data(), caller)) {
+      if (!docSnap.exists || !(await callerHasOrgAdmin(docSnap.id, docSnap.data(), caller))) {
         return { success: false, error: 'Only an organization owner or Admin can assign organization access.' };
       }
     }
@@ -593,9 +623,14 @@ export async function deleteTeamMember(idToken: string, memberId: string) {
     const orgDocs = await Promise.all(
       orgIds.map((id) => adminDb.collection('organizations').doc(id).get())
     );
+    const delAdminChecks = await Promise.all(
+      orgDocs.map((docSnap) =>
+        docSnap.exists ? callerHasOrgAdmin(docSnap.id, docSnap.data(), caller) : Promise.resolve(false)
+      )
+    );
     const canManage =
       data.ownerId === caller.uid ||
-      (orgDocs.length > 0 && orgDocs.every((docSnap) => docSnap.exists && callerHasOrgAdmin(docSnap.data(), caller)));
+      (orgDocs.length > 0 && delAdminChecks.every(Boolean));
     if (!canManage) {
       return { success: false, error: 'Only an organization owner or Admin of all assigned organizations can remove team members.' };
     }
@@ -610,6 +645,7 @@ export async function deleteTeamMember(idToken: string, memberId: string) {
       const orgRef = adminDb.collection('organizations').doc(orgId);
       batch.update(orgRef, {
         memberEmails: FieldValue.arrayRemove(targetEmail),
+        ...(data.memberUid ? { memberIds: FieldValue.arrayRemove(data.memberUid) } : {}),
         [permKey]: FieldValue.delete(),
       });
     }
@@ -648,14 +684,16 @@ export async function deleteTeamMember(idToken: string, memberId: string) {
 }
 
 /**
- * Checks if the newly signed-up or signed-in user has pending/active team invitations.
- * Automatically activates pending invitations, allocates all invited organizations,
- * and returns whether the user is an invited member (so signup skips "Add First Organization").
+ * Transactionally claims pending team invitations for a verified email user.
+ * Requires server-verified email_verified === true and validates every invited
+ * organization against the inviter's current authority before granting membership.
  */
 export async function checkAndClaimInvitations(idToken: string) {
   try {
     const caller = await verifyCaller(idToken);
-    if (!caller.email) return { success: true, data: { hasInvitations: false, orgIds: [] as string[] } };
+    if (!caller.email || !caller.emailVerified) {
+      return { success: true, data: { hasInvitations: false, orgIds: [] as string[] } };
+    }
 
     const memberSnap = await adminDb
       .collection('teamMembers')
@@ -667,44 +705,73 @@ export async function checkAndClaimInvitations(idToken: string) {
     }
 
     const allocatedOrgIds: string[] = [];
-    const batch = adminDb.batch();
 
     for (const docSnap of memberSnap.docs) {
-      const d = docSnap.data();
-      if (d.status === 'Suspended' || d.status === 'Inactive') continue;
+      const claimedForDoc = await adminDb.runTransaction(async (tx) => {
+        const freshMemberSnap = await tx.get(docSnap.ref);
+        if (!freshMemberSnap.exists) return [] as string[];
+        const d = freshMemberSnap.data() || {};
+        if (d.status === 'Suspended' || d.status === 'Inactive') return [] as string[];
+        if ((d.email || '').toLowerCase().trim() !== caller.email) return [] as string[];
+        if (d.memberUid && d.memberUid !== caller.uid) return [] as string[];
 
-      const orgIds: string[] = Array.isArray(d.organizationIds)
-        ? d.organizationIds
-        : d.organizationId
-        ? [d.organizationId]
-        : [];
-      allocatedOrgIds.push(...orgIds);
+        const candidateOrgIds: string[] = Array.isArray(d.organizationIds)
+          ? d.organizationIds
+          : d.organizationId
+          ? [d.organizationId]
+          : [];
 
-      if (d.status === 'Pending' || !d.memberUid) {
-        batch.update(docSnap.ref, {
-          status: 'Active',
-          memberUid: caller.uid,
-          activatedAt: FieldValue.serverTimestamp(),
-        });
-      }
+        const validOrgIds: string[] = [];
+        const validOrgUpdates: Array<{
+          ref: FirebaseFirestore.DocumentReference;
+          perms: string[] | null;
+        }> = [];
 
-      const permKey = `memberPermissions.${caller.email.replace(/\./g, '__DOT__')}`;
-      for (const orgId of orgIds) {
-        const orgRef = adminDb.collection('organizations').doc(orgId);
-        const orgPerms = Array.isArray(d.orgPermissions?.[orgId])
-          ? d.orgPermissions[orgId]
-          : Array.isArray(d.permissions)
-          ? d.permissions
-          : null;
-        batch.update(orgRef, {
-          memberEmails: FieldValue.arrayUnion(caller.email),
-          ...(d.ownerName ? { ownerName: d.ownerName } : {}),
-          ...(orgPerms ? { [permKey]: orgPerms } : {}),
-        });
-      }
+        for (const orgId of candidateOrgIds) {
+          if (!orgId || typeof orgId !== 'string') continue;
+          const orgRef = adminDb.collection('organizations').doc(orgId);
+          const orgSnap = await tx.get(orgRef);
+          if (!orgSnap.exists) continue;
+          const orgData = orgSnap.data() || {};
+          // Validate inviter still owns this organization (prevents cross-tenant injection)
+          if (orgData.ownerId !== d.ownerId) continue;
+
+          validOrgIds.push(orgId);
+          const orgPerms = Array.isArray(d.orgPermissions?.[orgId])
+            ? d.orgPermissions[orgId]
+            : Array.isArray(d.permissions)
+            ? d.permissions
+            : null;
+          validOrgUpdates.push({ ref: orgRef, perms: orgPerms });
+        }
+
+        if (validOrgIds.length === 0) return [] as string[];
+
+        if (d.status === 'Pending' || !d.memberUid) {
+          tx.update(docSnap.ref, {
+            status: 'Active',
+            memberUid: caller.uid,
+            organizationIds: validOrgIds,
+            organizationId: validOrgIds[0],
+            activatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        const permKey = `memberPermissions.${caller.email.replace(/\./g, '__DOT__')}`;
+        for (const item of validOrgUpdates) {
+          tx.update(item.ref, {
+            memberIds: FieldValue.arrayUnion(caller.uid),
+            memberEmails: FieldValue.arrayUnion(caller.email),
+            ...(d.ownerName ? { ownerName: d.ownerName } : {}),
+            ...(item.perms ? { [permKey]: item.perms } : {}),
+          });
+        }
+
+        return validOrgIds;
+      });
+
+      allocatedOrgIds.push(...claimedForDoc);
     }
-
-    await batch.commit();
 
     const uniqueOrgIds = Array.from(new Set(allocatedOrgIds));
     return {

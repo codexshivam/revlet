@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import dynamic from "next/dynamic"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -67,7 +68,13 @@ import {
   createZoneSnapshot,
   listZoneSnapshots,
   rollbackZoneSnapshot,
+  importZoneFileRecords,
 } from "@/app/actions/dns-service"
+
+const StepUpMfaDialog = dynamic(
+  () => import("@/components/security/step-up-mfa-dialog").then((m) => m.StepUpMfaDialog),
+  { ssr: false }
+)
 import {
   Tooltip,
   TooltipContent,
@@ -456,13 +463,6 @@ export default function DNSManagementPage() {
       const idToken = await user.getIdToken()
       const res = await createZone(idToken, selectedOrg.id, selectedOrg.domain)
       if (res.success && res.data?.id) {
-        const orgRef = doc(db, "organizations", selectedOrg.id)
-        await updateDoc(orgRef, {
-          cloudflareZoneId: res.data.id,
-          dnsMode: "managed",
-          dnsRequested: true,
-          updatedAt: new Date().toISOString(),
-        })
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("revlet-orgs-refresh"))
         }
@@ -590,16 +590,28 @@ export default function DNSManagementPage() {
     }
   }
 
-  const handleExecuteRollback = async () => {
+  const [isRollbackMfaOpen, setIsRollbackMfaOpen] = useState(false)
+
+  const handleExecuteRollback = async (stepUpToken?: string) => {
     if (!user || !selectedOrg?.id || !zoneId || !selectedSnapshotForRollback) return
     setIsRollingBack(true)
     try {
       const idToken = await user.getIdToken()
-      const res = await rollbackZoneSnapshot(idToken, selectedOrg.id, zoneId, selectedSnapshotForRollback.id)
+      const res = await rollbackZoneSnapshot(
+        idToken,
+        selectedOrg.id,
+        zoneId,
+        selectedSnapshotForRollback.id,
+        stepUpToken
+      )
+      if (!res.success && typeof res.error === "string" && res.error.includes("MFA_STEP_UP_REQUIRED")) {
+        setIsRollbackMfaOpen(true)
+        return
+      }
       if (res.success && res.data) {
         toast({
           title: "Zone restored",
-          description: `Restored ${res.data.restoredCount} records (${res.data.deletedCount} extraneous records cleaned).`,
+          description: `Restored ${res.data.restoredCount} records (${res.data.deletedCount} divergent records removed atomically).`,
         })
         setIsRollbackConfirmOpen(false)
         setSelectedSnapshotForRollback(null)
@@ -663,39 +675,26 @@ export default function DNSManagementPage() {
     try {
       const idToken = await user.getIdToken()
       const orgId = selectedOrg.id
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        const text = e.target?.result as string
-        const lines = text.split("\n")
-        let count = 0
+      const text = await importFile.text()
+      const res = await importZoneFileRecords(idToken, orgId, zoneId, text, proxyAllImported)
 
-        for (const line of lines) {
-          const parts = line.split(/\s+/)
-          if (parts.length >= 4) {
-            const name = parts[0]
-            const type = parts.includes("IN") ? parts[parts.indexOf("IN") + 1] : parts[2]
-            const content = parts.slice(parts.indexOf(type) + 1).join(" ")
-
-            if (SUPPORTED_TYPES.includes(type)) {
-              const isProxied = proxyAllImported && PROXY_SUPPORTED_TYPES.includes(type)
-              await createDNSRecord(idToken, orgId, zoneId, {
-                name,
-                type,
-                content,
-                ttl: "Auto",
-                proxied: isProxied,
-              })
-              count++
-            }
-          }
-        }
-
-        toast({ title: "Import complete", description: `Queued ${count} records for propagation.` })
-        setIsImportDialogOpen(false)
-        setImportFile(null)
-        fetchDNSData()
+      if (!res.success && !res.data?.created) {
+        throw new Error(res.error || "Could not import records from zone file.")
       }
-      reader.readAsText(importFile)
+
+      const created = res.data?.created || 0
+      const failed = res.data?.failed || 0
+      toast({
+        variant: failed > 0 && created === 0 ? "destructive" : "default",
+        title: failed > 0 ? "Import completed with warnings" : "Import complete",
+        description:
+          failed > 0
+            ? `Created ${created} records; ${failed} rejected by provider.`
+            : `Verified and created ${created} DNS records.`,
+      })
+      setIsImportDialogOpen(false)
+      setImportFile(null)
+      fetchDNSData()
     } catch (err: any) {
       toast({ variant: "destructive", title: "Import failed", description: err.message })
     } finally {
@@ -1790,7 +1789,7 @@ export default function DNSManagementPage() {
                 Cancel
               </Button>
               <Button
-                onClick={handleExecuteRollback}
+                onClick={() => void handleExecuteRollback()}
                 disabled={isRollingBack}
                 className="h-9 px-4 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
               >
@@ -1814,11 +1813,11 @@ export default function DNSManagementPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="p-3 rounded-lg bg-red-50 border border-red-200/80 text-xs text-red-900 leading-relaxed space-y-1">
-              <p className="font-semibold">All associated DNS data in Revlet will be permanently deleted:</p>
+              <p className="font-semibold">What happens when you disconnect:</p>
               <ul className="list-disc list-inside space-y-0.5 text-red-800">
-                <li>All saved zone snapshots and rollback history</li>
-                <li>Stored access credentials and zone bindings</li>
-                <li>DNS configuration metadata for this organization</li>
+                <li>Stored access credentials and active zone bindings are removed</li>
+                <li>Live DNS records at Cloudflare remain untouched</li>
+                <li>Saved zone snapshots and change history are preserved for audit</li>
               </ul>
             </div>
             <DialogFooter className="pt-4 gap-2">
@@ -1841,6 +1840,15 @@ export default function DNSManagementPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <StepUpMfaDialog
+          open={isRollbackMfaOpen}
+          onOpenChange={setIsRollbackMfaOpen}
+          actionLabel="restore a DNS zone snapshot"
+          onVerified={(token) => {
+            void handleExecuteRollback(token)
+          }}
+        />
       </div>
     </DashboardShell>
   )

@@ -7,11 +7,38 @@
  * Authenticates callers via Firebase ID token and asserts organization tenancy.
  */
 
-import { verifyUserOrgAccess } from './auth-helper';
+import { assertStepUpMfa, verifyUserOrgAccess } from './auth-helper';
 import { cfFetch } from './dns-client';
 import { adminDb } from '@/firebase/admin';
 import { encryptToken } from '@/lib/security/encryption';
 import { FieldValue } from 'firebase-admin/firestore';
+
+async function assertUniqueZoneBinding(zoneId: string, currentOrgId: string) {
+  const existing = await adminDb
+    .collection('organizations')
+    .where('cloudflareZoneId', '==', zoneId)
+    .limit(2)
+    .get();
+  const conflict = existing.docs.find((d) => d.id !== currentOrgId);
+  if (conflict) {
+    throw new Error('This Cloudflare zone is already bound to another Revlet organization.');
+  }
+}
+
+async function fetchAllZoneRecords(zoneId: string, cfToken?: string): Promise<any[]> {
+  const allRecords: any[] = [];
+  let page = 1;
+  let totalPages = 1;
+  while (page <= totalPages && page <= 10) {
+    const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100&page=${page}`, {}, cfToken);
+    if (Array.isArray(data.result)) {
+      allRecords.push(...data.result);
+    }
+    totalPages = data.result_info?.total_pages || 1;
+    page++;
+  }
+  return allRecords;
+}
 
 
 export async function getZoneDetails(idToken: string, orgId: string, zoneId: string) {
@@ -172,25 +199,43 @@ export async function createZone(idToken: string, orgId: string, domainName: str
 
     // 2. Idempotency check: reuse existing zone if already registered on this Cloudflare account
     const cleanDomain = domainName.toLowerCase().trim();
+    const orgRef = adminDb.collection('organizations').doc(orgId);
+    const persistManagedBinding = async (zoneId: string, nameServers: string[]) => {
+      await assertUniqueZoneBinding(zoneId, orgId);
+      await orgRef.update({
+        cloudflareZoneId: zoneId,
+        cloudflareZoneName: cleanDomain,
+        dnsMode: 'managed',
+        dnsRequested: true,
+        nameservers: nameServers,
+        updatedAt: new Date().toISOString(),
+      });
+    };
+
     try {
       const existingRes = await cfFetch(`/zones?name=${encodeURIComponent(cleanDomain)}`, {}, verified.cfToken);
       const existingZone = Array.isArray(existingRes.result)
         ? existingRes.result.find((z: any) => z.name?.toLowerCase().trim() === cleanDomain)
         : null;
       if (existingZone) {
+        const ns = existingZone.name_servers || [];
+        await persistManagedBinding(existingZone.id, ns);
         return {
           success: true,
           data: {
             id: existingZone.id,
-            nameServers: existingZone.name_servers || [],
+            nameServers: ns,
           },
         };
       }
-    } catch {
+    } catch (lookupErr: any) {
+      if (lookupErr?.message?.includes('already bound')) {
+        throw lookupErr;
+      }
       // Proceed to zone creation if lookup fails
     }
 
-    // 3. Create the zone
+    // 3. Create the zone and persist the server-owned binding
     const zoneData = await cfFetch('/zones', {
       method: 'POST',
       body: JSON.stringify({
@@ -200,11 +245,14 @@ export async function createZone(idToken: string, orgId: string, domainName: str
       }),
     }, verified.cfToken);
 
-    return { 
-      success: true, 
+    const createdNs = zoneData.result.name_servers || [];
+    await persistManagedBinding(zoneData.result.id, createdNs);
+
+    return {
+      success: true,
       data: {
         id: zoneData.result.id,
-        nameServers: zoneData.result.name_servers
+        nameServers: createdNs
       }
     };
   } catch (error: any) {
@@ -272,6 +320,9 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
       };
     }
 
+    // Enforce unique tenant-to-zone mapping before binding
+    await assertUniqueZoneBinding(matchedZone.id, orgId);
+
     // Step 3: Envelope Encryption using AES-256-GCM
     const encrypted = encryptToken(cleanToken);
 
@@ -297,6 +348,7 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
 
     await orgRef.update({
       cloudflareZoneId: matchedZone.id,
+      cloudflareZoneName: matchedZone.name,
       dnsMode: 'byot',
       cloudflareTokenAudit: tokenAuditMeta,
       cloudflareTokenEncrypted: FieldValue.delete(),
@@ -304,10 +356,10 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
       updatedAt: verifiedAt
     });
 
-    // Step 5: Automatically create an initial baseline snapshot
+    // Step 5: Automatically create a complete paginated baseline snapshot
     try {
-      const recordsRes = await cfFetch(`/zones/${matchedZone.id}/dns_records?per_page=100`, {}, cleanToken);
-      const initialRecords = sanitizeDNSRecordsForFirestore(recordsRes.result || []);
+      const allRawRecords = await fetchAllZoneRecords(matchedZone.id, cleanToken);
+      const initialRecords = sanitizeDNSRecordsForFirestore(allRawRecords);
 
       await orgRef.collection('dns_snapshots').add({
         createdAt: new Date().toISOString(),
@@ -338,8 +390,8 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
 }
 
 /**
- * Disables DNS management for the organization and completely removes all snapshots
- * and associated DNS/token metadata from Firestore.
+ * Disconnects DNS management and revokes the stored Cloudflare token while
+ * preserving DNS snapshot history for audit and future recovery.
  */
 export async function disconnectCloudflareToken(idToken: string, orgId: string) {
   try {
@@ -350,30 +402,19 @@ export async function disconnectCloudflareToken(idToken: string, orgId: string) 
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
 
-    // 1. Delete all DNS snapshots in subcollection
-    const snapCol = orgRef.collection('dns_snapshots');
-    while (true) {
-      const batchSnap = await snapCol.limit(400).get();
-      if (batchSnap.empty) break;
-      const batch = adminDb.batch();
-      batchSnap.docs.forEach((d) => batch.delete(d.ref));
-      await batch.commit();
-      if (batchSnap.size < 400) break;
-    }
-
-    // 2. Remove all DNS & token fields from the organization document and secrets subcollection
+    // Preserve dns_snapshots history; revoke secret and clear active zone binding
     await orgRef.collection('secrets').doc('cloudflare').delete().catch(() => null);
     await orgRef.update({
       cloudflareTokenEncrypted: FieldValue.delete(),
       cloudflareTokenAudit: FieldValue.delete(),
       cloudflareZoneId: FieldValue.delete(),
+      cloudflareZoneName: FieldValue.delete(),
       cloudflareTokenVerifiedAt: FieldValue.delete(),
       cloudflareTokenExpiresOn: FieldValue.delete(),
       cloudflareTokenScopedZone: FieldValue.delete(),
       dnsMode: FieldValue.delete(),
       dnsRequested: FieldValue.delete(),
       nameservers: FieldValue.delete(),
-      dnsSnapshots: FieldValue.delete(),
       updatedAt: new Date().toISOString()
     });
 
@@ -546,14 +587,39 @@ export async function listZoneSnapshots(idToken: string, orgId: string) {
   }
 }
 
+function recordSignature(r: any): string {
+  const ttlNorm = r.ttl === 'Auto' || r.ttl === 1 || r.ttl === '1' ? 1 : parseInt(String(r.ttl || 1), 10) || 1;
+  const prioNorm =
+    r.type === 'MX' || r.type === 'SRV'
+      ? String(parseInt(String(r.priority ?? 10), 10) || 10)
+      : '';
+  return [
+    String(r.type || '').toUpperCase(),
+    String(r.name || '').toLowerCase(),
+    String(r.content || ''),
+    String(ttlNorm),
+    r.proxied ? '1' : '0',
+    prioNorm,
+  ].join('|');
+}
+
 /**
- * 1-Click Rollback: Reconciles live zone records against a selected snapshot.
+ * Atomic Rollback: Reconciles live zone records against a selected snapshot using
+ * Cloudflare's batch API and full-field comparison (type, name, content, TTL, proxy, priority).
+ * Requires DNS: Admin permission and recent Step-Up MFA verification.
  */
-export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneId: string, snapshotId: string) {
+export async function rollbackZoneSnapshot(
+  idToken: string,
+  orgId: string,
+  zoneId: string,
+  snapshotId: string,
+  stepUpToken?: string
+) {
   if (!zoneId || !snapshotId) return { success: false, error: 'Missing parameters' };
   try {
     const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
-    
+    assertStepUpMfa(verified.uid, stepUpToken);
+
     // 1. Fetch snapshot
     const snapDoc = await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots').doc(snapshotId).get();
     if (!snapDoc.exists) {
@@ -562,12 +628,12 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
     const snapData = snapDoc.data();
     const targetRecords: any[] = snapData?.records || [];
 
-    // 2. Fetch current live records
+    // 2. Fetch complete live records
     const currentRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!currentRes.success) throw new Error(currentRes.error);
     const currentRecords: any[] = currentRes.data || [];
 
-    // 3. Pre-rollback safety backup of current state (only after DNS: Admin permission check passed)
+    // 3. Pre-rollback safety backup of current state
     const cleanCurrentRecords = sanitizeDNSRecordsForFirestore(currentRecords);
     await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots').add({
       createdAt: new Date().toISOString(),
@@ -577,65 +643,229 @@ export async function rollbackZoneSnapshot(idToken: string, orgId: string, zoneI
       createdById: verified.uid
     });
 
-    // 4. Perform diff & rollback
-    // Step A: Delete records present currently that are NOT in target snapshot
-    let deletedCount = 0;
+    // 4. Compute exact full-field diff (type, name, content, TTL, proxied, priority)
+    const targetSigCounts = new Map<string, number>();
+    for (const t of targetRecords) {
+      const sig = recordSignature(t);
+      targetSigCounts.set(sig, (targetSigCounts.get(sig) || 0) + 1);
+    }
+
+    const deletes: Array<{ id: string }> = [];
+    const matchedSigCounts = new Map<string, number>();
     for (const cur of currentRecords) {
-      const matchInTarget = targetRecords.find(t => 
-        t.type === cur.type && 
-        t.name === cur.name && 
-        t.content === cur.content
-      );
-      if (!matchInTarget) {
-        const delRes = await deleteDNSRecord(idToken, orgId, zoneId, cur.id);
-        if (!delRes.success) {
-          throw new Error(delRes.error || `Failed to delete DNS record ${cur.name} (${cur.type}) during rollback.`);
-        }
-        deletedCount++;
+      const sig = recordSignature(cur);
+      const needed = targetSigCounts.get(sig) || 0;
+      const alreadyMatched = matchedSigCounts.get(sig) || 0;
+      if (alreadyMatched < needed) {
+        matchedSigCounts.set(sig, alreadyMatched + 1);
+      } else if (cur.id) {
+        deletes.push({ id: cur.id });
       }
     }
 
-    // Step B: Recreate missing records from snapshot
-    let restoredCount = 0;
-    const afterDeleteRes = await listDNSRecords(idToken, orgId, zoneId);
-    if (!afterDeleteRes.success) {
-      throw new Error(afterDeleteRes.error || 'Failed to verify remaining DNS records during rollback.');
-    }
-    const remainingRecords: any[] = afterDeleteRes.data || [];
-
+    const posts: any[] = [];
+    const createdSigCounts = new Map<string, number>(matchedSigCounts);
     for (const target of targetRecords) {
-      const exists = remainingRecords.some(r => 
-        r.type === target.type && 
-        r.name === target.name && 
-        r.content === target.content
-      );
-      if (!exists) {
-        const createRes = await createDNSRecord(idToken, orgId, zoneId, {
+      const sig = recordSignature(target);
+      const have = createdSigCounts.get(sig) || 0;
+      const needed = targetSigCounts.get(sig) || 0;
+      if (have < needed) {
+        createdSigCounts.set(sig, have + 1);
+        const payload: any = {
           type: target.type,
           name: target.name,
           content: target.content,
-          ttl: target.ttl,
-          proxied: target.proxied,
-          priority: target.priority
-        });
-        if (!createRes.success) {
-          throw new Error(createRes.error || `Failed to restore DNS record ${target.name} (${target.type}) during rollback.`);
+          ttl: target.ttl === 'Auto' || target.ttl === 1 ? 1 : parseInt(String(target.ttl), 10) || 1,
+          proxied: Boolean(target.proxied),
+        };
+        if (target.type === 'MX' || target.type === 'SRV') {
+          const p = parseInt(String(target.priority ?? 10), 10);
+          payload.priority = isNaN(p) ? 10 : p;
         }
-        restoredCount++;
+        posts.push(payload);
       }
+    }
+
+    if (deletes.length > 0 || posts.length > 0) {
+      await cfFetch(
+        `/zones/${zoneId}/dns_records/batch`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ...(deletes.length > 0 ? { deletes } : {}),
+            ...(posts.length > 0 ? { posts } : {}),
+          }),
+        },
+        verified.cfToken
+      );
     }
 
     return {
       success: true,
       data: {
-        restoredCount,
-        deletedCount,
+        restoredCount: posts.length,
+        deletedCount: deletes.length,
         snapshotReason: snapData?.reason,
         snapshotDate: snapData?.createdAt
       }
     };
   } catch (error: any) {
     return { success: false, error: error.message || 'Rollback failed.' };
+  }
+}
+
+const IMPORT_SUPPORTED_TYPES = new Set([
+  'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SRV', 'CAA', 'PTR', 'SPF', 'TLSA', 'HTTPS', 'SVCB', 'URI', 'LOC', 'NAPTR'
+]);
+const IMPORT_PROXY_TYPES = new Set(['A', 'AAAA', 'CNAME']);
+
+/**
+ * Server-side BIND zone file importer with TTL and priority preservation,
+ * per-line diagnostics, and verified provider result reporting.
+ */
+export async function importZoneFileRecords(
+  idToken: string,
+  orgId: string,
+  zoneId: string,
+  zoneFileText: string,
+  proxyAllImported = false
+) {
+  if (!zoneId || !zoneFileText?.trim()) {
+    return { success: false, error: 'Zone file is empty.' };
+  }
+  try {
+    const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
+    const lines = zoneFileText.split(/\r?\n/);
+    const posts: any[] = [];
+    const diagnostics: Array<{ line: number; status: 'queued' | 'skipped' | 'error'; message: string }> = [];
+
+    for (let idx = 0; idx < lines.length; idx++) {
+      const rawLine = lines[idx].trim();
+      const lineNum = idx + 1;
+      if (!rawLine || rawLine.startsWith(';') || rawLine.startsWith('$')) continue;
+
+      const withoutComment = rawLine.replace(/\s+;.*$/, '').trim();
+      const parts = withoutComment.split(/\s+/);
+      if (parts.length < 4) {
+        diagnostics.push({ line: lineNum, status: 'skipped', message: 'Incomplete record line.' });
+        continue;
+      }
+
+      const name = parts[0].replace(/\.$/, '');
+      const inIdx = parts.findIndex((p) => p.toUpperCase() === 'IN');
+      let ttl = 1;
+      let typeIdx = 2;
+
+      if (inIdx > 0) {
+        typeIdx = inIdx + 1;
+        if (inIdx >= 2 && /^\d+$/.test(parts[1])) {
+          const parsedTtl = parseInt(parts[1], 10);
+          ttl = parsedTtl >= 60 ? parsedTtl : 1;
+        }
+      } else if (/^\d+$/.test(parts[1])) {
+        const parsedTtl = parseInt(parts[1], 10);
+        ttl = parsedTtl >= 60 ? parsedTtl : 1;
+        typeIdx = 2;
+      } else {
+        typeIdx = 1;
+      }
+
+      const type = (parts[typeIdx] || '').toUpperCase();
+      if (type === 'SOA') {
+        diagnostics.push({ line: lineNum, status: 'skipped', message: 'SOA record skipped.' });
+        continue;
+      }
+      if (!IMPORT_SUPPORTED_TYPES.has(type)) {
+        diagnostics.push({ line: lineNum, status: 'skipped', message: `Unsupported record type: ${type || 'unknown'}.` });
+        continue;
+      }
+
+      const rest = parts.slice(typeIdx + 1);
+      if (rest.length === 0) {
+        diagnostics.push({ line: lineNum, status: 'error', message: `Missing content for ${type} record.` });
+        continue;
+      }
+
+      const payload: any = {
+        type,
+        name,
+        ttl,
+        proxied: proxyAllImported && IMPORT_PROXY_TYPES.has(type),
+      };
+
+      if (type === 'MX') {
+        const prio = parseInt(rest[0], 10);
+        if (!isNaN(prio) && rest.length >= 2) {
+          payload.priority = prio;
+          payload.content = rest.slice(1).join(' ').replace(/\.$/, '');
+        } else {
+          payload.priority = 10;
+          payload.content = rest.join(' ').replace(/\.$/, '');
+        }
+      } else if (type === 'TXT') {
+        payload.content = rest.join(' ').replace(/^"|"$/g, '');
+      } else {
+        payload.content = rest.join(' ').replace(/\.$/, '');
+      }
+
+      posts.push(payload);
+      diagnostics.push({ line: lineNum, status: 'queued', message: `${type} ${name}` });
+    }
+
+    if (posts.length === 0) {
+      return {
+        success: false,
+        error: 'No valid DNS records found in zone file.',
+        data: { created: 0, failed: 0, diagnostics },
+      };
+    }
+
+    let created = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < posts.length; i += 50) {
+      const chunk = posts.slice(i, i + 50);
+      try {
+        const batchRes = await cfFetch(
+          `/zones/${zoneId}/dns_records/batch`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ posts: chunk }),
+          },
+          verified.cfToken
+        );
+        const createdBatch = Array.isArray(batchRes.result?.posts) ? batchRes.result.posts.length : chunk.length;
+        created += createdBatch;
+      } catch {
+        for (const rec of chunk) {
+          try {
+            await cfFetch(
+              `/zones/${zoneId}/dns_records`,
+              { method: 'POST', body: JSON.stringify(rec) },
+              verified.cfToken
+            );
+            created++;
+          } catch (recErr: any) {
+            failed++;
+            errors.push(`${rec.type} ${rec.name}: ${recErr?.message || 'Rejected'}`);
+          }
+        }
+      }
+    }
+
+    return {
+      success: created > 0 || failed === 0,
+      data: {
+        created,
+        failed,
+        diagnostics: diagnostics.slice(0, 50),
+        errors: errors.slice(0, 10),
+      },
+      ...(created === 0 && failed > 0 ? { error: errors[0] || 'All imported records were rejected by Cloudflare.' } : {}),
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Zone file import failed.' };
   }
 }
 

@@ -77,57 +77,61 @@ export async function verifyUserOrgAccess(
   let isMember = isOwner;
   let permissions: string[] = isOwner ? ['*'] : [];
 
-  if (!isOwner && userEmail) {
-    if (decodedToken.email_verified !== true) {
+  if (!isOwner) {
+    if (!userEmail || decodedToken.email_verified !== true) {
       throw new Error("Unauthorized: Email verification is required to access shared organizations.");
     }
 
-    const emailPermKey = userEmail.replace(/\./g, '__DOT__');
-    const orgMemberPerms = orgData?.memberPermissions?.[emailPermKey];
-    if (Array.isArray(orgMemberPerms)) {
-      permissions = orgMemberPerms;
-    }
-
-    const inMemberEmails =
-      Array.isArray(orgData?.memberEmails) &&
-      orgData.memberEmails.map((e: string) => e.toLowerCase().trim()).includes(userEmail);
-
-    try {
-      const memberSnap = await adminDb.collection('teamMembers')
+    // Active, UID-bound membership in teamMembers is the single source of authorization.
+    // Pending invitations grant zero access; Suspended/Inactive blocks immediately.
+    const [byUidSnap, byEmailSnap] = await Promise.all([
+      adminDb
+        .collection('teamMembers')
+        .where('ownerId', '==', orgData?.ownerId)
+        .where('memberUid', '==', decodedToken.uid)
+        .limit(5)
+        .get(),
+      adminDb
+        .collection('teamMembers')
         .where('ownerId', '==', orgData?.ownerId)
         .where('email', '==', userEmail)
-        .limit(1)
-        .get();
+        .limit(5)
+        .get(),
+    ]);
 
-      if (!memberSnap.empty) {
-        const mData = memberSnap.docs[0].data();
-        const mOrgs: string[] = Array.isArray(mData.organizationIds)
-          ? mData.organizationIds
-          : mData.organizationId
-          ? [mData.organizationId]
-          : [];
-        if (mOrgs.includes(orgId)) {
-          if (mData.status === 'Suspended' || mData.status === 'Inactive') {
-            throw new Error("Unauthorized: Your access to this organization has been suspended.");
-          }
-          if (mData.status === 'Active' || inMemberEmails) {
-            isMember = true;
-            if (permissions.length === 0) {
-              const perOrgPerms = mData.orgPermissions?.[orgId];
-              if (Array.isArray(perOrgPerms)) {
-                permissions = perOrgPerms;
-              } else if (Array.isArray(mData.permissions)) {
-                permissions = mData.permissions;
-              }
-            }
-          }
-        }
-      } else if (inMemberEmails) {
-        isMember = true;
+    const candidateDocs = new Map<string, any>();
+    for (const d of [...byUidSnap.docs, ...byEmailSnap.docs]) {
+      candidateDocs.set(d.id, d.data());
+    }
+
+    for (const mData of candidateDocs.values()) {
+      const mOrgs: string[] = Array.isArray(mData.organizationIds)
+        ? mData.organizationIds
+        : mData.organizationId
+        ? [mData.organizationId]
+        : [];
+      if (!mOrgs.includes(orgId)) continue;
+
+      if (mData.status === 'Suspended' || mData.status === 'Inactive') {
+        throw new Error("Unauthorized: Your access to this organization has been suspended.");
       }
-    } catch (err: any) {
-      if (err?.message?.includes('suspended')) throw err;
-      console.warn("[Auth Helper] Team member lookup warning:", err?.message);
+      if (mData.status !== 'Active') {
+        // Pending invitations must be explicitly accepted before granting access
+        continue;
+      }
+      // If bound to a UID, enforce exact UID match
+      if (mData.memberUid && mData.memberUid !== decodedToken.uid) {
+        continue;
+      }
+
+      isMember = true;
+      const perOrgPerms = mData.orgPermissions?.[orgId];
+      if (Array.isArray(perOrgPerms)) {
+        permissions = perOrgPerms;
+      } else if (Array.isArray(mData.permissions)) {
+        permissions = mData.permissions;
+      }
+      break;
     }
   }
 
@@ -139,8 +143,13 @@ export async function verifyUserOrgAccess(
     throw new Error("Unauthorized: Insufficient organization permissions for this action.");
   }
 
-  if (expectedZoneId && (!orgData?.cloudflareZoneId || orgData.cloudflareZoneId !== expectedZoneId)) {
-    throw new Error("Unauthorized: Target zone does not match organization.");
+  if (expectedZoneId) {
+    if (!orgData?.cloudflareZoneId || orgData.cloudflareZoneId !== expectedZoneId) {
+      throw new Error("Unauthorized: Target zone does not match organization.");
+    }
+    if (orgData?.dnsMode !== 'byot' && orgData?.dnsMode !== 'managed') {
+      throw new Error("Unauthorized: Organization does not have a verified server-managed DNS binding.");
+    }
   }
 
   let cfToken: string | undefined = undefined;
@@ -162,8 +171,13 @@ export async function verifyUserOrgAccess(
     }
   }
 
-  // Platform fallback: use platform Cloudflare token if tenant did not supply BYOT token
-  if (!cfToken && process.env.CLOUDFLARE_DNS_TOKEN) {
+  // Strictly scope credential resolution to the organization's dnsMode:
+  // BYOT orgs MUST NEVER fall back to the platform Cloudflare token.
+  if (orgData?.dnsMode === 'byot') {
+    if (!cfToken && expectedZoneId) {
+      throw new Error("Cloudflare BYOT credential is unavailable for this organization. Please reconnect your token.");
+    }
+  } else if (!cfToken && process.env.CLOUDFLARE_DNS_TOKEN) {
     cfToken = process.env.CLOUDFLARE_DNS_TOKEN.trim();
   }
 

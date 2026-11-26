@@ -20,8 +20,9 @@ service cloud.firestore {
     }
 
     // ─── Organizations ────────────────────────────────────────────────────────
-    // Owners can manage their organization details. Sensitive service activation
-    // and quota fields are mutated exclusively via Admin SDK Server Actions.
+    // Owners can create/update basic org metadata. DNS zone bindings, Cloudflare tokens,
+    // mail activation, quotas, and membership/permission maps are exclusively server-owned
+    // via Admin SDK Server Actions.
     match /organizations/{orgId} {
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
@@ -31,14 +32,21 @@ service cloud.firestore {
         && request.resource.data.domain.size() > 0
         && request.resource.data.contactName is string
         && request.resource.data.contactEmail is string
-        && (!('mailServiceActive' in request.resource.data) || request.resource.data.mailServiceActive == false);
+        && (!('mailServiceActive' in request.resource.data) || request.resource.data.mailServiceActive == false)
+        && request.resource.data.keys().hasOnly([
+          'ownerId', 'ownerName', 'name', 'domain', 'code',
+          'address', 'phone', 'currentEmail', 'contactName',
+          'contactPhone', 'contactEmail', 'description',
+          'status', 'createdAt', 'updatedAt', 'mailServiceActive'
+        ]);
       allow read: if isResourceOwner() || isSuperAdmin() || (
         isAuthenticated() &&
-        request.auth.token.email != null &&
-        request.auth.token.email.lower() in resource.data.memberEmails
+        request.auth.uid in resource.data.memberIds
       ) || (
         isAuthenticated() &&
-        request.auth.uid in resource.data.memberIds
+        request.auth.token.email_verified == true &&
+        request.auth.token.email != null &&
+        request.auth.token.email.lower() in resource.data.memberEmails
       );
       allow update: if (isResourceOwner() || isSuperAdmin())
         && request.resource.data.ownerId == resource.data.ownerId
@@ -47,7 +55,7 @@ service cloud.firestore {
           (
             request.resource.data.domain == resource.data.domain &&
             request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt', 'memberEmails', 'memberIds', 'adminEmails', 'memberPermissions'])
+              .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt'])
           )
         );
       allow delete: if isResourceOwner() || isSuperAdmin();
@@ -126,22 +134,19 @@ service cloud.firestore {
     }
 
     // ─── Team Members ─────────────────────────────────────────────────────────
-    // Org owners can invite, read, update, delete team members.
-    // Invited members can read their own membership records.
+    // Invitations and memberships are mutated exclusively via Admin SDK Server Actions.
+    // Owners and verified invitees/members can read their own membership records.
     match /teamMembers/{memberId} {
-      allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.email is string
-        && request.resource.data.organizationId is string
-        && exists(/databases/$(database)/documents/organizations/$(request.resource.data.organizationId))
-        && get(/databases/$(database)/documents/organizations/$(request.resource.data.organizationId)).data.ownerId == request.auth.uid;
+      allow create, update, delete: if false;
       allow read: if isResourceOwner() || (
         isAuthenticated() &&
+        resource.data.memberUid == request.auth.uid
+      ) || (
+        isAuthenticated() &&
+        request.auth.token.email_verified == true &&
         request.auth.token.email != null &&
         resource.data.email.lower() == request.auth.token.email.lower()
       );
-      allow update: if isResourceOwner() && request.resource.data.ownerId == resource.data.ownerId;
-      allow delete: if isResourceOwner();
     }
 
 

@@ -313,43 +313,6 @@ export default function TeamManagementPage() {
       })
 
       if (!res.success) {
-        if (db) {
-          const normalizedEmail = inviteEmail.trim().toLowerCase()
-          const emailKey = normalizedEmail.replace(/\./g, "__DOT__")
-          const nowIso = new Date().toISOString()
-          await addDoc(collection(db, "teamMembers"), {
-            ownerId: user.uid,
-            email: normalizedEmail,
-            organizationId: inviteOrgIds[0],
-            organizationIds: inviteOrgIds,
-            accessMode: hasAnyAdmin ? "admin" : "services",
-            permissions: flatPerms,
-            orgPermissions,
-            status: "Pending",
-            invitedBy: user.email || user.uid,
-            createdAt: nowIso,
-            updatedAt: nowIso,
-          })
-          for (const oid of inviteOrgIds) {
-            try {
-              const permsForOrg = orgPermissions[oid] || flatPerms
-              await updateDoc(doc(db, "organizations", oid), {
-                memberEmails: arrayUnion(normalizedEmail),
-                [`memberPermissions.${emailKey}`]: permsForOrg,
-                updatedAt: nowIso,
-              })
-            } catch {
-              // ignore org doc update error if rules restrict
-            }
-          }
-          toast({
-            title: "Invitation sent",
-            description: `${normalizedEmail} has been invited to ${inviteOrgIds.length} organization(s).`,
-          })
-          setIsInviteOpen(false)
-          await fetchTeamData()
-          return
-        }
         toast({
           variant: "destructive",
           title: "Invitation failed",
@@ -359,11 +322,8 @@ export default function TeamManagementPage() {
       }
 
       toast({
-        title: res.data?.status === "Active" ? "Organization access granted" : "Invitation sent",
-        description:
-          res.data?.status === "Active"
-            ? `${inviteEmail.trim().toLowerCase()} now has active access to ${inviteOrgIds.length} organization(s).`
-            : `${inviteEmail.trim().toLowerCase()} is Pending activation across ${inviteOrgIds.length} organization(s).`,
+        title: "Invitation sent",
+        description: `${inviteEmail.trim().toLowerCase()} is Pending acceptance across ${inviteOrgIds.length} organization(s).`,
       })
 
       setIsInviteOpen(false)
@@ -425,23 +385,6 @@ export default function TeamManagementPage() {
       })
 
       if (!res.success) {
-        if (db) {
-          await updateDoc(doc(db, "teamMembers", memberToEdit.id), {
-            organizationId: editOrgIds[0],
-            organizationIds: editOrgIds,
-            accessMode: hasAnyAdmin ? "admin" : "services",
-            permissions: flatPerms,
-            orgPermissions,
-            updatedAt: new Date().toISOString(),
-          })
-          toast({
-            title: "Access updated",
-            description: `Updated organizations and access level for ${memberToEdit.email}.`,
-          })
-          setMemberToEdit(null)
-          await fetchTeamData()
-          return
-        }
         toast({
           variant: "destructive",
           title: "Update failed",
@@ -482,18 +425,6 @@ export default function TeamManagementPage() {
       const idToken = await user.getIdToken()
       const res = await updateTeamMemberStatus(idToken, member.id, newStatus)
       if (!res.success) {
-        if (db) {
-          await updateDoc(doc(db, "teamMembers", member.id), {
-            status: newStatus,
-            updatedAt: new Date().toISOString(),
-          })
-          toast({
-            title: `Access ${newStatus === "Active" ? "restored" : "suspended"}`,
-            description: `${member.email} is now ${newStatus.toLowerCase()}.`,
-          })
-          await fetchTeamData()
-          return
-        }
         toast({
           variant: "destructive",
           title: "Status update failed",
@@ -522,25 +453,6 @@ export default function TeamManagementPage() {
       const idToken = await user.getIdToken()
       const res = await deleteTeamMember(idToken, member.id)
       if (!res.success) {
-        if (db) {
-          await deleteDoc(doc(db, "teamMembers", member.id))
-          for (const oid of getMemberOrgIds(member)) {
-            try {
-              await updateDoc(doc(db, "organizations", oid), {
-                memberEmails: arrayRemove(member.email.toLowerCase().trim()),
-              })
-            } catch {
-              // ignore
-            }
-          }
-          toast({
-            title: "Access revoked",
-            description: `${member.email} has been removed from all assigned organizations.`,
-          })
-          setMemberToDelete(null)
-          await fetchTeamData()
-          return
-        }
         toast({
           variant: "destructive",
           title: "Removal failed",

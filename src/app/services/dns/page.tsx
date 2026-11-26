@@ -208,7 +208,6 @@ export default function DNSManagementPage() {
   const [copiedText, setCopiedText] = useState<string | null>(null)
   const [permissionWarning, setPermissionWarning] = useState<string | null>(null)
   const [connectionError, setConnectionError] = useState<string | null>(null)
-  const [quickFilter, setQuickFilter] = useState<"all" | "mail" | "proxied">("all")
   const [typeFilter, setTypeFilter] = useState<string>("ALL")
   const [mobileDetailRecord, setMobileDetailRecord] = useState<DNSRecord | null>(null)
   const [isReviewingRecord, setIsReviewingRecord] = useState(false)
@@ -710,22 +709,6 @@ export default function DNSManagementPage() {
   const [recordsPage, setRecordsPage] = useState(1)
   const [recordsPageSize, setRecordsPageSize] = useState(25)
 
-  const isMailRecord = (r: DNSRecord) => {
-    if (r.type === "MX") return true
-    if (r.type === "TXT") {
-      const c = r.content.toLowerCase()
-      const n = r.name.toLowerCase()
-      return (
-        c.includes("v=spf1") ||
-        c.includes("v=dkim1") ||
-        c.includes("v=dmarc1") ||
-        n.includes("_dmarc") ||
-        n.includes("_domainkey")
-      )
-    }
-    return false
-  }
-
   const filteredRecords = records.filter((r) => {
     const q = searchQuery.trim().toLowerCase()
     const matchesSearch =
@@ -735,8 +718,6 @@ export default function DNSManagementPage() {
       r.type.toLowerCase().includes(q)
     if (!matchesSearch) return false
     if (typeFilter !== "ALL" && r.type !== typeFilter) return false
-    if (quickFilter === "mail" && !isMailRecord(r)) return false
-    if (quickFilter === "proxied" && !r.proxied) return false
     return true
   })
 
@@ -744,7 +725,7 @@ export default function DNSManagementPage() {
 
   useEffect(() => {
     setRecordsPage(1)
-  }, [searchQuery, quickFilter, typeFilter, selectedOrg?.id])
+  }, [searchQuery, typeFilter, selectedOrg?.id])
 
   const resolvePreviewHostname = (rawName: string | undefined, domain: string | undefined) => {
     const cleanDomain = (domain || "").trim().replace(/\.$/, "")
@@ -1257,44 +1238,6 @@ export default function DNSManagementPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-
-                {/* Quick Filter Pills */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {(
-                    [
-                      { id: "all", label: "All records" },
-                      { id: "mail", label: "Mail (MX / SPF / DKIM / DMARC)" },
-                      { id: "proxied", label: "Proxied" },
-                    ] as const
-                  ).map((pill) => (
-                    <button
-                      key={pill.id}
-                      type="button"
-                      onClick={() => setQuickFilter(pill.id)}
-                      className={cn(
-                        "px-2.5 py-1 rounded-md text-xs font-medium border transition-colors",
-                        quickFilter === pill.id
-                          ? "bg-slate-900 text-white border-slate-900"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
-                      )}
-                    >
-                      {pill.label}
-                    </button>
-                  ))}
-                  {(quickFilter !== "all" || typeFilter !== "ALL" || searchQuery) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuickFilter("all")
-                        setTypeFilter("ALL")
-                        setSearchQuery("")
-                      }}
-                      className="px-2 py-1 text-xs text-slate-500 hover:text-slate-900 underline"
-                    >
-                      Reset
-                    </button>
-                  )}
                 </div>
               </CardHeader>
 

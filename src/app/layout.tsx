@@ -7,6 +7,7 @@ import { JsonLd } from '@/components/seo/json-ld';
 import { DevToolsGuard } from '@/components/security/devtools-guard';
 import { PointerEventsGuard } from '@/components/layout/pointer-events-guard';
 import { PersistentWorkspaceFrame } from '@/components/layout/dashboard-shell';
+import { RouteVitalsMonitor } from '@/components/layout/route-vitals-monitor';
 import {
   SITE_URL,
   MARKETING_URL,
@@ -278,6 +279,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <DevToolsGuard />
         <PointerEventsGuard />
+        <RouteVitalsMonitor />
         <FirebaseClientProvider>
           <PersistentWorkspaceFrame>{children}</PersistentWorkspaceFrame>
           <Toaster />

@@ -367,6 +367,7 @@ export default function LoginPage() {
         const cred = (await navigator.credentials.get({
           publicKey: {
             challenge: b64uToBuf(opt.challenge),
+            ...(opt.rpId ? { rpId: opt.rpId } : {}),
             allowCredentials: opt.allowCredentials.map((c: { id: string }) => ({
               id: b64uToBuf(c.id),
               type: "public-key",
@@ -385,6 +386,8 @@ export default function LoginPage() {
             method: "passkey",
             credentialId: bufToB64u(cred.rawId),
             clientDataJSON: bufToB64u(resp.clientDataJSON),
+            authenticatorData: bufToB64u(resp.authenticatorData),
+            signature: bufToB64u(resp.signature),
           }),
         })
         const ver = await verRes.json()

@@ -9,6 +9,11 @@ import {
   verifyStepUpToken,
   verifyTotpCode,
 } from '@/lib/mfa';
+import {
+  resolveExpectedRpId,
+  verifyPasskeyAssertion,
+  verifyPasskeyRegistration,
+} from '@/lib/webauthn-verify';
 import { sendRevletAccountEmail } from '@/lib/revlet-alerts';
 
 const MFA_SESSION_COOKIE = 'revlet_mfa_session';
@@ -247,11 +252,11 @@ export async function POST(req: NextRequest) {
         type: 'create',
         expiresAt: Date.now() + 5 * 60 * 1000,
       });
-      const host = req.nextUrl.hostname || 'app.revlet.me';
+      const rpId = resolveExpectedRpId(req);
       return NextResponse.json({
         ok: true,
         challenge,
-        rp: { name: 'Revlet', id: host === '127.0.0.1' ? 'localhost' : host },
+        rp: { name: 'Revlet', id: rpId },
         user: {
           id: Buffer.from(uid, 'utf8').toString('base64url'),
           name: email || uid,
@@ -263,9 +268,12 @@ export async function POST(req: NextRequest) {
     if (action === 'passkey_register_verify') {
       const credentialId = typeof body.credentialId === 'string' ? body.credentialId : '';
       const clientDataJSON = typeof body.clientDataJSON === 'string' ? body.clientDataJSON : '';
+      const publicKeySpki = typeof body.publicKeySpki === 'string' ? body.publicKeySpki : '';
+      const publicKeyAlgorithm = typeof body.publicKeyAlgorithm === 'number' ? body.publicKeyAlgorithm : 0;
+      const authenticatorData = typeof body.authenticatorData === 'string' ? body.authenticatorData : undefined;
       const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim() : 'Security Passkey';
 
-      if (!credentialId || !clientDataJSON) {
+      if (!credentialId || !clientDataJSON || !publicKeySpki) {
         return NextResponse.json({ ok: false, error: 'Invalid passkey payload.' }, { status: 400 });
       }
       const chSnap = await userRef.collection('mfaChallenges').doc('current').get();
@@ -273,15 +281,26 @@ export async function POST(req: NextRequest) {
       if (!chData || chData.type !== 'create' || chData.expiresAt < Date.now()) {
         return NextResponse.json({ ok: false, error: 'Passkey challenge expired.' }, { status: 400 });
       }
-      const clientData = JSON.parse(Buffer.from(clientDataJSON, 'base64url').toString('utf8'));
-      if (clientData.type !== 'webauthn.create' || clientData.challenge !== chData.challenge) {
-        return NextResponse.json({ ok: false, error: 'Passkey challenge mismatch.' }, { status: 400 });
+      const regCheck = verifyPasskeyRegistration({
+        req,
+        expectedChallenge: chData.challenge,
+        credentialId,
+        clientDataJSON,
+        publicKeySpki,
+        publicKeyAlgorithm,
+        authenticatorData,
+      });
+      if (!regCheck.ok) {
+        return NextResponse.json({ ok: false, error: regCheck.error }, { status: 400 });
       }
       const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
       await userRef.collection('mfaChallenges').doc('current').delete().catch(() => {});
       await userRef.collection('mfaPasskeys').doc(credentialId).set({
         credentialId,
         label,
+        publicKeySpki,
+        publicKeyAlgorithm,
+        signCount: regCheck.signCount,
         createdAt: new Date().toISOString(),
       });
       if (!hadEnrolledMfa) {
@@ -328,6 +347,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ok: true,
         challenge,
+        rpId: resolveExpectedRpId(req),
         allowCredentials: passkeysSnap.docs.map((d) => ({
           id: d.id,
           type: 'public-key',
@@ -459,6 +479,8 @@ export async function POST(req: NextRequest) {
       if (method === 'passkey') {
         const credentialId = typeof body.credentialId === 'string' ? body.credentialId : '';
         const clientDataJSON = typeof body.clientDataJSON === 'string' ? body.clientDataJSON : '';
+        const authenticatorData = typeof body.authenticatorData === 'string' ? body.authenticatorData : '';
+        const signature = typeof body.signature === 'string' ? body.signature : '';
         const chSnap = await userRef.collection('mfaChallenges').doc('current').get();
         const chData = chSnap.data();
         if (!chData || chData.type !== 'get' || chData.expiresAt < Date.now()) {
@@ -468,11 +490,33 @@ export async function POST(req: NextRequest) {
         if (!pkSnap.exists) {
           return NextResponse.json({ ok: false, error: 'Unrecognized passkey credential.' }, { status: 403 });
         }
-        const clientData = JSON.parse(Buffer.from(clientDataJSON, 'base64url').toString('utf8'));
-        if (clientData.type !== 'webauthn.get' || clientData.challenge !== chData.challenge) {
-          return NextResponse.json({ ok: false, error: 'Passkey assertion mismatch.' }, { status: 400 });
+        const pkData = pkSnap.data() || {};
+        const assertCheck = verifyPasskeyAssertion({
+          req,
+          expectedChallenge: chData.challenge,
+          passkey: {
+            id: pkSnap.id,
+            label: pkData.label || 'Passkey',
+            createdAt: pkData.createdAt || '',
+            publicKeySpki: pkData.publicKeySpki,
+            publicKeyAlgorithm: pkData.publicKeyAlgorithm,
+            signCount: pkData.signCount,
+          },
+          clientDataJSON,
+          authenticatorData,
+          signature,
+        });
+        if (!assertCheck.ok) {
+          return NextResponse.json({ ok: false, error: assertCheck.error }, { status: 403 });
         }
-        await userRef.collection('mfaChallenges').doc('current').delete().catch(() => {});
+        await Promise.all([
+          userRef.collection('mfaChallenges').doc('current').delete().catch(() => {}),
+          userRef
+            .collection('mfaPasskeys')
+            .doc(credentialId)
+            .set({ signCount: assertCheck.nextSignCount }, { merge: true })
+            .catch(() => {}),
+        ]);
         const stepUpToken = createStepUpToken({ uid, email, method: 'passkey' });
         return setMfaSessionCookie(
           req,

@@ -211,10 +211,21 @@ export function MfaEnrollmentCard() {
       })) as PublicKeyCredential | null
       if (!cred) throw new Error("Cancelled")
       const resp = cred.response as AuthenticatorAttestationResponse
+      const publicKeyBuf = typeof resp.getPublicKey === "function" ? resp.getPublicKey() : null
+      const publicKeyAlgorithm =
+        typeof resp.getPublicKeyAlgorithm === "function" ? resp.getPublicKeyAlgorithm() : -7
+      const authDataBuf =
+        typeof resp.getAuthenticatorData === "function" ? resp.getAuthenticatorData() : null
+      if (!publicKeyBuf) {
+        throw new Error("Your browser did not provide a WebAuthn public key for this passkey.")
+      }
       await callMfa({
         action: "passkey_register_verify",
         credentialId: bufToB64u(cred.rawId),
         clientDataJSON: bufToB64u(resp.clientDataJSON),
+        publicKeySpki: bufToB64u(publicKeyBuf),
+        publicKeyAlgorithm,
+        ...(authDataBuf ? { authenticatorData: bufToB64u(authDataBuf) } : {}),
         label: passkeyLabel.trim() || "Security Key",
       })
       toast({

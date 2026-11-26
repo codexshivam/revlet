@@ -72,11 +72,19 @@ import { toast } from "@/hooks/use-toast"
 import { useUser } from "@/firebase"
 import { useActiveOrg } from "@/hooks/use-active-org"
 import { cn } from "@/lib/utils"
+import dynamic from "next/dynamic"
 import { PageHeader } from "@/components/layout/page-header"
 import { EmptyOrgState } from "@/components/services/empty-org-state"
 import { ServiceActivationCard } from "@/components/services/service-activation-card"
-import { EmailGovernancePanel } from "@/components/services/email-governance-panel"
-import { StepUpMfaDialog } from "@/components/security/step-up-mfa-dialog"
+
+const EmailGovernancePanel = dynamic(
+  () => import("@/components/services/email-governance-panel").then((m) => m.EmailGovernancePanel),
+  { ssr: false }
+)
+const StepUpMfaDialog = dynamic(
+  () => import("@/components/security/step-up-mfa-dialog").then((m) => m.StepUpMfaDialog),
+  { ssr: false }
+)
 import {
   getOrganizationSecurityPolicy,
   setOrganizationEnforceMfa,

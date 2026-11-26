@@ -169,6 +169,7 @@ export function StepUpMfaDialog({
       const cred = (await navigator.credentials.get({
         publicKey: {
           challenge: b64uToBuf(optData.challenge),
+          ...(optData.rpId ? { rpId: optData.rpId } : {}),
           allowCredentials: (optData.allowCredentials || []).map((c: any) => ({
             id: b64uToBuf(c.id),
             type: "public-key",
@@ -192,6 +193,8 @@ export function StepUpMfaDialog({
           method: "passkey",
           credentialId: bufToB64u(cred.rawId),
           clientDataJSON: bufToB64u(resp.clientDataJSON),
+          authenticatorData: bufToB64u(resp.authenticatorData),
+          signature: bufToB64u(resp.signature),
         }),
       })
       const verifyData = await verifyRes.json()

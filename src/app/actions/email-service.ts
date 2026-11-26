@@ -4,16 +4,16 @@ import crypto from 'crypto';
 import dns from 'dns';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
-import { verifyUserOrgAccess } from './auth-helper';
+import { assertStepUpMfa, hasOrgPermission, verifyUserOrgAccess } from './auth-helper';
 import {
   listDNSRecords,
   createDNSRecord,
-  updateDNSRecord,
-  deleteDNSRecord,
 } from './dns-service';
 import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
 import { hashMailPassword, hashMailPasswordAsync } from '@/lib/security/mail-crypto';
 import {
+  assertActiveMailDomainBinding,
+  isEmailAddressTakenInOrg,
   logMailAuditEvent,
   callStalwartJmap,
   dispatchStalwartApi,
@@ -242,59 +242,6 @@ async function syncStalwartGroupPrincipal(params: {
 // so the platform owner never has to add client domains manually in the AWS Console.
 // ============================================================================
 
-async function syncCustomDkimTargetCnames(tokens: string[]): Promise<void> {
-  if (!MAIL_DKIM_TARGET_DOMAIN || MAIL_DKIM_TARGET_DOMAIN === 'dkim.amazonses.com') {
-    return;
-  }
-  const cfToken = (process.env.CLOUDFLARE_DNS_TOKEN || '').trim();
-  if (!cfToken || tokens.length === 0) return;
-
-  const zoneId = (process.env.REVLET_CLOUDFLARE_ZONE_ID || 'b01f5fc25d042b813d59034710fe4476').trim();
-  const headers = {
-    Authorization: `Bearer ${cfToken}`,
-    'Content-Type': 'application/json',
-  };
-
-  for (const token of tokens) {
-    const cleanToken = String(token || '').trim().toLowerCase();
-    if (!cleanToken) continue;
-    const fqdn = `${cleanToken}.${MAIL_DKIM_TARGET_DOMAIN}`;
-    const target = `${cleanToken}.dkim.amazonses.com`;
-    try {
-      const checkRes = await fetch(
-        `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=CNAME&name=${encodeURIComponent(fqdn)}`,
-        { headers, cache: 'no-store' }
-      );
-      const checkData = await checkRes.json().catch(() => ({}));
-      const existing = Array.isArray(checkData?.result) ? checkData.result[0] : null;
-      if (existing && String(existing.content || '').toLowerCase() === target) {
-        continue;
-      }
-      if (existing?.id) {
-        await fetch(
-          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${existing.id}`,
-          {
-            method: 'PUT',
-            headers,
-            body: JSON.stringify({ type: 'CNAME', name: fqdn, content: target, ttl: 300, proxied: false }),
-          }
-        );
-      } else {
-        await fetch(
-          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ type: 'CNAME', name: fqdn, content: target, ttl: 300, proxied: false }),
-          }
-        );
-      }
-    } catch {
-      // Non-blocking DNS sync
-    }
-  }
-}
-
 interface OrgDkimConfig {
   mode: 'byodkim' | 'easydkim';
   selector: string;
@@ -303,39 +250,33 @@ interface OrgDkimConfig {
 }
 
 async function provisionAwsSesByoDkim(
+  orgId: string,
   domain: string,
   selector: string,
-  privateKeyB64: string
+  privateKeyB64: string,
+  legacyProvisioned: boolean
 ): Promise<boolean> {
-  const cleanDomain = domain.toLowerCase().trim();
-  if (!cleanDomain || cleanDomain.includes('@') || !privateKeyB64) return false;
-
-  const encoded = encodeURIComponent(cleanDomain);
-  const getRes = await callAwsSesV2Api('GET', `/v2/email/identities/${encoded}`);
-
-  if (getRes.ok) {
-    if (getRes.data?.DkimAttributes?.SigningAttributesOrigin === 'EXTERNAL') {
-      return true;
-    }
-    const putRes = await callAwsSesV2Api('PUT', `/v2/email/identities/${encoded}/dkim/signing`, {
-      SigningAttributesOrigin: 'EXTERNAL',
-      SigningAttributes: {
-        DomainSigningSelector: selector,
-        DomainSigningPrivateKey: privateKeyB64,
-      },
-    });
-    if (!putRes.ok) {
-      console.error('[BYODKIM] PUT /v2/email/identities/{domain}/dkim/signing failed:', {
-        domain: cleanDomain,
-        status: putRes.status,
-        data: putRes.data,
-      });
-    }
-    return putRes.ok;
+  const identityPath = `/v2/email/identities/${encodeURIComponent(domain)}`;
+  const binding = adminDb.collection('mailDomainBindings').doc(domain);
+  const bindingData = (await binding.get()).data();
+  if (bindingData?.orgId !== orgId) {
+    throw new Error('The domain is not bound to this organization.');
   }
 
-  const createRes = await callAwsSesV2Api('POST', '/v2/email/identities', {
-    EmailIdentity: cleanDomain,
+  const existing = await callAwsSesV2Api('GET', identityPath);
+  if (existing.ok) {
+    if (!bindingData.sesIdentityCreated && !legacyProvisioned) {
+      throw new Error('A sending identity already exists for this domain. Contact support to verify its ownership.');
+    }
+    // Existing identities require a separate, reviewed migration to change signing keys.
+    return existing.data?.DkimAttributes?.SigningAttributesOrigin === 'EXTERNAL'
+      && existing.data?.VerifiedForSendingStatus === true
+      && existing.data?.DkimAttributes?.Status === 'SUCCESS';
+  }
+  if (existing.status !== 404) return false;
+
+  const created = await callAwsSesV2Api('POST', '/v2/email/identities', {
+    EmailIdentity: domain,
     ConfigurationSetName: 'revlet-ses-cfg-default',
     DkimSigningAttributes: {
       DomainSigningSelector: selector,
@@ -343,48 +284,13 @@ async function provisionAwsSesByoDkim(
       DomainSigningAttributesOrigin: 'EXTERNAL',
     },
   });
-  if (!createRes.ok) {
-    console.error('[BYODKIM] POST /v2/email/identities failed:', {
-      domain: cleanDomain,
-      status: createRes.status,
-      data: createRes.data,
-    });
+  if (created.ok) {
+    await binding.update({ sesIdentityCreated: true });
+  } else {
+    console.error('[BYODKIM] Could not create sending identity:', { domain, status: created.status });
   }
-  return createRes.ok;
-}
-
-async function provisionAwsSesDomainTokens(domain: string): Promise<string[] | null> {
-  const cleanDomain = domain.toLowerCase().trim();
-  // Guard: strictly enforce DOMAIN identities only, never individual EMAIL_ADDRESS identities
-  if (!cleanDomain || cleanDomain.includes('@')) return null;
-
-  const encoded = encodeURIComponent(cleanDomain);
-  // 1. Check if domain identity already exists in AWS SES v2
-  const getRes = await callAwsSesV2Api('GET', `/v2/email/identities/${encoded}`);
-  if (getRes.ok && Array.isArray(getRes.data?.DkimAttributes?.Tokens)) {
-    const tokens = getRes.data.DkimAttributes.Tokens.filter(Boolean);
-    if (tokens.length === 3) {
-      await syncCustomDkimTargetCnames(tokens);
-      return tokens;
-    }
-  }
-
-  // 2. Otherwise create the domain identity in AWS SES v2 automatically with 2048-bit RSA DKIM
-  const createRes = await callAwsSesV2Api('POST', '/v2/email/identities', {
-    EmailIdentity: cleanDomain,
-    DkimSigningAttributes: {
-      NextSigningKeyLength: 'RSA_2048_BIT',
-    },
-  });
-  if (createRes.ok && Array.isArray(createRes.data?.DkimAttributes?.Tokens)) {
-    const tokens = createRes.data.DkimAttributes.Tokens.filter(Boolean);
-    if (tokens.length === 3) {
-      await syncCustomDkimTargetCnames(tokens);
-      return tokens;
-    }
-  }
-
-  return null;
+  // The next activation check can confirm the provider has verified the new identity.
+  return false;
 }
 
 // ============================================================================
@@ -407,12 +313,12 @@ async function resolvePublicDnsRecords(
   dkimConfig: OrgDkimConfig,
   bypassCache = false
 ): Promise<Array<{ type: string; name: string; content: string; priority?: number }>> {
-  const normalizedDomain = domain.toLowerCase().trim();
+  const normalizedDomain = domain.toLowerCase().trim().replace(/\.$/, '');
   if (!normalizedDomain) return [];
 
   const cacheKey =
     dkimConfig.mode === 'byodkim'
-      ? `${normalizedDomain}:byodkim:${dkimConfig.selector}`
+      ? `${normalizedDomain}:byodkim:${dkimConfig.selector}:${dkimConfig.publicKey}`
       : `${normalizedDomain}:${dkimConfig.tokens.slice(0, 3).join(',')}`;
   if (!bypassCache) {
     const cached = publicDnsCache.get(cacheKey);
@@ -529,7 +435,7 @@ function buildRequiredDnsRecords(
   dkimConfig: OrgDkimConfig,
   liveRecords: Array<{ type: string; name: string; content: string; priority?: number }> = []
 ): MailRequiredDnsRecord[] {
-  const normalizedDomain = domain.toLowerCase().trim();
+  const normalizedDomain = domain.toLowerCase().trim().replace(/\.$/, '');
 
   const isPresent = (type: string, expectedName: string, expectedContentFragment: string) => {
     const cleanExpectedName = expectedName.toLowerCase().replace(/\.$/, '');
@@ -543,7 +449,7 @@ function buildRequiredDnsRecords(
         (cleanExpectedName === normalizedDomain && (rName === '@' || rName === normalizedDomain));
       if (!nameMatches) return false;
       const rContent = (r.content || '').toLowerCase().replace(/\.$/, '');
-      return rContent.includes(cleanExpectedContent);
+      return type === 'TXT' ? rContent.includes(cleanExpectedContent) : rContent === cleanExpectedContent;
     });
   };
 
@@ -557,7 +463,7 @@ function buildRequiredDnsRecords(
       content: MAIL_MX_HOST,
       priority: 10,
       ttl: 'Auto',
-      verified: isPresent('MX', normalizedDomain, MAIL_MX_HOST),
+      verified: isPresent('MX', normalizedDomain, MAIL_MX_HOST) && !hasOtherMailProvider(normalizedDomain, liveRecords),
       required: true,
     },
   ];
@@ -573,7 +479,14 @@ function buildRequiredDnsRecords(
       name: recordName,
       content: recordContent,
       ttl: 'Auto',
-      verified: isPresent('TXT', recordName, `p=${dkimConfig.publicKey}`),
+      verified: Boolean(dkimConfig.publicKey) && liveRecords.some((record) =>
+        record.type === 'TXT' &&
+        record.name.toLowerCase().replace(/\.$/, '') === recordName.toLowerCase() &&
+        record.content.replace(/^"|"$/g, '').split(';').some((tag) => {
+          const match = /^p\s*=\s*(.*)$/.exec(tag.trim());
+          return match?.[1].replace(/\s/g, '') === dkimConfig.publicKey;
+        })
+      ),
       required: true,
     });
   } else {
@@ -625,112 +538,77 @@ function buildRequiredDnsRecords(
   return [...coreRecords, ...optionalRecords];
 }
 
-async function ensureOrgDkimConfig(
-  orgId: string,
-  orgData: FirebaseFirestore.DocumentData,
-  options?: { forceVerifySes?: boolean }
-): Promise<OrgDkimConfig> {
-  const domain = (orgData.domain || '').toLowerCase().trim();
+function hasOtherMailProvider(domain: string, records: Array<{ type: string; name: string; content: string }>) {
+  const expected = MAIL_MX_HOST.toLowerCase().replace(/\.$/, '');
+  return records.some((record) => {
+    const name = record.name.toLowerCase().replace(/\.$/, '');
+    return record.type === 'MX' && (name === domain || name === '@') &&
+      record.content.toLowerCase().replace(/\.$/, '') !== expected;
+  });
+}
 
-  // Preserve legacy active Easy DKIM domains that already verified 3 CNAMEs
-  if (
-    orgData.mailServiceActive === true &&
-    orgData.mailDkimMode !== 'byodkim' &&
-    !orgData.mailDkimPublicKey &&
-    Array.isArray(orgData.mailDkimTokens) &&
-    orgData.mailDkimTokens.length === 3
-  ) {
-    const sesTokens = domain ? await provisionAwsSesDomainTokens(domain) : null;
-    return {
-      mode: 'easydkim',
-      selector: 'revlet',
-      publicKey: '',
-      tokens: sesTokens && sesTokens.length === 3 ? sesTokens : orgData.mailDkimTokens,
-    };
+function readOrgDkimConfig(orgData: FirebaseFirestore.DocumentData): OrgDkimConfig | null {
+  if (orgData.mailDkimMode !== 'byodkim' && !orgData.mailDkimPublicKey &&
+      Array.isArray(orgData.mailDkimTokens) && orgData.mailDkimTokens.length === 3) {
+    return { mode: 'easydkim', selector: 'revlet', publicKey: '', tokens: orgData.mailDkimTokens };
   }
-
-  const orgRef = adminDb.collection('organizations').doc(orgId);
-  const secretRef = orgRef.collection('privateSecrets').doc('dkim');
-  let selector = (typeof orgData.mailDkimSelector === 'string' && orgData.mailDkimSelector.trim()) || 'revlet';
-  let publicKey = typeof orgData.mailDkimPublicKey === 'string' ? orgData.mailDkimPublicKey.trim() : '';
-  let privateKey = '';
-
-  const secretSnap = await secretRef.get().catch(() => null);
-  if (secretSnap?.exists) {
-    const sData = secretSnap.data() || {};
-    if (typeof sData.privateKey === 'string' && sData.privateKey.trim()) {
-      privateKey = sData.privateKey.trim();
-    }
-    if (!publicKey && typeof sData.publicKey === 'string' && sData.publicKey.trim()) {
-      publicKey = sData.publicKey.trim();
-    }
-  }
-
-  if (!publicKey || !privateKey) {
-    const pair = crypto.generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: { type: 'spki', format: 'der' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'der' },
-    });
-    publicKey = pair.publicKey.toString('base64');
-    privateKey = pair.privateKey.toString('base64');
-    selector = 'revlet';
-
-    await Promise.all([
-      secretRef.set({
-        selector,
-        publicKey,
-        privateKey,
-        updatedAt: new Date().toISOString(),
-      }),
-      orgRef.update({
-        mailDkimSelector: selector,
-        mailDkimPublicKey: publicKey,
-        updatedAt: new Date().toISOString(),
-      }),
-    ]).catch(() => {});
-  } else if (orgData.mailDkimSelector !== selector || orgData.mailDkimPublicKey !== publicKey) {
-    await orgRef.update({
-      mailDkimSelector: selector,
-      mailDkimPublicKey: publicKey,
-    }).catch(() => {});
-  }
-
-  const needsSesProvision =
-    !orgData.mailSesVerifiedInByo ||
-    !orgData.mailSesIdentityProvisioned ||
-    orgData.mailDkimMode !== 'byodkim' ||
-    Boolean(options?.forceVerifySes);
-
-  if (domain && needsSesProvision) {
-    const provisioned = await provisionAwsSesByoDkim(domain, selector, privateKey);
-    if (provisioned) {
-      await orgRef.update({
-        mailSesIdentityProvisioned: true,
-        mailSesVerifiedInByo: true,
-        mailDkimMode: 'byodkim',
-        updatedAt: new Date().toISOString(),
-      }).catch(() => {});
-    }
-  }
-
+  if (!orgData.mailDkimPublicKey) return null;
   return {
     mode: 'byodkim',
-    selector,
-    publicKey,
+    selector: orgData.mailDkimSelector || 'revlet',
+    publicKey: orgData.mailDkimPublicKey,
     tokens: [],
   };
 }
 
-function mergeSpfWithRevletInclude(existingSpf: string, includeToken: string): string {
-  const clean = existingSpf.trim().replace(/^"|"$/g, '');
-  if (clean.toLowerCase().includes(includeToken.toLowerCase())) return clean;
-  const mechMatch = clean.match(/(\s+[~?-]all|\s+\+?all)\s*$/i);
-  if (mechMatch) {
-    const idx = clean.lastIndexOf(mechMatch[1]);
-    return `${clean.slice(0, idx)} ${includeToken}${mechMatch[1]}`.replace(/\s+/g, ' ').trim();
-  }
-  return `${clean} ${includeToken} ~all`.replace(/\s+/g, ' ').trim();
+async function prepareOrgDkimConfig(orgId: string, orgData: FirebaseFirestore.DocumentData): Promise<OrgDkimConfig> {
+  const configured = readOrgDkimConfig(orgData);
+  if (configured) return configured;
+
+  const orgRef = adminDb.collection('organizations').doc(orgId);
+  const secretRef = orgRef.collection('privateSecrets').doc('dkim');
+  const pair = await new Promise<{ publicKey: string; privateKey: string }>((resolve, reject) => {
+    crypto.generateKeyPair('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'der' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'der' },
+    }, (error, publicKey, privateKey) => {
+      if (error) reject(error);
+      else resolve({ publicKey: publicKey.toString('base64'), privateKey: privateKey.toString('base64') });
+    });
+  });
+
+  return adminDb.runTransaction(async (tx) => {
+    const freshOrg = await tx.get(orgRef);
+    if (!freshOrg.exists) throw new Error('Organization is unavailable.');
+    const current = readOrgDkimConfig(freshOrg.data() || {});
+    if (current) return current;
+    const secret = (await tx.get(secretRef)).data();
+    const selector = secret?.selector || 'revlet';
+    const publicKey = secret?.publicKey || pair.publicKey;
+    if (!secret?.publicKey || !secret?.privateKey) {
+      if (secret?.publicKey || secret?.privateKey) throw new Error('Domain signing configuration needs repair.');
+      tx.set(secretRef, { ...pair, selector, updatedAt: FieldValue.serverTimestamp() });
+    }
+    tx.update(orgRef, { mailDkimSelector: selector, mailDkimPublicKey: publicKey });
+    return { mode: 'byodkim', selector, publicKey, tokens: [] };
+  });
+}
+
+async function claimMailDomain(orgId: string, domain: string) {
+  const binding = adminDb.collection('mailDomainBindings').doc(domain);
+  const organizations = adminDb.collection('organizations').where('domain', '==', domain);
+  await adminDb.runTransaction(async (tx) => {
+    const current = await tx.get(binding);
+    if (current.exists && current.data()?.orgId !== orgId) {
+      throw new Error('This domain is already connected to another organization.');
+    }
+    const matching = await tx.get(organizations);
+    if (matching.docs.some((doc) => doc.id !== orgId && doc.data().mailServiceActive === true)) {
+      throw new Error('This domain is already connected to another organization.');
+    }
+    if (!current.exists) tx.create(binding, { orgId, createdAt: FieldValue.serverTimestamp() });
+  });
 }
 
 async function provisionRequiredDnsRecordsOnZone(
@@ -752,43 +630,21 @@ async function provisionRequiredDnsRecordsOnZone(
 
     const currentRecords: any[] = existingRes.data || [];
     const normalizedDomain = domainName.toLowerCase().replace(/\.$/, '').trim();
-    const expectedMxHost = MAIL_MX_HOST.toLowerCase().replace(/\.$/, '').trim();
+    if (hasOtherMailProvider(normalizedDomain, currentRecords)) {
+      return { success: false, addedCount: 0, error: 'Another mail provider is configured. Review the existing MX records and plan the cutover in DNS Management before publishing Revlet records.' };
+    }
     let addedCount = 0;
     const failures: string[] = [];
 
-    // 1. Update existing root SPF in-place (preserving other authorized senders!) instead of deleting it
-    const existingRootSpf = currentRecords.find((r: any) => {
-      const rType = (r.type || '').toUpperCase();
-      const rName = (r.name || '').toLowerCase().replace(/\.$/, '').trim();
-      const isRoot = rName === normalizedDomain || rName === '@' || rName === '';
-      return rType === 'TXT' && isRoot && (r.content || '').toLowerCase().includes('v=spf1');
-    });
+    // Only add missing required entries. Existing SPF and DMARC policies remain under the DNS owner's control.
+    const requiredRecords = buildRequiredDnsRecords(normalizedDomain, dkimConfig, currentRecords);
 
-    if (
-      existingRootSpf &&
-      !(existingRootSpf.content || '').toLowerCase().includes(MAIL_SPF_INCLUDE.toLowerCase())
-    ) {
-      const mergedSpf = mergeSpfWithRevletInclude(existingRootSpf.content || '', MAIL_SPF_INCLUDE);
-      const updRes = await updateDNSRecord(idToken, orgId, zoneId, existingRootSpf.id, {
-        type: 'TXT',
-        name: existingRootSpf.name,
-        content: mergedSpf,
-        ttl: existingRootSpf.ttl || 'Auto',
-        proxied: false,
-      });
-      if (!updRes.success) {
-        failures.push(`SPF update failed: ${updRes.error || 'Provider rejected SPF merge.'}`);
-      } else {
-        addedCount++;
-      }
-    }
-
-    // 2. Create all missing required records (MX, SPF if none existed, DKIM, DMARC) BEFORE deleting old MX
-    const preCreateRes = await listDNSRecords(idToken, orgId, zoneId);
-    const liveBeforeCreate: any[] = preCreateRes.success ? preCreateRes.data || [] : currentRecords;
-    const requiredRecords = buildRequiredDnsRecords(normalizedDomain, dkimConfig, liveBeforeCreate);
-
-    for (const req of requiredRecords) {
+    const publishOrder = [
+      ...requiredRecords.filter((record) => record.type !== 'MX'),
+      ...requiredRecords.filter((record) => record.type === 'MX'),
+    ];
+    for (const req of publishOrder) {
+      if (req.type === 'MX' && failures.length > 0) break;
       if (req.required !== false && !req.verified) {
         const createRes = await createDNSRecord(idToken, orgId, zoneId, {
           type: req.type,
@@ -806,36 +662,11 @@ async function provisionRequiredDnsRecordsOnZone(
       }
     }
 
-    // 3. Only after replacement MX is installed, remove conflicting root MX records
-    const afterCreateRes = await listDNSRecords(idToken, orgId, zoneId);
-    const liveAfterCreate: any[] = afterCreateRes.success ? afterCreateRes.data || [] : liveBeforeCreate;
-    const hasRevletMx = liveAfterCreate.some((r: any) => {
-      const rType = (r.type || '').toUpperCase();
-      const rName = (r.name || '').toLowerCase().replace(/\.$/, '').trim();
-      const isRoot = rName === normalizedDomain || rName === '@' || rName === '';
-      const rContent = (r.content || '').toLowerCase().replace(/\.$/, '').trim();
-      return rType === 'MX' && isRoot && rContent === expectedMxHost;
-    });
-
-    if (hasRevletMx) {
-      const conflictingMx = liveAfterCreate.filter((r: any) => {
-        const rType = (r.type || '').toUpperCase();
-        const rName = (r.name || '').toLowerCase().replace(/\.$/, '').trim();
-        const isRoot = rName === normalizedDomain || rName === '@' || rName === '';
-        const rContent = (r.content || '').toLowerCase().replace(/\.$/, '').trim();
-        return rType === 'MX' && isRoot && rContent !== expectedMxHost;
-      });
-      for (const conflict of conflictingMx) {
-        const delRes = await deleteDNSRecord(idToken, orgId, zoneId, conflict.id);
-        if (!delRes.success) {
-          failures.push(`Could not remove conflicting MX ${conflict.content}: ${delRes.error || 'Delete rejected.'}`);
-        }
-      }
-    }
-
-    // 4. Final verification: check that every required record is actually present
     const finalRes = await listDNSRecords(idToken, orgId, zoneId);
-    const liveFinal: any[] = finalRes.success ? finalRes.data || [] : liveAfterCreate;
+    if (!finalRes.success) {
+      return { success: false, addedCount, error: 'DNS changes could not be verified at the provider. Check again before retrying.' };
+    }
+    const liveFinal = finalRes.data || [];
     const finalCheck = buildRequiredDnsRecords(normalizedDomain, dkimConfig, liveFinal);
     const missingRequired = finalCheck.filter((r) => r.required !== false && !r.verified);
 
@@ -914,55 +745,22 @@ export async function resetOrgEmailQuota(
 export async function getMailServiceState(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Read', 'Email: Add', 'Email: Admin']);
+    const { orgData, permissions, isOwner } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Read', 'Email: Add', 'Email: Admin']);
     const domain = (orgData.domain || '').toLowerCase().trim();
-    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData, {
-      forceVerifySes: !orgData.mailSesVerifiedInByo,
-    });
-
-    let liveRecords: any[] = [];
+    const dkimConfig = readOrgDkimConfig(orgData);
     const dnsServiceActive = Boolean(orgData.cloudflareZoneId);
-
-    if (dnsServiceActive && orgData.cloudflareZoneId) {
-      const dnsRes = await listDNSRecords(idToken, orgId, orgData.cloudflareZoneId);
-      if (dnsRes.success && Array.isArray(dnsRes.data)) {
-        liveRecords = dnsRes.data;
-      }
-    }
-
-    // Fallback to live public DNS resolution if Cloudflare zone is not linked or returned empty
-    if (liveRecords.length === 0 && domain) {
-      liveRecords = await resolvePublicDnsRecords(domain, dkimConfig);
-    }
-
-    const requiredDnsRecords = buildRequiredDnsRecords(domain, dkimConfig, liveRecords);
+    const liveRecords = dkimConfig && domain ? await resolvePublicDnsRecords(domain, dkimConfig) : [];
+    const requiredDnsRecords = dkimConfig ? buildRequiredDnsRecords(domain, dkimConfig, liveRecords) : [];
     const rolling = await calculateRollingQuota(orgData);
-
-    // Do NOT silently auto-activate organizations on read; require explicit activation via Email Service page.
-    const effectiveMailServiceActive = Boolean(orgData.mailServiceActive);
-
-    // Self-healing writeback if quota values rolled over or self-healed
-    if (
-      rolling.monthlySentCount !== orgData.mailMonthlySent ||
-      rolling.dailySentCount !== orgData.mailDailySent
-    ) {
-      adminDb
-        .collection('organizations')
-        .doc(orgId)
-        .update({
-          mailDailySent: rolling.dailySentCount,
-          mailMonthlySent: rolling.monthlySentCount,
-          mailMonthlyBucket: new Date().toISOString().slice(0, 7),
-          updatedAt: new Date().toISOString(),
-        })
-        .catch(() => {});
-    }
 
     return {
       success: true,
       data: {
-        mailServiceActive: effectiveMailServiceActive,
+        mailServiceActive: Boolean(orgData.mailServiceActive),
         dnsServiceActive,
+        canManageMailService: hasOrgPermission(permissions, "Email: Admin"),
+        canDeactivateMailService: isOwner,
+        canInviteTeamMembers: hasOrgPermission(permissions, "Org: Admin"),
         domain,
         monthlyOutboundLimit: orgData.mailMonthlyLimit ?? 1000,
         dailyOutboundLimit: orgData.mailDailyLimit ?? 100,
@@ -987,42 +785,31 @@ export async function activateMailService(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
-    const domain = (orgData.domain || '').toLowerCase().trim();
+    const domain = (orgData.domain || '').toLowerCase().trim().replace(/\.$/, '');
     if (!domain) {
       return { success: false, error: 'Organization does not have a valid domain configured.' };
     }
 
-    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData, {
-      forceVerifySes: !orgData.mailSesVerifiedInByo,
-    });
-    let dnsProvisionedAutomatically = false;
-    let dnsAddedCount = 0;
-    let dnsWarning: string | undefined;
+    const dkimConfig = readOrgDkimConfig(orgData);
+    if (!dkimConfig) return { success: false, error: 'Prepare DNS records before activating Email Service.' };
 
-    if (orgData.cloudflareZoneId) {
-      const dnsResult = await provisionRequiredDnsRecordsOnZone(
-        idToken,
-        orgId,
-        orgData.cloudflareZoneId,
-        domain,
-        dkimConfig
-      );
-      dnsProvisionedAutomatically = dnsResult.success;
-      dnsAddedCount = dnsResult.addedCount;
-      if (!dnsResult.success) {
-        dnsWarning = dnsResult.error;
+    const livePublic = await resolvePublicDnsRecords(domain, dkimConfig, true);
+    const required = buildRequiredDnsRecords(domain, dkimConfig, livePublic).filter((record) => record.required !== false);
+    if (hasOtherMailProvider(domain, livePublic)) {
+      return { success: false, error: 'Another mail provider is still published in DNS. Review your MX records before activating.' };
+    }
+    if (!required.every((record) => record.verified)) {
+      return { success: false, error: 'Public DNS has not verified the required MX and DKIM records yet. Publish them and check again.' };
+    }
+
+    await claimMailDomain(orgId, domain);
+    if (dkimConfig.mode === 'byodkim') {
+      const secret = (await adminDb.collection('organizations').doc(orgId).collection('privateSecrets').doc('dkim').get()).data();
+      if (!secret?.privateKey || secret.publicKey !== dkimConfig.publicKey) {
+        return { success: false, error: 'Domain signing configuration needs repair. Contact support before activating.' };
       }
-    } else {
-      const livePublic = await resolvePublicDnsRecords(domain, dkimConfig, true);
-      const checkedRecords = buildRequiredDnsRecords(domain, dkimConfig, livePublic);
-      const coreRequired = checkedRecords.filter((r) => r.id !== 'txt-spf' && r.id !== 'txt-dmarc');
-      const allCoreVerified = coreRequired.length > 0 && coreRequired.every((r) => r.verified);
-      if (!allCoreVerified) {
-        return {
-          success: false,
-          error:
-            'Please publish and verify both required DNS records (Inbound MX and Outbound DKIM) before activating Email Service.',
-        };
+      if (!(await provisionAwsSesByoDkim(orgId, domain, dkimConfig.selector, secret.privateKey, orgData.mailSesIdentityProvisioned === true))) {
+        return { success: false, error: 'The sending provider has not verified this domain. Check again shortly. If verification remains pending, contact support.' };
       }
     }
 
@@ -1054,23 +841,15 @@ export async function activateMailService(idToken: string, orgId: string) {
       actorEmail: email,
       action: 'MAIL_SERVICE_ACTIVATED',
       target: domain,
-      metadata: { dnsProvisionedAutomatically, dnsAddedCount },
     });
 
-    return {
-      success: true,
-      data: {
-        dnsProvisionedAutomatically,
-        dnsAddedCount,
-        dnsWarning,
-      },
-    };
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to activate Email Service.' };
   }
 }
 
-export async function deactivateMailService(idToken: string, orgId: string) {
+export async function deactivateMailService(idToken: string, orgId: string, stepUpToken?: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
     const { uid, email, isOwner, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
@@ -1081,6 +860,7 @@ export async function deactivateMailService(idToken: string, orgId: string) {
       };
     }
 
+    assertStepUpMfa(uid, stepUpToken);
     const nowMs = Date.now();
     const deactivatedAt = new Date(nowMs).toISOString();
     const purgeScheduledAt = new Date(nowMs + FOURTEEN_DAYS_MS).toISOString();
@@ -1113,17 +893,12 @@ export async function syncMailDnsRecords(idToken: string, orgId: string) {
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
     const domain = (orgData.domain || '').toLowerCase().trim();
-    const dkimConfig = await ensureOrgDkimConfig(orgId, orgData, {
-      forceVerifySes: !orgData.mailSesVerifiedInByo,
-    });
-
-    await syncStalwartDomainPrincipal(domain, {
-      disableAutoDkim: dkimConfig.mode === 'byodkim',
-    }).catch(() => {});
+    if (!domain) return { success: false, error: 'Configure a primary domain first.' };
+    const dkimConfig = await prepareOrgDkimConfig(orgId, orgData);
 
     if (!orgData.cloudflareZoneId) {
       // Perform live DNS verification against public resolvers
-      const livePublic = await resolvePublicDnsRecords(domain, dkimConfig);
+      const livePublic = await resolvePublicDnsRecords(domain, dkimConfig, true);
       const verifiedRecords = buildRequiredDnsRecords(domain, dkimConfig, livePublic);
       const verifiedCount = verifiedRecords.filter((r) => r.verified).length;
       return {
@@ -1170,7 +945,7 @@ export async function updateMailCatchAll(
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
-    const domain = (orgData.domain || '').toLowerCase().trim();
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
     const previousCatchAllUserId: string | null = orgData.mailCatchAllUserId || null;
 
     let catchAllEmail: string | null = null;
@@ -1220,6 +995,7 @@ export async function updateMailCatchAll(
           aliases: Array.isArray(prevData.aliases) ? prevData.aliases : [],
           domain,
           isCatchAllTarget: false,
+          expectedPrincipalId: prevData.stalwartAccountId || null,
         });
       }
     }
@@ -1232,6 +1008,7 @@ export async function updateMailCatchAll(
         aliases: Array.isArray(nextTargetData.aliases) ? nextTargetData.aliases : [],
         domain,
         isCatchAllTarget: true,
+        expectedPrincipalId: nextTargetData.stalwartAccountId || null,
       });
     }
 
@@ -1436,70 +1213,6 @@ export async function deleteMailOrgUnit(idToken: string, orgId: string, ouId: st
 // USERS DIRECTORY, ALIASES, SUSPENSION & 14-DAY DELETION RECOVERY
 // ============================================================================
 
-export async function isEmailAddressTakenInOrg(
-  orgId: string,
-  candidateEmail: string,
-  excludeUserId?: string,
-  excludeGroupId?: string,
-  excludeSharedMailboxId?: string
-): Promise<string | null> {
-  const normalized = candidateEmail.toLowerCase().trim();
-
-  const usersSnap = await adminDb
-    .collection('organizations')
-    .doc(orgId)
-    .collection('mailUsers')
-    .get();
-
-  for (const doc of usersSnap.docs) {
-    if (excludeUserId && doc.id === excludeUserId) continue;
-    const d = doc.data();
-    // Skip permanently expired deleted accounts
-    if (d.status === 'deleted' && d.recoverableUntil) {
-      if (new Date(d.recoverableUntil).getTime() <= Date.now()) {
-        continue;
-      }
-    }
-    if ((d.primaryEmail || '').toLowerCase() === normalized) {
-      return `Address "${normalized}" is already assigned as a primary email account.`;
-    }
-    const aliases: string[] = Array.isArray(d.aliases) ? d.aliases : [];
-    if (aliases.some((a) => a.toLowerCase() === normalized)) {
-      return `Address "${normalized}" is already assigned as an email alias.`;
-    }
-  }
-
-  const groupsSnap = await adminDb
-    .collection('organizations')
-    .doc(orgId)
-    .collection('mailGroups')
-    .get();
-
-  for (const doc of groupsSnap.docs) {
-    if (excludeGroupId && doc.id === excludeGroupId) continue;
-    const d = doc.data();
-    if ((d.groupEmail || '').toLowerCase() === normalized) {
-      return `Address "${normalized}" is already used by a group address.`;
-    }
-  }
-
-  const sharedSnap = await adminDb
-    .collection('organizations')
-    .doc(orgId)
-    .collection('mailSharedMailboxes')
-    .get();
-
-  for (const doc of sharedSnap.docs) {
-    if (excludeSharedMailboxId && doc.id === excludeSharedMailboxId) continue;
-    const d = doc.data();
-    if ((d.email || '').toLowerCase() === normalized) {
-      return `Address "${normalized}" is already used by a shared mailbox.`;
-    }
-  }
-
-  return null;
-}
-
 export async function listMailUsers(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
@@ -1592,10 +1305,7 @@ export async function createMailUser(
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Add', 'Email: Admin']);
-    const domain = (orgData.domain || '').toLowerCase().trim();
-    if (!domain) {
-      return { success: false, error: 'Organization domain is not configured.' };
-    }
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
 
     const firstCheck = validateAndSanitizeInput(payload.firstName || '', 'First name', {
       required: true,
@@ -1644,23 +1354,8 @@ export async function createMailUser(
     const orgUnitPath = stripScripts(payload.orgUnitPath || '/', { maxLength: 64 }) || '/';
     const now = new Date().toISOString();
 
-    const docRef = await colRef.add({
-      firstName,
-      lastName,
-      displayName,
-      primaryEmail,
-      passwordHash: hashMailPassword(payload.password),
-      aliases: [],
-      orgUnitPath,
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-      recoverableUntil: null,
-    });
-
-    // Provision principal in Stalwart Mail Server
-    await syncStalwartUserPrincipal({
+    // Provision principal in Stalwart Mail Server first so collisions fail closed before Firestore writes
+    const stalwartAccountId = await syncStalwartUserPrincipal({
       primaryEmail,
       displayName,
       orgUnitPath,
@@ -1669,6 +1364,22 @@ export async function createMailUser(
       isCatchAllTarget: false,
       plainPassword: payload.password,
       isCreate: true,
+    });
+
+    const docRef = await colRef.add({
+      firstName,
+      lastName,
+      displayName,
+      primaryEmail,
+      passwordHash: hashMailPassword(payload.password),
+      stalwartAccountId: stalwartAccountId || null,
+      aliases: [],
+      orgUnitPath,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      recoverableUntil: null,
     });
 
     await logMailAuditEvent({
@@ -1711,6 +1422,7 @@ export async function updateMailUserAccount(
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
 
     const firstCheck = validateAndSanitizeInput(payload.firstName || '', 'First name', {
       required: true,
@@ -1761,8 +1473,9 @@ export async function updateMailUserAccount(
       displayName,
       orgUnitPath,
       aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
-      domain: (orgData.domain || '').toLowerCase().trim(),
+      domain,
       isCatchAllTarget: orgData.mailCatchAllUserId === userId,
+      expectedPrincipalId: userData.stalwartAccountId || null,
     });
 
     await logMailAuditEvent({
@@ -1787,11 +1500,14 @@ export async function resetMailUserPassword(
   idToken: string,
   orgId: string,
   userId: string,
-  newPassword: string
+  newPassword: string,
+  stepUpToken?: string
 ) {
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    assertStepUpMfa(uid, stepUpToken);
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
     const passwordError = validateMailPassword(newPassword);
     if (passwordError) {
       return { success: false, error: passwordError };
@@ -1810,22 +1526,25 @@ export async function resetMailUserPassword(
 
     const userData = userDoc.data()!;
 
-    const nowIso = new Date().toISOString();
-    await userRef.update({
-      passwordHash: hashMailPassword(newPassword),
-      updatedAt: nowIso,
-      passwordUpdatedAt: nowIso,
-      passwordUpdatedBy: email,
-    });
-
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
     await syncStalwartUserPrincipal({
       primaryEmail: userData.primaryEmail,
       displayName: userData.displayName || userData.firstName,
       orgUnitPath: userData.orgUnitPath || '/',
       aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
-      domain: (orgData.domain || '').toLowerCase().trim(),
+      domain,
       isCatchAllTarget: orgData.mailCatchAllUserId === userId,
       plainPassword: newPassword,
+      expectedPrincipalId: userData.stalwartAccountId || null,
+    });
+
+    await userRef.update({
+      passwordHash: hashMailPassword(newPassword),
+      updatedAt: nowIso,
+      passwordUpdatedAt: nowIso,
+      passwordUpdatedBy: email,
+      sessionRevokedAt: nowMs,
     });
 
     await logMailAuditEvent({
@@ -1846,14 +1565,18 @@ export async function resetMailUserPassword(
 export async function resetMailUserMfa(
   idToken: string,
   orgId: string,
-  userId: string
+  userId: string,
+  stepUpToken?: string
 ) {
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
-    const { uid, email } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    assertStepUpMfa(uid, stepUpToken);
+    await assertActiveMailDomainBinding(orgId, orgData);
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
-    const userDoc = await orgRef.collection('mailUsers').doc(userId).get();
+    const userRef = orgRef.collection('mailUsers').doc(userId);
+    const userDoc = await userRef.get();
     if (!userDoc.exists) {
       return { success: false, error: 'Email account not found.' };
     }
@@ -1864,7 +1587,8 @@ export async function resetMailUserMfa(
       return { success: false, error: 'Mailbox email address is missing.' };
     }
 
-    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
     await orgRef
       .collection('mailUserMfa')
       .doc(encodeURIComponent(targetEmail))
@@ -1884,6 +1608,11 @@ export async function resetMailUserMfa(
         adminResetAt: nowIso,
         adminResetBy: email,
       });
+
+    await userRef.update({
+      sessionRevokedAt: nowMs,
+      updatedAt: nowIso,
+    });
 
     await logMailAuditEvent({
       orgId,
@@ -1910,10 +1639,7 @@ export async function manageMailUserAlias(
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
-    const domain = (orgData.domain || '').toLowerCase().trim();
-    if (!domain) {
-      return { success: false, error: 'Organization domain is not configured.' };
-    }
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
 
     const userRef = adminDb
       .collection('organizations')
@@ -1988,6 +1714,7 @@ export async function manageMailUserAlias(
       aliases: currentAliases,
       domain,
       isCatchAllTarget: orgData.mailCatchAllUserId === userId,
+      expectedPrincipalId: userData.stalwartAccountId || null,
     });
 
     await logMailAuditEvent({
@@ -2017,6 +1744,7 @@ export async function toggleMailUserSuspend(
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
     const userRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -2030,31 +1758,34 @@ export async function toggleMailUserSuspend(
 
     const userData = userDoc.data()!;
     const nextStatus = suspend ? 'suspended' : 'active';
-    const updatedAt = new Date().toISOString();
+    const nowMs = Date.now();
+    const updatedAt = new Date(nowMs).toISOString();
+
+    const wasCatchAll = orgData.mailCatchAllUserId === userId;
+    await syncStalwartUserPrincipal({
+      primaryEmail: userData.primaryEmail,
+      displayName: userData.displayName || userData.firstName,
+      orgUnitPath: userData.orgUnitPath || '/',
+      aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
+      domain,
+      isCatchAllTarget: !suspend && wasCatchAll,
+      disabled: suspend,
+      expectedPrincipalId: userData.stalwartAccountId || null,
+    });
 
     await userRef.update({
       status: nextStatus,
       updatedAt,
+      ...(suspend ? { sessionRevokedAt: nowMs } : {}),
     });
 
     // If this account was the catch-all fallback and is now suspended, clear catch-all
-    const wasCatchAll = orgData.mailCatchAllUserId === userId;
     if (suspend && wasCatchAll) {
       await adminDb.collection('organizations').doc(orgId).update({
         mailCatchAllUserId: null,
         mailCatchAllEmail: null,
       });
     }
-
-    await syncStalwartUserPrincipal({
-      primaryEmail: userData.primaryEmail,
-      displayName: userData.displayName || userData.firstName,
-      orgUnitPath: userData.orgUnitPath || '/',
-      aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
-      domain: (orgData.domain || '').toLowerCase().trim(),
-      isCatchAllTarget: !suspend && wasCatchAll,
-      disabled: suspend,
-    });
 
     await logMailAuditEvent({
       orgId,
@@ -2081,6 +1812,7 @@ export async function deleteMailUserAccount(idToken: string, orgId: string, user
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
     const userRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -2097,11 +1829,23 @@ export async function deleteMailUserAccount(idToken: string, orgId: string, user
     const deletedAt = new Date(nowMs).toISOString();
     const recoverableUntil = new Date(nowMs + FOURTEEN_DAYS_MS).toISOString();
 
+    await syncStalwartUserPrincipal({
+      primaryEmail: userData.primaryEmail,
+      displayName: userData.displayName || userData.firstName,
+      orgUnitPath: userData.orgUnitPath || '/',
+      aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
+      domain,
+      isCatchAllTarget: false,
+      disabled: true,
+      expectedPrincipalId: userData.stalwartAccountId || null,
+    });
+
     await userRef.update({
       status: 'deleted',
       deletedAt,
       recoverableUntil,
       updatedAt: deletedAt,
+      sessionRevokedAt: nowMs,
     });
 
     if (orgData.mailCatchAllUserId === userId) {
@@ -2110,16 +1854,6 @@ export async function deleteMailUserAccount(idToken: string, orgId: string, user
         mailCatchAllEmail: null,
       });
     }
-
-    await syncStalwartUserPrincipal({
-      primaryEmail: userData.primaryEmail,
-      displayName: userData.displayName || userData.firstName,
-      orgUnitPath: userData.orgUnitPath || '/',
-      aliases: Array.isArray(userData.aliases) ? userData.aliases : [],
-      domain: (orgData.domain || '').toLowerCase().trim(),
-      isCatchAllTarget: false,
-      disabled: true,
-    });
 
     await logMailAuditEvent({
       orgId,
@@ -2146,7 +1880,8 @@ export async function deleteMailUserAccount(idToken: string, orgId: string, user
 export async function recoverMailUserAccount(idToken: string, orgId: string, userId: string) {
   if (!orgId || !userId) return { success: false, error: 'Missing parameters.' };
   try {
-    const { uid, email } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
     const userRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -2160,15 +1895,25 @@ export async function recoverMailUserAccount(idToken: string, orgId: string, use
 
     const data = userDoc.data()!;
     if (data.recoverableUntil && new Date(data.recoverableUntil).getTime() <= Date.now()) {
-      await userRef.delete();
-      if (data.primaryEmail) {
-        await dispatchStalwartApi(
-          'DELETE',
-          `/api/principal/${encodeURIComponent(data.primaryEmail.toLowerCase().trim())}`
-        );
-      }
-      return { success: false, error: 'The 14-day recovery window for this account has expired.' };
+      // Do not delete directly here; permanent deletion is handled by the retention
+      // worker after verifying no active legal hold protects this mailbox.
+      return {
+        success: false,
+        error:
+          'The 14-day recovery window for this account has expired. Permanent deletion is handled automatically after legal-hold verification.',
+      };
     }
+
+    const stalwartAccountId = await syncStalwartUserPrincipal({
+      primaryEmail: data.primaryEmail,
+      displayName: data.displayName || data.firstName,
+      orgUnitPath: data.orgUnitPath || '/',
+      aliases: Array.isArray(data.aliases) ? data.aliases : [],
+      domain,
+      isCatchAllTarget: false,
+      disabled: false,
+      expectedPrincipalId: data.stalwartAccountId || null,
+    });
 
     const updatedAt = new Date().toISOString();
     await userRef.update({
@@ -2176,6 +1921,7 @@ export async function recoverMailUserAccount(idToken: string, orgId: string, use
       deletedAt: null,
       recoverableUntil: null,
       updatedAt,
+      ...(stalwartAccountId && !data.stalwartAccountId ? { stalwartAccountId } : {}),
     });
 
     await logMailAuditEvent({
@@ -2230,20 +1976,6 @@ export async function listMailGroups(idToken: string, orgId: string) {
 
     groups.sort((a, b) => a.name.localeCompare(b.name));
 
-    // Non-blocking self-healing reconciliation to ensure all groups in Firestore
-    // are automatically synchronized in Stalwart Mail Server without manual recreation
-    if (groups.length > 0) {
-      Promise.allSettled(
-        groups.map((g) =>
-          syncStalwartGroupPrincipal({
-            groupEmail: g.groupEmail,
-            name: g.name,
-            memberEmails: g.memberEmails,
-          })
-        )
-      ).catch(() => {});
-    }
-
     return { success: true, data: groups };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to list groups.' };
@@ -2263,10 +1995,7 @@ export async function createMailGroup(
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
-    const domain = (orgData.domain || '').toLowerCase().trim();
-    if (!domain) {
-      return { success: false, error: 'Organization domain is not configured.' };
-    }
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
 
     const nameCheck = validateAndSanitizeInput(payload.name || '', 'Group name', {
       required: true,
@@ -2357,7 +2086,8 @@ export async function updateMailGroup(
 ) {
   if (!orgId || !groupId) return { success: false, error: 'Missing parameters.' };
   try {
-    const { uid, email } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    await assertActiveMailDomainBinding(orgId, orgData);
     const groupRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -2449,7 +2179,8 @@ export async function updateMailGroup(
 export async function deleteMailGroup(idToken: string, orgId: string, groupId: string) {
   if (!orgId || !groupId) return { success: false, error: 'Missing parameters.' };
   try {
-    const { uid, email } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    await assertActiveMailDomainBinding(orgId, orgData);
     const groupRef = adminDb
       .collection('organizations')
       .doc(orgId)
@@ -2523,16 +2254,14 @@ export async function bulkCreateMailUsers(
 
   try {
     const { uid, email, orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Add', 'Email: Admin']);
-    const domain = (orgData.domain || '').toLowerCase().trim();
-    if (!domain) {
-      return { success: false, error: 'Organization domain is not configured.' };
-    }
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
     const colRef = orgRef.collection('mailUsers');
-    const [existingUsersSnap, existingGroupsSnap] = await Promise.all([
+    const [existingUsersSnap, existingGroupsSnap, existingSharedSnap] = await Promise.all([
       colRef.get(),
       orgRef.collection('mailGroups').get(),
+      orgRef.collection('mailSharedMailboxes').get(),
     ]);
 
     const takenEmails = new Set<string>();
@@ -2557,6 +2286,12 @@ export async function bulkCreateMailUsers(
       const gEmail = gDoc.data().groupEmail;
       if (gEmail) {
         takenEmails.add(String(gEmail).toLowerCase().trim());
+      }
+    }
+    for (const sDoc of existingSharedSnap.docs) {
+      const sEmail = sDoc.data().email;
+      if (sEmail) {
+        takenEmails.add(String(sEmail).toLowerCase().trim());
       }
     }
 
@@ -2616,12 +2351,30 @@ export async function bulkCreateMailUsers(
       const now = new Date().toISOString();
       const passwordHash = await hashMailPasswordAsync(row.password);
 
+      let stalwartAccountId: string | null = null;
+      try {
+        stalwartAccountId = await syncStalwartUserPrincipal({
+          primaryEmail,
+          displayName,
+          orgUnitPath,
+          aliases: [],
+          domain,
+          isCatchAllTarget: false,
+          plainPassword: row.password,
+          isCreate: true,
+        });
+      } catch (providerErr: any) {
+        errors.push(`${rowLabel} (${primaryEmail}): ${providerErr?.message || 'Mail server rejected mailbox creation.'}`);
+        continue;
+      }
+
       const docRef = await colRef.add({
         firstName,
         lastName,
         displayName,
         primaryEmail,
         passwordHash,
+        stalwartAccountId: stalwartAccountId || null,
         aliases: [],
         orgUnitPath,
         status: 'active',
@@ -2632,17 +2385,6 @@ export async function bulkCreateMailUsers(
       });
 
       takenEmails.add(primaryEmail);
-
-      await syncStalwartUserPrincipal({
-        primaryEmail,
-        displayName,
-        orgUnitPath,
-        aliases: [],
-        domain,
-        isCatchAllTarget: false,
-        plainPassword: row.password,
-        isCreate: true,
-      });
 
       createdUsers.push({
         id: docRef.id,

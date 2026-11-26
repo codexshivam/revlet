@@ -4,13 +4,14 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
 import { verifyUserOrgAccess, assertStepUpMfa } from './auth-helper';
 import {
+  assertActiveMailDomainBinding,
+  isEmailAddressTakenInOrg,
   logMailAuditEvent,
   syncStalwartSharedMailboxPrincipal,
   deleteStalwartSharedMailboxPrincipal,
   findStalwartAccountByEmail,
   callStalwartJmap,
 } from '@/lib/mail-internal';
-import { isEmailAddressTakenInOrg } from './email-service';
 import { validateAndSanitizeInput } from '@/lib/security/sanitize';
 import {
   COMPLIANCE_ADMIN_PERMISSION,
@@ -87,12 +88,12 @@ export interface AuditLogRecord {
 
 export async function getGovernanceOverview(idToken: string, orgId: string) {
   try {
+    // Restrict sensitive governance data (quarantine, legal holds, DLP, transport rules, audit logs)
+    // to authorized administrative roles — never basic Email: Read.
     await verifyUserOrgAccess(idToken, orgId, undefined, [
-      'Email: Read',
       'Email: Admin',
       SECURITY_ADMIN_PERMISSION,
       COMPLIANCE_ADMIN_PERMISSION,
-      'HelpDesk: Admin',
     ]);
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
@@ -127,20 +128,6 @@ export async function getGovernanceOverview(idToken: string, orgId: string) {
       id: d.id,
       ...(d.data() as any),
     })) as SharedMailboxRecord[];
-
-    // Non-blocking self-healing reconciliation to ensure all shared mailboxes in Firestore
-    // are automatically synchronized in Stalwart Mail Server
-    if (sharedMailboxes.length > 0) {
-      Promise.allSettled(
-        sharedMailboxes.map((sm) =>
-          syncStalwartSharedMailboxPrincipal({
-            email: sm.email,
-            displayName: sm.displayName,
-            delegates: Array.isArray(sm.delegates) ? sm.delegates : [],
-          })
-        )
-      ).catch(() => {});
-    }
 
     return {
       success: true,
@@ -512,23 +499,40 @@ export async function resolveQuarantineItem(
       .collection('mailQuarantine')
       .doc(itemId);
     const itemSnap = await itemRef.get();
+    if (!itemSnap.exists) {
+      return { success: false, error: 'Quarantine item not found.' };
+    }
     const itemData = itemSnap.data() || {};
 
-    await itemRef.update({
-      status: decision,
-      resolvedBy: auth.email || auth.uid,
-      resolvedAt: new Date().toISOString(),
-    });
+    if (decision === 'released') {
+      await assertActiveMailDomainBinding(orgId, auth.orgData);
 
-    // When an admin releases a quarantined message, attempt JMAP delivery via Stalwart + AWS SES
-    if (decision === 'released' && itemData.sender && Array.isArray(itemData.recipients) && itemData.recipients.length > 0) {
+      const senderEmail = String(itemData.sender || '').toLowerCase().trim();
+      const recipients: string[] = Array.isArray(itemData.recipients)
+        ? itemData.recipients
+            .map((r: unknown) => String(r || '').toLowerCase().trim())
+            .filter((r: string) => r.includes('@'))
+        : [];
+      if (!senderEmail || recipients.length === 0) {
+        return {
+          success: false,
+          error: 'Quarantined message is missing sender or recipient details and cannot be released.',
+        };
+      }
+
+      await itemRef.update({
+        status: 'release_pending',
+        releaseAttemptedBy: auth.email || auth.uid,
+        releaseAttemptedAt: new Date().toISOString(),
+        releaseError: FieldValue.delete(),
+      });
+
+      let deliveryError: string | null = null;
       try {
-        const senderEmail = String(itemData.sender).toLowerCase().trim();
-        const recipients: string[] = itemData.recipients
-          .map((r: unknown) => String(r || '').toLowerCase().trim())
-          .filter((r: string) => r.includes('@'));
         const acc = await findStalwartAccountByEmail(senderEmail);
-        if (acc?.id && recipients.length > 0) {
+        if (!acc?.id) {
+          deliveryError = `Sender mailbox "${senderEmail}" could not be resolved on the mail server.`;
+        } else {
           const metaRes = await callStalwartJmap([
             ['Mailbox/get', { accountId: acc.id, ids: null }, 'mb'],
             ['Identity/get', { accountId: acc.id, ids: null }, 'id'],
@@ -542,7 +546,7 @@ export async function resolveQuarantineItem(
           const sentMailboxId = sentMb?.id || 'e';
           const identityId = idList[0]?.id || 'b';
           const bodyText = String(itemData.bodyText || itemData.snippet || '');
-          await callStalwartJmap([
+          const jmapRes = await callStalwartJmap([
             [
               'Email/set',
               {
@@ -579,10 +583,56 @@ export async function resolveQuarantineItem(
               'sRel',
             ],
           ]);
+
+          const emailSetResp = jmapRes.find((r) => r[0] === 'Email/set' && r[2] === 'cRel')?.[1];
+          const subSetResp = jmapRes.find((r) => r[0] === 'EmailSubmission/set' && r[2] === 'sRel')?.[1];
+          if (!emailSetResp?.created?.relMsg) {
+            const errDesc =
+              emailSetResp?.notCreated?.relMsg?.description ||
+              emailSetResp?.notCreated?.relMsg?.type ||
+              'Mail server failed to stage released message.';
+            deliveryError = String(errDesc);
+          } else if (!subSetResp?.created?.relSub) {
+            const errDesc =
+              subSetResp?.notCreated?.relSub?.description ||
+              subSetResp?.notCreated?.relSub?.type ||
+              'Mail server rejected message submission.';
+            deliveryError = String(errDesc);
+          }
         }
-      } catch (releaseErr) {
-        console.warn('[Quarantine Release] Delivery attempt warning:', releaseErr);
+      } catch (releaseErr: any) {
+        deliveryError = releaseErr?.message || 'Mail server delivery failed.';
       }
+
+      if (deliveryError) {
+        await itemRef.update({
+          status: 'release_failed',
+          releaseError: deliveryError,
+          releaseFailedAt: new Date().toISOString(),
+        });
+        await logMailAuditEvent({
+          orgId,
+          actorUid: auth.uid,
+          actorEmail: auth.email,
+          action: 'QUARANTINE_RELEASE_FAILED',
+          target: itemData.subject ? `${itemId} (${itemData.subject})` : itemId,
+          metadata: { error: deliveryError },
+        });
+        return { success: false, error: `Failed to release quarantined message: ${deliveryError}` };
+      }
+
+      await itemRef.update({
+        status: 'released',
+        resolvedBy: auth.email || auth.uid,
+        resolvedAt: new Date().toISOString(),
+        releaseError: FieldValue.delete(),
+      });
+    } else {
+      await itemRef.update({
+        status: 'deleted',
+        resolvedBy: auth.email || auth.uid,
+        resolvedAt: new Date().toISOString(),
+      });
     }
 
     await logMailAuditEvent({
@@ -615,8 +665,7 @@ export async function createSharedMailbox(
   try {
     const auth = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
     const orgData = auth.orgData;
-    const domain = (orgData?.domain || '').toLowerCase().trim();
-    if (!domain) throw new Error('Organization domain is not configured.');
+    const domain = await assertActiveMailDomainBinding(orgId, orgData);
 
     const dnRes = validateAndSanitizeInput(input.displayName || '', 'Display name');
     const displayName = (dnRes.sanitized || '').slice(0, 80);
@@ -716,6 +765,7 @@ export async function updateSharedMailboxDelegates(
   try {
     const auth = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
     assertStepUpMfa(auth.uid, stepUpToken);
+    const orgDomain = await assertActiveMailDomainBinding(orgId, auth.orgData);
 
     const docRef = adminDb
       .collection('organizations')
@@ -730,11 +780,7 @@ export async function updateSharedMailboxDelegates(
     const mailboxEmail = (existing.email || '').toLowerCase().trim();
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
-    const [orgSnap, usersSnap] = await Promise.all([
-      orgRef.get(),
-      orgRef.collection('mailUsers').get(),
-    ]);
-    const orgDomain = String(orgSnap.data()?.domain || '').trim().toLowerCase();
+    const usersSnap = await orgRef.collection('mailUsers').get();
     const activeUserEmails = new Set(
       usersSnap.docs
         .map((d) => d.data() || {})
@@ -809,6 +855,7 @@ export async function deleteSharedMailbox(
   try {
     const auth = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
     assertStepUpMfa(auth.uid, stepUpToken);
+    await assertActiveMailDomainBinding(orgId, auth.orgData);
 
     const docRef = adminDb
       .collection('organizations')

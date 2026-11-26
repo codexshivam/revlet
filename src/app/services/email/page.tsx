@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -147,10 +149,35 @@ export default function EmailServiceAdminPage() {
   const [isLoadingQuota, setIsLoadingQuota] = useState(false)
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true)
   const [hasLoadedDirectory, setHasLoadedDirectory] = useState(false)
+  const [directoryError, setDirectoryError] = useState<string | null>(null)
+  const [credentialStepUp, setCredentialStepUp] = useState<{
+    type: "password" | "mfa"
+    orgId: string
+  } | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const loadRequestSeqRef = useRef(0)
   const [isActivating, setIsActivating] = useState(false)
   const [isDeactivating, setIsDeactivating] = useState(false)
+  const [deactivationChallengeOrg, setDeactivationChallengeOrg] = useState<string | null>(null)
+  const lifecycleOrgRef = useRef(selectedOrgId)
+  lifecycleOrgRef.current = selectedOrgId
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const [lifecycleAccess, setLifecycleAccess] = useState<{
+    orgId: string
+    canManage: boolean
+    canDeactivate: boolean
+    canInvite: boolean
+  } | null>(null)
+  const canManageMailService = lifecycleAccess?.orgId === selectedOrgId && lifecycleAccess?.canManage
+  const canDeactivateMailService = lifecycleAccess?.orgId === selectedOrgId && lifecycleAccess?.canDeactivate
+  useEffect(() => {
+    setSetupError(null)
+    setDirectoryError(null)
+    setDeactivationChallengeOrg(null)
+    setCredentialStepUp(null)
+    setRequiredDnsRecords([])
+    setHasScannedDns(false)
+  }, [selectedOrgId])
   const [isSyncingDns, setIsSyncingDns] = useState(false)
 
   const [serviceActive, setServiceActive] = useState<boolean>(() => Boolean(selectedOrg?.mailServiceActive))
@@ -548,6 +575,7 @@ export default function EmailServiceAdminPage() {
         }
 
         // Fetch directory collections (Users, OrgUnits, Groups) immediately in parallel
+        setDirectoryError(null)
         const dirPromise = Promise.all([
           listMailOrgUnits(idToken, selectedOrgId),
           listMailUsers(idToken, selectedOrgId),
@@ -557,22 +585,32 @@ export default function EmailServiceAdminPage() {
             if (loadRequestSeqRef.current !== requestSeq) {
               return
             }
+            const failures: string[] = []
             if (ousRes.success && ousRes.data) {
               setOrgUnits(ousRes.data)
+            } else if (!ousRes.success) {
+              failures.push(ousRes.error || "Could not load organizational units.")
             }
             if (usersRes.success && usersRes.data) {
               setUsers(usersRes.data)
+            } else if (!usersRes.success) {
+              failures.push(usersRes.error || "Could not load email accounts.")
             }
             if (groupsRes.success && groupsRes.data) {
               setGroups(groupsRes.data)
+            } else if (!groupsRes.success) {
+              failures.push(groupsRes.error || "Could not load email groups.")
             }
+            setDirectoryError(failures.length > 0 ? failures[0] : null)
             setHasLoadedDirectory(true)
           })
-          .catch((err) => {
+          .catch((err: any) => {
             if (loadRequestSeqRef.current !== requestSeq) {
               return
             }
             console.error("Failed to load mail directory:", err)
+            setDirectoryError(err?.message || "Could not load email directory.")
+            setHasLoadedDirectory(true)
           })
           .finally(() => {
             if (loadRequestSeqRef.current === requestSeq) {
@@ -587,6 +625,12 @@ export default function EmailServiceAdminPage() {
               return
             }
             if (stateRes.success && stateRes.data) {
+              setLifecycleAccess({
+                orgId: selectedOrgId,
+                canManage: stateRes.data.canManageMailService,
+                canDeactivate: stateRes.data.canDeactivateMailService,
+                canInvite: stateRes.data.canInviteTeamMembers,
+              })
               setServiceActive(stateRes.data.mailServiceActive)
               setDnsServiceActive(stateRes.data.dnsServiceActive)
               setMonthlyOutboundLimit(stateRes.data.monthlyOutboundLimit)
@@ -597,6 +641,9 @@ export default function EmailServiceAdminPage() {
               setCatchAllEmail(stateRes.data.catchAllEmail)
               setMailPurgeScheduledAt(stateRes.data.mailPurgeScheduledAt || null)
               setRequiredDnsRecords(stateRes.data.requiredDnsRecords)
+            } else {
+              setLifecycleAccess(null)
+              setSetupError(stateRes.error || "Could not load Email Service setup.")
             }
           })
           .catch((err) => {
@@ -630,16 +677,47 @@ export default function EmailServiceAdminPage() {
   )
 
   const parsedBulkRows = useMemo<BulkImportUserRow[]>(() => {
+    const parseCsvLine = (line: string): string[] => {
+      const cells: string[] = []
+      let current = ""
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (inQuotes) {
+          if (ch === '"') {
+            if (line[i + 1] === '"') {
+              current += '"'
+              i++
+            } else {
+              inQuotes = false
+            }
+          } else {
+            current += ch
+          }
+        } else if (ch === '"') {
+          inQuotes = true
+        } else if (ch === ",") {
+          cells.push(current.trim())
+          current = ""
+        } else {
+          current += ch
+        }
+      }
+      cells.push(current.trim())
+      return cells
+    }
+
     const lines = bulkCsvText
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean)
     if (lines.length === 0) return []
 
-    const startIdx = lines[0].toLowerCase().includes("emailprefix") ? 1 : 0
+    const firstCols = parseCsvLine(lines[0]).map((c) => c.toLowerCase())
+    const startIdx = firstCols.some((c) => c.includes("emailprefix")) ? 1 : 0
     const rows: BulkImportUserRow[] = []
     for (let i = startIdx; i < lines.length; i++) {
-      const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""))
+      const cols = parseCsvLine(lines[i])
       if (cols.length < 4) continue
       rows.push({
         firstName: cols[0] || "",
@@ -670,7 +748,11 @@ export default function EmailServiceAdminPage() {
   const handleExportUsersCsv = () => {
     if (!selectedOrg) return
     const header = "firstName,lastName,primaryEmail,orgUnitPath,aliases,status"
-    const escapeCsv = (val: string) => `"${String(val || "").replace(/"/g, '""')}"`
+    const escapeCsv = (value: string) => {
+      const text = String(value || "")
+      const safeText = /^[\s\uFEFF]*[=+@-]|^[\t\r\n]/.test(text) ? "'" + text : text
+      return `"${safeText.replace(/"/g, '""')}"`
+    }
     const lines = users.map((u) =>
       [
         escapeCsv(u.firstName),
@@ -797,66 +879,43 @@ export default function EmailServiceAdminPage() {
 
   // Service activation / deactivation / DNS sync
   const handleActivateService = async () => {
-    if (!user || !selectedOrgId) return
+    if (!user || !selectedOrgId || !canManageMailService || isActivating || isSyncingDns) return
     setIsActivating(true)
+    setSetupError(null)
     try {
-      const idToken = await user.getIdToken()
-
-      // If DNS is external, attempt a live sync first to advise user on status
-      if (!dnsServiceActive) {
-        try {
-          await syncMailDnsRecords(idToken, selectedOrgId)
-        } catch {
-          // Proceed with activation
-        }
-      }
-
-      const res = await activateMailService(idToken, selectedOrgId)
-      if (!res.success) {
-        throw new Error(res.error)
-      }
+      const res = await activateMailService(await user.getIdToken(), selectedOrgId)
+      if (lifecycleOrgRef.current !== selectedOrgId) return
+      if (!res.success) throw new Error(res.error)
 
       setServiceActive(true)
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("revlet-orgs-refresh"))
-      }
-
-      if (res.data?.dnsProvisionedAutomatically) {
-        toast({
-          title: "Email Service activated & configured",
-          description: `Safety snapshot created and required MX, SPF, DMARC, and DKIM records auto-injected into ${selectedOrg?.domain}.`,
-        })
-      } else if (res.data?.dnsWarning) {
-        toast({
-          title: "Email Service activated",
-          description: `Email Service is active. Review DNS records in Settings (${res.data.dnsWarning}).`,
-        })
-      } else {
-        toast({
-          title: "Email Service activated",
-          description: `Email Service is now active for ${selectedOrg?.domain}. Ensure MX & DKIM records are published in your DNS manager.`,
-        })
-      }
-
-      await loadAllMailData(true)
-      setHasScannedDns(true)
-    } catch (err: any) {
+      window.dispatchEvent(new Event("revlet-orgs-refresh"))
       toast({
-        variant: "destructive",
-        title: "Activation failed",
-        description: err.message || "Could not activate Email Service.",
+        title: "Email Service activated",
+        description: `Mail is active for ${selectedOrg?.domain}.`,
       })
+      await loadAllMailData(true)
+      if (lifecycleOrgRef.current === selectedOrgId) setHasScannedDns(true)
+    } catch (err: any) {
+      if (lifecycleOrgRef.current === selectedOrgId) {
+        setSetupError(err.message || "Could not activate Email Service.")
+      }
     } finally {
       setIsActivating(false)
     }
   }
 
-  const handleDeactivateService = async () => {
-    if (!user || !selectedOrgId) return
+  const handleDeactivateService = async (stepUpToken?: string) => {
+    if (!user || !selectedOrgId || !canDeactivateMailService) return
     setIsDeactivating(true)
     try {
       const idToken = await user.getIdToken()
-      const res = await deactivateMailService(idToken, selectedOrgId)
+      const res = await deactivateMailService(idToken, selectedOrgId, stepUpToken)
+      if (lifecycleOrgRef.current !== selectedOrgId) return
+      if (!res.success && res.error?.includes("MFA_STEP_UP_REQUIRED")) {
+        setIsDeactivateConfirmOpen(false)
+        setDeactivationChallengeOrg(selectedOrgId)
+        return
+      }
       if (!res.success) throw new Error(res.error)
 
       setServiceActive(false)
@@ -880,11 +939,13 @@ export default function EmailServiceAdminPage() {
   }
 
   const handleSyncDnsRecords = async () => {
-    if (!user || !selectedOrgId) return
+    if (!user || !selectedOrgId || !canManageMailService || isSyncingDns || isActivating) return
     setIsSyncingDns(true)
+    setSetupError(null)
     try {
       const idToken = await user.getIdToken()
       const res = await syncMailDnsRecords(idToken, selectedOrgId)
+      if (lifecycleOrgRef.current !== selectedOrgId) return
       if (!res.success) throw new Error(res.error)
 
       if (!dnsServiceActive) {
@@ -894,16 +955,18 @@ export default function EmailServiceAdminPage() {
         })
       } else {
         toast({
-          title: "DNS records synchronized",
+          title: "DNS records checked at provider",
           description:
             res.data?.addedCount && res.data.addedCount > 0
-              ? `Added ${res.data.addedCount} missing DNS record(s) to ${selectedOrg?.domain}.`
+              ? `Added ${res.data.addedCount} required record(s). Public DNS may take time to reflect the changes.`
               : `All required DNS records are present on ${selectedOrg?.domain}.`,
         })
       }
       await loadAllMailData(true)
-      setHasScannedDns(true)
+      if (lifecycleOrgRef.current === selectedOrgId) setHasScannedDns(true)
     } catch (err: any) {
+      if (lifecycleOrgRef.current !== selectedOrgId) return
+      setSetupError(err.message || "Could not check DNS records.")
       toast({
         variant: "destructive",
         title: "DNS sync failed",
@@ -1109,7 +1172,7 @@ export default function EmailServiceAdminPage() {
     }
   }
 
-  const handleResetUserPassword = async () => {
+  const handleResetUserPassword = async (stepUpToken?: string) => {
     if (!user || !selectedOrgId || !passwordTargetUser) return
     setIsResettingPassword(true)
     try {
@@ -1118,9 +1181,16 @@ export default function EmailServiceAdminPage() {
         idToken,
         selectedOrgId,
         passwordTargetUser.id,
-        newPasswordValue
+        newPasswordValue,
+        stepUpToken
       )
-      if (!res.success) throw new Error(res.error)
+      if (!res.success) {
+        if (res.error?.includes("MFA_STEP_UP_REQUIRED")) {
+          setCredentialStepUp({ type: "password", orgId: selectedOrgId })
+          return
+        }
+        throw new Error(res.error)
+      }
 
       toast({
         title: "Password reset",
@@ -1139,13 +1209,24 @@ export default function EmailServiceAdminPage() {
     }
   }
 
-  const handleResetUserMfa = async () => {
+  const handleResetUserMfa = async (stepUpToken?: string) => {
     if (!user || !selectedOrgId || !mfaResetTargetUser) return
     setIsResettingMfa(true)
     try {
       const idToken = await user.getIdToken()
-      const res = await resetMailUserMfa(idToken, selectedOrgId, mfaResetTargetUser.id)
-      if (!res.success) throw new Error(res.error)
+      const res = await resetMailUserMfa(
+        idToken,
+        selectedOrgId,
+        mfaResetTargetUser.id,
+        stepUpToken
+      )
+      if (!res.success) {
+        if (res.error?.includes("MFA_STEP_UP_REQUIRED")) {
+          setCredentialStepUp({ type: "mfa", orgId: selectedOrgId })
+          return
+        }
+        throw new Error(res.error)
+      }
 
       toast({
         title: "MFA settings removed",
@@ -1660,59 +1741,41 @@ export default function EmailServiceAdminPage() {
                     </p>
                   </div>
 
-                  {dnsServiceActive ? (
-                    <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold text-slate-900">Managed by Revlet Platform</p>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Required MX, SPF, DKIM, and DMARC records will be configured automatically without affecting existing website records.
-                        </p>
-                      </div>
-                      <Button
-                        onClick={handleActivateService}
-                        disabled={isActivating}
-                        className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
-                      >
-                        {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        {isActivating ? "Activating..." : "Activate"}
-                      </Button>
+                  <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4" aria-busy={isSyncingDns || isActivating}>
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-semibold text-zinc-950">
+                        {dnsServiceActive ? "Connected DNS" : "External DNS"}
+                      </p>
+                      <p className="text-sm leading-relaxed text-zinc-600">
+                        {dnsServiceActive
+                          ? "Publish the required MX and DKIM records. If another mail provider is configured, review the cutover in DNS Management first."
+                          : "Prepare the records below, publish them at your DNS provider, then check public DNS."}
+                      </p>
                     </div>
-                  ) : (
-                    <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-slate-900">External DNS Setup</p>
-                          <span className="font-mono text-[11px] text-slate-500 tabular-nums">
-                            {verifiedCoreDnsCount}/{coreDnsRecords.length} verified
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Add the required Inbound (MX) and Outbound (DKIM) DNS records below at your domain provider, then verify your domain to activate.
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        {areCoreRecordsVerified ? (
-                          <Button
-                            onClick={handleActivateService}
-                            disabled={isActivating}
-                            className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
-                          >
-                            {isActivating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            {isActivating ? "Activating..." : "Verify & Activate"}
-                          </Button>
-                        ) : (
-                          <Button
-                            onClick={handleSyncDnsRecords}
-                            disabled={isSyncingDns}
-                            className="w-full h-9 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
-                          >
-                            {isSyncingDns && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            {isSyncingDns ? "Verifying Domain..." : "Verify Domain"}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                    <p className="text-sm font-medium text-zinc-800" role="status">
+                      {coreDnsRecords.length === 0
+                        ? "DNS records are ready to prepare."
+                        : `${verifiedCoreDnsCount} of ${coreDnsRecords.length} required records verified in public DNS.`}
+                    </p>
+                    {setupError && (
+                      <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                        {setupError}
+                      </p>
+                    )}
+                    {!isLoadingQuota && !canManageMailService && (
+                      <p className="text-sm text-zinc-600">An email administrator can complete setup for this organization.</p>
+                    )}
+                    <Button
+                      onClick={areCoreRecordsVerified ? handleActivateService : handleSyncDnsRecords}
+                      disabled={!canManageMailService || isLoadingQuota || isActivating || isSyncingDns}
+                      className="min-h-11 w-full rounded-lg bg-zinc-950 text-sm text-white hover:bg-zinc-800"
+                    >
+                      {(isActivating || isSyncingDns) && <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+                      {isActivating ? "Checking Activation…" : isSyncingDns ? "Checking DNS…" : areCoreRecordsVerified
+                        ? "Activate Email Service" : dnsServiceActive ? "Publish Required Records"
+                          : coreDnsRecords.length === 0 ? "Prepare DNS Records" : "Check Public DNS"}
+                    </Button>
+                  </div>
                 </div>
               }
             />
@@ -1755,14 +1818,14 @@ export default function EmailServiceAdminPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleSyncDnsRecords}
-                    disabled={isSyncingDns}
+                    disabled={!canManageMailService || isSyncingDns || isActivating}
                     className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none"
                   >
                     <RefreshCw
                       className={cn("w-3.5 h-3.5 mr-1.5 text-slate-400", isSyncingDns && "animate-spin")}
                       strokeWidth={1.5}
                     />
-                    {isSyncingDns ? "Checking..." : "Verify DNS"}
+                    {isSyncingDns ? "Checking…" : dnsServiceActive ? "Publish Required Records" : "Check Public DNS"}
                   </Button>
                 </div>
               </div>
@@ -1889,8 +1952,16 @@ export default function EmailServiceAdminPage() {
         {/* Page header */}
         <PageHeader
           title="Email Service"
+          description={selectedOrg.domain}
           actions={
             <>
+              {lifecycleAccess?.orgId === selectedOrgId && lifecycleAccess?.canInvite && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/management/team?inviteOrg=${encodeURIComponent(selectedOrgId)}&preset=email-viewer`}>
+                    Invite Member
+                  </Link>
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -1939,7 +2010,7 @@ export default function EmailServiceAdminPage() {
                   <Button
                     size="sm"
                     onClick={handleSyncDnsRecords}
-                    disabled={isSyncingDns}
+                    disabled={!canManageMailService || isSyncingDns || isActivating}
                     className="h-8 px-3 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none"
                   >
                     {isSyncingDns && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
@@ -1950,7 +2021,7 @@ export default function EmailServiceAdminPage() {
                     size="sm"
                     variant="outline"
                     onClick={handleSyncDnsRecords}
-                    disabled={isSyncingDns}
+                    disabled={!canManageMailService || isSyncingDns || isActivating}
                     className="h-8 px-3 border-amber-300 bg-white hover:bg-amber-50 text-amber-900 text-xs font-medium rounded-lg shadow-none"
                   >
                     {isSyncingDns && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
@@ -2270,6 +2341,23 @@ export default function EmailServiceAdminPage() {
               </div>
 
               {/* Users table */}
+              {directoryError && (
+                <div className="mx-6 my-4 rounded-lg border border-red-200 bg-red-50/70 px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 text-sm text-red-800">
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" strokeWidth={1.75} />
+                    <span>{directoryError}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs border-red-200 bg-white text-red-700 hover:bg-red-50 shrink-0"
+                    onClick={() => loadAllMailData(false)}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.75} />
+                    Retry
+                  </Button>
+                </div>
+              )}
               {isLoadingDirectory || !hasLoadedDirectory ? (
                 <Table>
                   <TableHeader>
@@ -3333,18 +3421,18 @@ export default function EmailServiceAdminPage() {
                   <Button
                     size="sm"
                     onClick={handleSyncDnsRecords}
-                    disabled={isSyncingDns}
+                    disabled={!canManageMailService || isSyncingDns || isActivating}
                     className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
                   >
                     {isSyncingDns ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
-                        {dnsServiceActive ? "Syncing Deliverability Records" : "Verifying Deliverability"}
+                        {dnsServiceActive ? "Checking Provider DNS…" : "Checking Public DNS…"}
                       </>
                     ) : dnsServiceActive ? (
-                      "Sync Deliverability Records"
+                      "Publish Required Records"
                     ) : (
-                      "Verify Deliverability"
+                      "Check Public DNS"
                     )}
                   </Button>
                 </div>
@@ -3587,13 +3675,14 @@ export default function EmailServiceAdminPage() {
                   Deactivate Email Service
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Pause Email Service for {selectedOrg.domain}. Accounts, aliases, and groups remain saved in your directory.
+                  Pause mail for {selectedOrg.domain} and schedule permanent deletion after 14 days.
                 </p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsDeactivateConfirmOpen(true)}
+                disabled={!canDeactivateMailService}
                 className="h-9 px-4 text-xs font-medium text-destructive border-slate-200 hover:bg-rose-50 hover:text-destructive rounded-lg shrink-0 transition-colors"
               >
                 Deactivate Service
@@ -3603,16 +3692,48 @@ export default function EmailServiceAdminPage() {
 
           <TabsContent value="shared" className="mt-0">
             {selectedOrgId && (
-              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="shared" />
+              <EmailGovernancePanel key={selectedOrgId} orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="shared" />
             )}
           </TabsContent>
 
           <TabsContent value="governance" className="mt-0">
             {selectedOrgId && (
-              <EmailGovernancePanel orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="quarantine" />
+              <EmailGovernancePanel key={selectedOrgId} orgId={selectedOrgId} domain={selectedOrg?.domain || ""} mode="quarantine" />
             )}
           </TabsContent>
         </Tabs>
+
+        <StepUpMfaDialog
+          open={Boolean(deactivationChallengeOrg)}
+          onOpenChange={(open) => { if (!open) setDeactivationChallengeOrg(null) }}
+          actionLabel="Deactivate Email Service"
+          onVerified={async (token) => {
+            if (deactivationChallengeOrg && lifecycleOrgRef.current === deactivationChallengeOrg) {
+              await handleDeactivateService(token)
+            }
+            setDeactivationChallengeOrg(null)
+          }}
+        />
+
+        <StepUpMfaDialog
+          open={Boolean(credentialStepUp)}
+          onOpenChange={(open) => { if (!open) setCredentialStepUp(null) }}
+          actionLabel={
+            credentialStepUp?.type === "mfa"
+              ? "Reset Mailbox 2-Step Verification"
+              : "Reset Mailbox Password"
+          }
+          onVerified={async (freshToken) => {
+            const pending = credentialStepUp
+            setCredentialStepUp(null)
+            if (!pending || lifecycleOrgRef.current !== pending.orgId) return
+            if (pending.type === "password") {
+              await handleResetUserPassword(freshToken)
+            } else {
+              await handleResetUserMfa(freshToken)
+            }
+          }}
+        />
 
         <StepUpMfaDialog
           open={mfaStepUpOpen}
@@ -4163,7 +4284,7 @@ export default function EmailServiceAdminPage() {
               </Button>
               <Button
                 size="sm"
-                onClick={handleResetUserPassword}
+                onClick={() => handleResetUserPassword()}
                 disabled={
                   isResettingPassword ||
                   newPasswordValue.length < 8 ||

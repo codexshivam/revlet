@@ -248,14 +248,17 @@ export async function syncStalwartUserPrincipal(params: {
   isCatchAllTarget: boolean;
   plainPassword?: string;
   isCreate?: boolean;
+  expectedPrincipalId?: string | null;
   disabled?: boolean;
 }) {
   const cleanEmail = params.primaryEmail.toLowerCase().trim();
   const [localPart, domainPart] = cleanEmail.split('@');
-  if (!localPart || !domainPart) return;
+  if (!localPart || !domainPart) return null;
 
   const domainId = await ensureStalwartDomainId(domainPart);
-  if (!domainId) return;
+  if (!domainId) {
+    throw new Error(`Could not resolve mail domain "${domainPart}" on provider.`);
+  }
 
   const existingAcc = await findStalwartAccountByEmail(cleanEmail);
 
@@ -278,6 +281,16 @@ export async function syncStalwartUserPrincipal(params: {
           };
         }
       }
+    }
+  }
+
+  // Fail closed on create if a Stalwart principal already exists for this address
+  // unless it matches this tenant's expectedPrincipalId (idempotent retry).
+  if (params.isCreate && existingAcc) {
+    if (!params.expectedPrincipalId || existingAcc.id !== params.expectedPrincipalId) {
+      throw new Error(
+        `A mail provider account already exists for "${cleanEmail}" and does not belong to this mailbox record.`
+      );
     }
   }
 
@@ -312,8 +325,13 @@ export async function syncStalwartUserPrincipal(params: {
         'createUsr',
       ],
     ]);
-    const createdId = createRes.find((r) => r[0] === 'x:Account/set' && r[2] === 'createUsr')?.[1]?.created?.usr0?.id;
-    return typeof createdId === 'string' && createdId ? createdId : null;
+    const setResp = createRes.find((r) => r[0] === 'x:Account/set' && r[2] === 'createUsr')?.[1];
+    const createdId = setResp?.created?.usr0?.id;
+    if (typeof createdId !== 'string' || !createdId) {
+      const errDesc = setResp?.notCreated?.usr0?.description || setResp?.notCreated?.usr0?.type || 'Provider rejected mailbox creation.';
+      throw new Error(String(errDesc));
+    }
+    return createdId;
   }
 
   const updateFields: Record<string, unknown> = {
@@ -331,7 +349,7 @@ export async function syncStalwartUserPrincipal(params: {
     };
   }
 
-  await callStalwartJmap([
+  const updRes = await callStalwartJmap([
     [
       'x:Account/set',
       {
@@ -343,6 +361,14 @@ export async function syncStalwartUserPrincipal(params: {
       'updUsr',
     ],
   ]);
+  const updResp = updRes.find((r) => r[0] === 'x:Account/set' && r[2] === 'updUsr')?.[1];
+  if (updResp?.notUpdated?.[existingAcc.id]) {
+    const errDesc =
+      updResp.notUpdated[existingAcc.id]?.description ||
+      updResp.notUpdated[existingAcc.id]?.type ||
+      'Provider rejected mailbox update.';
+    throw new Error(String(errDesc));
+  }
   return typeof existingAcc.id === 'string' && existingAcc.id ? existingAcc.id : null;
 }
 
@@ -756,4 +782,111 @@ export async function purgeExpiredMailData(): Promise<{
     purgedUsersCount,
     notificationsSent,
   };
+}
+
+// ============================================================================
+// DOMAIN OWNERSHIP & INTERNAL ADDRESS UNIQUENESS GUARDS
+// ============================================================================
+
+/**
+ * Enforces that an organization has active email service and owns the
+ * verified mail domain binding before any Stalwart principal mutation.
+ */
+export async function assertActiveMailDomainBinding(
+  orgId: string,
+  orgData: any
+): Promise<string> {
+  if (orgData?.mailServiceActive !== true) {
+    throw new Error('Email service must be activated before managing mailboxes or routing.');
+  }
+
+  const domain = String(orgData?.domain || '').toLowerCase().replace(/\.$/, '').trim();
+  if (!domain) {
+    throw new Error('Organization domain is not configured.');
+  }
+
+  const bindingRef = adminDb.collection('mailDomainBindings').doc(domain);
+  const bindingSnap = await bindingRef.get();
+
+  if (bindingSnap.exists) {
+    if (bindingSnap.data()?.orgId !== orgId) {
+      throw new Error('This domain is bound to another organization.');
+    }
+    return domain;
+  }
+
+  // Legacy active orgs (activated prior to mailDomainBindings) must still be unambiguous.
+  const matching = await adminDb
+    .collection('organizations')
+    .where('domain', '==', domain)
+    .get();
+  if (matching.docs.some((doc) => doc.id !== orgId && doc.data()?.mailServiceActive === true)) {
+    throw new Error('This domain is already connected to another organization.');
+  }
+
+  return domain;
+}
+
+export async function isEmailAddressTakenInOrg(
+  orgId: string,
+  candidateEmail: string,
+  excludeUserId?: string,
+  excludeGroupId?: string,
+  excludeSharedMailboxId?: string
+): Promise<string | null> {
+  const normalized = candidateEmail.toLowerCase().trim();
+
+  const usersSnap = await adminDb
+    .collection('organizations')
+    .doc(orgId)
+    .collection('mailUsers')
+    .get();
+
+  for (const doc of usersSnap.docs) {
+    if (excludeUserId && doc.id === excludeUserId) continue;
+    const d = doc.data();
+    // Skip permanently expired deleted accounts
+    if (d.status === 'deleted' && d.recoverableUntil) {
+      if (new Date(d.recoverableUntil).getTime() <= Date.now()) {
+        continue;
+      }
+    }
+    if ((d.primaryEmail || '').toLowerCase() === normalized) {
+      return `Address "${normalized}" is already assigned as a primary email account.`;
+    }
+    const aliases: string[] = Array.isArray(d.aliases) ? d.aliases : [];
+    if (aliases.some((a) => a.toLowerCase() === normalized)) {
+      return `Address "${normalized}" is already assigned as an email alias.`;
+    }
+  }
+
+  const groupsSnap = await adminDb
+    .collection('organizations')
+    .doc(orgId)
+    .collection('mailGroups')
+    .get();
+
+  for (const doc of groupsSnap.docs) {
+    if (excludeGroupId && doc.id === excludeGroupId) continue;
+    const d = doc.data();
+    if ((d.groupEmail || '').toLowerCase() === normalized) {
+      return `Address "${normalized}" is already used by a group address.`;
+    }
+  }
+
+  const sharedSnap = await adminDb
+    .collection('organizations')
+    .doc(orgId)
+    .collection('mailSharedMailboxes')
+    .get();
+
+  for (const doc of sharedSnap.docs) {
+    if (excludeSharedMailboxId && doc.id === excludeSharedMailboxId) continue;
+    const d = doc.data();
+    if ((d.email || '').toLowerCase() === normalized) {
+      return `Address "${normalized}" is already used by a shared mailbox.`;
+    }
+  }
+
+  return null;
 }

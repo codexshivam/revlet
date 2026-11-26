@@ -282,7 +282,7 @@ export async function syncStalwartUserPrincipal(params: {
   }
 
   if (!existingAcc) {
-    await callStalwartJmap([
+    const createRes = await callStalwartJmap([
       [
         'x:Account/set',
         {
@@ -312,7 +312,8 @@ export async function syncStalwartUserPrincipal(params: {
         'createUsr',
       ],
     ]);
-    return;
+    const createdId = createRes.find((r) => r[0] === 'x:Account/set' && r[2] === 'createUsr')?.[1]?.created?.usr0?.id;
+    return typeof createdId === 'string' && createdId ? createdId : null;
   }
 
   const updateFields: Record<string, unknown> = {
@@ -342,6 +343,7 @@ export async function syncStalwartUserPrincipal(params: {
       'updUsr',
     ],
   ]);
+  return typeof existingAcc.id === 'string' && existingAcc.id ? existingAcc.id : null;
 }
 
 export async function syncStalwartSharedMailboxPrincipal(params: {

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import { useUser, useFirestore } from "@/firebase"
 import { collection, query, where, or, getDocs, onSnapshot } from "firebase/firestore"
 import { checkAndClaimInvitations } from "@/app/actions/team"
@@ -59,6 +60,8 @@ const OrgContext = createContext<OrgContextType | null>(null)
 export function OrgProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: userLoading } = useUser()
   const db = useFirestore()
+  const pathname = usePathname()
+  const router = useRouter()
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [activeOrgId, setActiveOrgId] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -85,16 +88,6 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true)
     try {
-      if (user.emailVerified && claimedUidRef.current !== user.uid) {
-        claimedUidRef.current = user.uid
-        try {
-          const idToken = await user.getIdToken()
-          await checkAndClaimInvitations(idToken)
-        } catch (claimErr) {
-          console.error("Failed to check invitations:", claimErr)
-        }
-      }
-
       const q = query(
         collection(db, "organizations"),
         or(
@@ -103,12 +96,16 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         )
       )
       const snap = await getDocs(q)
-      const fetched = snap.docs
+      const fetched = (snap.docs
         .map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }))
-        .filter((o: any) => o.status !== "Pending Deletion") as Organization[]
+        .filter((o: any) => o.status !== "Pending Deletion") as Organization[]).sort((a, b) => {
+          const timeA = a.createdAt?.toMillis?.() || 0
+          const timeB = b.createdAt?.toMillis?.() || 0
+          return timeB - timeA
+        })
 
       setOrgs(fetched)
 
@@ -145,13 +142,24 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    // Claim invitations once if verified
-    if (user.emailVerified && claimedUidRef.current !== user.uid) {
-      claimedUidRef.current = user.uid
+    let active = true
+    const currentUid = user.uid
+    let inviteTimer: ReturnType<typeof setTimeout> | null = null
+
+    const runInviteClaim = () => {
+      if (!active || !user.emailVerified || claimedUidRef.current === currentUid) return
+      claimedUidRef.current = currentUid
       user
         .getIdToken()
         .then((idToken) => checkAndClaimInvitations(idToken))
         .catch((claimErr) => console.error("Failed to check invitations:", claimErr))
+    }
+
+    const hasInviteHint =
+      typeof window !== "undefined" &&
+      (window.location.search.includes("invite=") || window.location.pathname.includes("/invite"))
+    if (hasInviteHint) {
+      runInviteClaim()
     }
 
     const q = query(
@@ -165,14 +173,28 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onSnapshot(
       q,
       (snap) => {
-        const fetched = snap.docs
+        if (!active) return
+        const fetched = (snap.docs
           .map((doc) => ({
             id: doc.id,
             ...doc.data(),
           }))
-          .filter((o: any) => o.status !== "Pending Deletion") as Organization[]
+          .filter((o: any) => o.status !== "Pending Deletion") as Organization[]).sort((a, b) => {
+            const timeA = a.createdAt?.toMillis?.() || 0
+            const timeB = b.createdAt?.toMillis?.() || 0
+            return timeB - timeA
+          })
 
         setOrgs(fetched)
+
+        // First-time users with 0 orgs claim invitations immediately; existing members defer off first paint
+        if (user.emailVerified && claimedUidRef.current !== currentUid) {
+          if (fetched.length === 0) {
+            runInviteClaim()
+          } else if (!inviteTimer) {
+            inviteTimer = setTimeout(runInviteClaim, 2000)
+          }
+        }
 
         const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
         const found = fetched.find((o) => o.id === storedId)
@@ -189,6 +211,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         setLoading(false)
       },
       (error) => {
+        if (!active) return
         console.error("Error listening to organizations:", error)
         fetchOrgs()
       }
@@ -198,6 +221,8 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       window.addEventListener("revlet-orgs-refresh", fetchOrgs)
     }
     return () => {
+      active = false
+      if (inviteTimer) clearTimeout(inviteTimer)
       unsubscribe()
       if (typeof window !== "undefined") {
         window.removeEventListener("revlet-orgs-refresh", fetchOrgs)
@@ -225,13 +250,40 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeOrgId])
 
-  const changeActiveOrg = useCallback((id: string) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("selectedOrgId", id)
-      window.dispatchEvent(new Event("active-org-changed"))
+  // Sync activeOrgId from explicit /orgs/[orgKey]/* workspace URL
+  useEffect(() => {
+    if (!pathname || orgs.length === 0) return
+    const match = pathname.match(/^\/orgs\/([^/]+)(?:\/|$)/)
+    if (!match) return
+    const orgKey = decodeURIComponent(match[1])
+    const matched = orgs.find(
+      (o) => o.id === orgKey || (o.code && o.code.toLowerCase() === orgKey.toLowerCase())
+    )
+    if (matched && matched.id !== activeOrgId) {
+      setActiveOrgId(matched.id)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("selectedOrgId", matched.id)
+      }
     }
-    setActiveOrgId(id)
-  }, [])
+  }, [pathname, orgs, activeOrgId])
+
+  const changeActiveOrg = useCallback(
+    (id: string) => {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("selectedOrgId", id)
+        window.dispatchEvent(new Event("active-org-changed"))
+      }
+      setActiveOrgId(id)
+      if (pathname) {
+        const match = pathname.match(/^\/orgs\/([^/]+)(\/.*)?$/)
+        if (match && decodeURIComponent(match[1]) !== id) {
+          const rest = match[2] || "/overview"
+          router.replace(`/orgs/${encodeURIComponent(id)}${rest}`)
+        }
+      }
+    },
+    [pathname, router]
+  )
 
   const activeOrg = useMemo(() => {
     const found = orgs.find((o) => o.id === activeOrgId)

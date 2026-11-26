@@ -211,6 +211,10 @@ export async function POST(req: NextRequest) {
         sharedMailboxes,
         orgUnitPath: userData.orgUnitPath || '/',
         isCatchAllTarget,
+        stalwartAccountId:
+          typeof userData.stalwartAccountId === 'string' && userData.stalwartAccountId.trim()
+            ? userData.stalwartAccountId.trim()
+            : null,
         canonicalStalwartEmails: canonicalEmails,
         identities,
       },

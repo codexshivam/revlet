@@ -8,7 +8,7 @@ interface AuthFrameProps {
 
 export function AuthFrame({ children, className }: AuthFrameProps) {
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between selection:bg-slate-200">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col justify-between selection:bg-slate-200 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       {/* Top Header */}
       <header className="w-full bg-white border-b border-slate-200 px-4 sm:px-8 lg:px-12 h-14 flex items-center justify-between shrink-0">
         <a

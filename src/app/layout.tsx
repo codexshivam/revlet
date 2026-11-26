@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { JsonLd } from '@/components/seo/json-ld';
 import { DevToolsGuard } from '@/components/security/devtools-guard';
 import { PointerEventsGuard } from '@/components/layout/pointer-events-guard';
+import { PersistentWorkspaceFrame } from '@/components/layout/dashboard-shell';
 import {
   SITE_URL,
   MARKETING_URL,
@@ -30,6 +31,7 @@ const spaceGrotesk = Space_Grotesk({
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
   themeColor: '#09090b',
   colorScheme: 'light',
 };
@@ -277,7 +279,7 @@ export default function RootLayout({
         <DevToolsGuard />
         <PointerEventsGuard />
         <FirebaseClientProvider>
-          {children}
+          <PersistentWorkspaceFrame>{children}</PersistentWorkspaceFrame>
           <Toaster />
         </FirebaseClientProvider>
       </body>

@@ -258,8 +258,28 @@ export default function EmailServiceAdminPage() {
   const [users, setUsers] = useState<MailUserRecord[]>([])
   const [groups, setGroups] = useState<MailGroupRecord[]>([])
 
-  // Active tab & filters (synced with ?tab= URL parameter)
+  // Active tab & filters (synced with /orgs/[orgKey]/email/[section] and ?tab= URL parameter)
   const [activeTab, setActiveTabState] = useState("users")
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const match = window.location.pathname.match(/\/email\/([^/]+)(?:\/|$)/)
+    if (match) {
+      const slug = decodeURIComponent(match[1]).toLowerCase()
+      const slugMap: Record<string, string> = {
+        users: "users",
+        groups: "groups",
+        "shared-mailboxes": "shared",
+        shared: "shared",
+        routing: "routing",
+        domains: "domains",
+        governance: "governance",
+        settings: "settings",
+      }
+      if (slugMap[slug]) {
+        setActiveTabState(slugMap[slug])
+      }
+    }
+  }, [])
   const [enforceMfa, setEnforceMfa] = useState(false)
   const [isUpdatingEnforceMfa, setIsUpdatingEnforceMfa] = useState(false)
   const [mfaStepUpOpen, setMfaStepUpOpen] = useState(false)

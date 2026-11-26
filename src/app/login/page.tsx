@@ -51,6 +51,22 @@ function bufToB64u(buf: ArrayBuffer): string {
 
 export default function LoginPage() {
   const router = useRouter()
+  const getSafeNextPath = () => {
+    if (typeof window === "undefined") return "/account/home"
+    const raw = new URLSearchParams(window.location.search).get("next")
+    if (!raw) return "/account/home"
+    const trimmed = raw.trim()
+    if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.includes("\\") || trimmed.startsWith("/login")) {
+      return "/account/home"
+    }
+    return trimmed
+  }
+  const navigateAfterAuth = () => {
+    if (typeof document !== "undefined") {
+      document.cookie = "revlet_session_hint=1; path=/; max-age=2592000; samesite=lax"
+    }
+    router.replace(getSafeNextPath())
+  }
   const auth = useAuth()
   const { user, loading: authLoading } = useUser()
   const [isLoading, setIsLoading] = useState(false)
@@ -123,9 +139,9 @@ export default function LoginPage() {
           return
         }
       }
-      router.push("/account/home")
+      navigateAfterAuth()
     } catch {
-      router.push("/account/home")
+      navigateAfterAuth()
     }
   }
 
@@ -336,7 +352,7 @@ export default function LoginPage() {
         const data = await res.json()
         if (!res.ok || !data.ok) throw new Error(data.error || "Invalid 6-digit code")
         toast({ title: "2-Step Verification Enabled" })
-        router.push("/account/home")
+        navigateAfterAuth()
         return
       }
 
@@ -373,7 +389,7 @@ export default function LoginPage() {
         })
         const ver = await verRes.json()
         if (!verRes.ok || !ver.ok) throw new Error(ver.error || "Passkey verification failed")
-        router.push("/account/home")
+        navigateAfterAuth()
         return
       }
 
@@ -388,7 +404,7 @@ export default function LoginPage() {
       })
       const ver = await verRes.json()
       if (!verRes.ok || !ver.ok) throw new Error(ver.error || "Invalid verification code")
-      router.push("/account/home")
+      navigateAfterAuth()
     } catch (err: any) {
       setMfaError(sanitizeMfaError(err, "Verification failed"))
     } finally {

@@ -101,10 +101,14 @@ export default function AccountHomePage() {
   const auth = useAuth()
   const db = useFirestore()
   const { user, loading: authLoading } = useUser()
-  const { setActiveOrgId } = useActiveOrg()
+  const {
+    orgs: providerOrgs,
+    loading: isLoadingOrgs,
+    setActiveOrgId,
+    refreshOrgs: fetchOrgs,
+  } = useActiveOrg()
 
-  const [orgs, setOrgs] = useState<Organization[]>([])
-  const [isLoadingOrgs, setIsLoadingOrgs] = useState(true)
+  const orgs = providerOrgs as Organization[]
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditNameOpen, setIsEditNameOpen] = useState(false)
@@ -201,57 +205,12 @@ export default function AccountHomePage() {
     }
   }, [isDialogOpen, isDeleteDialogOpen, isSignOutOpen, isEditNameOpen])
 
-  const fetchOrgs = useCallback(async () => {
-    if (authLoading || !user) return
-
-    try {
-      const orgsRef = collection(db, "organizations")
-      const q = query(
-        orgsRef,
-        or(
-          where("ownerId", "==", user.uid),
-          where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
-        )
-      )
-      const snapshot = await getDocs(q)
-      const fetchedOrgs = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as Organization[]
-
-      const sortedOrgs = fetchedOrgs.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis?.() || 0
-        const timeB = b.createdAt?.toMillis?.() || 0
-        return timeB - timeA
-      })
-
-      setOrgs(sortedOrgs)
-      setIsLoadingOrgs(false)
-    } catch {
-      const permissionError = new FirestorePermissionError({
-        path: "organizations",
-        operation: "list",
-      })
-      errorEmitter.emit("permission-error", permissionError)
-      setIsLoadingOrgs(false)
-    }
-  }, [user, authLoading, db])
-
   useEffect(() => {
     if (authLoading) return
-
     if (!user) {
-      setIsLoadingOrgs(false)
-      router.push("/login")
-      return
+      router.replace("/login")
     }
-
-    fetchOrgs()
-    if (typeof window !== "undefined") {
-      window.addEventListener("revlet-orgs-refresh", fetchOrgs)
-      return () => window.removeEventListener("revlet-orgs-refresh", fetchOrgs)
-    }
-  }, [user, authLoading, router, fetchOrgs])
+  }, [user, authLoading, router])
 
   const handleOpenEdit = (org: Organization) => {
     setEditingOrg(org)

@@ -40,7 +40,17 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  if (
+    pathname.startsWith('/orgs') ||
+    pathname.startsWith('/account') ||
+    pathname.startsWith('/services') ||
+    pathname.startsWith('/management') ||
+    pathname.startsWith('/api/')
+  ) {
+    response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+  }
+  return response;
 }
 
 export const config = {

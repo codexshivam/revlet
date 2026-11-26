@@ -12,10 +12,12 @@ import {
   ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useActiveOrg } from "@/hooks/use-active-org"
 
 interface NavItem {
   title: string
   href: string
+  matchPrefixes: string[]
   icon: React.ElementType
   badge?: React.ReactNode
 }
@@ -28,32 +30,62 @@ export function RecursiveSidebar({
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
+  const { activeOrg } = useActiveOrg()
+  const orgPrefix = activeOrg?.id ? `/orgs/${encodeURIComponent(activeOrg.id)}` : null
 
-  const isItemActive = (href: string) => {
-    if (href === "/account/home") {
-      return pathname === "/account/home" || pathname === "/"
-    }
-    return pathname === href || pathname.startsWith(href + "/")
+  const isItemActive = (target: NavItem | string) => {
+    const prefixes = typeof target === "string" ? [target] : target.matchPrefixes
+    return prefixes.some((p) => {
+      if (p === "/account/home") {
+        return pathname === "/account/home" || pathname === "/" || /^\/orgs\/[^/]+\/overview(?:\/|$)/.test(pathname)
+      }
+      return pathname === p || pathname.startsWith(`${p}/`)
+    })
   }
 
   const generalItems: NavItem[] = [
-    { title: "Account Home", icon: LayoutDashboard, href: "/account/home" },
+    {
+      title: "Account Home",
+      icon: LayoutDashboard,
+      href: orgPrefix ? `${orgPrefix}/overview` : "/account/home",
+      matchPrefixes: ["/account/home", ...(orgPrefix ? [`${orgPrefix}/overview`] : [])],
+    },
   ]
 
   const serviceItems: NavItem[] = [
-    { title: "DNS Management", icon: Globe, href: "/services/dns" },
-    { title: "Email Service", icon: Mail, href: "/services/email" },
+    {
+      title: "DNS Management",
+      icon: Globe,
+      href: orgPrefix ? `${orgPrefix}/dns` : "/services/dns",
+      matchPrefixes: ["/services/dns", ...(orgPrefix ? [`${orgPrefix}/dns`] : [])],
+    },
+    {
+      title: "Email Service",
+      icon: Mail,
+      href: orgPrefix ? `${orgPrefix}/email/users` : "/services/email",
+      matchPrefixes: ["/services/email", ...(orgPrefix ? [`${orgPrefix}/email`] : [])],
+    },
   ]
 
   const bottomNavItems: NavItem[] = [
-    { title: "Team Management", icon: Users, href: "/management/team" },
-    { title: "Account Settings", icon: Settings, href: "/management/settings" },
+    {
+      title: "Team Management",
+      icon: Users,
+      href: orgPrefix ? `${orgPrefix}/team` : "/management/team",
+      matchPrefixes: ["/management/team", ...(orgPrefix ? [`${orgPrefix}/team`] : [])],
+    },
+    {
+      title: "Account Settings",
+      icon: Settings,
+      href: orgPrefix ? `${orgPrefix}/settings` : "/management/settings",
+      matchPrefixes: ["/management/settings", ...(orgPrefix ? [`${orgPrefix}/settings`] : [])],
+    },
   ]
 
   const renderNavList = (items: NavItem[]) => (
     <div className="space-y-0.5">
       {items.map((item, idx) => {
-        const isActive = isItemActive(item.href)
+        const isActive = isItemActive(item)
 
         return (
           <Link

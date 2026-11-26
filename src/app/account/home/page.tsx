@@ -7,6 +7,13 @@ const SetupChecklist = dynamic(
   () => import("@/components/org/setup-checklist").then((mod) => mod.SetupChecklist),
   { ssr: false }
 )
+const PendingInvitationsBanner = dynamic(
+  () =>
+    import("@/components/org/pending-invitations-banner").then(
+      (mod) => mod.PendingInvitationsBanner
+    ),
+  { ssr: false }
+)
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -480,6 +487,7 @@ export default function AccountHomePage() {
           </div>
         </div>
 
+        <PendingInvitationsBanner />
         <SetupChecklist />
 
         {/* Organizations container */}

@@ -4,7 +4,19 @@ import crypto from 'crypto';
 import { adminAuth, adminDb } from '@/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { ORG_ADMIN_PERMISSION, ADMIN_ALL_PERMISSIONS } from '@/lib/team-permissions';
+import { verifyStepUpToken } from '@/lib/mfa';
+import { getEnrolledFactorCounts } from '@/lib/mfa-store';
 import { sendRevletAlertEmail } from '@/lib/revlet-alerts';
+
+const PRIVILEGED_PERMISSIONS = new Set([
+  ORG_ADMIN_PERMISSION,
+  'DNS: Admin',
+  'Email: Admin',
+]);
+
+function isPrivilegedGrant(perms: string[]): boolean {
+  return perms.some((p) => PRIVILEGED_PERMISSIONS.has(p));
+}
 
 function hashInviteToken(rawToken: string): string {
   return crypto.createHash('sha256').update(rawToken.trim()).digest('hex');
@@ -772,11 +784,19 @@ export async function getInvitationByToken(rawToken: string) {
       return { success: true, data: { state: 'revoked' as const } };
     }
     if (d.status === 'Active') {
+      const orgId = d.organizationId || (Array.isArray(d.organizationIds) ? d.organizationIds[0] : undefined);
+      const perms: string[] = Array.isArray(d.orgPermissions?.[orgId])
+        ? d.orgPermissions[orgId]
+        : Array.isArray(d.permissions)
+        ? d.permissions
+        : [];
       return {
         success: true,
         data: {
           state: 'accepted' as const,
-          orgId: d.organizationId || (Array.isArray(d.organizationIds) ? d.organizationIds[0] : undefined),
+          orgId,
+          primaryPerms: perms,
+          email: String(d.email || '').toLowerCase().trim(),
         },
       };
     }
@@ -809,6 +829,8 @@ export async function getInvitationByToken(rawToken: string) {
       return { success: true, data: { state: 'revoked' as const } };
     }
 
+    const isPrivileged = orgs.some((o) => isPrivilegedGrant(o.permissions));
+
     return {
       success: true,
       data: {
@@ -817,6 +839,7 @@ export async function getInvitationByToken(rawToken: string) {
         email: String(d.email || '').toLowerCase().trim(),
         inviterName: String(d.ownerName || d.invitedBy || 'Workspace Admin'),
         inviterEmail: String(d.invitedBy || ''),
+        isPrivileged,
         orgs,
       },
     };
@@ -830,7 +853,11 @@ export async function getInvitationByToken(rawToken: string) {
  * Requires a revocation-checked verified email matching the invitation and
  * validates the inviter's current authority (owner OR delegated Org Admin) for each org.
  */
-export async function acceptInvitationByToken(idToken: string, rawToken: string) {
+export async function acceptInvitationByToken(
+  idToken: string,
+  rawToken: string,
+  stepUpToken?: string
+) {
   try {
     const caller = await verifyCaller(idToken);
     if (!caller.email || !caller.emailVerified) {
@@ -851,7 +878,7 @@ export async function acceptInvitationByToken(idToken: string, rawToken: string)
       .get();
 
     if (snap.empty) {
-      return { success: false, error: 'This invitation link is invalid or has already been used.' };
+      return { success: false, error: 'This invitation link is invalid or has expired.' };
     }
 
     const inviteRef = snap.docs[0].ref;
@@ -864,12 +891,49 @@ export async function acceptInvitationByToken(idToken: string, rawToken: string)
       };
     }
 
-    const inviterUid = String(preData.invitedByUid || preData.ownerId || '');
     const candidateOrgIds: string[] = Array.isArray(preData.organizationIds)
       ? preData.organizationIds
       : preData.organizationId
       ? [preData.organizationId]
       : [];
+
+    // Already accepted by this user: idempotently reopen the workspace
+    if (preData.status === 'Active' && preData.memberUid === caller.uid) {
+      const primaryOrgId = candidateOrgIds[0];
+      const primaryPerms: string[] = Array.isArray(preData.orgPermissions?.[primaryOrgId])
+        ? preData.orgPermissions[primaryOrgId]
+        : Array.isArray(preData.permissions)
+        ? preData.permissions
+        : [];
+      return {
+        success: true,
+        data: { orgIds: candidateOrgIds, primaryOrgId, primaryPerms, alreadyAccepted: true },
+      };
+    }
+
+    // Require fresh MFA step-up if invitation grants a privileged role and user has enrolled MFA
+    const allOfferedPerms = Array.from(
+      new Set(
+        candidateOrgIds.flatMap((oid) =>
+          Array.isArray(preData.orgPermissions?.[oid])
+            ? (preData.orgPermissions[oid] as string[])
+            : Array.isArray(preData.permissions)
+            ? (preData.permissions as string[])
+            : []
+        )
+      )
+    );
+    if (isPrivilegedGrant(allOfferedPerms)) {
+      const mfaCounts = await getEnrolledFactorCounts(caller.uid);
+      if (mfaCounts.totalFactors > 0 && !verifyStepUpToken(stepUpToken, caller.uid)) {
+        return {
+          success: false,
+          error: 'MFA_STEP_UP_REQUIRED: Complete 2-Step Verification to accept this privileged role.',
+        };
+      }
+    }
+
+    const inviterUid = String(preData.invitedByUid || preData.ownerId || '');
 
     // Validate inviter's current authority (owner OR active delegated Org Admin) for each org
     const authorizedOrgIds: string[] = [];
@@ -896,6 +960,9 @@ export async function acceptInvitationByToken(idToken: string, rawToken: string)
         throw new Error('This invitation has been revoked.');
       }
       if (d.status === 'Active') {
+        if (d.memberUid && d.memberUid !== caller.uid) {
+          throw new Error('This invitation was already claimed by another account.');
+        }
         return authorizedOrgIds;
       }
       if (typeof d.expiresAt === 'number' && d.expiresAt < Date.now()) {
@@ -905,12 +972,12 @@ export async function acceptInvitationByToken(idToken: string, rawToken: string)
         throw new Error('Signed-in email does not match this invitation.');
       }
 
+      // Keep inviteTokenHash on Active record so retrying the same link cleanly reopens the workspace
       tx.update(inviteRef, {
         status: 'Active',
         memberUid: caller.uid,
         organizationIds: authorizedOrgIds,
         organizationId: authorizedOrgIds[0],
-        inviteTokenHash: FieldValue.delete(),
         activatedAt: FieldValue.serverTimestamp(),
         acceptedAt: FieldValue.serverTimestamp(),
       });
@@ -946,10 +1013,212 @@ export async function acceptInvitationByToken(idToken: string, rawToken: string)
         orgIds: acceptedOrgIds,
         primaryOrgId,
         primaryPerms,
+        alreadyAccepted: false,
       },
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Could not accept invitation.' };
+  }
+}
+
+/**
+ * Lists all valid Pending invitations for the signed-in verified user so Account Home
+ * can display a Pending Invitations banner with individual Join or deliberate Join All.
+ */
+export async function listMyPendingInvitations(idToken: string) {
+  try {
+    const caller = await verifyCaller(idToken);
+    if (!caller.email || !caller.emailVerified) {
+      return { success: true, data: [] as Array<any> };
+    }
+    const snap = await adminDb
+      .collection('teamMembers')
+      .where('email', '==', caller.email)
+      .where('status', '==', 'Pending')
+      .limit(20)
+      .get();
+
+    const now = Date.now();
+    const results: Array<{
+      id: string;
+      inviterName: string;
+      isPrivileged: boolean;
+      orgs: Array<{ id: string; name: string; domain: string; permissions: string[] }>;
+    }> = [];
+
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      if (d.revoked === true) continue;
+      if (typeof d.expiresAt === 'number' && d.expiresAt < now) continue;
+
+      const orgIds: string[] = Array.isArray(d.organizationIds)
+        ? d.organizationIds
+        : d.organizationId
+        ? [d.organizationId]
+        : [];
+      const orgDocs = await Promise.all(
+        orgIds.map((oid) => adminDb.collection('organizations').doc(oid).get())
+      );
+      const orgs = orgDocs
+        .filter((o) => o.exists)
+        .map((o) => ({
+          id: o.id,
+          name: String(o.data()?.name || o.data()?.domain || o.id),
+          domain: String(o.data()?.domain || ''),
+          permissions: Array.isArray(d.orgPermissions?.[o.id])
+            ? (d.orgPermissions[o.id] as string[])
+            : Array.isArray(d.permissions)
+            ? (d.permissions as string[])
+            : [],
+        }));
+      if (orgs.length === 0) continue;
+
+      results.push({
+        id: doc.id,
+        inviterName: String(d.ownerName || d.invitedBy || 'Workspace Admin'),
+        isPrivileged: orgs.some((o) => isPrivilegedGrant(o.permissions)),
+        orgs,
+      });
+    }
+
+    return { success: true, data: results };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Could not load pending invitations.' };
+  }
+}
+
+/**
+ * Deliberately accepts one or all pending invitations for the signed-in verified user
+ * (supports individual Join or Join All from Account Home).
+ */
+export async function acceptPendingInvitations(
+  idToken: string,
+  inviteIds?: string[],
+  stepUpToken?: string
+) {
+  try {
+    const caller = await verifyCaller(idToken);
+    if (!caller.email || !caller.emailVerified) {
+      return { success: false, error: 'Email verification is required before joining workspaces.' };
+    }
+
+    const snap = await adminDb
+      .collection('teamMembers')
+      .where('email', '==', caller.email)
+      .where('status', '==', 'Pending')
+      .limit(20)
+      .get();
+
+    const targetDocs = snap.docs.filter((doc) => {
+      const d = doc.data();
+      if (d.revoked === true) return false;
+      if (typeof d.expiresAt === 'number' && d.expiresAt < Date.now()) return false;
+      if (inviteIds && inviteIds.length > 0 && !inviteIds.includes(doc.id)) return false;
+      return true;
+    });
+
+    if (targetDocs.length === 0) {
+      return { success: false, error: 'No pending invitations available to accept.' };
+    }
+
+    // Require fresh MFA step-up if any selected invitation grants a privileged role
+    const anyPrivileged = targetDocs.some((doc) => {
+      const d = doc.data();
+      const flatPerms: string[] = Array.isArray(d.permissions) ? d.permissions : [];
+      return isPrivilegedGrant(flatPerms);
+    });
+    if (anyPrivileged) {
+      const mfaCounts = await getEnrolledFactorCounts(caller.uid);
+      if (mfaCounts.totalFactors > 0 && !verifyStepUpToken(stepUpToken, caller.uid)) {
+        return {
+          success: false,
+          error: 'MFA_STEP_UP_REQUIRED: Complete 2-Step Verification to accept privileged workspace access.',
+        };
+      }
+    }
+
+    const joinedOrgIds: string[] = [];
+    let firstPerms: string[] = [];
+
+    for (const docSnap of targetDocs) {
+      const preData = docSnap.data();
+      const inviterUid = String(preData.invitedByUid || preData.ownerId || '');
+      const candidateOrgIds: string[] = Array.isArray(preData.organizationIds)
+        ? preData.organizationIds
+        : preData.organizationId
+        ? [preData.organizationId]
+        : [];
+
+      const authorizedOrgIds: string[] = [];
+      for (const orgId of candidateOrgIds) {
+        const orgSnap = await adminDb.collection('organizations').doc(orgId).get();
+        if (!orgSnap.exists) continue;
+        if (await uidHasOrgAdmin(orgId, orgSnap.data(), inviterUid)) {
+          authorizedOrgIds.push(orgId);
+        }
+      }
+      if (authorizedOrgIds.length === 0) continue;
+
+      const claimed = await adminDb.runTransaction(async (tx) => {
+        const fresh = await tx.get(docSnap.ref);
+        if (!fresh.exists) return [] as string[];
+        const d = fresh.data() || {};
+        if (d.status !== 'Pending' || d.revoked === true) return [] as string[];
+        if ((d.email || '').toLowerCase().trim() !== caller.email) return [] as string[];
+
+        tx.update(docSnap.ref, {
+          status: 'Active',
+          memberUid: caller.uid,
+          organizationIds: authorizedOrgIds,
+          organizationId: authorizedOrgIds[0],
+          activatedAt: FieldValue.serverTimestamp(),
+          acceptedAt: FieldValue.serverTimestamp(),
+        });
+
+        const permKey = `memberPermissions.${caller.email.replace(/\./g, '__DOT__')}`;
+        for (const orgId of authorizedOrgIds) {
+          const orgRef = adminDb.collection('organizations').doc(orgId);
+          const orgPerms = Array.isArray(d.orgPermissions?.[orgId])
+            ? d.orgPermissions[orgId]
+            : Array.isArray(d.permissions)
+            ? d.permissions
+            : [];
+          tx.update(orgRef, {
+            memberIds: FieldValue.arrayUnion(caller.uid),
+            memberEmails: FieldValue.arrayUnion(caller.email),
+            ...(orgPerms.length > 0 ? { [permKey]: orgPerms } : {}),
+          });
+        }
+        return authorizedOrgIds;
+      });
+
+      if (claimed.length > 0) {
+        if (firstPerms.length === 0) {
+          firstPerms = Array.isArray(preData.orgPermissions?.[claimed[0]])
+            ? preData.orgPermissions[claimed[0]]
+            : Array.isArray(preData.permissions)
+            ? preData.permissions
+            : [];
+        }
+        joinedOrgIds.push(...claimed);
+      }
+    }
+
+    const uniqueOrgIds = Array.from(new Set(joinedOrgIds));
+    if (uniqueOrgIds.length === 0) {
+      return { success: false, error: 'None of the selected invitations could be accepted.' };
+    }
+
+    return {
+      success: true,
+      data: {
+        orgIds: uniqueOrgIds,
+        primaryOrgId: uniqueOrgIds[0],
+        primaryPerms: firstPerms,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to accept pending invitations.' };
   }
 }
 

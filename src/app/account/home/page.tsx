@@ -14,6 +14,10 @@ const PendingInvitationsBanner = dynamic(
     ),
   { ssr: false }
 )
+const StepUpMfaDialog = dynamic(
+  () => import("@/components/security/step-up-mfa-dialog").then((mod) => mod.StepUpMfaDialog),
+  { ssr: false }
+)
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -61,7 +65,7 @@ import { toast } from "@/hooks/use-toast"
 import { useAuth, useUser, useFirestore, syncUserOrganizations } from "@/firebase"
 import { signOut, updateProfile } from "firebase/auth"
 import { useRouter } from "next/navigation"
-import { deleteOrganization } from "@/app/actions/organization"
+import { createOrganizationWorkspace, deleteOrganization } from "@/app/actions/organization"
 import {
   collection,
   query,
@@ -108,6 +112,7 @@ export default function AccountHomePage() {
   const auth = useAuth()
   const db = useFirestore()
   const { user, loading: authLoading } = useUser()
+  const [deleteStepUpOrgId, setDeleteStepUpOrgId] = useState<string | null>(null)
   const {
     orgs: providerOrgs,
     loading: isLoadingOrgs,
@@ -285,25 +290,21 @@ export default function AccountHomePage() {
           description: "Changes have been saved successfully.",
         })
       } else {
-        const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase()
-        const orgCode = `${formData.name.substring(0, 3).toUpperCase()}-${uniqueSuffix}`
-
-        const orgsRef = collection(db, "organizations")
-        await addDoc(orgsRef, {
+        const idToken = await user.getIdToken()
+        const createRes = await createOrganizationWorkspace(idToken, {
           name: formData.name.trim(),
+          domain: formData.domain.toLowerCase().trim(),
           address: formData.address.trim(),
           phone: formData.phone.trim(),
-          currentEmail: formData.currentEmail.trim(),
-          domain: formData.domain.toLowerCase().trim(),
           contactName: formData.contactName.trim(),
           contactPhone: formData.contactPhone.trim(),
           contactEmail: formData.contactEmail.trim(),
           description: formData.description.trim(),
-          code: orgCode,
-          ownerId: user.uid,
-          status: "Active",
-          createdAt: serverTimestamp(),
         })
+        if (!createRes.success || !createRes.data?.id) {
+          throw new Error(createRes.error || "Failed to register organization.")
+        }
+        setActiveOrgId(createRes.data.id)
         toast({
           title: "Organization registered",
           description: `${formData.name} has been added to your account.`,
@@ -327,39 +328,34 @@ export default function AccountHomePage() {
     }
   }
 
-  const handleDeleteOrg = async () => {
+  const handleDeleteOrg = async (stepUpToken?: string) => {
     if (!editingOrg || !user) return
+    const targetOrgId = editingOrg.id
+    const targetOrgName = editingOrg.name
     setIsSubmitting(true)
 
     try {
       const idToken = await user.getIdToken()
-      const res = await deleteOrganization(idToken, editingOrg.id)
+      const res = await deleteOrganization(idToken, targetOrgId, stepUpToken)
 
       if (!res.success) {
-        const { deleteDoc: deleteDocSdk, doc: docSdk } = await import("firebase/firestore")
-        await deleteDocSdk(docSdk(db, "organizations", editingOrg.id))
+        if (res.error?.includes("MFA_STEP_UP_REQUIRED")) {
+          setDeleteStepUpOrgId(targetOrgId)
+          return
+        }
+        throw new Error(res.error || "Could not delete organization.")
       }
 
       toast({
         title: "Organization deleted",
-        description: `"${editingOrg.name}" has been permanently removed.`,
+        description: `"${targetOrgName}" has been permanently removed.`,
       })
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("revlet-orgs-refresh"))
-        const storedId = localStorage.getItem("selectedOrgId")
-        if (storedId === editingOrg.id) {
-          const remaining = orgs.filter((o) => o.id !== editingOrg.id)
-          const nextId = remaining.length > 0 ? remaining[0].id : ""
-          if (nextId) {
-            localStorage.setItem("selectedOrgId", nextId)
-            setActiveOrgId(nextId)
-          } else {
-            localStorage.removeItem("selectedOrgId")
-            setActiveOrgId("")
-          }
-          window.dispatchEvent(new Event("active-org-changed"))
-        }
+        const remaining = orgs.filter((o) => o.id !== targetOrgId)
+        const nextId = remaining.length > 0 ? remaining[0].id : ""
+        setActiveOrgId(nextId)
       }
 
       setIsDeleteDialogOpen(false)
@@ -1089,7 +1085,7 @@ export default function AccountHomePage() {
                 </AlertDialogCancel>
                 <Button
                   variant="destructive"
-                  onClick={handleDeleteOrg}
+                  onClick={() => handleDeleteOrg()}
                   disabled={deleteConfirmName.trim() !== editingOrg?.name?.trim() || isSubmitting}
                   className="text-xs h-9 px-4 font-medium rounded-lg"
                 >
@@ -1102,6 +1098,19 @@ export default function AccountHomePage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          <StepUpMfaDialog
+            open={Boolean(deleteStepUpOrgId)}
+            onOpenChange={(open) => { if (!open) setDeleteStepUpOrgId(null) }}
+            actionLabel="Permanently Delete Organization"
+            onVerified={async (freshToken) => {
+              const pendingId = deleteStepUpOrgId
+              setDeleteStepUpOrgId(null)
+              if (pendingId && editingOrg?.id === pendingId) {
+                await handleDeleteOrg(freshToken)
+              }
+            }}
+          />
         </div>
       </div>
     </DashboardShell>

@@ -505,33 +505,38 @@ export async function disconnectCloudflareToken(
     assertStepUpMfa(verified.uid, stepUpToken);
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
-    const prevZoneId = verified.orgData?.cloudflareZoneId;
+    const secretRef = orgRef.collection('secrets').doc('cloudflare');
 
-    // Release transactional zone reservation if owned by this org
-    if (prevZoneId) {
-      const bindingRef = adminDb.collection('system_zone_bindings').doc(prevZoneId);
-      await adminDb.runTransaction(async (tx) => {
-        const snap = await tx.get(bindingRef);
-        if (snap.exists && snap.data()?.orgId === orgId) {
+    // Atomically clear organization binding, stored Cloudflare secret, and zone reservation
+    // in a single Firestore transaction so partial state cannot linger.
+    await adminDb.runTransaction(async (tx) => {
+      const freshOrgSnap = await tx.get(orgRef);
+      if (!freshOrgSnap.exists) {
+        throw new Error('Organization not found.');
+      }
+      const prevZoneId = freshOrgSnap.data()?.cloudflareZoneId;
+      if (prevZoneId) {
+        const bindingRef = adminDb.collection('system_zone_bindings').doc(String(prevZoneId));
+        const bindingSnap = await tx.get(bindingRef);
+        if (bindingSnap.exists && bindingSnap.data()?.orgId === orgId) {
           tx.delete(bindingRef);
         }
-      }).catch(() => {});
-    }
+      }
 
-    // Preserve dns_snapshots history; revoke secret and clear active zone binding
-    await orgRef.collection('secrets').doc('cloudflare').delete().catch(() => null);
-    await orgRef.update({
-      cloudflareTokenEncrypted: FieldValue.delete(),
-      cloudflareTokenAudit: FieldValue.delete(),
-      cloudflareZoneId: FieldValue.delete(),
-      cloudflareZoneName: FieldValue.delete(),
-      cloudflareTokenVerifiedAt: FieldValue.delete(),
-      cloudflareTokenExpiresOn: FieldValue.delete(),
-      cloudflareTokenScopedZone: FieldValue.delete(),
-      dnsMode: FieldValue.delete(),
-      dnsRequested: FieldValue.delete(),
-      nameservers: FieldValue.delete(),
-      updatedAt: new Date().toISOString()
+      tx.delete(secretRef);
+      tx.update(orgRef, {
+        cloudflareTokenEncrypted: FieldValue.delete(),
+        cloudflareTokenAudit: FieldValue.delete(),
+        cloudflareZoneId: FieldValue.delete(),
+        cloudflareZoneName: FieldValue.delete(),
+        cloudflareTokenVerifiedAt: FieldValue.delete(),
+        cloudflareTokenExpiresOn: FieldValue.delete(),
+        cloudflareTokenScopedZone: FieldValue.delete(),
+        dnsMode: FieldValue.delete(),
+        dnsRequested: FieldValue.delete(),
+        nameservers: FieldValue.delete(),
+        updatedAt: new Date().toISOString(),
+      });
     });
 
     return { success: true };

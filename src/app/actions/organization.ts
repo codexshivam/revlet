@@ -1,7 +1,8 @@
 'use server';
 
-import { verifyUserOrgAccess } from './auth-helper';
-import { adminDb } from '@/firebase/admin';
+import { FieldValue } from 'firebase-admin/firestore';
+import { assertStepUpMfa, verifyUserOrgAccess } from './auth-helper';
+import { adminAuth, adminDb } from '@/firebase/admin';
 import { ORG_ADMIN_PERMISSION } from '@/lib/team-permissions';
 import { callStalwartJmap, dispatchStalwartApi } from '@/lib/mail-internal';
 import {
@@ -9,7 +10,97 @@ import {
   sendRevletAlertEmail,
 } from '@/lib/revlet-alerts';
 
-export async function deleteOrganization(idToken: string, orgId: string) {
+/**
+ * Unified server action for creating a new organization workspace across
+ * Sign-Up, Account Home, and the Org Switcher. Validates and normalizes
+ * the domain and populates required contact & membership fields.
+ */
+export async function createOrganizationWorkspace(
+  idToken: string,
+  input: {
+    name: string;
+    domain: string;
+    contactName?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    address?: string;
+    phone?: string;
+    description?: string;
+  }
+) {
+  if (!idToken) return { success: false, error: 'Authentication required.' };
+  try {
+    const decoded = await adminAuth.verifyIdToken(idToken, true);
+    const uid = decoded.uid;
+    const ownerEmail = (decoded.email || '').toLowerCase().trim();
+    const ownerName = (decoded.name || ownerEmail.split('@')[0] || 'Account Owner').trim();
+
+    const cleanName = (input.name || '').trim().slice(0, 120);
+    const cleanDomain = (input.domain || '')
+      .toLowerCase()
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/\.$/, '');
+
+    if (!cleanName) {
+      return { success: false, error: 'Organization name is required.' };
+    }
+    if (
+      !cleanDomain ||
+      !cleanDomain.includes('.') ||
+      !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(cleanDomain)
+    ) {
+      return { success: false, error: 'A valid root domain (e.g. example.com) is required.' };
+    }
+
+    const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const prefix = cleanName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 3).toUpperCase() || 'ORG';
+    const orgCode = `${prefix}-${uniqueSuffix}`;
+
+    const contactName = (input.contactName || ownerName).trim().slice(0, 120);
+    const contactEmail = (input.contactEmail || ownerEmail).toLowerCase().trim();
+
+    const docRef = await adminDb.collection('organizations').add({
+      ownerId: uid,
+      ownerName,
+      ownerEmail: ownerEmail || null,
+      memberIds: [uid],
+      memberEmails: ownerEmail ? [ownerEmail] : [],
+      name: cleanName,
+      domain: cleanDomain,
+      code: orgCode,
+      contactName,
+      contactEmail,
+      contactPhone: (input.contactPhone || '').trim().slice(0, 40),
+      address: (input.address || '').trim().slice(0, 240),
+      phone: (input.phone || '').trim().slice(0, 40),
+      description: (input.description || '').trim().slice(0, 500),
+      status: 'Active',
+      mailServiceActive: false,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      data: {
+        id: docRef.id,
+        name: cleanName,
+        domain: cleanDomain,
+        code: orgCode,
+      },
+    };
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Failed to create organization.' };
+  }
+}
+
+export async function deleteOrganization(
+  idToken: string,
+  orgId: string,
+  stepUpToken?: string
+) {
   if (!idToken || !orgId) {
     return { success: false, error: 'Missing required parameters' };
   }
@@ -20,8 +111,13 @@ export async function deleteOrganization(idToken: string, orgId: string) {
       return { success: false, error: 'Unauthorized: Only the organization owner can delete this organization.' };
     }
 
+    assertStepUpMfa(authResult.uid, stepUpToken);
+
     const orgRef = adminDb.collection('organizations').doc(orgId);
     const orgSnap = await orgRef.get();
+    if (!orgSnap.exists) {
+      return { success: false, error: 'Organization not found.' };
+    }
     const orgData = orgSnap.data() || {};
     const orgName = String(orgData.name || orgData.domain || orgId);
     const orgDomain = String(orgData.domain || 'N/A');
@@ -29,39 +125,91 @@ export async function deleteOrganization(idToken: string, orgId: string) {
       (authResult.email ? authResult.email.toLowerCase().trim() : null) ||
       (await resolveOrganizationOwnerEmail(orgData));
 
-    const domain = String(orgData.domain || '').toLowerCase().trim();
+    const domain = String(orgData.domain || '').toLowerCase().replace(/\.$/, '').trim();
 
-    // 1. Query associated team members and all subcollections
+    // Refuse deletion if any active Legal Hold protects this organization's mail data
+    const activeHoldsSnap = await orgRef
+      .collection('mailLegalHolds')
+      .where('status', '==', 'active')
+      .limit(1)
+      .get();
+    if (!activeHoldsSnap.empty) {
+      return {
+        success: false,
+        error: 'This organization has an active Legal Hold and cannot be deleted until all holds are released.',
+      };
+    }
+
+    // Mark workspace Pending Deletion before starting cleanup
+    await orgRef.update({
+      status: 'Pending Deletion',
+      deletionRequestedAt: new Date().toISOString(),
+      deletionRequestedBy: authResult.email || authResult.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // 1. Query associated team members and ALL organization subcollections
     const [
       membersLegacySnap,
       membersArraySnap,
       mailUsersSnap,
       mailGroupsSnap,
+      mailSharedSnap,
+      mailUserMfaSnap,
       mailOusSnap,
       mailLogsSnap,
+      mailHoldsSnap,
+      mailDlpSnap,
+      mailTransportSnap,
+      mailQuarantineSnap,
+      mailQuotaSubsSnap,
       dnsSnapshotsSnap,
       secretsSnap,
+      privateSecretsSnap,
       snsEventsSnap,
     ] = await Promise.all([
       adminDb.collection('teamMembers').where('organizationId', '==', orgId).get(),
       adminDb.collection('teamMembers').where('organizationIds', 'array-contains', orgId).get(),
       orgRef.collection('mailUsers').get(),
       orgRef.collection('mailGroups').get(),
+      orgRef.collection('mailSharedMailboxes').get(),
+      orgRef.collection('mailUserMfa').get(),
       orgRef.collection('mailOrgUnits').get(),
       orgRef.collection('mailAuditLogs').get(),
+      orgRef.collection('mailLegalHolds').get(),
+      orgRef.collection('mailDlpRules').get(),
+      orgRef.collection('mailTransportRules').get(),
+      orgRef.collection('mailQuarantine').get(),
+      orgRef.collection('mailQuotaSubmissions').get(),
       orgRef.collection('dns_snapshots').get(),
       orgRef.collection('secrets').get(),
+      orgRef.collection('privateSecrets').get(),
       orgRef.collection('snsProcessedEvents').get(),
     ]);
 
-    // 2. Deprovision Stalwart principals, mailing lists, and domain (best-effort)
-    for (const uDoc of mailUsersSnap.docs) {
-      const primaryEmail = (uDoc.data().primaryEmail || '').toLowerCase().trim();
-      if (primaryEmail) {
-        await dispatchStalwartApi('DELETE', `/api/principal/${encodeURIComponent(primaryEmail)}`).catch(() => null);
+    // 2. Only deprovision Stalwart principals/domain if THIS organization owns the verified mail domain binding!
+    let ownsMailBinding = false;
+    if (domain) {
+      const bindingSnap = await adminDb.collection('mailDomainBindings').doc(domain).get();
+      if (bindingSnap.exists) {
+        ownsMailBinding = bindingSnap.data()?.orgId === orgId;
+      } else if (orgData.mailServiceActive === true) {
+        const otherActive = await adminDb
+          .collection('organizations')
+          .where('domain', '==', domain)
+          .where('mailServiceActive', '==', true)
+          .get();
+        ownsMailBinding = !otherActive.docs.some((d) => d.id !== orgId);
       }
     }
-    if (domain) {
+
+    if (ownsMailBinding && domain) {
+      for (const uDoc of mailUsersSnap.docs) {
+        const primaryEmail = (uDoc.data().primaryEmail || '').toLowerCase().trim();
+        if (primaryEmail && primaryEmail.endsWith(`@${domain}`)) {
+          await dispatchStalwartApi('DELETE', `/api/principal/${encodeURIComponent(primaryEmail)}`).catch(() => null);
+        }
+      }
       try {
         const mlRes = await callStalwartJmap([
           ['x:MailingList/get', { accountId: 'b', ids: null }, 'mlList'],
@@ -89,6 +237,26 @@ export async function deleteOrganization(idToken: string, orgId: string) {
       } catch (stalwartErr) {
         console.warn('[Org Delete] Stalwart domain cleanup warning:', stalwartErr);
       }
+    }
+
+    // Release verified domain and DNS zone bindings if owned by this org
+    if (domain && ownsMailBinding) {
+      const mailBindingRef = adminDb.collection('mailDomainBindings').doc(domain);
+      await adminDb.runTransaction(async (tx) => {
+        const snap = await tx.get(mailBindingRef);
+        if (snap.exists && snap.data()?.orgId === orgId) {
+          tx.delete(mailBindingRef);
+        }
+      });
+    }
+    if (orgData.cloudflareZoneId) {
+      const zoneBindingRef = adminDb.collection('system_zone_bindings').doc(String(orgData.cloudflareZoneId));
+      await adminDb.runTransaction(async (tx) => {
+        const snap = await tx.get(zoneBindingRef);
+        if (snap.exists && snap.data()?.orgId === orgId) {
+          tx.delete(zoneBindingRef);
+        }
+      });
     }
 
     // 3. Collect all Firestore batch operations (preserving multi-org teamMembers)
@@ -135,10 +303,18 @@ export async function deleteOrganization(idToken: string, orgId: string) {
     const subRefs = [
       ...mailUsersSnap.docs.map((d) => d.ref),
       ...mailGroupsSnap.docs.map((d) => d.ref),
+      ...mailSharedSnap.docs.map((d) => d.ref),
+      ...mailUserMfaSnap.docs.map((d) => d.ref),
       ...mailOusSnap.docs.map((d) => d.ref),
       ...mailLogsSnap.docs.map((d) => d.ref),
+      ...mailHoldsSnap.docs.map((d) => d.ref),
+      ...mailDlpSnap.docs.map((d) => d.ref),
+      ...mailTransportSnap.docs.map((d) => d.ref),
+      ...mailQuarantineSnap.docs.map((d) => d.ref),
+      ...mailQuotaSubsSnap.docs.map((d) => d.ref),
       ...dnsSnapshotsSnap.docs.map((d) => d.ref),
       ...secretsSnap.docs.map((d) => d.ref),
+      ...privateSecretsSnap.docs.map((d) => d.ref),
       ...snsEventsSnap.docs.map((d) => d.ref),
     ];
     for (const ref of subRefs) {

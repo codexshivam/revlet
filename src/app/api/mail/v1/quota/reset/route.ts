@@ -102,6 +102,8 @@ export async function POST(req: NextRequest) {
     if (!orgDocId) {
       if (isInternalSecret) {
         const now = new Date();
+        const nowMs = now.getTime();
+        const oneDayAgo = nowMs - 24 * 60 * 60 * 1000;
         const currentDayKey = now.toISOString().slice(0, 10);
         const currentMonthKey = now.toISOString().slice(0, 7);
         const systemScope = requestedScope || 'daily';
@@ -120,18 +122,30 @@ export async function POST(req: NextRequest) {
           );
           const shouldResetMonthly =
             systemScope === 'all' || systemScope === 'monthly' || isNewMonth;
-          const shouldResetDaily = systemScope === 'all' || systemScope === 'daily';
 
           const updatePayload: Record<string, any> = {
             mailQuotaLastResetAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
           };
 
-          if (shouldResetDaily) {
-            updatePayload.mailDailySent = 0;
-            updatePayload.mailHourlyBuckets = {};
+          // Prune only expired (>24h) rolling hourly buckets so live 24-hour sends
+          // are never erased by a fixed-time daily cron run.
+          if (systemScope === 'all' || systemScope === 'daily') {
+            const existingHourly: Record<string, number> = orgData.mailHourlyBuckets || {};
+            const activeHourly: Record<string, number> = {};
+            let rollingDailySent = 0;
+            for (const [key, count] of Object.entries(existingHourly)) {
+              const bucketTime = new Date(key + ':00:00.000Z').getTime();
+              if (!isNaN(bucketTime) && bucketTime >= oneDayAgo) {
+                const val = typeof count === 'number' ? count : 0;
+                activeHourly[key] = val;
+                rollingDailySent += val;
+              }
+            }
+            updatePayload.mailHourlyBuckets = activeHourly;
+            updatePayload.mailDailySent = rollingDailySent;
             updatePayload.mailDailyBucket = currentDayKey;
-            updatePayload.mailQuotaSentToday = 0;
+            updatePayload.mailQuotaSentToday = rollingDailySent;
           }
 
           if (shouldResetMonthly) {
@@ -150,7 +164,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           ok: true,
           scope: systemScope,
-          message: `System-wide email quotas reset (${systemScope}) for ${resetCount} organizations (${monthlyRolloverCount} monthly rollovers).`,
+          message: `Reconciled rolling 24h buckets (${systemScope}) for ${resetCount} organizations (${monthlyRolloverCount} monthly rollovers).`,
           resetCount,
           monthlyRolloverCount,
         });
@@ -162,12 +176,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Restrict manual quota adjustments to internal operations secret or platform super-admin
+    // (or Organization Owner / Organization Admin, never ordinary Email: Admin).
     if (!isInternalSecret && decodedToken?.admin !== true) {
       try {
-        await verifyUserOrgAccess(bearerToken, orgDocId, undefined, ['Email: Admin']);
+        const auth = await verifyUserOrgAccess(bearerToken, orgDocId);
+        if (!auth.isOwner && !auth.permissions.includes('Organization Admin')) {
+          return NextResponse.json(
+            { ok: false, error: 'Forbidden: Organization Owner or Organization Admin permission required to adjust quotas.' },
+            { status: 403 }
+          );
+        }
       } catch (err: any) {
         return NextResponse.json(
-          { ok: false, error: err?.message || 'Forbidden: Email Admin permission required.' },
+          { ok: false, error: err?.message || 'Forbidden: Operations or Organization Admin permission required.' },
           { status: 403 }
         );
       }

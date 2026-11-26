@@ -58,7 +58,8 @@ service cloud.firestore {
               .hasOnly(['name', 'address', 'phone', 'code', 'contactName', 'contactPhone', 'contactEmail', 'description', 'status', 'updatedAt'])
           )
         );
-      allow delete: if isResourceOwner() || isSuperAdmin();
+      // Organization deletion must execute via the MFA-gated, legal-hold-checked Server Action.
+      allow delete: if false;
 
       match /secrets/{secretId} {
         allow read, write: if false;

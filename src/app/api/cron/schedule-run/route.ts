@@ -49,56 +49,71 @@ async function executeScheduledRun(request: NextRequest) {
 
   const startedAt = new Date().toISOString();
   const results: Record<string, unknown> = {};
+  let hasFailure = false;
 
   // 1. Purge expired organization mail data
   try {
     results.purgeExpired = await purgeExpiredMailData();
   } catch (err: any) {
+    hasFailure = true;
     results.purgeExpired = { error: err?.message || 'Purge failed' };
   }
 
-  // 2. Reset daily outbound quotas if needed (runs once per UTC day or when ?forceQuotaReset=true)
+  // 2. Reconcile expired (>24h) rolling quota buckets & monthly rollovers without erasing live 24h sends
   try {
     const forceQuotaReset = request.nextUrl.searchParams.get('forceQuotaReset') === 'true';
-    const todayUtc = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const nowMs = now.getTime();
+    const oneDayAgo = nowMs - 24 * 60 * 60 * 1000;
+    const todayUtc = now.toISOString().slice(0, 10);
+    const currentMonthKey = now.toISOString().slice(0, 7);
     const stateRef = adminDb.collection('system').doc('schedulerState');
     const stateSnap = await stateRef.get();
     const lastQuotaResetDay = stateSnap.data()?.lastQuotaResetDay;
 
     if (forceQuotaReset || lastQuotaResetDay !== todayUtc) {
-      let resetOrgsCount = 0;
-      let resetUsersCount = 0;
+      let reconciledOrgsCount = 0;
+      let monthlyRolloverCount = 0;
       const orgsSnap = await adminDb
         .collection('organizations')
         .where('mailServiceActive', '==', true)
         .get();
 
       for (const orgDoc of orgsSnap.docs) {
-        await orgDoc.ref.set(
-          {
-            mailQuotaSentToday: 0,
-            mailQuotaLastResetAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true }
-        );
-        resetOrgsCount++;
-
-        const usersSnap = await orgDoc.ref.collection('mailUsers').get();
-        if (!usersSnap.empty) {
-          const batch = adminDb.batch();
-          for (const userDoc of usersSnap.docs) {
-            batch.set(
-              userDoc.ref,
-              {
-                sentTodayCount: 0,
-                quotaLastResetAt: FieldValue.serverTimestamp(),
-              },
-              { merge: true }
-            );
-            resetUsersCount++;
+        const orgData = orgDoc.data() || {};
+        const existingHourly: Record<string, number> = orgData.mailHourlyBuckets || {};
+        const activeHourly: Record<string, number> = {};
+        let rollingDailySent = 0;
+        for (const [key, count] of Object.entries(existingHourly)) {
+          const bucketTime = new Date(key + ':00:00.000Z').getTime();
+          if (!isNaN(bucketTime) && bucketTime >= oneDayAgo) {
+            const val = typeof count === 'number' ? count : 0;
+            activeHourly[key] = val;
+            rollingDailySent += val;
           }
-          await batch.commit();
         }
+
+        const isNewMonth = Boolean(
+          orgData.mailMonthlyBucket && orgData.mailMonthlyBucket !== currentMonthKey
+        );
+        const updatePayload: Record<string, unknown> = {
+          mailHourlyBuckets: activeHourly,
+          mailDailySent: rollingDailySent,
+          mailQuotaSentToday: rollingDailySent,
+          mailDailyBucket: todayUtc,
+          mailQuotaLastResetAt: FieldValue.serverTimestamp(),
+        };
+        if (isNewMonth) {
+          updatePayload.mailMonthlySent = 0;
+          updatePayload.mailDailyBuckets = {};
+          updatePayload.mailMonthlyBucket = currentMonthKey;
+          monthlyRolloverCount++;
+        } else if (!orgData.mailMonthlyBucket) {
+          updatePayload.mailMonthlyBucket = currentMonthKey;
+        }
+
+        await orgDoc.ref.set(updatePayload, { merge: true });
+        reconciledOrgsCount++;
       }
 
       await stateRef.set(
@@ -113,17 +128,18 @@ async function executeScheduledRun(request: NextRequest) {
       results.quotaReset = {
         executed: true,
         day: todayUtc,
-        resetOrgsCount,
-        resetUsersCount,
+        reconciledOrgsCount,
+        monthlyRolloverCount,
       };
     } else {
       results.quotaReset = {
         executed: false,
-        reason: `Already reset for ${todayUtc}`,
+        reason: `Already reconciled for ${todayUtc}`,
       };
     }
   } catch (err: any) {
-    results.quotaReset = { error: err?.message || 'Quota reset failed' };
+    hasFailure = true;
+    results.quotaReset = { error: err?.message || 'Quota reconciliation failed' };
   }
 
   // 3. Trigger RevletMail ephemeral purge if configured
@@ -137,23 +153,30 @@ async function executeScheduledRun(request: NextRequest) {
       },
       signal: AbortSignal.timeout(8000),
     });
+    if (!res.ok) {
+      hasFailure = true;
+    }
     results.webmailEphemeralPurge = {
       status: res.status,
       ok: res.ok,
     };
   } catch (err: any) {
+    hasFailure = true;
     results.webmailEphemeralPurge = {
-      skipped: true,
+      ok: false,
       reason: err?.message || 'Webmail unreachable',
     };
   }
 
-  return NextResponse.json({
-    success: true,
-    startedAt,
-    completedAt: new Date().toISOString(),
-    results,
-  });
+  return NextResponse.json(
+    {
+      success: !hasFailure,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      results,
+    },
+    { status: hasFailure ? 500 : 200 }
+  );
 }
 
 export async function GET(request: NextRequest) {

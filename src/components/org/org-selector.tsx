@@ -27,9 +27,9 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { useActiveOrg } from "@/hooks/use-active-org"
-import { useUser, useFirestore } from "@/firebase"
+import { useUser } from "@/firebase"
 import { useToast } from "@/hooks/use-toast"
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { createOrganizationWorkspace } from "@/app/actions/organization"
 
 export function OrgSelector({ 
   selectedId, 
@@ -42,7 +42,6 @@ export function OrgSelector({
 }) {
   const { orgs, activeOrgId, setActiveOrgId, loading } = useActiveOrg()
   const { user } = useUser()
-  const db = useFirestore()
   const { toast } = useToast()
 
   const [open, setOpen] = React.useState(false)
@@ -89,21 +88,19 @@ export function OrgSelector({
     setIsSubmitting(true)
 
     try {
-      const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase()
-      const orgCode = `${cleanName.substring(0, 3).toUpperCase()}-${uniqueSuffix}`
-
-      const orgsRef = collection(db, "organizations")
-      const newDoc = await addDoc(orgsRef, {
+      const idToken = await user.getIdToken()
+      const res = await createOrganizationWorkspace(idToken, {
         name: cleanName,
         domain: cleanDomain,
-        code: orgCode,
-        ownerId: user.uid,
-        status: "Active",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
       })
+      if (!res.success || !res.data?.id) {
+        throw new Error(res.error || "Failed to create organization.")
+      }
 
-      handleSelect(newDoc.id)
+      handleSelect(res.data.id)
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("revlet-orgs-refresh"))
+      }
       setIsAddOrgOpen(false)
       setNewOrgName("")
       setNewOrgDomain("")

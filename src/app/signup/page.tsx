@@ -332,7 +332,9 @@ export default function SignupPage() {
       }
 
       if (typeof window !== "undefined") {
-        localStorage.setItem("revlet_active_org_id", newOrgDoc.id)
+        sessionStorage.setItem(`revlet_active_org:${activeUser.uid}`, newOrgDoc.id)
+        localStorage.setItem("selectedOrgId", newOrgDoc.id)
+        window.dispatchEvent(new Event("active-org-changed"))
       }
 
       toast({

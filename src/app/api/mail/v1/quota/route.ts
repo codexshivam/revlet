@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const fromEmail = (body.fromEmail || '').toLowerCase().trim();
+    const explicitOrgId = typeof body.orgId === 'string' ? body.orgId.trim() : '';
+    const submissionId = typeof body.submissionId === 'string' ? body.submissionId.trim().slice(0, 128) : '';
     const recipientCount = Math.max(1, Math.min(100, Number(body.recipientCount) || 1));
 
     if (!fromEmail || !fromEmail.includes('@')) {
@@ -77,22 +79,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let orgId = getCachedOrgId(domain);
+    // Resolve organization authoritatively via mailDomainBindings/{domain} first
+    let orgId = explicitOrgId || getCachedOrgId(domain);
     if (!orgId) {
-      const orgSnap = await adminDb
-        .collection('organizations')
-        .where('domain', '==', domain)
-        .limit(1)
-        .get();
+      const bindingSnap = await adminDb.collection('mailDomainBindings').doc(domain).get();
+      if (bindingSnap.exists && typeof bindingSnap.data()?.orgId === 'string') {
+        orgId = bindingSnap.data()!.orgId;
+      } else {
+        // Legacy fallback: only match an org with active email service on this domain
+        const orgSnap = await adminDb
+          .collection('organizations')
+          .where('domain', '==', domain)
+          .where('mailServiceActive', '==', true)
+          .limit(2)
+          .get();
 
-      if (orgSnap.empty) {
+        if (orgSnap.empty) {
+          return NextResponse.json(
+            { ok: false, smtpCode: 550, smtpMessage: '550 5.1.8 Sender domain not registered or inactive.' },
+            { status: 404 }
+          );
+        }
+        if (orgSnap.size > 1) {
+          return NextResponse.json(
+            { ok: false, smtpCode: 451, smtpMessage: '451 4.3.0 Ambiguous domain binding.' },
+            { status: 409 }
+          );
+        }
+        orgId = orgSnap.docs[0].id;
+      }
+      domainOrgCache.set(domain, { orgId, expiresAt: Date.now() + CACHE_TTL_MS });
+    } else if (explicitOrgId) {
+      // Verify explicit orgId owns the domain binding if a binding exists
+      const bindingSnap = await adminDb.collection('mailDomainBindings').doc(domain).get();
+      if (bindingSnap.exists && bindingSnap.data()?.orgId !== explicitOrgId) {
         return NextResponse.json(
-          { ok: false, smtpCode: 550, smtpMessage: '550 5.1.8 Sender domain not registered.' },
-          { status: 404 }
+          { ok: false, smtpCode: 553, smtpMessage: '553 5.7.1 Sender domain does not match organization binding.' },
+          { status: 403 }
         );
       }
-      orgId = orgSnap.docs[0].id;
-      domainOrgCache.set(domain, { orgId, expiresAt: Date.now() + CACHE_TTL_MS });
     }
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
@@ -146,8 +171,26 @@ export async function POST(req: NextRequest) {
     }
 
     const txResult = await adminDb.runTransaction(async (tx) => {
-      const freshOrgDoc = await tx.get(orgRef);
+      const submissionRef = submissionId
+        ? orgRef.collection('mailQuotaSubmissions').doc(submissionId)
+        : null;
+      const [freshOrgDoc, existingSubmissionSnap] = await Promise.all([
+        tx.get(orgRef),
+        submissionRef ? tx.get(submissionRef) : Promise.resolve(null),
+      ]);
       const d = freshOrgDoc.data() || {};
+
+      // Idempotent reservation: return existing result if submissionId already charged
+      if (existingSubmissionSnap?.exists) {
+        return {
+          allowed: true,
+          idempotentReplay: true,
+          dailySent: d.mailDailySent ?? 0,
+          monthlySent: d.mailMonthlySent ?? 0,
+          dailyLimit: d.mailDailyLimit ?? 100,
+          monthlyLimit: d.mailMonthlyLimit ?? 1000,
+        };
+      }
 
       if (d.mailOutboundPaused || (typeof d.mailBounceRate === 'number' && d.mailBounceRate > 5.0)) {
         return {
@@ -202,15 +245,11 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 2. Calculate Monthly Sent Count for Current Calendar Month
+      // 2. Calculate Monthly Sent Count for Current UTC Calendar Month independently
+      // (never pull last month's rolling 24h sends into a new calendar month).
       const currentMonthKey = now.toISOString().slice(0, 7); // e.g. "2026-11"
-      const isNewMonth = d.mailMonthlyBucket && d.mailMonthlyBucket !== currentMonthKey;
-      let currentMonthlySent = 0;
-
-      if (!isNewMonth) {
-        const recordedMonthly = d.mailMonthlySent ?? 0;
-        currentMonthlySent = Math.max(recordedMonthly, rollingDailySent);
-      }
+      const isNewMonth = Boolean(d.mailMonthlyBucket && d.mailMonthlyBucket !== currentMonthKey);
+      const currentMonthlySent = isNewMonth ? 0 : Math.max(0, Number(d.mailMonthlySent ?? 0));
 
       const projectedDaily = rollingDailySent + recipientCount;
       const projectedMonthly = currentMonthlySent + recipientCount;
@@ -225,6 +264,14 @@ export async function POST(req: NextRequest) {
           dailyLimit,
           monthlyLimit,
         };
+      }
+
+      if (submissionRef) {
+        tx.set(submissionRef, {
+          fromEmail,
+          recipientCount,
+          createdAt: now.toISOString(),
+        });
       }
 
       // 3. Keep 30-day daily buckets for analytics/auditing

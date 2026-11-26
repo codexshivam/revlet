@@ -176,8 +176,21 @@ export default {
       'User-Agent': 'Cloudflare-Worker-Manual/1.0',
     };
 
-    // 1. Live Stalwart Health & Queue Monitor
+    // 1. Minimal public liveness on /health; detailed Stalwart queue diagnostics require auth
     if (url.pathname === '/health') {
+      const detailed = url.searchParams.get('detailed') === '1' || url.searchParams.get('detailed') === 'true';
+      if (!detailed) {
+        return new Response(
+          JSON.stringify({ ok: true, status: 'alive', timestamp: new Date().toISOString() }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (!isAuthorized(request, env)) {
+        return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       const report = await checkStalwartHealthAndQueue(env);
       return new Response(JSON.stringify(report, null, 2), {
         status: report.ok ? 200 : 503,
@@ -241,8 +254,14 @@ export default {
       );
     }
 
-    // 4. Manual job trigger
+    // 4. Manual job trigger (strictly authenticated)
     if (url.pathname === '/run') {
+      if (!isAuthorized(request, env)) {
+        return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       const target = url.searchParams.get('job') || 'schedule-run';
       let endpoint = `${env.APP_URL}/api/cron/schedule-run`;
       let method = 'POST';

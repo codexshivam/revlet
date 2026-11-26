@@ -864,9 +864,43 @@ export async function deactivateMailService(idToken: string, orgId: string, step
     const nowMs = Date.now();
     const deactivatedAt = new Date(nowMs).toISOString();
     const purgeScheduledAt = new Date(nowMs + FOURTEEN_DAYS_MS).toISOString();
+    const domain = String(orgData.domain || '').toLowerCase().replace(/\.$/, '').trim();
 
-    await adminDb.collection('organizations').doc(orgId).update({
+    const orgRef = adminDb.collection('organizations').doc(orgId);
+    const usersSnap = await orgRef.collection('mailUsers').get();
+
+    // Immediately pause all active mailboxes at the provider boundary and revoke webmail sessions
+    for (const uDoc of usersSnap.docs) {
+      const uData = uDoc.data() || {};
+      if (uData.primaryEmail && domain) {
+        await syncStalwartUserPrincipal({
+          primaryEmail: uData.primaryEmail,
+          displayName: uData.displayName || uData.firstName || '',
+          orgUnitPath: uData.orgUnitPath || '/',
+          aliases: Array.isArray(uData.aliases) ? uData.aliases : [],
+          domain,
+          isCatchAllTarget: false,
+          disabled: true,
+          expectedPrincipalId: uData.stalwartAccountId || null,
+        }).catch((err) => {
+          console.warn('[Mail Deactivate] Provider pause warning:', err?.message || err);
+        });
+      }
+    }
+    for (let i = 0; i < usersSnap.docs.length; i += 400) {
+      const batch = adminDb.batch();
+      usersSnap.docs.slice(i, i + 400).forEach((uDoc) => {
+        batch.update(uDoc.ref, {
+          sessionRevokedAt: nowMs,
+          updatedAt: deactivatedAt,
+        });
+      });
+      await batch.commit();
+    }
+
+    await orgRef.update({
       mailServiceActive: false,
+      mailLifecycleState: 'scheduled_for_deletion',
       mailDeactivatedAt: deactivatedAt,
       mailPurgeScheduledAt: purgeScheduledAt,
       mailPurgeCompletedAt: null,

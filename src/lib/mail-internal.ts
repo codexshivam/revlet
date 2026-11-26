@@ -576,13 +576,18 @@ export async function purgeExpiredMailData(): Promise<{
         const sharedSnap = await orgDoc.ref.collection('mailSharedMailboxes').get();
         const ousSnap = await orgDoc.ref.collection('mailOrgUnits').get();
 
-        // Re-check legal holds immediately before destructive Stalwart/Firestore deletion
-        const preDeleteHolds = await orgDoc.ref
-          .collection('mailLegalHolds')
-          .where('status', '==', 'active')
-          .limit(1)
-          .get();
+        // Re-check fresh organization state and legal holds immediately before
+        // destructive Stalwart/Firestore deletion so reactivation or a newly placed hold wins.
+        const [freshOrgSnap, preDeleteHolds] = await Promise.all([
+          orgDoc.ref.get(),
+          orgDoc.ref.collection('mailLegalHolds').where('status', '==', 'active').limit(1).get(),
+        ]);
+        const freshOrgData = freshOrgSnap.data() || {};
+        if (!freshOrgSnap.exists || freshOrgData.mailServiceActive === true || !freshOrgData.mailPurgeScheduledAt) {
+          continue;
+        }
         if (!preDeleteHolds.empty) {
+          await orgDoc.ref.update({ mailLifecycleState: 'held', updatedAt: FieldValue.serverTimestamp() });
           await logMailAuditEvent({
             orgId,
             actorUid: 'system-cron',
@@ -592,6 +597,8 @@ export async function purgeExpiredMailData(): Promise<{
           });
           continue;
         }
+
+        await orgDoc.ref.update({ mailLifecycleState: 'purging', updatedAt: FieldValue.serverTimestamp() });
 
         // Remove user principals from Stalwart
         for (const uDoc of usersSnap.docs) {
@@ -646,6 +653,7 @@ export async function purgeExpiredMailData(): Promise<{
         }
 
         await orgDoc.ref.update({
+          mailLifecycleState: 'purged',
           mailPurgeScheduledAt: null,
           mailPurgeCompletedAt: nowIso,
           mailCatchAllUserId: null,

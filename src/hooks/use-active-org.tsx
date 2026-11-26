@@ -54,6 +54,7 @@ interface OrgContextType {
   setActiveOrgId: (id: string) => void
   refreshOrgs: () => Promise<void>
   loading: boolean
+  error: string | null
   routeOrgKey: string | null
   isRouteOrgResolving: boolean
   isRouteOrgUnavailable: boolean
@@ -61,19 +62,28 @@ interface OrgContextType {
 
 const OrgContext = createContext<OrgContextType | null>(null)
 
+function getTabStorageKey(uid: string | null | undefined): string {
+  return uid ? `revlet_active_org:${uid}` : "selectedOrgId"
+}
+
+function readTabActiveOrgId(uid: string | null | undefined): string {
+  if (typeof window === "undefined") return ""
+  if (uid) {
+    const perTab = sessionStorage.getItem(getTabStorageKey(uid))
+    if (perTab) return perTab
+  }
+  return localStorage.getItem("selectedOrgId") || ""
+}
+
 export function OrgProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: userLoading } = useUser()
   const db = useFirestore()
   const pathname = usePathname()
   const router = useRouter()
   const [orgs, setOrgs] = useState<Organization[]>([])
-  const [activeOrgId, setActiveOrgId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("selectedOrgId") || ""
-    }
-    return ""
-  })
+  const [activeOrgId, setActiveOrgId] = useState<string>(() => readTabActiveOrgId(null))
   const [loading, setLoading] = useState(true)
+  const [orgsError, setOrgsError] = useState<string | null>(null)
   const claimedUidRef = useRef<string | null>(null)
 
   const fetchOrgs = useCallback(async () => {
@@ -85,18 +95,22 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       setOrgs([])
       setActiveOrgId("")
+      setOrgsError(null)
       setLoading(false)
       claimedUidRef.current = null
       return
     }
 
     setLoading(true)
+    setOrgsError(null)
     try {
+      const normalizedEmail = user.email?.toLowerCase().trim() || ""
       const q = query(
         collection(db, "organizations"),
         or(
           where("ownerId", "==", user.uid),
-          where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
+          where("memberIds", "array-contains", user.uid),
+          ...(normalizedEmail ? [where("memberEmails", "array-contains", normalizedEmail)] : [])
         )
       )
       const snap = await getDocs(q)
@@ -113,7 +127,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
 
       setOrgs(fetched)
 
-      const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
+      const storedId = readTabActiveOrgId(user.uid)
       const found = fetched.find((o) => o.id === storedId)
 
       if (found) {
@@ -121,13 +135,15 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       } else if (fetched.length > 0) {
         setActiveOrgId(fetched[0].id)
         if (typeof window !== "undefined") {
-          localStorage.setItem("selectedOrgId", fetched[0].id)
+          sessionStorage.setItem(getTabStorageKey(user.uid), fetched[0].id)
         }
       } else {
         setActiveOrgId("")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching organizations:", error)
+      setOrgs([])
+      setOrgsError(error?.message || "Failed to load organizations.")
     } finally {
       setLoading(false)
     }
@@ -151,11 +167,13 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     // Invitations are explicitly accepted via /invite/[token] — never silently claimed in the background.
     const inviteTimer: ReturnType<typeof setTimeout> | null = null
 
+    const normalizedEmail = user.email?.toLowerCase().trim() || ""
     const q = query(
       collection(db, "organizations"),
       or(
         where("ownerId", "==", user.uid),
-        where("memberEmails", "array-contains", user.email?.toLowerCase().trim() || "")
+        where("memberIds", "array-contains", user.uid),
+        ...(normalizedEmail ? [where("memberEmails", "array-contains", normalizedEmail)] : [])
       )
     )
 
@@ -163,6 +181,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       q,
       (snap) => {
         if (!active) return
+        setOrgsError(null)
         const fetched = (snap.docs
           .map((doc) => ({
             id: doc.id,
@@ -176,14 +195,14 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
 
         setOrgs(fetched)
 
-        const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
+        const storedId = readTabActiveOrgId(user.uid)
         const found = fetched.find((o) => o.id === storedId)
         if (found) {
           setActiveOrgId(found.id)
         } else if (fetched.length > 0) {
           setActiveOrgId(fetched[0].id)
           if (typeof window !== "undefined") {
-            localStorage.setItem("selectedOrgId", fetched[0].id)
+            sessionStorage.setItem(getTabStorageKey(user.uid), fetched[0].id)
           }
         } else {
           setActiveOrgId("")
@@ -210,9 +229,10 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, userLoading, db, fetchOrgs])
 
+  // Keep active workspace scoped to this tab only (do not listen to cross-tab storage events)
   useEffect(() => {
     const handleOrgChanged = () => {
-      const storedId = typeof window !== "undefined" ? localStorage.getItem("selectedOrgId") : null
+      const storedId = readTabActiveOrgId(user?.uid)
       if (storedId && storedId !== activeOrgId) {
         setActiveOrgId(storedId)
       }
@@ -220,15 +240,13 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== "undefined") {
       window.addEventListener("active-org-changed", handleOrgChanged)
-      window.addEventListener("storage", handleOrgChanged)
     }
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener("active-org-changed", handleOrgChanged)
-        window.removeEventListener("storage", handleOrgChanged)
       }
     }
-  }, [activeOrgId])
+  }, [activeOrgId, user?.uid])
 
   // Synchronously derive route-scoped workspace key from /orgs/[orgKey]/*
   const routeOrgKey = useMemo(() => {
@@ -260,20 +278,22 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       return
     }
     if (typeof window !== "undefined") {
+      sessionStorage.setItem(getTabStorageKey(user?.uid), routeMatchedOrg.id)
       localStorage.setItem("selectedOrgId", routeMatchedOrg.id)
       router.replace(legacyWorkspaceDestination(pathname, window.location.search, window.location.hash))
     }
-  }, [routeMatchedOrg, activeOrgId, pathname, router])
+  }, [routeMatchedOrg, activeOrgId, pathname, router, user?.uid])
 
   const changeActiveOrg = useCallback(
     (id: string) => {
       if (typeof window !== "undefined") {
+        sessionStorage.setItem(getTabStorageKey(user?.uid), id)
         localStorage.setItem("selectedOrgId", id)
         window.dispatchEvent(new Event("active-org-changed"))
       }
       setActiveOrgId(id)
     },
-    []
+    [user?.uid]
   )
 
   // When on a route-scoped /orgs/[orgKey]/* URL, NEVER fall back to another org!
@@ -297,6 +317,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       setActiveOrgId: changeActiveOrg,
       refreshOrgs: fetchOrgs,
       loading,
+      error: orgsError,
       routeOrgKey,
       isRouteOrgResolving,
       isRouteOrgUnavailable,
@@ -308,6 +329,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       changeActiveOrg,
       fetchOrgs,
       loading,
+      orgsError,
       routeOrgKey,
       isRouteOrgResolving,
       isRouteOrgUnavailable,
@@ -333,6 +355,7 @@ export function useActiveOrg(): OrgContextType {
       },
       refreshOrgs: async () => {},
       loading: true,
+      error: null,
       routeOrgKey: null,
       isRouteOrgResolving: false,
       isRouteOrgUnavailable: false,

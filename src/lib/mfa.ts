@@ -116,7 +116,7 @@ export function createStepUpToken(
   return `${encoded}.${sig}`;
 }
 
-export function verifyStepUpToken(token: string | undefined | null, expectedUid: string): StepUpTokenPayload | null {
+export function verifyAnyStepUpToken(token: string | undefined | null): StepUpTokenPayload | null {
   if (!token || typeof token !== 'string') return null;
   const parts = token.split('.');
   if (parts.length !== 2) return null;
@@ -135,12 +135,18 @@ export function verifyStepUpToken(token: string | undefined | null, expectedUid:
     const decoded = JSON.parse(
       Buffer.from(encoded, 'base64url').toString('utf8')
     ) as StepUpTokenPayload;
-    if (!decoded || decoded.uid !== expectedUid) return null;
+    if (!decoded || typeof decoded.uid !== 'string' || !decoded.uid) return null;
     if (typeof decoded.exp !== 'number' || decoded.exp < Date.now()) return null;
     return decoded;
   } catch {
     return null;
   }
+}
+
+export function verifyStepUpToken(token: string | undefined | null, expectedUid: string): StepUpTokenPayload | null {
+  const decoded = verifyAnyStepUpToken(token);
+  if (!decoded || decoded.uid !== expectedUid) return null;
+  return decoded;
 }
 
 export function hashOtpCode(uid: string, code: string): string {

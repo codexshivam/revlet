@@ -26,12 +26,13 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 import { useActiveOrg } from "@/hooks/use-active-org"
+import { buildOrgRoute } from "@/lib/org-routes"
 import { useToast } from "@/hooks/use-toast"
 
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false)
   const router = useRouter()
-  const { orgs, activeOrgId, setActiveOrgId } = useActiveOrg()
+  const { orgs, activeOrg, activeOrgId, setActiveOrgId } = useActiveOrg()
   const { toast } = useToast()
 
   React.useEffect(() => {
@@ -63,24 +64,24 @@ export function CommandPalette() {
         <CommandEmpty>No matching commands, pages, or organizations found.</CommandEmpty>
 
         <CommandGroup heading="Navigation">
-          <CommandItem onSelect={() => navigate("/account/home")}>
+          <CommandItem onSelect={() => navigate(buildOrgRoute(activeOrg?.id, "overview"))}>
             <LayoutDashboard className="mr-2 h-4 w-4 text-zinc-900 group-hover:!text-white group-data-[selected='true']:!text-white" />
-            <span>Account Home</span>
+            <span>Workspace Overview</span>
             <CommandShortcut>Home</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={() => navigate("/services/dns")}>
+          <CommandItem onSelect={() => navigate(buildOrgRoute(activeOrg?.id, "dns"))}>
             <Globe className="mr-2 h-4 w-4 text-emerald-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>DNS Management</span>
           </CommandItem>
-          <CommandItem onSelect={() => navigate("/services/email")}>
+          <CommandItem onSelect={() => navigate(buildOrgRoute(activeOrg?.id, "email", "users"))}>
             <Mail className="mr-2 h-4 w-4 text-zinc-900 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email Service</span>
           </CommandItem>
-          <CommandItem onSelect={() => navigate("/management/team")}>
+          <CommandItem onSelect={() => navigate(buildOrgRoute(activeOrg?.id, "team"))}>
             <Users className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Team Management</span>
           </CommandItem>
-          <CommandItem onSelect={() => navigate("/management/settings")}>
+          <CommandItem onSelect={() => navigate(buildOrgRoute(activeOrg?.id, "settings"))}>
             <Settings className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Account Settings</span>
           </CommandItem>
@@ -89,19 +90,19 @@ export function CommandPalette() {
         <CommandSeparator />
 
         <CommandGroup heading="Email Directory">
-          <CommandItem onSelect={() => navigate("/services/email?tab=users")}>
+          <CommandItem onSelect={() => navigate(buildOrgRoute(activeOrg?.id, "email", "users"))}>
             <Mail className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email: Users Directory</span>
           </CommandItem>
-          <CommandItem onSelect={() => navigate("/services/email?tab=groups")}>
+          <CommandItem onSelect={() => navigate(buildOrgRoute(activeOrg?.id, "email", "groups"))}>
             <Users className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email: Groups</span>
           </CommandItem>
-          <CommandItem onSelect={() => navigate("/services/email?tab=suspended")}>
+          <CommandItem onSelect={() => navigate(buildOrgRoute(activeOrg?.id, "email", "suspended"))}>
             <ShieldAlert className="mr-2 h-4 w-4 text-amber-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email: Suspended Accounts</span>
           </CommandItem>
-          <CommandItem onSelect={() => navigate("/services/email?tab=settings")}>
+          <CommandItem onSelect={() => navigate(buildOrgRoute(activeOrg?.id, "email", "settings"))}>
             <Settings className="mr-2 h-4 w-4 text-slate-600 group-hover:!text-white group-data-[selected='true']:!text-white" />
             <span>Email: Settings &amp; DNS</span>
           </CommandItem>

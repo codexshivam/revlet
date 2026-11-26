@@ -107,7 +107,7 @@ function DashboardShellInner({
   className?: string
 }) {
   const { user, loading } = useUser()
-  const { activeOrg } = useActiveOrg()
+  const { activeOrg, orgs, routeOrgKey, isRouteOrgResolving, isRouteOrgUnavailable } = useActiveOrg()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -261,7 +261,41 @@ function DashboardShellInner({
               )}
             >
               <div className="space-y-6 sm:space-y-8 flex-1 animate-fade-up-in motion-reduce:animate-none">
-                {children}
+                {isRouteOrgResolving ? (
+                  <div className="space-y-4 py-6">
+                    <div className="h-7 w-48 rounded bg-slate-200/80" />
+                    <div className="h-36 w-full rounded-xl border border-slate-200 bg-white" />
+                  </div>
+                ) : isRouteOrgUnavailable ? (
+                  <div className="max-w-lg mx-auto my-12 rounded-xl border border-slate-200 bg-white p-6 text-center space-y-4">
+                    <div className="space-y-1.5">
+                      <h1 className="text-base font-semibold text-slate-900">
+                        Workspace unavailable
+                      </h1>
+                      <p className="text-sm text-slate-600">
+                        You do not have access to workspace <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">{routeOrgKey}</span>, or it no longer exists.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                      {orgs[0] ? (
+                        <Link
+                          href={`/orgs/${encodeURIComponent(orgs[0].id)}/overview`}
+                          className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-800 transition-colors"
+                        >
+                          Open {orgs[0].name || orgs[0].domain}
+                        </Link>
+                      ) : null}
+                      <Link
+                        href="/account/home"
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        Go to Account Home
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  children
+                )}
               </div>
             </div>
           </main>

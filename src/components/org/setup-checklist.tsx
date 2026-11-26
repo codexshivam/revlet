@@ -6,6 +6,7 @@ import { ArrowRight, CheckCircle2, Circle, Sparkles, X } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useActiveOrg } from "@/hooks/use-active-org"
+import { buildOrgRoute } from "@/lib/org-routes"
 import { cn } from "@/lib/utils"
 
 const DISMISS_KEY_PREFIX = "revlet_setup_checklist_dismissed_"
@@ -35,25 +36,25 @@ export function SetupChecklist() {
       id: "org",
       label: "Register organization",
       done: hasDomain,
-      href: "/account/home",
+      href: buildOrgRoute(activeOrg.id, "overview"),
     },
     {
       id: "dns",
       label: "Connect DNS management",
       done: hasDns,
-      href: "/services/dns",
+      href: buildOrgRoute(activeOrg.id, "dns"),
     },
     {
       id: "email",
       label: "Activate Email Service",
       done: hasMail,
-      href: "/services/email",
+      href: buildOrgRoute(activeOrg.id, "email", "users"),
     },
     {
       id: "team",
       label: "Invite team members",
       done: hasTeam,
-      href: "/management/team",
+      href: buildOrgRoute(activeOrg.id, "team"),
     },
   ]
 

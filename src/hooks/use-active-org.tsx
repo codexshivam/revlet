@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useUser, useFirestore } from "@/firebase"
 import { collection, query, where, or, getDocs, onSnapshot } from "firebase/firestore"
 import { checkAndClaimInvitations } from "@/app/actions/team"
+import { preserveCompatibleSearchParams } from "@/lib/org-routes"
 
 export interface Organization {
   id: string
@@ -53,6 +54,9 @@ interface OrgContextType {
   setActiveOrgId: (id: string) => void
   refreshOrgs: () => Promise<void>
   loading: boolean
+  routeOrgKey: string | null
+  isRouteOrgResolving: boolean
+  isRouteOrgUnavailable: boolean
 }
 
 const OrgContext = createContext<OrgContextType | null>(null)
@@ -250,27 +254,45 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeOrgId])
 
-  // Sync activeOrgId from explicit /orgs/[orgKey]/* workspace URL
-  useEffect(() => {
-    if (!pathname || orgs.length === 0) return
+  // Synchronously derive route-scoped workspace key from /orgs/[orgKey]/*
+  const routeOrgKey = useMemo(() => {
+    if (!pathname) return null
     const match = pathname.match(/^\/orgs\/([^/]+)(?:\/|$)/)
-    if (!match) return
-    const orgKey = decodeURIComponent(match[1])
-    const matched = orgs.find(
-      (o) => o.id === orgKey || (o.code && o.code.toLowerCase() === orgKey.toLowerCase())
-    )
-    if (matched && matched.id !== activeOrgId) {
-      setActiveOrgId(matched.id)
-      if (typeof window !== "undefined") {
-        localStorage.setItem("selectedOrgId", matched.id)
-      }
+    if (!match) return null
+    try {
+      return decodeURIComponent(match[1])
+    } catch {
+      return match[1]
     }
-  }, [pathname, orgs, activeOrgId])
+  }, [pathname])
+
+  const routeMatchedOrg = useMemo(() => {
+    if (!routeOrgKey) return undefined
+    return orgs.find(
+      (o) => o.id === routeOrgKey || (o.code && o.code.toLowerCase() === routeOrgKey.toLowerCase())
+    )
+  }, [routeOrgKey, orgs])
+
+  const isRouteOrgResolving = Boolean(routeOrgKey && loading && !routeMatchedOrg)
+  const isRouteOrgUnavailable = Boolean(routeOrgKey && !loading && !routeMatchedOrg)
+
+  // Keep persisted last-org synced when a route org resolves
+  useEffect(() => {
+    if (!routeMatchedOrg) return
+    if (routeMatchedOrg.id !== activeOrgId) {
+      setActiveOrgId(routeMatchedOrg.id)
+    }
+    if (typeof window !== "undefined") {
+      localStorage.setItem("selectedOrgId", routeMatchedOrg.id)
+      document.cookie = `revlet_last_org=${encodeURIComponent(routeMatchedOrg.id)}; path=/; max-age=2592000; samesite=lax`
+    }
+  }, [routeMatchedOrg, activeOrgId])
 
   const changeActiveOrg = useCallback(
     (id: string) => {
       if (typeof window !== "undefined") {
         localStorage.setItem("selectedOrgId", id)
+        document.cookie = `revlet_last_org=${encodeURIComponent(id)}; path=/; max-age=2592000; samesite=lax`
         window.dispatchEvent(new Event("active-org-changed"))
       }
       setActiveOrgId(id)
@@ -278,21 +300,30 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         const match = pathname.match(/^\/orgs\/([^/]+)(\/.*)?$/)
         if (match && decodeURIComponent(match[1]) !== id) {
           const rest = match[2] || "/overview"
-          router.replace(`/orgs/${encodeURIComponent(id)}${rest}`)
+          const qs =
+            typeof window !== "undefined"
+              ? preserveCompatibleSearchParams(window.location.search)
+              : ""
+          const hash = typeof window !== "undefined" ? window.location.hash || "" : ""
+          router.push(`/orgs/${encodeURIComponent(id)}${rest}${qs}${hash}`)
         }
       }
     },
     [pathname, router]
   )
 
+  // When on a route-scoped /orgs/[orgKey]/* URL, NEVER fall back to another org!
   const activeOrg = useMemo(() => {
+    if (routeOrgKey) {
+      return routeMatchedOrg
+    }
     const found = orgs.find((o) => o.id === activeOrgId)
     if (found) return found
     if (orgs.length > 0) return orgs[0]
     return undefined
-  }, [orgs, activeOrgId])
+  }, [routeOrgKey, routeMatchedOrg, orgs, activeOrgId])
 
-  const effectiveOrgId = activeOrg?.id || activeOrgId
+  const effectiveOrgId = routeOrgKey ? (routeMatchedOrg?.id || "") : (activeOrg?.id || activeOrgId)
 
   const value = useMemo(
     () => ({
@@ -302,8 +333,21 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       setActiveOrgId: changeActiveOrg,
       refreshOrgs: fetchOrgs,
       loading,
+      routeOrgKey,
+      isRouteOrgResolving,
+      isRouteOrgUnavailable,
     }),
-    [orgs, activeOrg, effectiveOrgId, changeActiveOrg, fetchOrgs, loading]
+    [
+      orgs,
+      activeOrg,
+      effectiveOrgId,
+      changeActiveOrg,
+      fetchOrgs,
+      loading,
+      routeOrgKey,
+      isRouteOrgResolving,
+      isRouteOrgUnavailable,
+    ]
   )
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>
@@ -325,6 +369,9 @@ export function useActiveOrg(): OrgContextType {
       },
       refreshOrgs: async () => {},
       loading: true,
+      routeOrgKey: null,
+      isRouteOrgResolving: false,
+      isRouteOrgUnavailable: false,
     }
   }
   return context

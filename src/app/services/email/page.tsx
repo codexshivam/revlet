@@ -68,7 +68,7 @@ import {
   ShieldOff,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
 import { useUser } from "@/firebase"
 import { useActiveOrg } from "@/hooks/use-active-org"
@@ -126,6 +126,17 @@ function getDaysRemaining(recoverableUntil: string | null): number {
   if (!recoverableUntil) return 14
   const diff = new Date(recoverableUntil).getTime() - Date.now()
   return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+}
+
+const EMAIL_TAB_TITLES: Record<string, string> = {
+  users: "User Directory",
+  groups: "Groups",
+  shared: "Shared Mailboxes",
+  suspended: "Suspended Accounts",
+  routing: "Mail Routing",
+  domains: "Domains",
+  governance: "Governance & Security",
+  settings: "Email Settings",
 }
 
 export default function EmailServiceAdminPage() {
@@ -268,44 +279,15 @@ export default function EmailServiceAdminPage() {
   const [users, setUsers] = useState<MailUserRecord[]>([])
   const [groups, setGroups] = useState<MailGroupRecord[]>([])
 
-  // Active tab & filters: /orgs/[orgKey]/email/[section] is the single source of truth;
-  // legacy ?tab= links are translated once and never override or contradict the path.
   const emailPathname = usePathname()
-  const emailRouter = useRouter()
-  const [activeTab, setActiveTabState] = useState("users")
+  const emailSearchParams = useSearchParams()
+  const legacySection = emailPathname.match(/^\/orgs\/[^/]+\/email\/([^/]+)/)?.[1]
+  const activeTab = emailSlugToTab(legacySection || emailSearchParams.get("tab")) || "users"
 
   useEffect(() => {
-    if (!emailPathname) return
-    const pathMatch = emailPathname.match(/\/email\/([^/]+)(?:\/|$)/)
-    if (pathMatch) {
-      const resolved = emailSlugToTab(decodeURIComponent(pathMatch[1]))
-      if (resolved) {
-        setActiveTabState(resolved)
-      }
-      // Strip any stale contradictory ?tab= query param on canonical /email/[section] paths
-      if (typeof window !== "undefined") {
-        const url = new URL(window.location.href)
-        if (url.searchParams.has("tab")) {
-          url.searchParams.delete("tab")
-          window.history.replaceState({}, "", url.pathname + url.search + url.hash)
-        }
-      }
-      return
-    }
+    document.title = `${EMAIL_TAB_TITLES[activeTab]} | Revlet Platform`
+  }, [activeTab])
 
-    // Legacy /services/email or /orgs/[orgKey]/email without section: translate ?tab= once
-    if (typeof window !== "undefined") {
-      const tabParam = new URLSearchParams(window.location.search).get("tab")
-      const resolved = emailSlugToTab(tabParam)
-      if (resolved) {
-        setActiveTabState(resolved)
-        if (selectedOrgId && emailPathname.startsWith("/orgs/")) {
-          const slug = emailTabToSlug(resolved)
-          emailRouter.replace(`/orgs/${encodeURIComponent(selectedOrgId)}/email/${slug}`)
-        }
-      }
-    }
-  }, [emailPathname, selectedOrgId, emailRouter])
   const [enforceMfa, setEnforceMfa] = useState(false)
   const [isUpdatingEnforceMfa, setIsUpdatingEnforceMfa] = useState(false)
   const [mfaStepUpOpen, setMfaStepUpOpen] = useState(false)
@@ -350,20 +332,11 @@ export default function EmailServiceAdminPage() {
   }
 
   const setActiveTab = (nextTab: string) => {
-    setActiveTabState(nextTab)
-    const slug = emailTabToSlug(nextTab)
-    if (emailPathname?.startsWith("/orgs/") && selectedOrgId) {
-      const targetPath = `/orgs/${encodeURIComponent(selectedOrgId)}/email/${slug}`
-      if (emailPathname !== targetPath) {
-        emailRouter.push(targetPath)
-      }
-      return
-    }
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href)
-      url.searchParams.set("tab", nextTab)
-      window.history.replaceState({}, "", url.toString())
-    }
+    if (nextTab === activeTab) return
+    const url = new URL(window.location.href)
+    url.pathname = "/services/email"
+    url.searchParams.set("tab", emailTabToSlug(nextTab))
+    window.history.pushState(null, "", url.pathname + url.search + url.hash)
   }
   const [selectedUserOu, setSelectedUserOu] = useState<string>("ALL")
   const [userSearchQuery, setUserSearchQuery] = useState("")

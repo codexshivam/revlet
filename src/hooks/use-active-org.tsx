@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useUser, useFirestore } from "@/firebase"
 import { collection, query, where, or, getDocs, onSnapshot } from "firebase/firestore"
 import { checkAndClaimInvitations } from "@/app/actions/team"
-import { preserveCompatibleSearchParams } from "@/lib/org-routes"
+import { legacyWorkspaceDestination } from "@/lib/org-routes"
 
 export interface Organization {
   id: string
@@ -281,35 +281,23 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     if (!routeMatchedOrg) return
     if (routeMatchedOrg.id !== activeOrgId) {
       setActiveOrgId(routeMatchedOrg.id)
+      return
     }
     if (typeof window !== "undefined") {
       localStorage.setItem("selectedOrgId", routeMatchedOrg.id)
-      document.cookie = `revlet_last_org=${encodeURIComponent(routeMatchedOrg.id)}; path=/; max-age=2592000; samesite=lax`
+      router.replace(legacyWorkspaceDestination(pathname, window.location.search, window.location.hash))
     }
-  }, [routeMatchedOrg, activeOrgId])
+  }, [routeMatchedOrg, activeOrgId, pathname, router])
 
   const changeActiveOrg = useCallback(
     (id: string) => {
       if (typeof window !== "undefined") {
         localStorage.setItem("selectedOrgId", id)
-        document.cookie = `revlet_last_org=${encodeURIComponent(id)}; path=/; max-age=2592000; samesite=lax`
         window.dispatchEvent(new Event("active-org-changed"))
       }
       setActiveOrgId(id)
-      if (pathname) {
-        const match = pathname.match(/^\/orgs\/([^/]+)(\/.*)?$/)
-        if (match && decodeURIComponent(match[1]) !== id) {
-          const rest = match[2] || "/overview"
-          const qs =
-            typeof window !== "undefined"
-              ? preserveCompatibleSearchParams(window.location.search)
-              : ""
-          const hash = typeof window !== "undefined" ? window.location.hash || "" : ""
-          router.push(`/orgs/${encodeURIComponent(id)}${rest}${qs}${hash}`)
-        }
-      }
     },
-    [pathname, router]
+    []
   )
 
   // When on a route-scoped /orgs/[orgKey]/* URL, NEVER fall back to another org!

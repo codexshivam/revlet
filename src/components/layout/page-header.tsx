@@ -3,11 +3,12 @@ import { cn } from "@/lib/utils"
 
 interface PageHeaderProps {
   title: string
+  description?: React.ReactNode
   actions?: React.ReactNode
   className?: string
 }
 
-export function PageHeader({ title, actions, className }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
   return (
     <div
       className={cn(
@@ -15,9 +16,12 @@ export function PageHeader({ title, actions, className }: PageHeaderProps) {
         className
       )}
     >
-      <h1 className="text-2xl font-headline font-semibold text-slate-900 tracking-tight">
-        {title}
-      </h1>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-headline font-semibold text-slate-900 tracking-tight">
+          {title}
+        </h1>
+        {description && <div className="text-xs text-slate-500">{description}</div>}
+      </div>
       {actions && <div className="flex items-center gap-2 flex-wrap">{actions}</div>}
     </div>
   )

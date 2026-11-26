@@ -107,7 +107,7 @@ function DashboardShellInner({
   className?: string
 }) {
   const { user, loading } = useUser()
-  const { activeOrg, orgs, routeOrgKey, isRouteOrgResolving, isRouteOrgUnavailable } = useActiveOrg()
+  const { orgs, setActiveOrgId, routeOrgKey, isRouteOrgResolving, isRouteOrgUnavailable } = useActiveOrg()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -279,7 +279,8 @@ function DashboardShellInner({
                     <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                       {orgs[0] ? (
                         <Link
-                          href={`/orgs/${encodeURIComponent(orgs[0].id)}/overview`}
+                          href="/account/home"
+                          onClick={() => setActiveOrgId(orgs[0].id)}
                           className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-800 transition-colors"
                         >
                           Open {orgs[0].name || orgs[0].domain}
@@ -308,25 +309,25 @@ function DashboardShellInner({
               {
                 label: "Overview",
                 icon: LayoutDashboard,
-                href: activeOrg?.id ? `/orgs/${encodeURIComponent(activeOrg.id)}/overview` : "/account/home",
+                href: "/account/home",
                 active: pathname === "/account/home" || /^\/orgs\/[^/]+\/overview/.test(pathname || ""),
               },
               {
                 label: "DNS",
                 icon: Globe,
-                href: activeOrg?.id ? `/orgs/${encodeURIComponent(activeOrg.id)}/dns` : "/services/dns",
+                href: "/services/dns",
                 active: (pathname || "").includes("/dns"),
               },
               {
                 label: "Email",
                 icon: Mail,
-                href: activeOrg?.id ? `/orgs/${encodeURIComponent(activeOrg.id)}/email/users` : "/services/email",
+                href: "/services/email",
                 active: (pathname || "").includes("/email"),
               },
               {
                 label: "Team",
                 icon: Users,
-                href: activeOrg?.id ? `/orgs/${encodeURIComponent(activeOrg.id)}/team` : "/management/team",
+                href: "/management/team",
                 active: (pathname || "").includes("/team") || (pathname || "").includes("/settings"),
               },
             ].map((item) => (

@@ -16,7 +16,7 @@ export const SITE_DESCRIPTION =
 export const PAGE_SEO = {
   login: {
     path: '/login',
-    title: 'Login | Revlet Platform',
+    title: 'Sign In | Revlet Platform',
     description:
       'Sign in to Revlet Platform to manage custom-domain RevletMail, 1-second global DNS records, shared team mailboxes, and passkey security controls.',
     ogTitle: 'Sign in to Revlet Platform',

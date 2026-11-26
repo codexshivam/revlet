@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { PageHeader } from "@/components/layout/page-header"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
@@ -254,6 +254,28 @@ export default function TeamManagementPage() {
       )
     }
   }, [activeContextOrgs, orgs.length, user?.uid])
+
+  // Support ?inviteOrg={orgId}&preset=dns-viewer shortcut from the DNS page
+  const handledInviteParamRef = useRef(false)
+  useEffect(() => {
+    if (handledInviteParamRef.current || orgs.length === 0 || typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    const inviteOrg = params.get("inviteOrg")
+    if (!inviteOrg) return
+    const matched = orgs.find((o) => o.id === inviteOrg)
+    if (!matched) return
+    handledInviteParamRef.current = true
+    const preset = params.get("preset")
+    setInviteEmail("")
+    setInviteOrgIds([matched.id])
+    setInviteOrgAccess({
+      [matched.id]: {
+        mode: "services",
+        permissions: preset === "dns-viewer" ? ["DNS: Read"] : ["DNS: Read", "Email: Read"],
+      },
+    })
+    setIsInviteOpen(true)
+  }, [orgs])
 
   const orgMap = useMemo(() => {
     const map = new Map<string, Organization>()
@@ -776,6 +798,29 @@ export default function TeamManagementPage() {
                       inviteOrgAccess,
                       setInviteOrgAccess,
                       "invite"
+                    )}
+                    {inviteOrgIds.length > 0 && (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs space-y-1">
+                        <p className="font-semibold text-slate-800">Effective access summary</p>
+                        <p className="text-slate-600 leading-relaxed">
+                          <span className="font-mono text-slate-900">
+                            {inviteEmail.trim() || "invitee@company.com"}
+                          </span>{" "}
+                          will be invited as{" "}
+                          <span className="font-medium text-slate-900">Pending acceptance</span> to{" "}
+                          {inviteOrgIds
+                            .map((oid) => {
+                              const o = orgMap.get(oid)
+                              const cfg = inviteOrgAccess[oid]
+                              const roleLabel =
+                                cfg?.mode === "admin"
+                                  ? "Organization Admin"
+                                  : (cfg?.permissions || []).join(", ") || "No permissions"
+                              return `${o?.name || o?.domain || oid} (${roleLabel})`
+                            })
+                            .join(" · ")}
+                        </p>
+                      </div>
                     )}
                   </div>
                   <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 flex flex-row justify-end gap-2 shrink-0">

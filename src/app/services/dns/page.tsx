@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import Link from "next/link"
 import dynamic from "next/dynamic"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -30,8 +31,17 @@ import {
   ShieldAlert,
   Copy,
   Check,
+  Users,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet"
+import { buildOrgRoute } from "@/lib/org-routes"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -197,6 +207,11 @@ export default function DNSManagementPage() {
 
   const [copiedText, setCopiedText] = useState<string | null>(null)
   const [permissionWarning, setPermissionWarning] = useState<string | null>(null)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [quickFilter, setQuickFilter] = useState<"all" | "mail" | "proxied">("all")
+  const [typeFilter, setTypeFilter] = useState<string>("ALL")
+  const [mobileDetailRecord, setMobileDetailRecord] = useState<DNSRecord | null>(null)
+  const [isReviewingRecord, setIsReviewingRecord] = useState(false)
   const toastRef = useRef(toast)
   toastRef.current = toast
   const userRef = useRef(user)
@@ -207,11 +222,25 @@ export default function DNSManagementPage() {
   const orgId = selectedOrg?.id
   const userId = user?.uid
 
+  // Effective caller DNS permissions (UI gating; Server Actions independently enforce the same)
+  const isOwner = Boolean(selectedOrg && user && selectedOrg.ownerId === user.uid)
+  const callerEmailKey = (user?.email || "").toLowerCase().trim().replace(/\./g, "__DOT__")
+  const callerPerms: string[] = isOwner
+    ? ["*"]
+    : Array.isArray(selectedOrg?.memberPermissions?.[callerEmailKey])
+    ? selectedOrg.memberPermissions[callerEmailKey]
+    : []
+  const canAdminDns =
+    isOwner || callerPerms.includes("*") || callerPerms.includes("Org: Admin") || callerPerms.includes("DNS: Admin")
+  const canEditDns = canAdminDns || callerPerms.includes("DNS: Edit")
+  const isViewOnly = Boolean(selectedOrg && user && !canEditDns)
+
   const fetchDNSData = useCallback(async () => {
     const currentUser = userRef.current
     if (!zoneId || !orgId || !currentUser) return
     const seq = ++fetchSeqRef.current
     setIsLoadingRecords(true)
+    setConnectionError(null)
     try {
       const idToken = await currentUser.getIdToken()
       if (seq !== fetchSeqRef.current) return
@@ -235,27 +264,11 @@ export default function DNSManagementPage() {
         setZoneDetails(zoneRes.data)
         setIsNameserversExpanded(zoneRes.data.status !== "active")
       } else {
-        const errMsg = zoneRes.error?.toLowerCase() || ""
-        if (
-          errMsg.includes("not found") ||
-          errMsg.includes("404") ||
-          errMsg.includes("1003") ||
-          errMsg.includes("403") ||
-          errMsg.includes("access denied")
-        ) {
-          await updateDoc(doc(db, "organizations", orgId), {
-            cloudflareZoneId: deleteField(),
-            dnsRequested: deleteField(),
-          })
-          toastRef.current({
-            title: "Configuration expired",
-            description: "The pending domain zone expired. Please reconnect the domain.",
-          })
-          return
-        }
-        if (zoneRes.error) {
-          throw new Error(zoneRes.error)
-        }
+        // Preserve the zone binding on read failure and surface a clear Connection needs attention state
+        setConnectionError(
+          zoneRes.error || "Unable to read zone details from Cloudflare. Your binding has been preserved for investigation."
+        )
+        return
       }
 
       const dnsRes = await listDNSRecords(idToken, orgId, zoneId)
@@ -263,24 +276,10 @@ export default function DNSManagementPage() {
       if (dnsRes.success && dnsRes.data) {
         setRecords(dnsRes.data)
       } else {
-        const dnsErrMsg = dnsRes.error?.toLowerCase() || ""
-        if (
-          dnsErrMsg.includes("403") ||
-          dnsErrMsg.includes("access denied") ||
-          dnsErrMsg.includes("not found") ||
-          dnsErrMsg.includes("404")
-        ) {
-          await updateDoc(doc(db, "organizations", orgId), {
-            cloudflareZoneId: deleteField(),
-            dnsRequested: deleteField(),
-          })
-          toastRef.current({
-            title: "Configuration expired",
-            description: "The domain configuration was removed from the edge network.",
-          })
-          return
-        }
-        throw new Error(dnsRes.error)
+        setConnectionError(
+          dnsRes.error || "Unable to load DNS records from Cloudflare. Your binding has been preserved."
+        )
+        return
       }
     } catch (error: any) {
       if (seq !== fetchSeqRef.current) return
@@ -288,19 +287,17 @@ export default function DNSManagementPage() {
       const rawMsg = error?.message || ""
       const isInternalRscError =
         rawMsg.includes("Server Components render") || rawMsg.includes("digest")
-      toastRef.current({
-        variant: "destructive",
-        title: "Sync error",
-        description: isInternalRscError
+      setConnectionError(
+        isInternalRscError
           ? "Unable to sync DNS records with edge network."
-          : rawMsg || "Could not fetch data from the network edge.",
-      })
+          : rawMsg || "Could not fetch data from the network edge."
+      )
     } finally {
       if (seq === fetchSeqRef.current) {
         setIsLoadingRecords(false)
       }
     }
-  }, [zoneId, orgId, userId, db])
+  }, [zoneId, orgId])
 
   useEffect(() => {
     if (zoneId && orgId && userId) {
@@ -368,9 +365,7 @@ export default function DNSManagementPage() {
     setFormData(updatedForm)
   }
 
-  const handleSaveRecord = async () => {
-    if (!zoneId || !selectedOrg?.id || !user) return
-
+  const validateForm = () => {
     const errors: { name?: string; content?: string; priority?: string } = {}
     const cleanName = formData.name?.trim() || ""
     const cleanContent = formData.content?.trim() || ""
@@ -389,16 +384,26 @@ export default function DNSManagementPage() {
       errors.content = "Script execution tags are prohibited."
     }
 
-    if (formData.type === "MX") {
-      if (formData.priority === undefined || isNaN(Number(formData.priority)) || formData.priority < 0 || formData.priority > 65535) {
+    if (formData.type === "MX" || formData.type === "SRV") {
+      if (
+        formData.priority === undefined ||
+        isNaN(Number(formData.priority)) ||
+        formData.priority < 0 ||
+        formData.priority > 65535
+      ) {
         errors.priority = "Priority must be an integer between 0 and 65535."
       }
     }
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
-      return
-    }
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleSaveRecord = async () => {
+    if (!zoneId || !selectedOrg?.id || !user) return
+    if (!validateForm()) return
+    const cleanName = formData.name?.trim() || ""
+    const cleanContent = formData.content?.trim() || ""
 
     setIsSubmitting(true)
     try {
@@ -705,15 +710,52 @@ export default function DNSManagementPage() {
   const [recordsPage, setRecordsPage] = useState(1)
   const [recordsPageSize, setRecordsPageSize] = useState(25)
 
-  const filteredRecords = records.filter(
-    (r) =>
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.content.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const isMailRecord = (r: DNSRecord) => {
+    if (r.type === "MX") return true
+    if (r.type === "TXT") {
+      const c = r.content.toLowerCase()
+      const n = r.name.toLowerCase()
+      return (
+        c.includes("v=spf1") ||
+        c.includes("v=dkim1") ||
+        c.includes("v=dmarc1") ||
+        n.includes("_dmarc") ||
+        n.includes("_domainkey")
+      )
+    }
+    return false
+  }
+
+  const filteredRecords = records.filter((r) => {
+    const q = searchQuery.trim().toLowerCase()
+    const matchesSearch =
+      !q ||
+      r.name.toLowerCase().includes(q) ||
+      r.content.toLowerCase().includes(q) ||
+      r.type.toLowerCase().includes(q)
+    if (!matchesSearch) return false
+    if (typeFilter !== "ALL" && r.type !== typeFilter) return false
+    if (quickFilter === "mail" && !isMailRecord(r)) return false
+    if (quickFilter === "proxied" && !r.proxied) return false
+    return true
+  })
+
+  const availableRecordTypes = Array.from(new Set(records.map((r) => r.type))).sort()
 
   useEffect(() => {
     setRecordsPage(1)
-  }, [searchQuery, selectedOrg?.id])
+  }, [searchQuery, quickFilter, typeFilter, selectedOrg?.id])
+
+  const resolvePreviewHostname = (rawName: string | undefined, domain: string | undefined) => {
+    const cleanDomain = (domain || "").trim().replace(/\.$/, "")
+    const cleanName = (rawName || "").trim().replace(/\.$/, "")
+    if (!cleanDomain) return cleanName || "@"
+    if (!cleanName || cleanName === "@") return cleanDomain
+    if (cleanName.toLowerCase() === cleanDomain.toLowerCase() || cleanName.toLowerCase().endsWith(`.${cleanDomain.toLowerCase()}`)) {
+      return cleanName
+    }
+    return `${cleanName}.${cleanDomain}`
+  }
 
   const totalRecordPages = Math.max(1, Math.ceil(filteredRecords.length / recordsPageSize))
   const safeRecordsPage = Math.min(recordsPage, totalRecordPages)
@@ -751,21 +793,51 @@ export default function DNSManagementPage() {
         {/* Header */}
         <PageHeader
           title="DNS Management"
+          description={
+            selectedOrg ? (
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs text-slate-700">{selectedOrg.domain}</span>
+                {isViewOnly && (
+                  <Badge variant="outline" className="text-[11px] font-medium bg-slate-100 text-slate-700 border-slate-300">
+                    View only
+                  </Badge>
+                )}
+              </span>
+            ) : undefined
+          }
           actions={
             selectedOrg && zoneId ? (
               <>
-                <Button
-                  disabled={Boolean(permissionWarning)}
-                  onClick={() => {
-                    setEditingRecord(null)
-                    setFormData({ type: "A", name: "", content: "", ttl: "Auto", proxied: true, priority: 10 })
-                    setIsDialogOpen(true)
-                  }}
-                  className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Record</span>
-                </Button>
+                {canAdminDns && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="h-9 px-3 bg-white border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium rounded-lg shadow-none hidden sm:inline-flex items-center gap-1.5"
+                  >
+                    <Link
+                      href={`${buildOrgRoute("team")}?inviteOrg=${encodeURIComponent(selectedOrg.id)}&preset=dns-viewer`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Invite member</span>
+                    </Link>
+                  </Button>
+                )}
+
+                {canEditDns && (
+                  <Button
+                    disabled={Boolean(permissionWarning)}
+                    onClick={() => {
+                      setEditingRecord(null)
+                      setIsReviewingRecord(false)
+                      setFormData({ type: "A", name: "", content: "", ttl: "Auto", proxied: true, priority: 10 })
+                      setIsDialogOpen(true)
+                    }}
+                    className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Record</span>
+                  </Button>
+                )}
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -788,16 +860,18 @@ export default function DNSManagementPage() {
                       className="group gap-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
                     >
                       <History className="w-4 h-4" />
-                      <span>Snapshots and Rollback</span>
+                      <span>Snapshots and History</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={Boolean(permissionWarning)}
-                      onClick={() => setIsImportDialogOpen(true)}
-                      className="group gap-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
-                    >
-                      <Upload className="w-4 h-4" />
-                      <span>Import Zone File</span>
-                    </DropdownMenuItem>
+                    {canEditDns && (
+                      <DropdownMenuItem
+                        disabled={Boolean(permissionWarning)}
+                        onClick={() => setIsImportDialogOpen(true)}
+                        className="group gap-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
+                      >
+                        <Upload className="w-4 h-4" />
+                        <span>Import Zone File</span>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onClick={handleExportBIND}
                       className="group gap-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:text-slate-500 [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white"
@@ -805,14 +879,18 @@ export default function DNSManagementPage() {
                       <Download className="w-4 h-4" />
                       <span>Export Zone File</span>
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => setIsDisableDialogOpen(true)}
-                      className="group gap-2 text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white text-xs cursor-pointer rounded-md"
-                    >
-                      <ShieldAlert className="w-4 h-4" />
-                      <span>Disable DNS Service</span>
-                    </DropdownMenuItem>
+                    {isOwner && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => setIsDisableDialogOpen(true)}
+                          className="group gap-2 text-destructive focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white [&>svg]:focus:text-white [&>svg]:data-[highlighted]:text-white text-xs cursor-pointer rounded-md"
+                        >
+                          <ShieldAlert className="w-4 h-4" />
+                          <span>Disable DNS Service</span>
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>
@@ -1113,29 +1191,110 @@ export default function DNSManagementPage() {
               )}
             </Card>
 
+            {connectionError && (
+              <div
+                role="alert"
+                className="rounded-xl border border-amber-300 bg-amber-50/80 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="flex items-start gap-2.5 text-xs text-amber-950">
+                  <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold">Connection needs attention</p>
+                    <p className="text-amber-900">{connectionError}</p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void fetchDNSData()}
+                  className="h-8 text-xs bg-white border-amber-300 text-amber-950 hover:bg-amber-100 shrink-0"
+                >
+                  Check again
+                </Button>
+              </div>
+            )}
+
             {/* Records Table Card */}
             <Card className="bg-white border-slate-200 shadow-none rounded-xl">
-              <CardHeader className="border-b border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-base font-semibold text-slate-900">
-                    DNS Records
-                  </CardTitle>
-                  <Badge
-                    variant="outline"
-                    className="text-xs font-normal tabular-nums text-slate-600 bg-slate-50 border-slate-200 px-2 py-0.5 rounded"
-                  >
-                    {records.length} {records.length === 1 ? "record" : "records"}
-                  </Badge>
+              <CardHeader className="border-b border-slate-100 px-6 py-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-base font-semibold text-slate-900">
+                      DNS Records
+                    </CardTitle>
+                    <Badge
+                      variant="outline"
+                      className="text-xs font-normal tabular-nums text-slate-600 bg-slate-50 border-slate-200 px-2 py-0.5 rounded"
+                    >
+                      {filteredRecords.length === records.length
+                        ? `${records.length} ${records.length === 1 ? "record" : "records"}`
+                        : `${filteredRecords.length} of ${records.length}`}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-64">
+                      <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                      <Input
+                        placeholder="Search name, value, or type..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="h-9 pl-9 text-base sm:text-xs border-slate-200 bg-white rounded-lg focus-visible:ring-primary/20"
+                      />
+                    </div>
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                      <SelectTrigger className="h-9 w-[108px] text-xs font-mono border-slate-200 bg-white rounded-lg">
+                        <SelectValue placeholder="All types" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-lg">
+                        <SelectItem value="ALL" className="text-xs">All types</SelectItem>
+                        {availableRecordTypes.map((t) => (
+                          <SelectItem key={t} value={t} className="text-xs font-mono">
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                  <Input
-                    placeholder="Search records..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg focus-visible:ring-primary/20"
-                  />
+                {/* Quick Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(
+                    [
+                      { id: "all", label: "All records" },
+                      { id: "mail", label: "Mail (MX / SPF / DKIM / DMARC)" },
+                      { id: "proxied", label: "Proxied" },
+                    ] as const
+                  ).map((pill) => (
+                    <button
+                      key={pill.id}
+                      type="button"
+                      onClick={() => setQuickFilter(pill.id)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-md text-xs font-medium border transition-colors",
+                        quickFilter === pill.id
+                          ? "bg-slate-900 text-white border-slate-900"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+                      )}
+                    >
+                      {pill.label}
+                    </button>
+                  ))}
+                  {(quickFilter !== "all" || typeFilter !== "ALL" || searchQuery) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickFilter("all")
+                        setTypeFilter("ALL")
+                        setSearchQuery("")
+                      }}
+                      className="px-2 py-1 text-xs text-slate-500 hover:text-slate-900 underline"
+                    >
+                      Reset
+                    </button>
+                  )}
                 </div>
               </CardHeader>
 
@@ -1234,38 +1393,43 @@ export default function DNSManagementPage() {
                                   )}
                                 </TableCell>
                                 <TableCell className="pr-6 text-right">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      aria-label={`Edit ${rec.type} record ${rec.name}`}
-                                      disabled={Boolean(permissionWarning)}
-                                      className="h-7 w-7 text-slate-400 hover:text-slate-900 transition-colors rounded-lg disabled:opacity-40"
-                                      onClick={() => {
-                                        setEditingRecord(rec)
-                                        setFormData({
-                                          ...rec,
-                                          priority: rec.priority !== undefined ? Number(rec.priority) : 10,
-                                        })
-                                        setIsDialogOpen(true)
-                                      }}
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      aria-label={`Delete ${rec.type} record ${rec.name}`}
-                                      disabled={Boolean(permissionWarning)}
-                                      className="h-7 w-7 text-slate-400 hover:text-red-600 transition-colors rounded-lg disabled:opacity-40"
-                                      onClick={() => {
-                                        setDeletingRecordId(rec.id)
-                                        setIsDeleteOpen(true)
-                                      }}
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </div>
+                                  {canEditDns ? (
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label={`Edit ${rec.type} record ${rec.name}`}
+                                        disabled={Boolean(permissionWarning)}
+                                        className="h-7 w-7 text-slate-400 hover:text-slate-900 transition-colors rounded-lg disabled:opacity-40"
+                                        onClick={() => {
+                                          setEditingRecord(rec)
+                                          setIsReviewingRecord(false)
+                                          setFormData({
+                                            ...rec,
+                                            priority: rec.priority !== undefined ? Number(rec.priority) : 10,
+                                          })
+                                          setIsDialogOpen(true)
+                                        }}
+                                      >
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label={`Delete ${rec.type} record ${rec.name}`}
+                                        disabled={Boolean(permissionWarning)}
+                                        className="h-7 w-7 text-slate-400 hover:text-red-600 transition-colors rounded-lg disabled:opacity-40"
+                                        onClick={() => {
+                                          setDeletingRecordId(rec.id)
+                                          setIsDeleteOpen(true)
+                                        }}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-400">View only</span>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -1276,23 +1440,32 @@ export default function DNSManagementPage() {
                       {/* Mobile List View */}
                       <div className="block md:hidden divide-y divide-slate-100">
                         {paginatedRecords.map((rec) => (
-                          <div key={rec.id} className="p-4 space-y-2">
+                          <div
+                            key={rec.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setMobileDetailRecord(rec)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault()
+                                setMobileDetailRecord(rec)
+                              }
+                            }}
+                            className="p-4 space-y-2 active:bg-slate-50 cursor-pointer"
+                          >
                             <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-semibold text-slate-700">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-mono text-xs font-semibold text-slate-700 shrink-0">
                                   {rec.type}
                                 </span>
-                                <span
-                                  className="font-mono text-xs font-medium text-slate-900"
-                                  onClick={() => handleCopyText(rec.name)}
-                                >
+                                <span className="font-mono text-xs font-medium text-slate-900 truncate">
                                   {rec.name}
                                 </span>
                               </div>
                               {isProxyAllowed(rec.type) && (
                                 <span
                                   className={cn(
-                                    "px-2 py-0.5 rounded text-[11px] font-medium border",
+                                    "px-2 py-0.5 rounded text-[11px] font-medium border shrink-0",
                                     rec.proxied
                                       ? "bg-amber-50 text-amber-700 border-amber-200/60"
                                       : "bg-slate-50 text-slate-600 border-slate-200"
@@ -1303,43 +1476,16 @@ export default function DNSManagementPage() {
                               )}
                             </div>
 
-                            <p
-                              className="font-mono text-xs text-slate-600 break-all"
-                              onClick={() => handleCopyText(rec.content)}
-                            >
+                            <p className="font-mono text-xs text-slate-600 break-all line-clamp-2">
                               {rec.content}
                             </p>
 
                             <div className="flex items-center justify-between pt-1 text-xs text-slate-400">
-                              <span>TTL: {rec.ttl}</span>
-                              <div className="flex gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-xs text-slate-500"
-                                  onClick={() => {
-                                    setEditingRecord(rec)
-                                    setFormData({
-                                      ...rec,
-                                      priority: rec.priority !== undefined ? Number(rec.priority) : 10,
-                                    })
-                                    setIsDialogOpen(true)
-                                  }}
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-xs text-red-600"
-                                  onClick={() => {
-                                    setDeletingRecordId(rec.id)
-                                    setIsDeleteOpen(true)
-                                  }}
-                                >
-                                  Delete
-                                </Button>
-                              </div>
+                              <span>
+                                TTL: {rec.ttl}
+                                {rec.priority !== undefined ? ` · Priority ${rec.priority}` : ""}
+                              </span>
+                              <span className="text-slate-600 font-medium">View details</span>
                             </div>
                           </div>
                         ))}
@@ -1410,148 +1556,340 @@ export default function DNSManagementPage() {
         </Dialog>
 
         {/* Add / Edit Record Dialog */}
-        <Dialog
+        {/* Mobile Accessible Record Detail Sheet */}
+        <Sheet
+          open={Boolean(mobileDetailRecord)}
+          onOpenChange={(open) => {
+            if (!open) setMobileDetailRecord(null)
+          }}
+        >
+          <SheetContent side="bottom" className="rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-white">
+            {mobileDetailRecord && (
+              <div className="space-y-4">
+                <SheetHeader className="text-left space-y-1">
+                  <SheetTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200">
+                      {mobileDetailRecord.type}
+                    </span>
+                    <span className="font-mono truncate">{mobileDetailRecord.name}</span>
+                  </SheetTitle>
+                  <SheetDescription className="text-xs text-slate-500">
+                    TTL: {mobileDetailRecord.ttl}
+                    {mobileDetailRecord.priority !== undefined ? ` · Priority ${mobileDetailRecord.priority}` : ""}
+                    {isProxyAllowed(mobileDetailRecord.type)
+                      ? ` · ${mobileDetailRecord.proxied ? "Proxied" : "DNS only"}`
+                      : ""}
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-500">Full value</Label>
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 font-mono text-xs text-slate-900 break-all">
+                    {mobileDetailRecord.content}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleCopyText(mobileDetailRecord.content)}
+                    className="h-10 flex-1 text-xs font-medium rounded-lg gap-1.5"
+                  >
+                    {copiedText === mobileDetailRecord.content ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                    <span>Copy value</span>
+                  </Button>
+                  {canEditDns && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={Boolean(permissionWarning)}
+                        onClick={() => {
+                          const target = mobileDetailRecord
+                          setMobileDetailRecord(null)
+                          setEditingRecord(target)
+                          setIsReviewingRecord(false)
+                          setFormData({
+                            ...target,
+                            priority: target.priority !== undefined ? Number(target.priority) : 10,
+                          })
+                          setIsDialogOpen(true)
+                        }}
+                        className="h-10 px-4 text-xs font-medium rounded-lg"
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={Boolean(permissionWarning)}
+                        onClick={() => {
+                          const id = mobileDetailRecord.id
+                          setMobileDetailRecord(null)
+                          setDeletingRecordId(id)
+                          setIsDeleteOpen(true)
+                        }}
+                        className="h-10 px-4 text-xs font-medium rounded-lg"
+                      >
+                        Delete
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+
+        {/* Type-Aware Add / Edit DNS Record Side Panel with Review-Before-Publish */}
+        <Sheet
           open={isDialogOpen}
           onOpenChange={(open) => {
             setIsDialogOpen(open)
-            if (!open) setFormErrors({})
+            if (!open) {
+              setFormErrors({})
+              setIsReviewingRecord(false)
+            }
           }}
         >
-          <DialogContent className="sm:max-w-2xl p-5 sm:p-6 bg-white border border-slate-200 rounded-xl shadow-lg">
-            <DialogHeader className="space-y-1 text-left">
-              <DialogTitle className="text-base font-semibold text-slate-900">
-                {editingRecord ? "Edit DNS Record" : "Add DNS Record"}
-              </DialogTitle>
-              <DialogDescription className="text-xs text-slate-500">
+          <SheetContent
+            side="right"
+            className="w-full sm:max-w-lg p-0 flex flex-col bg-white border-l border-slate-200 h-[100dvh]"
+          >
+            <SheetHeader className="px-5 py-4 border-b border-slate-100 text-left space-y-1 shrink-0">
+              <SheetTitle className="text-base font-semibold text-slate-900">
+                {isReviewingRecord
+                  ? "Review DNS change"
+                  : editingRecord
+                  ? "Edit DNS Record"
+                  : "Add DNS Record"}
+              </SheetTitle>
+              <SheetDescription className="text-xs text-slate-500 font-mono">
                 Zone: {selectedOrg?.domain}
-              </DialogDescription>
-            </DialogHeader>
+              </SheetDescription>
+            </SheetHeader>
 
-            <div className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Type</Label>
-                <Select value={formData.type} onValueChange={handleTypeChange}>
-                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-lg">
-                    {SUPPORTED_TYPES.map((t) => (
-                      <SelectItem key={t} value={t} className="text-xs font-mono">
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {isReviewingRecord ? (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Action</span>
+                      <span className="font-semibold text-slate-900">
+                        {editingRecord ? "Update record" : "Create record"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Type</span>
+                      <span className="font-mono font-semibold text-slate-900">{formData.type}</span>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-slate-500">Full hostname</span>
+                      <p className="font-mono text-slate-900 break-all bg-white border border-slate-200 rounded-md px-2.5 py-1.5">
+                        {resolvePreviewHostname(formData.name, selectedOrg?.domain)}
+                      </p>
+                    </div>
+                    {editingRecord && (
+                      <div className="space-y-1">
+                        <span className="text-slate-500">Previous value</span>
+                        <p className="font-mono text-slate-500 line-through break-all bg-white border border-slate-200 rounded-md px-2.5 py-1.5">
+                          {editingRecord.content}
+                        </p>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <span className="text-slate-500">{editingRecord ? "New value" : "Value"}</span>
+                      <p className="font-mono text-slate-900 break-all bg-white border border-slate-200 rounded-md px-2.5 py-1.5">
+                        {formData.content}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                      <span className="text-slate-500">TTL / Proxy</span>
+                      <span className="font-mono text-slate-900">
+                        {formData.ttl}
+                        {formData.type === "MX" || formData.type === "SRV"
+                          ? ` · Priority ${formData.priority ?? 10}`
+                          : ""}
+                        {isProxyAllowed(formData.type!)
+                          ? ` · ${formData.proxied ? "Proxied" : "DNS only"}`
+                          : ""}
+                      </span>
+                    </div>
+                  </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Name</Label>
-                <Input
-                  placeholder="e.g. @, www, api"
-                  className={cn(
-                    "h-9 text-sm border-slate-200 rounded-lg focus-visible:ring-primary/20 bg-white font-mono",
-                    formErrors.name && "border-red-400"
+                  {(formData.type === "MX" ||
+                    (formData.type === "TXT" &&
+                      /spf|dkim|dmarc/i.test(`${formData.name || ""} ${formData.content || ""}`))) && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <span>
+                        This record affects email routing or authentication. Verify the target carefully before publishing.
+                      </span>
+                    </div>
                   )}
-                  value={formData.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
-                />
-                {formErrors.name && <p className="text-xs text-red-500">{formErrors.name}</p>}
-              </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Value / target</Label>
-                <Input
-                  placeholder="e.g. 192.0.2.1 or target.example.com"
-                  className={cn(
-                    "h-9 text-sm border-slate-200 rounded-lg focus-visible:ring-primary/20 bg-white font-mono",
-                    formErrors.content && "border-red-400"
-                  )}
-                  value={formData.content}
-                  onChange={(e) => handleInputChange("content", e.target.value)}
-                />
-                {formErrors.content && <p className="text-xs text-red-500">{formErrors.content}</p>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {formData.type === "MX" ? (
+                  <p className="text-[11px] text-slate-500">
+                    Cloudflare accepts changes immediately; global DNS propagation depends on TTL and resolver caches.
+                  </p>
+                </div>
+              ) : (
+                <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-slate-700">Priority</Label>
+                    <Label className="text-xs font-medium text-slate-700">Type</Label>
+                    <Select value={formData.type} onValueChange={handleTypeChange}>
+                      <SelectTrigger className="h-10 sm:h-9 text-xs border-slate-200 bg-white rounded-lg font-mono">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-lg">
+                        {SUPPORTED_TYPES.map((t) => (
+                          <SelectItem key={t} value={t} className="text-xs font-mono">
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700">Name</Label>
                     <Input
-                      type="number"
-                      min={0}
-                      max={65535}
-                      step={1}
-                      placeholder="10"
-                      className="h-9 text-sm border-slate-200 rounded-lg bg-white"
-                      value={formData.priority !== undefined ? formData.priority : ""}
-                      onChange={(e) => handleInputChange("priority", e.target.value)}
+                      placeholder="e.g. @, www, api"
+                      className={cn(
+                        "h-10 sm:h-9 text-base sm:text-sm border-slate-200 rounded-lg focus-visible:ring-primary/20 bg-white font-mono",
+                        formErrors.name && "border-red-400"
+                      )}
+                      value={formData.name}
+                      onChange={(e) => handleInputChange("name", e.target.value)}
                     />
-                    {formErrors.priority && <p className="text-xs text-red-500">{formErrors.priority}</p>}
+                    <p className="text-[11px] text-slate-500">
+                      Resolves to{" "}
+                      <span className="font-mono text-slate-800">
+                        {resolvePreviewHostname(formData.name, selectedOrg?.domain)}
+                      </span>
+                    </p>
+                    {formErrors.name && <p className="text-xs text-red-500">{formErrors.name}</p>}
                   </div>
-                ) : (
-                  <div />
-                )}
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">TTL</Label>
-                  <Select value={formData.ttl} onValueChange={(v) => setFormData({ ...formData, ttl: v })}>
-                    <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-lg">
-                      <SelectItem value="Auto" className="text-xs">
-                        Auto
-                      </SelectItem>
-                      <SelectItem value="60" className="text-xs">
-                        1 minute
-                      </SelectItem>
-                      <SelectItem value="300" className="text-xs">
-                        5 minutes
-                      </SelectItem>
-                      <SelectItem value="3600" className="text-xs">
-                        1 hour
-                      </SelectItem>
-                      <SelectItem value="86400" className="text-xs">
-                        1 day
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {isProxyAllowed(formData.type!) && (
-                <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label className="text-xs font-medium text-slate-900">Proxy traffic</Label>
-                    <p className="text-xs text-slate-500">Route HTTP/S through edge network.</p>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700">Value / target</Label>
+                    <Input
+                      placeholder="e.g. 192.0.2.1 or target.example.com"
+                      className={cn(
+                        "h-10 sm:h-9 text-base sm:text-sm border-slate-200 rounded-lg focus-visible:ring-primary/20 bg-white font-mono",
+                        formErrors.content && "border-red-400"
+                      )}
+                      value={formData.content}
+                      onChange={(e) => handleInputChange("content", e.target.value)}
+                    />
+                    {formErrors.content && <p className="text-xs text-red-500">{formErrors.content}</p>}
                   </div>
-                  <Switch
-                    checked={formData.proxied}
-                    onCheckedChange={(v) => setFormData({ ...formData, proxied: v })}
-                  />
-                </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {formData.type === "MX" || formData.type === "SRV" ? (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-slate-700">Priority</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={65535}
+                          step={1}
+                          placeholder="10"
+                          className="h-10 sm:h-9 text-base sm:text-sm border-slate-200 rounded-lg bg-white"
+                          value={formData.priority !== undefined ? formData.priority : ""}
+                          onChange={(e) => handleInputChange("priority", e.target.value)}
+                        />
+                        {formErrors.priority && <p className="text-xs text-red-500">{formErrors.priority}</p>}
+                      </div>
+                    ) : (
+                      <div />
+                    )}
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-slate-700">TTL</Label>
+                      <Select value={formData.ttl} onValueChange={(v) => setFormData({ ...formData, ttl: v })}>
+                        <SelectTrigger className="h-10 sm:h-9 text-xs border-slate-200 bg-white rounded-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg">
+                          <SelectItem value="Auto" className="text-xs">Auto</SelectItem>
+                          <SelectItem value="60" className="text-xs">1 minute</SelectItem>
+                          <SelectItem value="300" className="text-xs">5 minutes</SelectItem>
+                          <SelectItem value="3600" className="text-xs">1 hour</SelectItem>
+                          <SelectItem value="86400" className="text-xs">1 day</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {isProxyAllowed(formData.type!) && (
+                    <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                      <div className="space-y-0.5">
+                        <Label className="text-xs font-medium text-slate-900">Proxy traffic</Label>
+                        <p className="text-xs text-slate-500">Route HTTP/S through edge network.</p>
+                      </div>
+                      <Switch
+                        checked={formData.proxied}
+                        onCheckedChange={(v) => setFormData({ ...formData, proxied: v })}
+                      />
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
-            <DialogFooter className="pt-2 gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setIsDialogOpen(false)}
-                className="h-9 text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveRecord}
-                disabled={isSubmitting}
-                className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
-              >
-                {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isSubmitting ? "Saving..." : editingRecord ? "Save Changes" : "Save Record"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            <div className="px-5 py-3.5 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-slate-100 bg-white flex items-center justify-end gap-2 shrink-0">
+              {isReviewingRecord ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setIsReviewingRecord(false)}
+                    disabled={isSubmitting}
+                    className="h-10 sm:h-9 text-xs"
+                  >
+                    Back to edit
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveRecord}
+                    disabled={isSubmitting}
+                    className="h-10 sm:h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
+                  >
+                    {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {isSubmitting ? "Publishing..." : "Publish change"}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setIsDialogOpen(false)}
+                    className="h-10 sm:h-9 text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (validateForm()) {
+                        setIsReviewingRecord(true)
+                      }
+                    }}
+                    className="h-10 sm:h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none"
+                  >
+                    Review changes
+                  </Button>
+                </>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
 
         {/* Import Dialog */}
         <Dialog

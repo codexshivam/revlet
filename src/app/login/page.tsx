@@ -81,6 +81,12 @@ export default function LoginPage() {
 
   // Google-inspired 2-Step Verification / Enforce MFA state
   const [mfaStep, setMfaStep] = useState<"none" | "verify" | "enroll">("none")
+
+  useEffect(() => {
+    const title = mfaStep === "enroll" ? "Set Up 2-Step Verification" : mfaStep === "verify" ? "2-Step Verification" : "Sign In"
+    document.title = `${title} | Revlet Platform`
+  }, [mfaStep])
+
   const [mfaMethod, setMfaMethod] = useState<"totp" | "passkey" | "secondary_email">("totp")
   const [showMethodPicker, setShowMethodPicker] = useState(false)
   const [mfaStatus, setMfaStatus] = useState<{

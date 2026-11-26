@@ -36,25 +36,25 @@ export function SetupChecklist() {
       id: "org",
       label: "Register organization",
       done: hasDomain,
-      href: buildOrgRoute(activeOrg.id, "overview"),
+      href: buildOrgRoute("overview"),
     },
     {
       id: "dns",
       label: "Connect DNS management",
       done: hasDns,
-      href: buildOrgRoute(activeOrg.id, "dns"),
+      href: buildOrgRoute("dns"),
     },
     {
       id: "email",
       label: "Activate Email Service",
       done: hasMail,
-      href: buildOrgRoute(activeOrg.id, "email", "users"),
+      href: buildOrgRoute("email", "users"),
     },
     {
       id: "team",
       label: "Invite team members",
       done: hasTeam,
-      href: buildOrgRoute(activeOrg.id, "team"),
+      href: buildOrgRoute("team"),
     },
   ]
 

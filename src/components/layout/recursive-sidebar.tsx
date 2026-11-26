@@ -12,7 +12,6 @@ import {
   ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useActiveOrg } from "@/hooks/use-active-org"
 
 interface NavItem {
   title: string
@@ -30,8 +29,6 @@ export function RecursiveSidebar({
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
-  const { activeOrg } = useActiveOrg()
-  const orgPrefix = activeOrg?.id ? `/orgs/${encodeURIComponent(activeOrg.id)}` : null
 
   const isItemActive = (target: NavItem | string) => {
     const prefixes = typeof target === "string" ? [target] : target.matchPrefixes
@@ -47,8 +44,8 @@ export function RecursiveSidebar({
     {
       title: "Account Home",
       icon: LayoutDashboard,
-      href: orgPrefix ? `${orgPrefix}/overview` : "/account/home",
-      matchPrefixes: ["/account/home", ...(orgPrefix ? [`${orgPrefix}/overview`] : [])],
+      href: "/account/home",
+      matchPrefixes: ["/account/home"],
     },
   ]
 
@@ -56,14 +53,14 @@ export function RecursiveSidebar({
     {
       title: "DNS Management",
       icon: Globe,
-      href: orgPrefix ? `${orgPrefix}/dns` : "/services/dns",
-      matchPrefixes: ["/services/dns", ...(orgPrefix ? [`${orgPrefix}/dns`] : [])],
+      href: "/services/dns",
+      matchPrefixes: ["/services/dns"],
     },
     {
       title: "Email Service",
       icon: Mail,
-      href: orgPrefix ? `${orgPrefix}/email/users` : "/services/email",
-      matchPrefixes: ["/services/email", ...(orgPrefix ? [`${orgPrefix}/email`] : [])],
+      href: "/services/email",
+      matchPrefixes: ["/services/email"],
     },
   ]
 
@@ -71,14 +68,14 @@ export function RecursiveSidebar({
     {
       title: "Team Management",
       icon: Users,
-      href: orgPrefix ? `${orgPrefix}/team` : "/management/team",
-      matchPrefixes: ["/management/team", ...(orgPrefix ? [`${orgPrefix}/team`] : [])],
+      href: "/management/team",
+      matchPrefixes: ["/management/team"],
     },
     {
       title: "Account Settings",
       icon: Settings,
-      href: orgPrefix ? `${orgPrefix}/settings` : "/management/settings",
-      matchPrefixes: ["/management/settings", ...(orgPrefix ? [`${orgPrefix}/settings`] : [])],
+      href: "/management/settings",
+      matchPrefixes: ["/management/settings"],
     },
   ]
 

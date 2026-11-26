@@ -2,7 +2,7 @@
 
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
-import { verifyUserOrgAccess, assertStepUpMfa } from './auth-helper';
+import { verifyUserOrgAccess, assertStepUpMfa, hasOrgPermission } from './auth-helper';
 import {
   assertActiveMailDomainBinding,
   isEmailAddressTakenInOrg,
@@ -88,26 +88,44 @@ export interface AuditLogRecord {
 
 export async function getGovernanceOverview(idToken: string, orgId: string) {
   try {
-    // Restrict sensitive governance data (quarantine, legal holds, DLP, transport rules, audit logs)
-    // to authorized administrative roles — never basic Email: Read.
-    await verifyUserOrgAccess(idToken, orgId, undefined, [
+    // Restrict sensitive governance data to authorized administrative roles and
+    // scope each dataset to the caller's specific capability.
+    const auth = await verifyUserOrgAccess(idToken, orgId, undefined, [
       'Email: Admin',
       SECURITY_ADMIN_PERMISSION,
       COMPLIANCE_ADMIN_PERMISSION,
     ]);
 
+    const canEmailAdmin = hasOrgPermission(auth.permissions, 'Email: Admin');
+    const canSecurityAdmin = hasOrgPermission(auth.permissions, SECURITY_ADMIN_PERMISSION);
+    const canComplianceAdmin = hasOrgPermission(auth.permissions, COMPLIANCE_ADMIN_PERMISSION);
+
     const orgRef = adminDb.collection('organizations').doc(orgId);
     const [holdsSnap, dlpSnap, transportSnap, quarSnap, sharedSnap, auditSnap, usersSnap] = await Promise.all([
-      orgRef.collection('mailLegalHolds').orderBy('createdAt', 'desc').get(),
-      orgRef.collection('mailDlpRules').orderBy('createdAt', 'desc').get(),
-      orgRef.collection('mailTransportRules').orderBy('createdAt', 'desc').get(),
-      orgRef.collection('mailQuarantine').orderBy('receivedAt', 'desc').limit(100).get(),
-      orgRef.collection('mailSharedMailboxes').orderBy('createdAt', 'desc').get(),
-      orgRef.collection('mailAuditLogs').orderBy('createdAt', 'desc').limit(150).get(),
-      orgRef.collection('mailUsers').get(),
+      canComplianceAdmin
+        ? orgRef.collection('mailLegalHolds').orderBy('createdAt', 'desc').get()
+        : Promise.resolve(null),
+      canSecurityAdmin
+        ? orgRef.collection('mailDlpRules').orderBy('createdAt', 'desc').get()
+        : Promise.resolve(null),
+      canEmailAdmin || canSecurityAdmin
+        ? orgRef.collection('mailTransportRules').orderBy('createdAt', 'desc').get()
+        : Promise.resolve(null),
+      canEmailAdmin || canSecurityAdmin
+        ? orgRef.collection('mailQuarantine').orderBy('receivedAt', 'desc').limit(100).get()
+        : Promise.resolve(null),
+      canEmailAdmin
+        ? orgRef.collection('mailSharedMailboxes').orderBy('createdAt', 'desc').get()
+        : Promise.resolve(null),
+      canSecurityAdmin || canComplianceAdmin
+        ? orgRef.collection('mailAuditLogs').orderBy('createdAt', 'desc').limit(150).get()
+        : Promise.resolve(null),
+      canEmailAdmin
+        ? orgRef.collection('mailUsers').get()
+        : Promise.resolve(null),
     ]);
 
-    const domainUsers = usersSnap.docs
+    const domainUsers = (usersSnap?.docs || [])
       .map((d) => {
         const u = d.data() || {};
         const email = String(u.primaryEmail || u.email || '').trim().toLowerCase();
@@ -124,21 +142,102 @@ export async function getGovernanceOverview(idToken: string, orgId: string) {
       .map(({ email, displayName }) => ({ email, displayName }))
       .sort((a, b) => a.email.localeCompare(b.email));
 
-    const sharedMailboxes = sharedSnap.docs.map((d) => ({
-      id: d.id,
-      ...(d.data() as any),
-    })) as SharedMailboxRecord[];
+    const legalHolds: LegalHoldRecord[] = (holdsSnap?.docs || []).map((d) => {
+      const v = d.data() || {};
+      return {
+        id: d.id,
+        matterName: String(v.matterName || ''),
+        custodianEmails: Array.isArray(v.custodianEmails) ? v.custodianEmails : [],
+        holdAllMailboxes: Boolean(v.holdAllMailboxes),
+        reason: String(v.reason || ''),
+        status: v.status === 'released' ? 'released' : 'active',
+        createdBy: String(v.createdBy || ''),
+        createdAt: String(v.createdAt || ''),
+        releasedBy: v.releasedBy ?? null,
+        releasedAt: v.releasedAt ?? null,
+      };
+    });
+
+    const dlpRules: DlpRuleRecord[] = (dlpSnap?.docs || []).map((d) => {
+      const v = d.data() || {};
+      return {
+        id: d.id,
+        name: String(v.name || ''),
+        patternType: v.patternType,
+        patternValue: String(v.patternValue || ''),
+        action: v.action,
+        enabled: Boolean(v.enabled),
+        createdAt: String(v.createdAt || ''),
+      };
+    });
+
+    const transportRules: TransportRuleRecord[] = (transportSnap?.docs || []).map((d) => {
+      const v = d.data() || {};
+      return {
+        id: d.id,
+        name: String(v.name || ''),
+        ruleType: v.ruleType,
+        configValue: String(v.configValue || ''),
+        enabled: Boolean(v.enabled),
+        createdAt: String(v.createdAt || ''),
+      };
+    });
+
+    const quarantineItems: QuarantineItemRecord[] = (quarSnap?.docs || []).map((d) => {
+      const v = d.data() || {};
+      return {
+        id: d.id,
+        sender: String(v.sender || ''),
+        recipients: Array.isArray(v.recipients) ? v.recipients : [],
+        subject: String(v.subject || ''),
+        snippet: String(v.snippet || ''),
+        reason: v.reason || 'DLP',
+        matchedRule: String(v.matchedRule || ''),
+        score: typeof v.score === 'number' ? v.score : 0,
+        status: v.status || 'quarantined',
+        receivedAt: String(v.receivedAt || ''),
+      };
+    });
+
+    const sharedMailboxes: SharedMailboxRecord[] = (sharedSnap?.docs || []).map((d) => {
+      const v = d.data() || {};
+      return {
+        id: d.id,
+        displayName: String(v.displayName || ''),
+        email: String(v.email || ''),
+        delegates: Array.isArray(v.delegates) ? v.delegates : [],
+        createdAt: String(v.createdAt || ''),
+      };
+    });
+
+    const auditLogs: AuditLogRecord[] = (auditSnap?.docs || []).map((d) => {
+      const v = d.data() || {};
+      return {
+        id: d.id,
+        actorUid: String(v.actorUid || ''),
+        actorEmail: v.actorEmail ? String(v.actorEmail) : null,
+        action: String(v.action || ''),
+        target: String(v.target || ''),
+        metadata: v.metadata && typeof v.metadata === 'object' ? v.metadata : {},
+        createdAt: String(v.createdAt || ''),
+      };
+    });
 
     return {
       success: true,
       data: {
-        legalHolds: holdsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as LegalHoldRecord[],
-        dlpRules: dlpSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as DlpRuleRecord[],
-        transportRules: transportSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as TransportRuleRecord[],
-        quarantineItems: quarSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as QuarantineItemRecord[],
+        legalHolds,
+        dlpRules,
+        transportRules,
+        quarantineItems,
         sharedMailboxes,
         domainUsers,
-        auditLogs: auditSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as AuditLogRecord[],
+        auditLogs,
+        capabilities: {
+          canEmailAdmin,
+          canSecurityAdmin,
+          canComplianceAdmin,
+        },
       },
     };
   } catch (err: any) {
@@ -257,7 +356,12 @@ export async function exportEDiscoveryBundle(
   idToken: string,
   orgId: string,
   queryText: string,
-  stepUpToken?: string
+  stepUpToken?: string,
+  scope?: {
+    custodianEmail?: string;
+    startDate?: string;
+    endDate?: string;
+  }
 ) {
   try {
     const auth = await verifyUserOrgAccess(idToken, orgId, undefined, [
@@ -266,25 +370,80 @@ export async function exportEDiscoveryBundle(
     ]);
     assertStepUpMfa(auth.uid, stepUpToken);
 
+    const AUDIT_LIMIT = 500;
+    const QUARANTINE_LIMIT = 200;
     const orgRef = adminDb.collection('organizations').doc(orgId);
     const [holdsSnap, logsSnap, quarSnap] = await Promise.all([
       orgRef.collection('mailLegalHolds').get(),
-      orgRef.collection('mailAuditLogs').orderBy('createdAt', 'desc').limit(500).get(),
-      orgRef.collection('mailQuarantine').orderBy('receivedAt', 'desc').limit(200).get(),
+      orgRef.collection('mailAuditLogs').orderBy('createdAt', 'desc').limit(AUDIT_LIMIT).get(),
+      orgRef.collection('mailQuarantine').orderBy('receivedAt', 'desc').limit(QUARANTINE_LIMIT).get(),
     ]);
 
     const q = (queryText || '').trim().toLowerCase();
-    const filterMatch = (obj: any) =>
-      !q || JSON.stringify(obj).toLowerCase().includes(q);
+    const custodian = (scope?.custodianEmail || '').trim().toLowerCase();
+    const startMs = scope?.startDate ? new Date(scope.startDate).getTime() : NaN;
+    const endMs = scope?.endDate ? new Date(scope.endDate).getTime() : NaN;
 
+    const withinDateRange = (iso?: string) => {
+      if (!iso || (Number.isNaN(startMs) && Number.isNaN(endMs))) return true;
+      const t = new Date(iso).getTime();
+      if (Number.isNaN(t)) return true;
+      if (!Number.isNaN(startMs) && t < startMs) return false;
+      if (!Number.isNaN(endMs) && t > endMs) return false;
+      return true;
+    };
+
+    const filterMatch = (obj: any, timestampField: string) => {
+      if (!withinDateRange(obj?.[timestampField])) return false;
+      const serialized = JSON.stringify(obj).toLowerCase();
+      if (custodian && !serialized.includes(custodian)) return false;
+      if (q && !serialized.includes(q)) return false;
+      return true;
+    };
+
+    const legalHolds = holdsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((o) => filterMatch(o, 'createdAt'));
+    const auditTrail = logsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((o) => filterMatch(o, 'createdAt'));
+    const quarantinedEvidence = quarSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((o) => filterMatch(o, 'receivedAt'));
+
+    const exportedAt = new Date().toISOString();
     const bundle = {
-      exportedAt: new Date().toISOString(),
+      manifest: {
+        exportType: 'governance_metadata_and_quarantine',
+        exportedAt,
+        exportedBy: auth.email || auth.uid,
+        orgId,
+        scope: {
+          query: q || '*',
+          custodianEmail: custodian || null,
+          startDate: scope?.startDate || null,
+          endDate: scope?.endDate || null,
+        },
+        counts: {
+          legalHolds: legalHolds.length,
+          auditTrail: auditTrail.length,
+          quarantinedEvidence: quarantinedEvidence.length,
+        },
+        truncated: {
+          auditTrail: logsSnap.size >= AUDIT_LIMIT,
+          quarantinedEvidence: quarSnap.size >= QUARANTINE_LIMIT,
+        },
+        includesRetainedMailboxMessages: false,
+        limitations:
+          'Exports legal hold records, governance audit logs (up to 500), and quarantined message records (up to 200). Live mailbox contents and attachments are not included.',
+      },
+      exportedAt,
       exportedBy: auth.email || auth.uid,
       orgId,
       query: q || '*',
-      legalHolds: holdsSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(filterMatch),
-      auditTrail: logsSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(filterMatch),
-      quarantinedEvidence: quarSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(filterMatch),
+      legalHolds,
+      auditTrail,
+      quarantinedEvidence,
     };
 
     await logMailAuditEvent({
@@ -293,12 +452,16 @@ export async function exportEDiscoveryBundle(
       actorEmail: auth.email,
       action: 'EDISCOVERY_EXPORT',
       target: orgId,
-      metadata: { query: q || '*' },
+      metadata: {
+        query: q || '*',
+        custodianEmail: custodian || null,
+        counts: bundle.manifest.counts,
+      },
     });
 
     return { success: true, data: bundle };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'Failed to export eDiscovery bundle.' };
+    return { success: false, error: err?.message || 'Failed to export governance metadata bundle.' };
   }
 }
 
@@ -505,9 +668,27 @@ export async function resolveQuarantineItem(
     const itemData = itemSnap.data() || {};
 
     if (decision === 'released') {
-      await assertActiveMailDomainBinding(orgId, auth.orgData);
+      const boundDomain = await assertActiveMailDomainBinding(orgId, auth.orgData);
+
+      // Enforce idempotent state transitions on quarantine items.
+      if (itemData.status === 'released') {
+        return { success: true };
+      }
+      if (itemData.status === 'release_pending') {
+        return { success: false, error: 'A release attempt is already in progress for this item.' };
+      }
+      if (itemData.status === 'deleted') {
+        return { success: false, error: 'Deleted quarantine items cannot be released.' };
+      }
 
       const senderEmail = String(itemData.sender || '').toLowerCase().trim();
+      const senderDomain = (senderEmail.split('@')[1] || '').toLowerCase().trim();
+      if (!senderDomain || senderDomain !== boundDomain) {
+        return {
+          success: false,
+          error: `Sender "${senderEmail}" does not belong to this organization's verified domain (@${boundDomain}).`,
+        };
+      }
       const recipients: string[] = Array.isArray(itemData.recipients)
         ? itemData.recipients
             .map((r: unknown) => String(r || '').toLowerCase().trim())
@@ -546,6 +727,7 @@ export async function resolveQuarantineItem(
           const sentMailboxId = sentMb?.id || 'e';
           const identityId = idList[0]?.id || 'b';
           const bodyText = String(itemData.bodyText || itemData.snippet || '');
+          const bodyHtml = typeof itemData.bodyHtml === 'string' && itemData.bodyHtml.trim() ? itemData.bodyHtml : '';
           const jmapRes = await callStalwartJmap([
             [
               'Email/set',
@@ -558,8 +740,11 @@ export async function resolveQuarantineItem(
                     from: [{ name: senderEmail.split('@')[0], email: senderEmail }],
                     to: recipients.map((email) => ({ name: email.split('@')[0], email })),
                     subject: String(itemData.subject || '(Released Message)'),
-                    bodyValues: { text: { value: bodyText } },
+                    bodyValues: bodyHtml
+                      ? { text: { value: bodyText }, html: { value: bodyHtml } }
+                      : { text: { value: bodyText } },
                     textBody: [{ partId: 'text', type: 'text/plain' }],
+                    ...(bodyHtml ? { htmlBody: [{ partId: 'html', type: 'text/html' }] } : {}),
                   },
                 },
               },
@@ -926,7 +1111,11 @@ export async function exportSiemAuditLogs(
     } else if (format === 'ndjson') {
       content = logs.map((l) => JSON.stringify(l)).join('\n');
     } else if (format === 'csv') {
-      const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const esc = (v: unknown) => {
+        const text = String(v ?? '');
+        const safeText = /^[\s\uFEFF]*[=+@-]|^[\t\r\n]/.test(text) ? `'${text}` : text;
+        return `"${safeText.replace(/"/g, '""')}"`;
+      };
       content = [
         'id,createdAt,actorUid,actorEmail,action,target,metadata',
         ...logs.map((l) =>
@@ -936,11 +1125,22 @@ export async function exportSiemAuditLogs(
         ),
       ].join('\n');
     } else {
-      // CEF (Common Event Format) for SIEM ingestion (Splunk, QRadar, Sentinel)
+      // CEF (Common Event Format) with RFC/CEF-compliant header and extension escaping
+      const escHeader = (v: unknown) =>
+        String(v ?? '')
+          .replace(/\\/g, '\\\\')
+          .replace(/\|/g, '\\|')
+          .replace(/[\r\n]+/g, ' ');
+      const escExt = (v: unknown) =>
+        String(v ?? '')
+          .replace(/\\/g, '\\\\')
+          .replace(/=/g, '\\=')
+          .replace(/\r/g, '\\r')
+          .replace(/\n/g, '\\n');
       content = logs
         .map(
           (l) =>
-            `CEF:0|Revlet|ControlPlane|1.0|${l.action}|${l.action}|5|rt=${l.createdAt} suser=${l.actorEmail || l.actorUid} cs1=${l.target} cs1Label=Target`
+            `CEF:0|Revlet|ControlPlane|1.0|${escHeader(l.action)}|${escHeader(l.action)}|5|rt=${escExt(l.createdAt)} suser=${escExt(l.actorEmail || l.actorUid)} cs1=${escExt(l.target)} cs1Label=Target`
         )
         .join('\n');
     }

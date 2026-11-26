@@ -576,6 +576,23 @@ export async function purgeExpiredMailData(): Promise<{
         const sharedSnap = await orgDoc.ref.collection('mailSharedMailboxes').get();
         const ousSnap = await orgDoc.ref.collection('mailOrgUnits').get();
 
+        // Re-check legal holds immediately before destructive Stalwart/Firestore deletion
+        const preDeleteHolds = await orgDoc.ref
+          .collection('mailLegalHolds')
+          .where('status', '==', 'active')
+          .limit(1)
+          .get();
+        if (!preDeleteHolds.empty) {
+          await logMailAuditEvent({
+            orgId,
+            actorUid: 'system-cron',
+            action: 'LEGAL_HOLD_PURGE_BLOCKED',
+            target: orgId,
+            metadata: { reason: 'Active Legal Hold placed before destructive org purge' },
+          });
+          continue;
+        }
+
         // Remove user principals from Stalwart
         for (const uDoc of usersSnap.docs) {
           const primaryEmail = (uDoc.data().primaryEmail || '').toLowerCase().trim();
@@ -724,7 +741,33 @@ export async function purgeExpiredMailData(): Promise<{
           if (Number.isNaN(expiryMs) || expiryMs > nowMs) continue;
 
           const userEmail = (uData.primaryEmail || '').toLowerCase().trim();
-          if (orgWideHold || (userEmail && heldEmails.has(userEmail))) {
+          // Re-check active legal holds immediately before deleting each custodian
+          // so a hold placed while a purge batch is running still blocks deletion.
+          const latestHoldsSnap = await orgDoc.ref
+            .collection('mailLegalHolds')
+            .where('status', '==', 'active')
+            .get();
+          let blockedByHold = orgWideHold || (Boolean(userEmail) && heldEmails.has(userEmail));
+          if (!blockedByHold) {
+            for (const hDoc of latestHoldsSnap.docs) {
+              const hData = hDoc.data() || {};
+              const custodians: string[] = Array.isArray(hData.custodianEmails)
+                ? hData.custodianEmails.map((c: string) => String(c).toLowerCase().trim())
+                : Array.isArray(hData.custodians)
+                ? hData.custodians.map((c: string) => String(c).toLowerCase().trim())
+                : [];
+              if (
+                hData.holdAllMailboxes === true ||
+                custodians.length === 0 ||
+                custodians.includes('*') ||
+                (userEmail && custodians.includes(userEmail))
+              ) {
+                blockedByHold = true;
+                break;
+              }
+            }
+          }
+          if (blockedByHold) {
             await logMailAuditEvent({
               orgId,
               actorUid: 'system-cron',

@@ -4,20 +4,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { PageHeader } from "@/components/layout/page-header"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
-import { useUser, useFirestore } from "@/firebase"
+import { useUser } from "@/firebase"
 import { useActiveOrg } from "@/hooks/use-active-org"
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  arrayUnion,
-  arrayRemove,
-} from "firebase/firestore"
 import {
   listTeamManagementData,
   inviteTeamMember,
@@ -138,13 +126,14 @@ function StatusBadge({ status }: { status: TeamMember["status"] }) {
 
 export default function TeamManagementPage() {
   const { user } = useUser()
-  const db = useFirestore()
-  const { orgs: activeContextOrgs, loading: isContextOrgsLoading } = useActiveOrg()
+  const { activeOrgId, loading: isContextOrgsLoading } = useActiveOrg()
   const { toast } = useToast()
 
   const [members, setMembers] = useState<TeamMember[]>([])
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [teamLoadError, setTeamLoadError] = useState<string | null>(null)
+  const teamRequestRef = useRef(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Invite modal state
@@ -162,100 +151,36 @@ export default function TeamManagementPage() {
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null)
 
   const fetchTeamData = useCallback(async () => {
+    const request = ++teamRequestRef.current
     if (!user) {
+      setOrgs([])
+      setMembers([])
       setIsLoading(false)
       return
     }
 
     setIsLoading(true)
+    setTeamLoadError(null)
     try {
-      const idToken = await user.getIdToken()
-      const res = await listTeamManagementData(idToken)
-      if (res.success && res.data) {
-        setOrgs(res.data.orgs)
-        setMembers(res.data.members)
-        setIsLoading(false)
-        return
-      }
+      const res = await listTeamManagementData(await user.getIdToken())
+      if (request !== teamRequestRef.current) return
+      if (!res.success || !res.data) throw new Error("Could not load authorized workspaces.")
+      setOrgs(res.data.orgs)
+      setMembers(res.data.members)
     } catch {
-      // Fallback to client-side Firestore below
-    }
-
-    try {
-      if (db) {
-        const ownedQ = query(collection(db, "organizations"), where("ownerId", "==", user.uid))
-        const ownedSnap = await getDocs(ownedQ)
-        const orgMapLocal = new Map<string, Organization>()
-        for (const d of ownedSnap.docs) {
-          const data = d.data()
-          if (data.status !== "Pending Deletion") {
-            orgMapLocal.set(d.id, {
-              id: d.id,
-              name: data.name || d.id,
-              domain: data.domain,
-              ownerId: data.ownerId || user.uid,
-            })
-          }
-        }
-        for (const ao of activeContextOrgs) {
-          if (!orgMapLocal.has(ao.id)) {
-            orgMapLocal.set(ao.id, {
-              id: ao.id,
-              name: ao.name,
-              domain: ao.domain,
-              ownerId: ao.ownerId || user.uid,
-            })
-          }
-        }
-        const resolvedOrgs = Array.from(orgMapLocal.values())
-        setOrgs(resolvedOrgs)
-
-        const membersQ = query(collection(db, "teamMembers"), where("ownerId", "==", user.uid))
-        const membersSnap = await getDocs(membersQ)
-        const callerEmail = (user.email || "").toLowerCase().trim()
-        const resolvedMembers: TeamMember[] = []
-        for (const md of membersSnap.docs) {
-          const mdata = md.data()
-          if ((mdata.email || "").toLowerCase().trim() === callerEmail) continue
-          resolvedMembers.push({
-            id: md.id,
-            email: mdata.email,
-            organizationId: mdata.organizationId,
-            organizationIds:
-              mdata.organizationIds || (mdata.organizationId ? [mdata.organizationId] : []),
-            accessMode: mdata.accessMode,
-            permissions: mdata.permissions || [],
-            orgPermissions: mdata.orgPermissions || {},
-            status: mdata.status || "Pending",
-            invitedBy: mdata.invitedBy,
-          })
-        }
-        setMembers(resolvedMembers)
-      }
-    } catch (err) {
-      console.error("Client fallback for team data failed:", err)
+      if (request !== teamRequestRef.current) return
+      setOrgs([])
+      setMembers([])
+      setTeamLoadError("Could not load team access. Try again before sending an invitation.")
     } finally {
-      setIsLoading(false)
+      if (request === teamRequestRef.current) setIsLoading(false)
     }
-  }, [user, db, activeContextOrgs])
+  }, [user])
 
   useEffect(() => {
-    fetchTeamData()
+    void fetchTeamData()
+    return () => { teamRequestRef.current++ }
   }, [fetchTeamData])
-
-  // Also sync any newly loaded activeContextOrgs so the user never sees an empty org state
-  useEffect(() => {
-    if (activeContextOrgs.length > 0 && orgs.length === 0) {
-      setOrgs(
-        activeContextOrgs.map((ao) => ({
-          id: ao.id,
-          name: ao.name,
-          domain: ao.domain,
-          ownerId: ao.ownerId || user?.uid || "",
-        }))
-      )
-    }
-  }, [activeContextOrgs, orgs.length, user?.uid])
 
   // Support ?inviteOrg={orgId}&preset=dns-viewer shortcut from the DNS page
   const handledInviteParamRef = useRef(false)
@@ -273,7 +198,7 @@ export default function TeamManagementPage() {
     setInviteOrgAccess({
       [matched.id]: {
         mode: "services",
-        permissions: preset === "dns-viewer" ? ["DNS: Read"] : ["DNS: Read", "Email: Read"],
+        permissions: preset === "dns-viewer" ? ["DNS: Read"] : ["Email: Read"],
       },
     })
     setIsInviteOpen(true)
@@ -308,7 +233,7 @@ export default function TeamManagementPage() {
 
   const handleOpenInvite = () => {
     setInviteEmail("")
-    const initialIds = orgs.length > 0 ? [orgs[0].id] : []
+    const initialIds = orgs.some((org) => org.id === activeOrgId) ? [activeOrgId] : []
     setInviteOrgIds(initialIds)
     const initialMap: OrgAccessMap = {}
     for (const oid of initialIds) {
@@ -890,7 +815,12 @@ export default function TeamManagementPage() {
 
         <Card className="bg-white border border-slate-200/80 shadow-none overflow-hidden rounded-xl">
           <CardContent className="p-0">
-            {isLoading || isContextOrgsLoading ? (
+            {teamLoadError ? (
+              <div role="alert" className="space-y-3 p-5 text-sm">
+                <p>{teamLoadError}</p>
+                <Button size="sm" variant="outline" onClick={() => void fetchTeamData()}>Retry</Button>
+              </div>
+            ) : isLoading || isContextOrgsLoading ? (
               <TableSkeleton rows={4} cols={5} />
             ) : members.length === 0 ? (
               <div className="py-20 text-center space-y-3 px-4 max-w-sm mx-auto">

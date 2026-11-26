@@ -911,65 +911,129 @@ export async function acceptInvitationByToken(
       };
     }
 
-    // Require fresh MFA step-up if invitation grants a privileged role and user has enrolled MFA
-    const allOfferedPerms = Array.from(
-      new Set(
-        candidateOrgIds.flatMap((oid) =>
-          Array.isArray(preData.orgPermissions?.[oid])
-            ? (preData.orgPermissions[oid] as string[])
-            : Array.isArray(preData.permissions)
-            ? (preData.permissions as string[])
-            : []
-        )
-      )
-    );
-    if (isPrivilegedGrant(allOfferedPerms)) {
-      const mfaCounts = await getEnrolledFactorCounts(caller.uid);
-      if (mfaCounts.totalFactors > 0 && !verifyStepUpToken(stepUpToken, caller.uid)) {
-        return {
-          success: false,
-          error: 'MFA_STEP_UP_REQUIRED: Complete 2-Step Verification to accept this privileged role.',
-        };
-      }
-    }
+    // Pre-fetch enrolled MFA factor counts and inviter team-membership docs so
+    // all authorization, token, role, and MFA checks execute atomically inside
+    // the acceptance transaction against fresh state.
+    const mfaCounts = await getEnrolledFactorCounts(caller.uid);
+    const preInviterUid = String(preData.invitedByUid || preData.ownerId || '');
+    const inviterMembershipSnap = preInviterUid
+      ? await adminDb
+          .collection('teamMembers')
+          .where('memberUid', '==', preInviterUid)
+          .limit(20)
+          .get()
+      : null;
+    const inviterMembershipRefs = inviterMembershipSnap ? inviterMembershipSnap.docs.map((d) => d.ref) : [];
 
-    const inviterUid = String(preData.invitedByUid || preData.ownerId || '');
-
-    // Validate inviter's current authority (owner OR active delegated Org Admin) for each org
-    const authorizedOrgIds: string[] = [];
-    for (const orgId of candidateOrgIds) {
-      const orgSnap = await adminDb.collection('organizations').doc(orgId).get();
-      if (!orgSnap.exists) continue;
-      if (await uidHasOrgAdmin(orgId, orgSnap.data(), inviterUid)) {
-        authorizedOrgIds.push(orgId);
-      }
-    }
-
-    if (authorizedOrgIds.length === 0) {
-      return {
-        success: false,
-        error: 'The inviter no longer has permission to grant access to this workspace.',
-      };
-    }
-
-    const acceptedOrgIds = await adminDb.runTransaction(async (tx) => {
+    const txResult = await adminDb.runTransaction(async (tx) => {
       const freshSnap = await tx.get(inviteRef);
       if (!freshSnap.exists) throw new Error('Invitation no longer exists.');
       const d = freshSnap.data() || {};
+
+      if (d.inviteTokenHash !== tokenHash) {
+        throw new Error('This invitation link has been superseded. Use the latest invitation email.');
+      }
       if (d.revoked === true || d.status === 'Suspended' || d.status === 'Inactive') {
         throw new Error('This invitation has been revoked.');
-      }
-      if (d.status === 'Active') {
-        if (d.memberUid && d.memberUid !== caller.uid) {
-          throw new Error('This invitation was already claimed by another account.');
-        }
-        return authorizedOrgIds;
       }
       if (typeof d.expiresAt === 'number' && d.expiresAt < Date.now()) {
         throw new Error('This invitation has expired. Ask your admin to resend it.');
       }
       if ((d.email || '').toLowerCase().trim() !== caller.email) {
         throw new Error('Signed-in email does not match this invitation.');
+      }
+
+      const freshOrgIds: string[] = Array.isArray(d.organizationIds)
+        ? d.organizationIds
+        : d.organizationId
+        ? [d.organizationId]
+        : [];
+      if (freshOrgIds.length === 0) {
+        throw new Error('Invitation has no target workspaces.');
+      }
+
+      if (d.status === 'Active') {
+        if (d.memberUid && d.memberUid !== caller.uid) {
+          throw new Error('This invitation was already claimed by another account.');
+        }
+        const primaryOrgId = freshOrgIds[0];
+        const primaryPerms: string[] = Array.isArray(d.orgPermissions?.[primaryOrgId])
+          ? d.orgPermissions[primaryOrgId]
+          : Array.isArray(d.permissions)
+          ? d.permissions
+          : [];
+        return { orgIds: freshOrgIds, primaryOrgId, primaryPerms, alreadyAccepted: true };
+      }
+
+      // Enforce MFA on the freshly read offered permissions inside the transaction.
+      // Privileged invitees with zero enrolled factors must enroll MFA first.
+      const freshOfferedPerms = Array.from(
+        new Set(
+          freshOrgIds.flatMap((oid) =>
+            Array.isArray(d.orgPermissions?.[oid])
+              ? (d.orgPermissions[oid] as string[])
+              : Array.isArray(d.permissions)
+              ? (d.permissions as string[])
+              : []
+          )
+        )
+      );
+      if (isPrivilegedGrant(freshOfferedPerms)) {
+        if (mfaCounts.totalFactors === 0) {
+          throw new Error(
+            'MFA_ENROLLMENT_REQUIRED: Enable 2-Step Verification in Account Settings before accepting a privileged workspace role.'
+          );
+        }
+        if (!verifyStepUpToken(stepUpToken, caller.uid)) {
+          throw new Error(
+            'MFA_STEP_UP_REQUIRED: Complete 2-Step Verification to accept this privileged role.'
+          );
+        }
+      }
+
+      // Re-read org docs and inviter membership docs inside the transaction to
+      // verify inviter authority atomically at the point of acceptance.
+      const inviterUid = String(d.invitedByUid || d.ownerId || '');
+      const orgRefs = freshOrgIds.map((oid) => adminDb.collection('organizations').doc(oid));
+      const [orgSnaps, freshInviterSnaps] = await Promise.all([
+        Promise.all(orgRefs.map((ref) => tx.get(ref))),
+        inviterUid && inviterUid === preInviterUid
+          ? Promise.all(inviterMembershipRefs.map((ref) => tx.get(ref)))
+          : Promise.resolve([]),
+      ]);
+
+      const authorizedOrgIds: string[] = [];
+      for (let i = 0; i < freshOrgIds.length; i++) {
+        const oid = freshOrgIds[i];
+        const orgSnap = orgSnaps[i];
+        if (!orgSnap.exists) continue;
+        const orgData = orgSnap.data() || {};
+        let inviterAuthorized = Boolean(inviterUid && orgData.ownerId === inviterUid);
+        if (!inviterAuthorized && inviterUid) {
+          for (const mSnap of freshInviterSnaps) {
+            if (!mSnap.exists) continue;
+            const md = mSnap.data() || {};
+            if (md.status !== 'Active' || md.memberUid !== inviterUid) continue;
+            const mOrgs: string[] = Array.isArray(md.organizationIds) ? md.organizationIds : [];
+            if (!mOrgs.includes(oid)) continue;
+            const mPerms: string[] = Array.isArray(md.orgPermissions?.[oid])
+              ? md.orgPermissions[oid]
+              : Array.isArray(md.permissions)
+              ? md.permissions
+              : [];
+            if (mPerms.includes(ORG_ADMIN_PERMISSION)) {
+              inviterAuthorized = true;
+              break;
+            }
+          }
+        }
+        if (inviterAuthorized) {
+          authorizedOrgIds.push(oid);
+        }
+      }
+
+      if (authorizedOrgIds.length === 0) {
+        throw new Error('The inviter no longer has permission to grant access to this workspace.');
       }
 
       // Keep inviteTokenHash on Active record so retrying the same link cleanly reopens the workspace
@@ -997,15 +1061,17 @@ export async function acceptInvitationByToken(
         });
       }
 
-      return authorizedOrgIds;
+      const primaryOrgId = authorizedOrgIds[0];
+      const primaryPerms: string[] = Array.isArray(d.orgPermissions?.[primaryOrgId])
+        ? d.orgPermissions[primaryOrgId]
+        : Array.isArray(d.permissions)
+        ? d.permissions
+        : [];
+
+      return { orgIds: authorizedOrgIds, primaryOrgId, primaryPerms, alreadyAccepted: false };
     });
 
-    const primaryOrgId = acceptedOrgIds[0];
-    const primaryPerms: string[] = Array.isArray(preData.orgPermissions?.[primaryOrgId])
-      ? preData.orgPermissions[primaryOrgId]
-      : Array.isArray(preData.permissions)
-      ? preData.permissions
-      : [];
+    const { orgIds: acceptedOrgIds, primaryOrgId, primaryPerms } = txResult;
 
     return {
       success: true,

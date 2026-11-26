@@ -125,16 +125,28 @@ export async function POST(req: NextRequest) {
     }
 
     if (type === 'quarantine') {
+      const orgSnap = await adminDb.collection('organizations').doc(orgId).get();
+      const orgDomain = String(orgSnap.data()?.domain || '').toLowerCase().trim();
+      const senderEmail = typeof body.sender === 'string' ? body.sender.toLowerCase().trim() : '';
+      const rawBodyText = typeof body.bodyText === 'string' ? body.bodyText : '';
+      const rawBodyHtml = typeof body.bodyHtml === 'string' ? body.bodyHtml : '';
+      const maxChars = 250_000;
+      const bodyTruncated = rawBodyText.length > maxChars || rawBodyHtml.length > maxChars;
+
       const ref = await adminDb
         .collection('organizations')
         .doc(orgId)
         .collection('mailQuarantine')
         .add({
-          sender: body.sender || '',
+          sender: senderEmail,
+          orgDomain: orgDomain || null,
           recipients: Array.isArray(body.recipients) ? body.recipients : [],
           subject: body.subject || '(No Subject)',
           snippet: body.snippet || '',
-          bodyText: typeof body.bodyText === 'string' ? body.bodyText.slice(0, 10000) : '',
+          bodyText: rawBodyText.slice(0, maxChars),
+          bodyHtml: rawBodyHtml.slice(0, maxChars),
+          bodyTruncated,
+          attachments: Array.isArray(body.attachments) ? body.attachments.slice(0, 50) : [],
           reason: body.reason || 'DLP',
           matchedRule: body.matchedRule || 'Policy Match',
           score: typeof body.score === 'number' ? body.score : 95,

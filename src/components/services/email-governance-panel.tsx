@@ -73,6 +73,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
     if (mode) setActiveSection(mode)
   }, [mode])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [legalHolds, setLegalHolds] = useState<LegalHoldRecord[]>([])
   const [dlpRules, setDlpRules] = useState<DlpRuleRecord[]>([])
   const [transportRules, setTransportRules] = useState<TransportRuleRecord[]>([])
@@ -156,6 +157,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   const loadData = useCallback(async () => {
     if (!user || !orgId) return
     setLoading(true)
+    setLoadError(null)
     try {
       const idToken = await user.getIdToken()
       const res = await getGovernanceOverview(idToken, orgId)
@@ -167,9 +169,11 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
         setSharedMailboxes(res.data.sharedMailboxes)
         setDomainUsers(Array.isArray(res.data.domainUsers) ? res.data.domainUsers : [])
         setAuditLogs(res.data.auditLogs)
+      } else {
+        setLoadError(res.error || "Could not load governance data for this organization.")
       }
     } catch {
-      // ignore
+      setLoadError("Could not load governance data for this organization.")
     } finally {
       setLoading(false)
     }
@@ -230,6 +234,15 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
       sm.delegates.some((d) => d.email.toLowerCase().includes(q))
     )
   })
+
+  if (loadError) {
+    return (
+      <div role="alert" className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 text-sm">
+        <p>{loadError}</p>
+        <Button variant="outline" size="sm" onClick={() => void loadData()}>Retry</Button>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -944,7 +957,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                 Transport & Mail Flow Rules
               </CardTitle>
               <CardDescription className="text-xs">
-                Enforce org disclaimers, external moderation, URL sandboxing, and attachment blocking.
+                Enforce org disclaimers, external moderation, external link hardening, and attachment blocking.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -955,7 +968,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   <SelectContent>
                     <SelectItem value="append_disclaimer">Append Legal Disclaimer</SelectItem>
                     <SelectItem value="block_attachment_ext">Block Attachment Extensions</SelectItem>
-                    <SelectItem value="sandbox_urls">Sandbox External URLs</SelectItem>
+                    <SelectItem value="sandbox_urls">Harden External Links (noopener/noreferrer)</SelectItem>
                     <SelectItem value="moderate_external">Moderate External Mail</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1081,9 +1094,14 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
           <Card className="lg:col-span-2 border-slate-200/80 shadow-none">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <CardTitle className="text-sm font-medium text-slate-900">
-                  Active Legal Holds & eDiscovery Export
-                </CardTitle>
+                <div>
+                  <CardTitle className="text-sm font-medium text-slate-900">
+                    Active Legal Holds & Governance Metadata Export
+                  </CardTitle>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Exports hold records, audit events (up to 500), and quarantined evidence (up to 200). Live mailbox contents are not included.
+                  </p>
+                </div>
                 <div className="flex items-center gap-2">
                   <Input
                     value={eDiscoveryQuery}

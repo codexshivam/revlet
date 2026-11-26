@@ -51,7 +51,8 @@ export async function verifyUserOrgAccess(
 
   let decodedToken;
   try {
-    decodedToken = await adminAuth.verifyIdToken(idToken);
+    // Check revocation so revoked sessions cannot perform protected mutations
+    decodedToken = await adminAuth.verifyIdToken(idToken, true);
   } catch (err: any) {
     console.error("[Auth Helper] Token verification failed:", err?.message);
     throw new Error(`Authentication failed: ${err?.message || "Invalid or expired session token."}`);
@@ -83,17 +84,18 @@ export async function verifyUserOrgAccess(
     }
 
     // Active, UID-bound membership in teamMembers is the single source of authorization.
-    // Pending invitations grant zero access; Suspended/Inactive blocks immediately.
+    // Query by organizationIds + memberUid (and email fallback) so invitations sent by
+    // delegated Org Admins (whose UID != orgData.ownerId) resolve identically to owner invites.
     const [byUidSnap, byEmailSnap] = await Promise.all([
       adminDb
         .collection('teamMembers')
-        .where('ownerId', '==', orgData?.ownerId)
+        .where('organizationIds', 'array-contains', orgId)
         .where('memberUid', '==', decodedToken.uid)
         .limit(5)
         .get(),
       adminDb
         .collection('teamMembers')
-        .where('ownerId', '==', orgData?.ownerId)
+        .where('organizationIds', 'array-contains', orgId)
         .where('email', '==', userEmail)
         .limit(5)
         .get(),

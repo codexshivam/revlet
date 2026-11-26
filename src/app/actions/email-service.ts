@@ -8,6 +8,7 @@ import { verifyUserOrgAccess } from './auth-helper';
 import {
   listDNSRecords,
   createDNSRecord,
+  updateDNSRecord,
   deleteDNSRecord,
 } from './dns-service';
 import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
@@ -721,6 +722,17 @@ async function ensureOrgDkimConfig(
   };
 }
 
+function mergeSpfWithRevletInclude(existingSpf: string, includeToken: string): string {
+  const clean = existingSpf.trim().replace(/^"|"$/g, '');
+  if (clean.toLowerCase().includes(includeToken.toLowerCase())) return clean;
+  const mechMatch = clean.match(/(\s+[~?-]all|\s+\+?all)\s*$/i);
+  if (mechMatch) {
+    const idx = clean.lastIndexOf(mechMatch[1]);
+    return `${clean.slice(0, idx)} ${includeToken}${mechMatch[1]}`.replace(/\s+/g, ' ').trim();
+  }
+  return `${clean} ${includeToken} ~all`.replace(/\s+/g, ' ').trim();
+}
+
 async function provisionRequiredDnsRecordsOnZone(
   idToken: string,
   orgId: string,
@@ -741,45 +753,40 @@ async function provisionRequiredDnsRecordsOnZone(
     const currentRecords: any[] = existingRes.data || [];
     const normalizedDomain = domainName.toLowerCase().replace(/\.$/, '').trim();
     const expectedMxHost = MAIL_MX_HOST.toLowerCase().replace(/\.$/, '').trim();
+    let addedCount = 0;
+    const failures: string[] = [];
 
-    // Remove conflicting root MX records (any MX that does not point to mx.revlet.me) and conflicting SPF records
-    const conflictingRootRecords = currentRecords.filter((r: any) => {
+    // 1. Update existing root SPF in-place (preserving other authorized senders!) instead of deleting it
+    const existingRootSpf = currentRecords.find((r: any) => {
       const rType = (r.type || '').toUpperCase();
       const rName = (r.name || '').toLowerCase().replace(/\.$/, '').trim();
       const isRoot = rName === normalizedDomain || rName === '@' || rName === '';
-
-      if (rType === 'MX') {
-        const rContent = (r.content || '').toLowerCase().replace(/\.$/, '').trim();
-        // If it's on root and not pointing to mx.revlet.me, it's a conflict
-        if (isRoot && rContent !== expectedMxHost) {
-          return true;
-        }
-      }
-
-      if (rType === 'TXT' && isRoot) {
-        const rContent = (r.content || '').toLowerCase();
-        if (rContent.includes('v=spf1') && !rContent.includes(MAIL_SPF_INCLUDE.toLowerCase())) {
-          return true;
-        }
-      }
-
-      return false;
+      return rType === 'TXT' && isRoot && (r.content || '').toLowerCase().includes('v=spf1');
     });
 
-    for (const conflict of conflictingRootRecords) {
-      try {
-        console.log(`[Email Service Activation] Removing conflicting record ${conflict.type} ${conflict.name} -> ${conflict.content}`);
-        await deleteDNSRecord(idToken, orgId, zoneId, conflict.id);
-      } catch (delErr) {
-        console.warn(`[Email Service Activation] Warning deleting conflict ${conflict.id}:`, delErr);
+    if (
+      existingRootSpf &&
+      !(existingRootSpf.content || '').toLowerCase().includes(MAIL_SPF_INCLUDE.toLowerCase())
+    ) {
+      const mergedSpf = mergeSpfWithRevletInclude(existingRootSpf.content || '', MAIL_SPF_INCLUDE);
+      const updRes = await updateDNSRecord(idToken, orgId, zoneId, existingRootSpf.id, {
+        type: 'TXT',
+        name: existingRootSpf.name,
+        content: mergedSpf,
+        ttl: existingRootSpf.ttl || 'Auto',
+        proxied: false,
+      });
+      if (!updRes.success) {
+        failures.push(`SPF update failed: ${updRes.error || 'Provider rejected SPF merge.'}`);
+      } else {
+        addedCount++;
       }
     }
 
-    const refreshedRes = await listDNSRecords(idToken, orgId, zoneId);
-    const liveAfterDelete: any[] = refreshedRes.success ? refreshedRes.data || [] : currentRecords;
-
-    const requiredRecords = buildRequiredDnsRecords(normalizedDomain, dkimConfig, liveAfterDelete);
-    let addedCount = 0;
+    // 2. Create all missing required records (MX, SPF if none existed, DKIM, DMARC) BEFORE deleting old MX
+    const preCreateRes = await listDNSRecords(idToken, orgId, zoneId);
+    const liveBeforeCreate: any[] = preCreateRes.success ? preCreateRes.data || [] : currentRecords;
+    const requiredRecords = buildRequiredDnsRecords(normalizedDomain, dkimConfig, liveBeforeCreate);
 
     for (const req of requiredRecords) {
       if (req.required !== false && !req.verified) {
@@ -793,8 +800,54 @@ async function provisionRequiredDnsRecordsOnZone(
         });
         if (createRes.success) {
           addedCount++;
+        } else {
+          failures.push(`${req.type} ${req.name}: ${createRes.error || 'Create rejected.'}`);
         }
       }
+    }
+
+    // 3. Only after replacement MX is installed, remove conflicting root MX records
+    const afterCreateRes = await listDNSRecords(idToken, orgId, zoneId);
+    const liveAfterCreate: any[] = afterCreateRes.success ? afterCreateRes.data || [] : liveBeforeCreate;
+    const hasRevletMx = liveAfterCreate.some((r: any) => {
+      const rType = (r.type || '').toUpperCase();
+      const rName = (r.name || '').toLowerCase().replace(/\.$/, '').trim();
+      const isRoot = rName === normalizedDomain || rName === '@' || rName === '';
+      const rContent = (r.content || '').toLowerCase().replace(/\.$/, '').trim();
+      return rType === 'MX' && isRoot && rContent === expectedMxHost;
+    });
+
+    if (hasRevletMx) {
+      const conflictingMx = liveAfterCreate.filter((r: any) => {
+        const rType = (r.type || '').toUpperCase();
+        const rName = (r.name || '').toLowerCase().replace(/\.$/, '').trim();
+        const isRoot = rName === normalizedDomain || rName === '@' || rName === '';
+        const rContent = (r.content || '').toLowerCase().replace(/\.$/, '').trim();
+        return rType === 'MX' && isRoot && rContent !== expectedMxHost;
+      });
+      for (const conflict of conflictingMx) {
+        const delRes = await deleteDNSRecord(idToken, orgId, zoneId, conflict.id);
+        if (!delRes.success) {
+          failures.push(`Could not remove conflicting MX ${conflict.content}: ${delRes.error || 'Delete rejected.'}`);
+        }
+      }
+    }
+
+    // 4. Final verification: check that every required record is actually present
+    const finalRes = await listDNSRecords(idToken, orgId, zoneId);
+    const liveFinal: any[] = finalRes.success ? finalRes.data || [] : liveAfterCreate;
+    const finalCheck = buildRequiredDnsRecords(normalizedDomain, dkimConfig, liveFinal);
+    const missingRequired = finalCheck.filter((r) => r.required !== false && !r.verified);
+
+    if (missingRequired.length > 0 || failures.length > 0) {
+      const missingSummary = missingRequired.map((m) => `${m.type} ${m.name}`).join(', ');
+      return {
+        success: false,
+        addedCount,
+        error:
+          failures[0] ||
+          `Required mail DNS records are still missing after provisioning: ${missingSummary}`,
+      };
     }
 
     return { success: true, addedCount };

@@ -13,23 +13,60 @@ import { adminDb } from '@/firebase/admin';
 import { encryptToken } from '@/lib/security/encryption';
 import { FieldValue } from 'firebase-admin/firestore';
 
-async function assertUniqueZoneBinding(zoneId: string, currentOrgId: string) {
-  const existing = await adminDb
-    .collection('organizations')
-    .where('cloudflareZoneId', '==', zoneId)
-    .limit(2)
-    .get();
-  const conflict = existing.docs.find((d) => d.id !== currentOrgId);
-  if (conflict) {
-    throw new Error('This Cloudflare zone is already bound to another Revlet organization.');
-  }
+async function claimZoneBindingTransaction(params: {
+  zoneId: string;
+  orgId: string;
+  domain: string;
+  mode: 'managed' | 'byot';
+  uid: string;
+  accountId?: string;
+  orgUpdate: Record<string, any>;
+}) {
+  const bindingRef = adminDb.collection('system_zone_bindings').doc(params.zoneId);
+  const orgRef = adminDb.collection('organizations').doc(params.orgId);
+
+  await adminDb.runTransaction(async (tx) => {
+    const bindingSnap = await tx.get(bindingRef);
+    if (bindingSnap.exists && bindingSnap.data()?.orgId && bindingSnap.data()?.orgId !== params.orgId) {
+      throw new Error('This Cloudflare zone is already bound to another Revlet organization.');
+    }
+
+    // Legacy guard: check if any other organization doc already references this zoneId
+    const legacyConflict = await adminDb
+      .collection('organizations')
+      .where('cloudflareZoneId', '==', params.zoneId)
+      .limit(2)
+      .get();
+    if (legacyConflict.docs.some((d) => d.id !== params.orgId)) {
+      throw new Error('This Cloudflare zone is already bound to another Revlet organization.');
+    }
+
+    tx.set(
+      bindingRef,
+      {
+        zoneId: params.zoneId,
+        orgId: params.orgId,
+        domain: params.domain,
+        mode: params.mode,
+        ...(params.accountId ? { accountId: params.accountId } : {}),
+        claimedByUid: params.uid,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    tx.update(orgRef, params.orgUpdate);
+  });
 }
 
-async function fetchAllZoneRecords(zoneId: string, cfToken?: string): Promise<any[]> {
+async function fetchAllZoneRecords(
+  zoneId: string,
+  cfToken?: string
+): Promise<{ records: any[]; isComplete: boolean }> {
   const allRecords: any[] = [];
   let page = 1;
   let totalPages = 1;
-  while (page <= totalPages && page <= 10) {
+  const MAX_PAGES = 10;
+  while (page <= totalPages && page <= MAX_PAGES) {
     const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100&page=${page}`, {}, cfToken);
     if (Array.isArray(data.result)) {
       allRecords.push(...data.result);
@@ -37,7 +74,7 @@ async function fetchAllZoneRecords(zoneId: string, cfToken?: string): Promise<an
     totalPages = data.result_info?.total_pages || 1;
     page++;
   }
-  return allRecords;
+  return { records: allRecords, isComplete: page > totalPages };
 }
 
 
@@ -129,10 +166,43 @@ export async function createDNSRecord(idToken: string, orgId: string, zoneId: st
   }
 }
 
-export async function updateDNSRecord(idToken: string, orgId: string, zoneId: string, recordId: string, record: any) {
+export async function updateDNSRecord(
+  idToken: string,
+  orgId: string,
+  zoneId: string,
+  recordId: string,
+  record: any,
+  expectedPrevious?: {
+    type?: string;
+    name?: string;
+    content?: string;
+    ttl?: string | number;
+    proxied?: boolean;
+    priority?: number;
+  }
+) {
   if (!zoneId || !recordId) return { success: false, error: 'Missing Zone ID or Record ID' };
   try {
     const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
+
+    // Stale-change drift guard: verify the live provider record still matches what the user reviewed
+    if (expectedPrevious) {
+      const liveRes = await cfFetch(`/zones/${zoneId}/dns_records/${recordId}`, {}, verified.cfToken);
+      const liveRec = liveRes?.result;
+      if (!liveRec) {
+        return {
+          success: false,
+          error: 'Record no longer exists at Cloudflare. Refresh DNS records before editing.',
+        };
+      }
+      if (recordSignature(liveRec) !== recordSignature(expectedPrevious)) {
+        return {
+          success: false,
+          error:
+            'DRIFT_DETECTED: This DNS record was modified externally since you loaded it. Refresh and review the latest values before publishing.',
+        };
+      }
+    }
 
     const payload: any = {
       type: record.type,
@@ -197,45 +267,59 @@ export async function createZone(idToken: string, orgId: string, domainName: str
       throw new Error("No Cloudflare account found. Ensure CLOUDFLARE_ACCOUNT_ID is set in your environment.");
     }
 
-    // 2. Idempotency check: reuse existing zone if already registered on this Cloudflare account
+    // 2. Prevent unverified adoption of pre-existing Cloudflare zones:
+    // Only reuse an existing zone if THIS organization already holds the verified binding.
     const cleanDomain = domainName.toLowerCase().trim();
-    const orgRef = adminDb.collection('organizations').doc(orgId);
     const persistManagedBinding = async (zoneId: string, nameServers: string[]) => {
-      await assertUniqueZoneBinding(zoneId, orgId);
-      await orgRef.update({
-        cloudflareZoneId: zoneId,
-        cloudflareZoneName: cleanDomain,
-        dnsMode: 'managed',
-        dnsRequested: true,
-        nameservers: nameServers,
-        updatedAt: new Date().toISOString(),
+      await claimZoneBindingTransaction({
+        zoneId,
+        orgId,
+        domain: cleanDomain,
+        mode: 'managed',
+        uid: verified.uid,
+        accountId,
+        orgUpdate: {
+          cloudflareZoneId: zoneId,
+          cloudflareZoneName: cleanDomain,
+          dnsMode: 'managed',
+          dnsRequested: true,
+          nameservers: nameServers,
+          updatedAt: new Date().toISOString(),
+        },
       });
     };
 
-    try {
-      const existingRes = await cfFetch(`/zones?name=${encodeURIComponent(cleanDomain)}`, {}, verified.cfToken);
-      const existingZone = Array.isArray(existingRes.result)
-        ? existingRes.result.find((z: any) => z.name?.toLowerCase().trim() === cleanDomain)
-        : null;
-      if (existingZone) {
-        const ns = existingZone.name_servers || [];
-        await persistManagedBinding(existingZone.id, ns);
+    const existingRes = await cfFetch(`/zones?name=${encodeURIComponent(cleanDomain)}`, {}, verified.cfToken);
+    const existingZone = Array.isArray(existingRes.result)
+      ? existingRes.result.find((z: any) => z.name?.toLowerCase().trim() === cleanDomain)
+      : null;
+
+    if (existingZone) {
+      const existingBindingSnap = await adminDb.collection('system_zone_bindings').doc(existingZone.id).get();
+      const alreadyOwnedByThisOrg =
+        verified.orgData?.cloudflareZoneId === existingZone.id ||
+        (existingBindingSnap.exists && existingBindingSnap.data()?.orgId === orgId);
+
+      if (!alreadyOwnedByThisOrg) {
         return {
-          success: true,
-          data: {
-            id: existingZone.id,
-            nameServers: ns,
-          },
+          success: false,
+          error:
+            `A Cloudflare zone for "${cleanDomain}" already exists and cannot be adopted without verified ownership. Connect your own scoped Cloudflare API token (BYOT) to prove domain control.`,
         };
       }
-    } catch (lookupErr: any) {
-      if (lookupErr?.message?.includes('already bound')) {
-        throw lookupErr;
-      }
-      // Proceed to zone creation if lookup fails
+
+      const ns = existingZone.name_servers || [];
+      await persistManagedBinding(existingZone.id, ns);
+      return {
+        success: true,
+        data: {
+          id: existingZone.id,
+          nameServers: ns,
+        },
+      };
     }
 
-    // 3. Create the zone and persist the server-owned binding
+    // 3. Create a fresh zone and transactionally reserve the binding
     const zoneData = await cfFetch('/zones', {
       method: 'POST',
       body: JSON.stringify({
@@ -269,7 +353,12 @@ export async function createZone(idToken: string, orgId: string, domainName: str
  * covers the organization's domain, encrypts it using AES-256-GCM, and stores
  * the envelope in Firestore.
  */
-export async function verifyAndConnectCloudflareToken(idToken: string, orgId: string, apiToken: string) {
+export async function verifyAndConnectCloudflareToken(
+  idToken: string,
+  orgId: string,
+  apiToken: string,
+  stepUpToken?: string
+) {
   if (!apiToken?.trim()) {
     return { success: false, error: 'Cloudflare API Token is required.' };
   }
@@ -278,6 +367,7 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
     if (!verified.isOwner) {
       return { success: false, error: 'Only organization owners can connect an edge API token.' };
     }
+    assertStepUpMfa(verified.uid, stepUpToken);
 
     const cleanToken = apiToken.trim();
     const domain = verified.orgData?.domain?.toLowerCase()?.trim();
@@ -320,13 +410,10 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
       };
     }
 
-    // Enforce unique tenant-to-zone mapping before binding
-    await assertUniqueZoneBinding(matchedZone.id, orgId);
-
     // Step 3: Envelope Encryption using AES-256-GCM
     const encrypted = encryptToken(cleanToken);
 
-    // Step 4: Store encrypted token in server-only secrets subcollection, and non-sensitive audit metadata on org doc
+    // Step 4: Transactionally claim zone binding, store encrypted token in server-only secrets subcollection
     const orgRef = adminDb.collection('organizations').doc(orgId);
     const verifiedAt = new Date().toISOString();
     const tokenAuditMeta = {
@@ -339,6 +426,24 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
       scopedZoneCount: zones.length
     };
 
+    await claimZoneBindingTransaction({
+      zoneId: matchedZone.id,
+      orgId,
+      domain: matchedZone.name || domain,
+      mode: 'byot',
+      uid: verified.uid,
+      accountId: matchedZone.account?.id,
+      orgUpdate: {
+        cloudflareZoneId: matchedZone.id,
+        cloudflareZoneName: matchedZone.name,
+        dnsMode: 'byot',
+        cloudflareTokenAudit: tokenAuditMeta,
+        cloudflareTokenEncrypted: FieldValue.delete(),
+        dnsRequested: true,
+        updatedAt: verifiedAt,
+      },
+    });
+
     await orgRef.collection('secrets').doc('cloudflare').set({
       ciphertext: encrypted.ciphertext,
       iv: encrypted.iv,
@@ -346,24 +451,18 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
       ...tokenAuditMeta,
     });
 
-    await orgRef.update({
-      cloudflareZoneId: matchedZone.id,
-      cloudflareZoneName: matchedZone.name,
-      dnsMode: 'byot',
-      cloudflareTokenAudit: tokenAuditMeta,
-      cloudflareTokenEncrypted: FieldValue.delete(),
-      dnsRequested: true,
-      updatedAt: verifiedAt
-    });
-
-    // Step 5: Automatically create a complete paginated baseline snapshot
+    // Step 5: Automatically create a complete paginated baseline snapshot with zone metadata
     try {
-      const allRawRecords = await fetchAllZoneRecords(matchedZone.id, cleanToken);
+      const { records: allRawRecords, isComplete } = await fetchAllZoneRecords(matchedZone.id, cleanToken);
       const initialRecords = sanitizeDNSRecordsForFirestore(allRawRecords);
 
       await orgRef.collection('dns_snapshots').add({
         createdAt: new Date().toISOString(),
         reason: 'Initial BYOT connection baseline',
+        zoneId: matchedZone.id,
+        domain: matchedZone.name || domain,
+        schemaVersion: 2,
+        isComplete,
         recordCount: initialRecords.length,
         records: initialRecords,
         createdById: verified.uid
@@ -393,14 +492,31 @@ export async function verifyAndConnectCloudflareToken(idToken: string, orgId: st
  * Disconnects DNS management and revokes the stored Cloudflare token while
  * preserving DNS snapshot history for audit and future recovery.
  */
-export async function disconnectCloudflareToken(idToken: string, orgId: string) {
+export async function disconnectCloudflareToken(
+  idToken: string,
+  orgId: string,
+  stepUpToken?: string
+) {
   try {
     const verified = await verifyUserOrgAccess(idToken, orgId);
     if (!verified.isOwner) {
       return { success: false, error: 'Only organization owners can disable DNS management.' };
     }
+    assertStepUpMfa(verified.uid, stepUpToken);
 
     const orgRef = adminDb.collection('organizations').doc(orgId);
+    const prevZoneId = verified.orgData?.cloudflareZoneId;
+
+    // Release transactional zone reservation if owned by this org
+    if (prevZoneId) {
+      const bindingRef = adminDb.collection('system_zone_bindings').doc(prevZoneId);
+      await adminDb.runTransaction(async (tx) => {
+        const snap = await tx.get(bindingRef);
+        if (snap.exists && snap.data()?.orgId === orgId) {
+          tx.delete(bindingRef);
+        }
+      }).catch(() => {});
+    }
 
     // Preserve dns_snapshots history; revoke secret and clear active zone binding
     await orgRef.collection('secrets').doc('cloudflare').delete().catch(() => null);
@@ -530,31 +646,47 @@ function sanitizeDNSRecordsForFirestore(records: any[]) {
     if (typeof r.priority === 'number' && !isNaN(r.priority)) {
       item.priority = r.priority;
     }
+    if (r.data && typeof r.data === 'object' && !Array.isArray(r.data)) {
+      // Preserve provider-specific structured fields (SRV, CAA, HTTPS, SVCB, TLSA, NAPTR, LOC, URI)
+      const cleanData: Record<string, any> = {};
+      for (const [k, v] of Object.entries(r.data)) {
+        if (v !== undefined) cleanData[k] = v;
+      }
+      if (Object.keys(cleanData).length > 0) {
+        item.data = cleanData;
+      }
+    }
+    if (typeof r.comment === 'string' && r.comment.trim()) {
+      item.comment = r.comment.trim();
+    }
     return item;
   });
 }
 
 /**
- * Creates an exportable JSON snapshot of the current zone records.
+ * Creates a zone-scoped, completeness-tracked JSON snapshot of the current zone records.
  */
 export async function createZoneSnapshot(idToken: string, orgId: string, zoneId: string, reason: string = 'Manual snapshot') {
   if (!zoneId) return { success: false, error: 'No Zone ID provided' };
   try {
     const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
-    const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
-    if (!recordsRes.success || !recordsRes.data) throw new Error(recordsRes.error || 'Failed to fetch DNS records');
+    const { records: rawRecords, isComplete } = await fetchAllZoneRecords(zoneId, verified.cfToken);
 
-    const records = sanitizeDNSRecordsForFirestore(recordsRes.data);
+    const records = sanitizeDNSRecordsForFirestore(rawRecords);
     const createdAt = new Date().toISOString();
     const snapshotDoc = await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots').add({
       createdAt,
       reason,
+      zoneId,
+      domain: verified.orgData?.cloudflareZoneName || verified.orgData?.domain || '',
+      schemaVersion: 2,
+      isComplete,
       recordCount: records.length,
       records,
       createdById: verified.uid
     });
 
-    return { success: true, data: { id: snapshotDoc.id, recordCount: records.length, createdAt } };
+    return { success: true, data: { id: snapshotDoc.id, recordCount: records.length, isComplete, createdAt } };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to create snapshot.' };
   }
@@ -620,24 +752,44 @@ export async function rollbackZoneSnapshot(
     const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
     assertStepUpMfa(verified.uid, stepUpToken);
 
-    // 1. Fetch snapshot
+    // 1. Fetch & validate snapshot (completeness + zone ownership)
     const snapDoc = await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots').doc(snapshotId).get();
     if (!snapDoc.exists) {
       return { success: false, error: 'Snapshot not found' };
     }
     const snapData = snapDoc.data();
+    if (snapData?.isComplete === false) {
+      return {
+        success: false,
+        error: 'This snapshot is incomplete (exceeded the 1,000-record capture cap) and cannot be used for a destructive restore.',
+      };
+    }
+    if (snapData?.zoneId && snapData.zoneId !== zoneId) {
+      return {
+        success: false,
+        error: 'This snapshot belongs to a different Cloudflare zone and cannot be restored onto the current zone.',
+      };
+    }
     const targetRecords: any[] = snapData?.records || [];
 
-    // 2. Fetch complete live records
-    const currentRes = await listDNSRecords(idToken, orgId, zoneId);
-    if (!currentRes.success) throw new Error(currentRes.error);
-    const currentRecords: any[] = currentRes.data || [];
+    // 2. Fetch complete live records directly from Cloudflare
+    const { records: currentRecords, isComplete: liveIsComplete } = await fetchAllZoneRecords(zoneId, verified.cfToken);
+    if (!liveIsComplete) {
+      return {
+        success: false,
+        error: 'Live zone exceeds the 1,000-record safety cap for automated rollback. Perform targeted updates instead.',
+      };
+    }
 
-    // 3. Pre-rollback safety backup of current state
+    // 3. Pre-rollback safety backup of current state (with zoneId + completeness)
     const cleanCurrentRecords = sanitizeDNSRecordsForFirestore(currentRecords);
     await adminDb.collection('organizations').doc(orgId).collection('dns_snapshots').add({
       createdAt: new Date().toISOString(),
       reason: `Pre-rollback backup before restoring snapshot (${snapData?.reason || snapshotId.slice(0, 6)})`,
+      zoneId,
+      domain: verified.orgData?.cloudflareZoneName || verified.orgData?.domain || '',
+      schemaVersion: 2,
+      isComplete: true,
       recordCount: cleanCurrentRecords.length,
       records: cleanCurrentRecords,
       createdById: verified.uid
@@ -719,58 +871,182 @@ const IMPORT_SUPPORTED_TYPES = new Set([
 ]);
 const IMPORT_PROXY_TYPES = new Set(['A', 'AAAA', 'CNAME']);
 
+function tokenizeBindLine(line: string): string[] {
+  const tokens: string[] = [];
+  let cur = '';
+  let inQuote = false;
+  let escape = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (escape) {
+      cur += ch;
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inQuote) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inQuote = !inQuote;
+      cur += ch;
+      continue;
+    }
+    if (!inQuote && ch === ';') {
+      break; // Comment outside quotes
+    }
+    if (!inQuote && /\s/.test(ch)) {
+      if (cur) {
+        tokens.push(cur);
+        cur = '';
+      }
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur) tokens.push(cur);
+  return tokens;
+}
+
+function unfoldBindLines(rawText: string): Array<{ lineNum: number; text: string }> {
+  const rawLines = rawText.split(/\r?\n/);
+  const unfolded: Array<{ lineNum: number; text: string }> = [];
+  let acc = '';
+  let startLine = 1;
+  let parenDepth = 0;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    if (parenDepth === 0) startLine = i + 1;
+
+    let inQuote = false;
+    let escape = false;
+    let cleaned = '';
+    for (let j = 0; j < line.length; j++) {
+      const ch = line[j];
+      if (escape) {
+        cleaned += ch;
+        escape = false;
+        continue;
+      }
+      if (ch === '\\' && inQuote) {
+        cleaned += ch;
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inQuote = !inQuote;
+        cleaned += ch;
+        continue;
+      }
+      if (!inQuote && ch === ';') break;
+      if (!inQuote && ch === '(') {
+        parenDepth++;
+        cleaned += ' ';
+        continue;
+      }
+      if (!inQuote && ch === ')') {
+        parenDepth = Math.max(0, parenDepth - 1);
+        cleaned += ' ';
+        continue;
+      }
+      cleaned += ch;
+    }
+
+    acc = acc ? `${acc} ${cleaned.trim()}` : cleaned.trim();
+    if (parenDepth === 0) {
+      if (acc.trim()) unfolded.push({ lineNum: startLine, text: acc.trim() });
+      acc = '';
+    }
+  }
+  if (acc.trim()) unfolded.push({ lineNum: startLine, text: acc.trim() });
+  return unfolded;
+}
+
+function expandBindName(rawName: string, origin: string): string {
+  const cleanOrigin = origin.replace(/\.$/, '').trim();
+  if (!rawName || rawName === '@') return cleanOrigin;
+  if (rawName.endsWith('.')) return rawName.replace(/\.$/, '');
+  return cleanOrigin ? `${rawName}.${cleanOrigin}` : rawName;
+}
+
 /**
- * Server-side BIND zone file importer with TTL and priority preservation,
- * per-line diagnostics, and verified provider result reporting.
+ * Server-side BIND zone file importer supporting $ORIGIN, $TTL, multiline (...) records,
+ * quoted TXT strings, and structured MX/SRV/CAA fields. Requires recent Step-Up MFA.
  */
 export async function importZoneFileRecords(
   idToken: string,
   orgId: string,
   zoneId: string,
   zoneFileText: string,
-  proxyAllImported = false
+  proxyAllImported = false,
+  stepUpToken?: string
 ) {
   if (!zoneId || !zoneFileText?.trim()) {
     return { success: false, error: 'Zone file is empty.' };
   }
   try {
     const verified = await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Edit', 'DNS: Admin']);
-    const lines = zoneFileText.split(/\r?\n/);
+    assertStepUpMfa(verified.uid, stepUpToken);
+
+    let currentOrigin = (verified.orgData?.cloudflareZoneName || verified.orgData?.domain || '')
+      .toLowerCase()
+      .replace(/\.$/, '')
+      .trim();
+    let defaultTtl = 1;
+    let lastOwnerName = currentOrigin;
+
+    const unfolded = unfoldBindLines(zoneFileText);
     const posts: any[] = [];
     const diagnostics: Array<{ line: number; status: 'queued' | 'skipped' | 'error'; message: string }> = [];
 
-    for (let idx = 0; idx < lines.length; idx++) {
-      const rawLine = lines[idx].trim();
-      const lineNum = idx + 1;
-      if (!rawLine || rawLine.startsWith(';') || rawLine.startsWith('$')) continue;
+    for (const { lineNum, text } of unfolded) {
+      const tokens = tokenizeBindLine(text);
+      if (tokens.length === 0) continue;
 
-      const withoutComment = rawLine.replace(/\s+;.*$/, '').trim();
-      const parts = withoutComment.split(/\s+/);
-      if (parts.length < 4) {
-        diagnostics.push({ line: lineNum, status: 'skipped', message: 'Incomplete record line.' });
+      const directive = tokens[0].toUpperCase();
+      if (directive === '$ORIGIN' && tokens[1]) {
+        currentOrigin = tokens[1].replace(/\.$/, '').trim();
+        lastOwnerName = currentOrigin;
         continue;
       }
+      if (directive === '$TTL' && tokens[1] && /^\d+$/.test(tokens[1])) {
+        const parsed = parseInt(tokens[1], 10);
+        defaultTtl = parsed >= 60 ? parsed : 1;
+        continue;
+      }
+      if (directive.startsWith('$')) continue;
 
-      const name = parts[0].replace(/\.$/, '');
-      const inIdx = parts.findIndex((p) => p.toUpperCase() === 'IN');
-      let ttl = 1;
-      let typeIdx = 2;
-
-      if (inIdx > 0) {
-        typeIdx = inIdx + 1;
-        if (inIdx >= 2 && /^\d+$/.test(parts[1])) {
-          const parsedTtl = parseInt(parts[1], 10);
-          ttl = parsedTtl >= 60 ? parsedTtl : 1;
-        }
-      } else if (/^\d+$/.test(parts[1])) {
-        const parsedTtl = parseInt(parts[1], 10);
-        ttl = parsedTtl >= 60 ? parsedTtl : 1;
-        typeIdx = 2;
+      let cursor = 0;
+      let ownerToken = tokens[0];
+      if (
+        ownerToken.toUpperCase() === 'IN' ||
+        /^\d+$/.test(ownerToken) ||
+        IMPORT_SUPPORTED_TYPES.has(ownerToken.toUpperCase())
+      ) {
+        ownerToken = lastOwnerName;
       } else {
-        typeIdx = 1;
+        ownerToken = expandBindName(ownerToken, currentOrigin);
+        lastOwnerName = ownerToken;
+        cursor = 1;
       }
 
-      const type = (parts[typeIdx] || '').toUpperCase();
+      let ttl = defaultTtl;
+      while (cursor < tokens.length) {
+        const t = tokens[cursor];
+        if (/^\d+$/.test(t)) {
+          const parsed = parseInt(t, 10);
+          ttl = parsed >= 60 ? parsed : 1;
+          cursor++;
+        } else if (t.toUpperCase() === 'IN' || t.toUpperCase() === 'CH' || t.toUpperCase() === 'HS') {
+          cursor++;
+        } else {
+          break;
+        }
+      }
+
+      const type = (tokens[cursor] || '').toUpperCase();
+      cursor++;
       if (type === 'SOA') {
         diagnostics.push({ line: lineNum, status: 'skipped', message: 'SOA record skipped.' });
         continue;
@@ -780,7 +1056,7 @@ export async function importZoneFileRecords(
         continue;
       }
 
-      const rest = parts.slice(typeIdx + 1);
+      const rest = tokens.slice(cursor);
       if (rest.length === 0) {
         diagnostics.push({ line: lineNum, status: 'error', message: `Missing content for ${type} record.` });
         continue;
@@ -788,7 +1064,7 @@ export async function importZoneFileRecords(
 
       const payload: any = {
         type,
-        name,
+        name: ownerToken,
         ttl,
         proxied: proxyAllImported && IMPORT_PROXY_TYPES.has(type),
       };
@@ -797,19 +1073,37 @@ export async function importZoneFileRecords(
         const prio = parseInt(rest[0], 10);
         if (!isNaN(prio) && rest.length >= 2) {
           payload.priority = prio;
-          payload.content = rest.slice(1).join(' ').replace(/\.$/, '');
+          payload.content = expandBindName(rest[1], currentOrigin);
         } else {
           payload.priority = 10;
-          payload.content = rest.join(' ').replace(/\.$/, '');
+          payload.content = expandBindName(rest[0], currentOrigin);
         }
+      } else if (type === 'SRV' && rest.length >= 4) {
+        payload.data = {
+          priority: parseInt(rest[0], 10) || 10,
+          weight: parseInt(rest[1], 10) || 0,
+          port: parseInt(rest[2], 10) || 0,
+          target: expandBindName(rest[3], currentOrigin),
+        };
+      } else if (type === 'CAA' && rest.length >= 3) {
+        payload.data = {
+          flags: parseInt(rest[0], 10) || 0,
+          tag: rest[1].replace(/^"|"$/g, ''),
+          value: rest.slice(2).join(' ').replace(/^"|"$/g, ''),
+        };
       } else if (type === 'TXT') {
-        payload.content = rest.join(' ').replace(/^"|"$/g, '');
+        // Concatenate adjacent quoted TXT character-strings cleanly
+        payload.content = rest
+          .map((seg) => (seg.startsWith('"') && seg.endsWith('"') ? seg.slice(1, -1) : seg))
+          .join('');
+      } else if (type === 'CNAME' || type === 'NS' || type === 'PTR') {
+        payload.content = expandBindName(rest[0], currentOrigin);
       } else {
         payload.content = rest.join(' ').replace(/\.$/, '');
       }
 
       posts.push(payload);
-      diagnostics.push({ line: lineNum, status: 'queued', message: `${type} ${name}` });
+      diagnostics.push({ line: lineNum, status: 'queued', message: `${type} ${ownerToken}` });
     }
 
     if (posts.length === 0) {
@@ -873,7 +1167,9 @@ export async function autoConfigureEmailDNS(idToken: string, orgId: string, zone
   if (!zoneId || !domainName) return { success: false, error: 'Missing parameters' };
   try {
     await verifyUserOrgAccess(idToken, orgId, zoneId, ['DNS: Admin']);
-    
+    const normalizedDomain = domainName.toLowerCase().replace(/\.$/, '').trim();
+    const spfInclude = 'include:_spf.mx.revlet.me';
+
     // Automatically snapshot before auto-configuring email DNS
     try {
       await createZoneSnapshot(idToken, orgId, zoneId, 'Pre-email DNS auto-configuration backup');
@@ -883,29 +1179,78 @@ export async function autoConfigureEmailDNS(idToken: string, orgId: string, zone
 
     const recordsRes = await listDNSRecords(idToken, orgId, zoneId);
     if (!recordsRes.success) throw new Error(recordsRes.error);
-    const records = recordsRes.data || [];
+    const records: any[] = recordsRes.data || [];
+    const failures: string[] = [];
 
-    // Delete conflicting records
-    const conflictingRecords = records.filter((r: any) => {
-      const isRoot = r.name === domainName || r.name === `@`;
-      if (!isRoot) return false;
-      if (r.type === 'MX') return true;
-      if (r.type === 'TXT' && r.content.includes('v=spf1')) return true;
-      return false;
+    // 1. Preserve existing SPF senders by merging Revlet's include in-place
+    const existingSpf = records.find((r: any) => {
+      const isRoot = (r.name || '').toLowerCase().replace(/\.$/, '') === normalizedDomain || r.name === '@';
+      return isRoot && r.type === 'TXT' && (r.content || '').toLowerCase().includes('v=spf1');
     });
 
-    for (const r of conflictingRecords) {
-      await deleteDNSRecord(idToken, orgId, zoneId, r.id);
+    if (existingSpf) {
+      if (!(existingSpf.content || '').toLowerCase().includes(spfInclude)) {
+        const clean = String(existingSpf.content || '').trim().replace(/^"|"$/g, '');
+        const mechMatch = clean.match(/(\s+[~?-]all|\s+\+?all)\s*$/i);
+        const merged = mechMatch
+          ? `${clean.slice(0, clean.lastIndexOf(mechMatch[1]))} ${spfInclude}${mechMatch[1]}`.replace(/\s+/g, ' ').trim()
+          : `${clean} ${spfInclude} ~all`.replace(/\s+/g, ' ').trim();
+        const updRes = await updateDNSRecord(idToken, orgId, zoneId, existingSpf.id, {
+          type: 'TXT',
+          name: existingSpf.name,
+          content: merged,
+          ttl: existingSpf.ttl || 'Auto',
+          proxied: false,
+        });
+        if (!updRes.success) failures.push(`SPF update failed: ${updRes.error}`);
+      }
+    } else {
+      const spfCreate = await createDNSRecord(idToken, orgId, zoneId, {
+        type: 'TXT',
+        name: normalizedDomain,
+        content: `v=spf1 ${spfInclude} ~all`,
+        ttl: 'Auto',
+        proxied: false,
+      });
+      if (!spfCreate.success) failures.push(`SPF create failed: ${spfCreate.error}`);
     }
 
-    // Create required records for Revlet Mail Server + AWS SES Outbound
-    const requiredRecords = [
-      { type: 'MX', name: domainName, content: 'mx.revlet.me', priority: 10, ttl: 'Auto', proxied: false },
-      { type: 'TXT', name: domainName, content: 'v=spf1 include:_spf.mx.revlet.me ~all', ttl: 'Auto', proxied: false }
-    ];
+    // 2. Ensure Revlet MX exists BEFORE deleting conflicting root MX records
+    const hasRevletMx = records.some((r: any) => {
+      const isRoot = (r.name || '').toLowerCase().replace(/\.$/, '') === normalizedDomain || r.name === '@';
+      return isRoot && r.type === 'MX' && (r.content || '').toLowerCase().replace(/\.$/, '') === 'mx.revlet.me';
+    });
 
-    for (const rec of requiredRecords) {
-      await createDNSRecord(idToken, orgId, zoneId, rec);
+    let mxInstalled = hasRevletMx;
+    if (!hasRevletMx) {
+      const mxCreate = await createDNSRecord(idToken, orgId, zoneId, {
+        type: 'MX',
+        name: normalizedDomain,
+        content: 'mx.revlet.me',
+        priority: 10,
+        ttl: 'Auto',
+        proxied: false,
+      });
+      if (mxCreate.success) {
+        mxInstalled = true;
+      } else {
+        failures.push(`MX create failed: ${mxCreate.error}`);
+      }
+    }
+
+    if (mxInstalled) {
+      const conflictingMx = records.filter((r: any) => {
+        const isRoot = (r.name || '').toLowerCase().replace(/\.$/, '') === normalizedDomain || r.name === '@';
+        return isRoot && r.type === 'MX' && (r.content || '').toLowerCase().replace(/\.$/, '') !== 'mx.revlet.me';
+      });
+      for (const r of conflictingMx) {
+        const delRes = await deleteDNSRecord(idToken, orgId, zoneId, r.id);
+        if (!delRes.success) failures.push(`Conflicting MX delete failed: ${delRes.error}`);
+      }
+    }
+
+    if (failures.length > 0) {
+      return { success: false, error: failures[0] };
     }
 
     return { success: true };

@@ -6,6 +6,7 @@ const ALLOWED_CF_PATHS: RegExp[] = [
   /^\/zones$/,
   /^\/zones\/[a-f0-9]{32}$/i,
   /^\/zones\/[a-f0-9]{32}\/dns_records$/i,
+  /^\/zones\/[a-f0-9]{32}\/dns_records\/batch$/i,
   /^\/zones\/[a-f0-9]{32}\/dns_records\/[a-f0-9]{32}$/i,
 ];
 

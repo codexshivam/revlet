@@ -410,10 +410,18 @@ export default function DNSManagementPage() {
       const orgId = selectedOrg.id
 
       if (editingRecord) {
-        const res = await updateDNSRecord(idToken, orgId, zoneId, editingRecord.id, formData)
+        const res = await updateDNSRecord(idToken, orgId, zoneId, editingRecord.id, formData, {
+          type: editingRecord.type,
+          name: editingRecord.name,
+          content: editingRecord.content,
+          ttl: editingRecord.ttl,
+          proxied: editingRecord.proxied,
+          priority: editingRecord.priority,
+        })
         if (res.success) {
-          toast({ title: "Record updated", description: "Changes committed to edge network." })
+          toast({ title: "Applied at provider", description: "Changes accepted by Cloudflare; DNS propagation in progress." })
           setIsDialogOpen(false)
+          setIsReviewingRecord(false)
           fetchDNSData()
         } else {
           throw new Error(res.error)
@@ -421,8 +429,9 @@ export default function DNSManagementPage() {
       } else {
         const res = await createDNSRecord(idToken, orgId, zoneId, formData)
         if (res.success) {
-          toast({ title: "Record created", description: "Record queued for edge propagation." })
+          toast({ title: "Applied at provider", description: "Record accepted by Cloudflare; DNS propagation in progress." })
           setIsDialogOpen(false)
+          setIsReviewingRecord(false)
           fetchDNSData()
         } else {
           throw new Error(res.error)
@@ -488,12 +497,26 @@ export default function DNSManagementPage() {
     }
   }
 
-  const handleConnectToken = async () => {
+  const [pendingMfaAction, setPendingMfaAction] = useState<
+    null | { type: "connect" | "disconnect" | "import" | "rollback"; label: string }
+  >(null)
+
+  const handleConnectToken = async (stepUpToken?: string) => {
     if (!user || !selectedOrg?.id || !apiTokenInput.trim()) return
     setIsConnectingToken(true)
     try {
       const idToken = await user.getIdToken()
-      const res = await verifyAndConnectCloudflareToken(idToken, selectedOrg.id, apiTokenInput.trim())
+      const res = await verifyAndConnectCloudflareToken(
+        idToken,
+        selectedOrg.id,
+        apiTokenInput.trim(),
+        stepUpToken
+      )
+      if (!res.success && typeof res.error === "string" && res.error.includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingMfaAction({ type: "connect", label: "connect a Cloudflare API token" })
+        setIsRollbackMfaOpen(true)
+        return
+      }
       if (res.success && res.data) {
         toast({
           title: "DNS management activated",
@@ -518,21 +541,25 @@ export default function DNSManagementPage() {
     }
   }
 
-  const handleDisconnectToken = async () => {
+  const handleDisconnectToken = async (stepUpToken?: string) => {
     if (!user || !selectedOrg?.id) return
     setIsDisconnectingToken(true)
     try {
       const idToken = await user.getIdToken()
-      const res = await disconnectCloudflareToken(idToken, selectedOrg.id)
+      const res = await disconnectCloudflareToken(idToken, selectedOrg.id, stepUpToken)
+      if (!res.success && typeof res.error === "string" && res.error.includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingMfaAction({ type: "disconnect", label: "disconnect DNS management" })
+        setIsRollbackMfaOpen(true)
+        return
+      }
       if (res.success) {
         toast({
-          title: "DNS service disabled",
-          description: "All DNS snapshots, credentials, and domain routing data have been removed.",
+          title: "DNS service disconnected",
+          description: "Credentials and zone bindings removed; snapshot history preserved.",
         })
         setIsDisableDialogOpen(false)
         setRecords([])
         setZoneDetails(null)
-        setSnapshots([])
         setPermissionWarning(null)
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("revlet-orgs-refresh"))
@@ -609,13 +636,14 @@ export default function DNSManagementPage() {
         stepUpToken
       )
       if (!res.success && typeof res.error === "string" && res.error.includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingMfaAction({ type: "rollback", label: "restore a DNS zone snapshot" })
         setIsRollbackMfaOpen(true)
         return
       }
       if (res.success && res.data) {
         toast({
-          title: "Zone restored",
-          description: `Restored ${res.data.restoredCount} records (${res.data.deletedCount} divergent records removed atomically).`,
+          title: "Applied at provider",
+          description: `Restored ${res.data.restoredCount} records (${res.data.deletedCount} divergent removed). DNS propagation in progress.`,
         })
         setIsRollbackConfirmOpen(false)
         setSelectedSnapshotForRollback(null)
@@ -672,7 +700,7 @@ export default function DNSManagementPage() {
     }
   }
 
-  const processImport = async () => {
+  const processImport = async (stepUpToken?: string) => {
     if (!importFile || !zoneId || !selectedOrg?.id || !user) return
     setIsSubmitting(true)
 
@@ -680,7 +708,13 @@ export default function DNSManagementPage() {
       const idToken = await user.getIdToken()
       const orgId = selectedOrg.id
       const text = await importFile.text()
-      const res = await importZoneFileRecords(idToken, orgId, zoneId, text, proxyAllImported)
+      const res = await importZoneFileRecords(idToken, orgId, zoneId, text, proxyAllImported, stepUpToken)
+
+      if (!res.success && typeof res.error === "string" && res.error.includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingMfaAction({ type: "import", label: "import a DNS zone file" })
+        setIsRollbackMfaOpen(true)
+        return
+      }
 
       if (!res.success && !res.data?.created) {
         throw new Error(res.error || "Could not import records from zone file.")
@@ -968,7 +1002,7 @@ export default function DNSManagementPage() {
                       </button>
                     </div>
                     <Button
-                      onClick={handleConnectToken}
+                      onClick={() => void handleConnectToken()}
                       disabled={isConnectingToken || !apiTokenInput.trim()}
                       className="w-full h-9 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center justify-center gap-2"
                     >
@@ -1909,7 +1943,7 @@ export default function DNSManagementPage() {
                 Cancel
               </Button>
               <Button
-                onClick={processImport}
+                onClick={() => void processImport()}
                 disabled={isSubmitting || !importFile || !importConfirmed}
                 className="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
               >
@@ -2110,7 +2144,7 @@ export default function DNSManagementPage() {
                 Cancel
               </Button>
               <Button
-                onClick={handleDisconnectToken}
+                onClick={() => void handleDisconnectToken()}
                 disabled={isDisconnectingToken}
                 variant="destructive"
                 className="h-9 px-4 text-xs font-medium rounded-lg shadow-none flex items-center gap-2"
@@ -2124,10 +2158,18 @@ export default function DNSManagementPage() {
 
         <StepUpMfaDialog
           open={isRollbackMfaOpen}
-          onOpenChange={setIsRollbackMfaOpen}
-          actionLabel="restore a DNS zone snapshot"
+          onOpenChange={(open) => {
+            setIsRollbackMfaOpen(open)
+            if (!open) setPendingMfaAction(null)
+          }}
+          actionLabel={pendingMfaAction?.label || "complete this DNS action"}
           onVerified={(token) => {
-            void handleExecuteRollback(token)
+            const action = pendingMfaAction?.type || "rollback"
+            setPendingMfaAction(null)
+            if (action === "connect") void handleConnectToken(token)
+            else if (action === "disconnect") void handleDisconnectToken(token)
+            else if (action === "import") void processImport(token)
+            else void handleExecuteRollback(token)
           }}
         />
       </div>

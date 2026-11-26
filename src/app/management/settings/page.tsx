@@ -1,9 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { MfaEnrollmentCard } from "@/components/security/mfa-enrollment-card"
+
+const StepUpMfaDialog = dynamic(
+  () => import("@/components/security/step-up-mfa-dialog").then((m) => m.StepUpMfaDialog),
+  { ssr: false }
+)
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -103,7 +109,10 @@ export default function SettingsPage() {
     }
   }
 
-  const handleUpdateEmail = async () => {
+  const [emailStepUpOpen, setEmailStepUpOpen] = useState(false)
+  const [pendingEmailChange, setPendingEmailChange] = useState<string | null>(null)
+
+  const handleUpdateEmail = async (stepUpToken?: string) => {
     if (!user || !newEmail.trim() || !emailConfirmPass) {
       toast({
         variant: "destructive",
@@ -118,7 +127,9 @@ export default function SettingsPage() {
       const credential = EmailAuthProvider.credential(user.email!, emailConfirmPass)
       await reauthenticateWithCredential(user, credential)
 
-      const idToken = await user.getIdToken()
+      // Force token refresh so server receives fresh auth_time
+      const idToken = await user.getIdToken(true)
+      const targetEmail = newEmail.trim()
       const customRes = await fetch("/api/auth/action-email", {
         method: "POST",
         headers: {
@@ -127,28 +138,33 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({
           type: "change_email",
-          newEmail: newEmail.trim(),
+          newEmail: targetEmail,
+          ...(stepUpToken ? { stepUpToken } : {}),
         }),
       })
       const customData = await customRes.json().catch(() => ({}))
       if (!customRes.ok || !customData?.ok) {
+        if (typeof customData?.error === "string" && customData.error.includes("MFA_STEP_UP_REQUIRED")) {
+          setEmailStepUpOpen(true)
+          return
+        }
         if (customData?.code === "auth/email-already-exists") {
           throw { code: "auth/email-already-in-use" }
         }
-        await verifyBeforeUpdateEmail(user, newEmail.trim())
+        throw new Error(customData?.error || "Could not dispatch email change confirmation.")
       }
 
+      setPendingEmailChange(targetEmail)
       toast({
         title: "Verification sent",
-        description:
-          "A verification link from accounts@revlet.me has been sent to your new email address. Changes will apply after confirmation.",
+        description: `A confirmation link from accounts@revlet.me was sent to ${targetEmail}, and a security notice was sent to your current address.`,
       })
       setNewEmail("")
       setEmailConfirmPass("")
     } catch (error: any) {
-      let errorMessage = "Could not update email. Please try again."
+      let errorMessage = error?.message || "Could not update email. Please try again."
 
-      if (error.code === "auth/wrong-password") {
+      if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
         errorMessage = "Your current password is invalid."
       } else if (error.code === "auth/email-already-in-use") {
         errorMessage = "This email address is already in use by another account."
@@ -178,11 +194,11 @@ export default function SettingsPage() {
       return
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 12) {
       toast({
         variant: "destructive",
         title: "Password too short",
-        description: "New password must be at least 6 characters long.",
+        description: "New password must be at least 12 characters long.",
       })
       return
     }
@@ -203,7 +219,7 @@ export default function SettingsPage() {
 
       await updatePassword(user, newPassword)
 
-      const idToken = await user.getIdToken()
+      const idToken = await user.getIdToken(true)
       try {
         await fetch("/api/auth/action-email", {
           method: "POST",
@@ -228,10 +244,10 @@ export default function SettingsPage() {
     } catch (error: any) {
       let errorMessage = "Could not update password. Please try again."
 
-      if (error.code === "auth/wrong-password") {
+      if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
         errorMessage = "Your current password is invalid."
       } else if (error.code === "auth/weak-password") {
-        errorMessage = "The new password is too weak. Please use at least 6 characters."
+        errorMessage = "The new password is too weak. Please use at least 12 characters."
       }
 
       toast({
@@ -247,12 +263,18 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     setIsLoggingOut(true)
     try {
+      // Clear server-side MFA session cookie + workspace cookies alongside Firebase sign-out
+      await fetch("/api/auth/mfa", { method: "DELETE" }).catch(() => {})
+      if (typeof document !== "undefined") {
+        document.cookie = "revlet_session_hint=; path=/; max-age=0; samesite=lax"
+        document.cookie = "revlet_last_org=; path=/; max-age=0; samesite=lax"
+      }
       await signOut(auth)
       toast({
         title: "Signed out",
         description: "You have been signed out of your account.",
       })
-      router.push("/login")
+      router.replace("/login")
     } catch {
       toast({
         variant: "destructive",
@@ -371,9 +393,24 @@ export default function SettingsPage() {
               </p>
             </div>
 
+            {pendingEmailChange && (
+              <div className="flex items-center justify-between gap-2 p-3 bg-amber-50/80 rounded-lg border border-amber-200 text-xs text-amber-950">
+                <span>
+                  Pending verification for <span className="font-mono font-medium">{pendingEmailChange}</span>.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPendingEmailChange(null)}
+                  className="text-amber-800 hover:underline font-medium shrink-0"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             <div className="pt-1 flex justify-start">
               <Button
-                onClick={handleUpdateEmail}
+                onClick={() => void handleUpdateEmail()}
                 disabled={isUpdatingEmail || !newEmail.trim() || !emailConfirmPass}
                 className="bg-primary hover:bg-primary/95 !text-white text-white font-medium text-xs h-9 px-4 rounded-lg transition-colors"
               >
@@ -393,7 +430,7 @@ export default function SettingsPage() {
               Password and Security
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Protect your administrative account with a strong password of at least 6 characters
+              Protect your administrative account with a strong password of at least 12 characters
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6 pt-0 space-y-4">
@@ -404,8 +441,9 @@ export default function SettingsPage() {
               <Input
                 id="old-pass"
                 type="password"
-                placeholder="••••••••"
-                className="h-9 text-xs border-slate-200 rounded-lg"
+                autoComplete="current-password"
+                placeholder="••••••••••••"
+                className="h-9 text-base sm:text-xs border-slate-200 rounded-lg"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
               />
@@ -419,8 +457,9 @@ export default function SettingsPage() {
                 <Input
                   id="new-pass"
                   type="password"
-                  placeholder="Minimum 6 characters"
-                  className="h-9 text-xs border-slate-200 rounded-lg"
+                  autoComplete="new-password"
+                  placeholder="Minimum 12 characters"
+                  className="h-9 text-base sm:text-xs border-slate-200 rounded-lg"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
@@ -432,8 +471,9 @@ export default function SettingsPage() {
                 <Input
                   id="confirm-pass"
                   type="password"
+                  autoComplete="new-password"
                   placeholder="Re-enter password"
-                  className="h-9 text-xs border-slate-200 rounded-lg"
+                  className="h-9 text-base sm:text-xs border-slate-200 rounded-lg"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                 />
@@ -446,7 +486,7 @@ export default function SettingsPage() {
                 disabled={
                   isUpdatingPassword ||
                   !currentPassword ||
-                  newPassword.length < 6 ||
+                  newPassword.length < 12 ||
                   newPassword !== confirmPassword
                 }
                 className="bg-primary hover:bg-primary/95 !text-white text-white font-medium text-xs h-9 px-4 rounded-lg transition-colors"
@@ -516,6 +556,15 @@ export default function SettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <StepUpMfaDialog
+        open={emailStepUpOpen}
+        onOpenChange={setEmailStepUpOpen}
+        actionLabel="change your account email address"
+        onVerified={(token) => {
+          void handleUpdateEmail(token)
+        }}
+      />
     </DashboardShell>
   )
 }

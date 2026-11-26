@@ -14,22 +14,15 @@ import {
   verifyPasskeyAssertion,
   verifyPasskeyRegistration,
 } from '@/lib/webauthn-verify';
+import {
+  checkUserEnforceMfa,
+  getEnrolledFactorCounts,
+  getPrivateMfaRef,
+  readPrivateMfaState,
+} from '@/lib/mfa-store';
 import { sendRevletAccountEmail } from '@/lib/revlet-alerts';
 
 const MFA_SESSION_COOKIE = 'revlet_mfa_session';
-
-async function checkHasEnrolledMfa(
-  userRef: FirebaseFirestore.DocumentReference
-): Promise<boolean> {
-  const [userSnap, passkeysSnap] = await Promise.all([
-    userRef.get(),
-    userRef.collection('mfaPasskeys').limit(1).get(),
-  ]);
-  const u = userSnap.exists ? userSnap.data() || {} : {};
-  const totpEnabled = Boolean(u.totpEnabled && u.totpSecret);
-  const secondaryEmailVerified = Boolean(u.secondaryEmailVerified && u.secondaryEmail);
-  return totpEnabled || !passkeysSnap.empty || secondaryEmailVerified;
-}
 
 async function sendMfaStatusEmail(params: {
   to: string;
@@ -64,7 +57,7 @@ async function sendMfaStatusEmail(params: {
           to: params.to,
           subject: '2-Step Verification (MFA) disabled on your Revlet account',
           title: 'MFA Disabled',
-          subtitle: `2-Step Verification (MFA) has been disabled on your Revlet account (${params.to}).`,
+          subtitle: `All 2-Step Verification (MFA) factors have been removed from your Revlet account (${params.to}).`,
           summaryLines: [
             'All Multi-Factor Authentication (MFA) factors have been removed from your Revlet account on app.revlet.me.',
             'If you did not disable 2-Step Verification, please secure your account and re-enable MFA immediately.',
@@ -111,46 +104,34 @@ async function authenticateBearer(req: NextRequest) {
   if (!idToken) {
     throw new Error('Unauthorized: Missing credentials.');
   }
-  const decoded = await adminAuth.verifyIdToken(idToken);
-  return decoded;
+  // Revocation-aware token verification
+  return await adminAuth.verifyIdToken(idToken, true);
+}
+
+function hasValidStepUp(body: any, uid: string): boolean {
+  const token = typeof body?.stepUpToken === 'string' ? body.stepUpToken : '';
+  return Boolean(verifyStepUpToken(token, uid));
 }
 
 export async function GET(req: NextRequest) {
   try {
     const decoded = await authenticateBearer(req);
     const userRef = adminDb.collection('users').doc(decoded.uid);
-    const [userSnap, passkeysSnap] = await Promise.all([
-      userRef.get(),
+    const [mfaState, passkeysSnap, enforceMfa] = await Promise.all([
+      readPrivateMfaState(decoded.uid),
       userRef.collection('mfaPasskeys').get(),
+      checkUserEnforceMfa(decoded.uid),
     ]);
-    const u = userSnap.exists ? userSnap.data() || {} : {};
+
     const passkeys = passkeysSnap.docs.map((d) => ({
       id: d.id,
       label: d.data().label || 'Passkey',
       createdAt: d.data().createdAt || '',
     }));
 
-    const totpEnabled = Boolean(u.totpEnabled && u.totpSecret);
-    const secondaryEmailVerified = Boolean(u.secondaryEmailVerified && u.secondaryEmail);
+    const totpEnabled = Boolean(mfaState.totpEnabled && mfaState.totpSecret);
+    const secondaryEmailVerified = Boolean(mfaState.secondaryEmailVerified && mfaState.secondaryEmail);
     const hasEnrolledMfa = totpEnabled || passkeys.length > 0 || secondaryEmailVerified;
-
-    let enforceMfa = false;
-    try {
-      const orgsSnap = await adminDb
-        .collection('organizations')
-        .where('memberIds', 'array-contains', decoded.uid)
-        .get();
-      enforceMfa = orgsSnap.docs.some((d) => Boolean(d.data()?.enforceMfa));
-      if (!enforceMfa) {
-        const ownedSnap = await adminDb
-          .collection('organizations')
-          .where('ownerId', '==', decoded.uid)
-          .get();
-        enforceMfa = ownedSnap.docs.some((d) => Boolean(d.data()?.enforceMfa));
-      }
-    } catch {
-      enforceMfa = false;
-    }
 
     const mfaCookie = req.cookies.get(MFA_SESSION_COOKIE)?.value;
     const mfaSessionVerified = Boolean(verifyStepUpToken(mfaCookie, decoded.uid));
@@ -163,7 +144,7 @@ export async function GET(req: NextRequest) {
       mfa: {
         totpEnabled,
         passkeys,
-        secondaryEmail: u.secondaryEmail || '',
+        secondaryEmail: mfaState.secondaryEmail || '',
         secondaryEmailVerified,
       },
     });
@@ -181,12 +162,20 @@ export async function POST(req: NextRequest) {
     const uid = decoded.uid;
     const email = (decoded.email || '').toLowerCase();
     const userRef = adminDb.collection('users').doc(uid);
+    const privRef = getPrivateMfaRef(uid);
     const body = await req.json().catch(() => ({}));
     const action = typeof body.action === 'string' ? body.action : '';
 
     if (action === 'totp_setup') {
+      const counts = await getEnrolledFactorCounts(uid);
+      if (counts.totalFactors > 0 && !hasValidStepUp(body, uid)) {
+        return NextResponse.json(
+          { ok: false, error: 'MFA_STEP_UP_REQUIRED: Verify an existing MFA factor before modifying authenticator setup.' },
+          { status: 403 }
+        );
+      }
       const secret = generateTotpSecret();
-      await userRef.set({ totpPendingSecret: secret }, { merge: true });
+      await privRef.set({ totpPendingSecret: secret }, { merge: true });
       return NextResponse.json({
         ok: true,
         secret,
@@ -196,16 +185,16 @@ export async function POST(req: NextRequest) {
 
     if (action === 'totp_enable') {
       const code = typeof body.code === 'string' ? body.code : '';
-      const snap = await userRef.get();
-      const pendingSecret = snap.data()?.totpPendingSecret;
+      const counts = await getEnrolledFactorCounts(uid);
+      const pendingSecret = counts.state.totpPendingSecret;
       if (!pendingSecret || !verifyTotpCode(pendingSecret, code)) {
         return NextResponse.json(
           { ok: false, error: 'Invalid 6-digit authenticator code.' },
           { status: 400 }
         );
       }
-      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
-      await userRef.set(
+      const hadEnrolledMfa = counts.totalFactors > 0;
+      await privRef.set(
         {
           totpSecret: pendingSecret,
           totpEnabled: true,
@@ -225,17 +214,28 @@ export async function POST(req: NextRequest) {
 
     if (action === 'totp_disable') {
       const code = typeof body.code === 'string' ? body.code : '';
-      const snap = await userRef.get();
-      const secret = snap.data()?.totpSecret;
-      if (secret && !verifyTotpCode(secret, code)) {
+      const [counts, enforceMfa] = await Promise.all([
+        getEnrolledFactorCounts(uid),
+        checkUserEnforceMfa(uid),
+      ]);
+      const secret = counts.state.totpSecret;
+      // Require either a valid current TOTP code OR fresh step-up proof from an existing factor
+      const hasTotpProof = Boolean(secret && code && verifyTotpCode(secret, code));
+      if (!hasTotpProof && !hasValidStepUp(body, uid)) {
         return NextResponse.json(
-          { ok: false, error: 'Invalid authenticator code.' },
-          { status: 400 }
+          { ok: false, error: 'MFA_STEP_UP_REQUIRED: Verify an existing MFA factor before disabling authenticator.' },
+          { status: 403 }
         );
       }
-      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
-      await userRef.set({ totpEnabled: false, totpSecret: null }, { merge: true });
-      if (hadEnrolledMfa && !(await checkHasEnrolledMfa(userRef))) {
+      if (enforceMfa && counts.totalFactors <= 1) {
+        return NextResponse.json(
+          { ok: false, error: 'Your organization enforces 2-Step Verification. Enroll another factor before removing your last one.' },
+          { status: 403 }
+        );
+      }
+      await privRef.set({ totpEnabled: false, totpSecret: null }, { merge: true });
+      const after = await getEnrolledFactorCounts(uid);
+      if (counts.totalFactors > 0 && after.totalFactors === 0) {
         try {
           await sendMfaStatusEmail({ to: email, enabled: false });
         } catch (mailErr) {
@@ -246,6 +246,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'passkey_register_options') {
+      const counts = await getEnrolledFactorCounts(uid);
+      if (counts.totalFactors > 0 && !hasValidStepUp(body, uid)) {
+        return NextResponse.json(
+          { ok: false, error: 'MFA_STEP_UP_REQUIRED: Verify an existing MFA factor before registering a new passkey.' },
+          { status: 403 }
+        );
+      }
       const challenge = crypto.randomBytes(32).toString('base64url');
       await userRef.collection('mfaChallenges').doc('current').set({
         challenge,
@@ -276,34 +283,41 @@ export async function POST(req: NextRequest) {
       if (!credentialId || !clientDataJSON || !publicKeySpki) {
         return NextResponse.json({ ok: false, error: 'Invalid passkey payload.' }, { status: 400 });
       }
-      const chSnap = await userRef.collection('mfaChallenges').doc('current').get();
-      const chData = chSnap.data();
-      if (!chData || chData.type !== 'create' || chData.expiresAt < Date.now()) {
-        return NextResponse.json({ ok: false, error: 'Passkey challenge expired.' }, { status: 400 });
-      }
-      const regCheck = verifyPasskeyRegistration({
-        req,
-        expectedChallenge: chData.challenge,
-        credentialId,
-        clientDataJSON,
-        publicKeySpki,
-        publicKeyAlgorithm,
-        authenticatorData,
+      const counts = await getEnrolledFactorCounts(uid);
+      const chRef = userRef.collection('mfaChallenges').doc('current');
+      const pkRef = userRef.collection('mfaPasskeys').doc(credentialId);
+
+      // Atomically consume registration challenge and persist credential
+      await adminDb.runTransaction(async (tx) => {
+        const chSnap = await tx.get(chRef);
+        const chData = chSnap.data();
+        if (!chData || chData.type !== 'create' || chData.expiresAt < Date.now()) {
+          throw new Error('CHALLENGE_EXPIRED');
+        }
+        const regCheck = verifyPasskeyRegistration({
+          req,
+          expectedChallenge: chData.challenge,
+          credentialId,
+          clientDataJSON,
+          publicKeySpki,
+          publicKeyAlgorithm,
+          authenticatorData,
+        });
+        if (!regCheck.ok) {
+          throw new Error(`VERIFY_FAILED:${regCheck.error}`);
+        }
+        tx.delete(chRef);
+        tx.set(pkRef, {
+          credentialId,
+          label,
+          publicKeySpki,
+          publicKeyAlgorithm,
+          signCount: regCheck.signCount,
+          createdAt: new Date().toISOString(),
+        });
       });
-      if (!regCheck.ok) {
-        return NextResponse.json({ ok: false, error: regCheck.error }, { status: 400 });
-      }
-      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
-      await userRef.collection('mfaChallenges').doc('current').delete().catch(() => {});
-      await userRef.collection('mfaPasskeys').doc(credentialId).set({
-        credentialId,
-        label,
-        publicKeySpki,
-        publicKeyAlgorithm,
-        signCount: regCheck.signCount,
-        createdAt: new Date().toISOString(),
-      });
-      if (!hadEnrolledMfa) {
+
+      if (counts.totalFactors === 0) {
         try {
           await sendMfaStatusEmail({ to: email, enabled: true });
         } catch (mailErr) {
@@ -318,9 +332,25 @@ export async function POST(req: NextRequest) {
       if (!credentialId) {
         return NextResponse.json({ ok: false, error: 'credentialId required.' }, { status: 400 });
       }
-      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
+      if (!hasValidStepUp(body, uid)) {
+        return NextResponse.json(
+          { ok: false, error: 'MFA_STEP_UP_REQUIRED: Verify an existing MFA factor before removing a passkey.' },
+          { status: 403 }
+        );
+      }
+      const [counts, enforceMfa] = await Promise.all([
+        getEnrolledFactorCounts(uid),
+        checkUserEnforceMfa(uid),
+      ]);
+      if (enforceMfa && counts.totalFactors <= 1) {
+        return NextResponse.json(
+          { ok: false, error: 'Your organization enforces 2-Step Verification. Enroll another factor before removing your last one.' },
+          { status: 403 }
+        );
+      }
       await userRef.collection('mfaPasskeys').doc(credentialId).delete();
-      if (hadEnrolledMfa && !(await checkHasEnrolledMfa(userRef))) {
+      const after = await getEnrolledFactorCounts(uid);
+      if (counts.totalFactors > 0 && after.totalFactors === 0) {
         try {
           await sendMfaStatusEmail({ to: email, enabled: false });
         } catch (mailErr) {
@@ -360,8 +390,15 @@ export async function POST(req: NextRequest) {
         typeof body.secondaryEmail === 'string' && body.secondaryEmail.includes('@')
           ? body.secondaryEmail.trim().toLowerCase()
           : '';
-      const snap = await userRef.get();
-      const savedEmail = snap.data()?.secondaryEmail || '';
+      const counts = await getEnrolledFactorCounts(uid);
+      const savedEmail = counts.state.secondaryEmail || '';
+      const isChangingRecoveryEmail = Boolean(targetEmail && targetEmail !== savedEmail);
+      if (isChangingRecoveryEmail && counts.totalFactors > 0 && !hasValidStepUp(body, uid)) {
+        return NextResponse.json(
+          { ok: false, error: 'MFA_STEP_UP_REQUIRED: Verify an existing MFA factor before changing your recovery email.' },
+          { status: 403 }
+        );
+      }
       const sendTo = targetEmail || savedEmail;
       if (!sendTo || !sendTo.includes('@')) {
         return NextResponse.json(
@@ -371,9 +408,9 @@ export async function POST(req: NextRequest) {
       }
 
       const code = String(crypto.randomInt(100000, 999999));
-      await userRef.set(
+      await privRef.set(
         {
-          ...(targetEmail && targetEmail !== savedEmail
+          ...(isChangingRecoveryEmail
             ? { secondaryEmail: targetEmail, secondaryEmailVerified: false }
             : {}),
           secondaryOtpHash: hashOtpCode(uid, code),
@@ -403,8 +440,8 @@ export async function POST(req: NextRequest) {
 
     if (action === 'secondary_email_verify') {
       const code = typeof body.code === 'string' ? body.code.trim() : '';
-      const snap = await userRef.get();
-      const data = snap.data() || {};
+      const counts = await getEnrolledFactorCounts(uid);
+      const data = counts.state;
       if (
         !data.secondaryOtpHash ||
         !data.secondaryOtpExpiresAt ||
@@ -421,8 +458,9 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      const hadEnrolledMfa = await checkHasEnrolledMfa(userRef);
-      await userRef.set(
+      const wasAlreadyVerified = Boolean(data.secondaryEmailVerified);
+      const hadEnrolledMfa = counts.totalFactors > 0;
+      await privRef.set(
         {
           secondaryEmailVerified: true,
           secondaryOtpHash: null,
@@ -440,6 +478,10 @@ export async function POST(req: NextRequest) {
           console.error('[mfa] Failed to send MFA enrollment email (Secondary Email):', mailErr);
         }
       }
+      // Do NOT mint stepUpToken when newly confirming a recovery address if other MFA factors existed
+      if (!wasAlreadyVerified && hadEnrolledMfa) {
+        return NextResponse.json({ ok: true });
+      }
       const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
       return setMfaSessionCookie(
         req,
@@ -452,8 +494,7 @@ export async function POST(req: NextRequest) {
 
     if (action === 'step_up_verify') {
       const method = body.method as 'totp' | 'passkey' | 'secondary_email' | 'firebase_mfa';
-      const snap = await userRef.get();
-      const u = snap.data() || {};
+      const u = await readPrivateMfaState(uid);
 
       if (method === 'totp') {
         const code = typeof body.code === 'string' ? body.code : '';
@@ -481,42 +522,43 @@ export async function POST(req: NextRequest) {
         const clientDataJSON = typeof body.clientDataJSON === 'string' ? body.clientDataJSON : '';
         const authenticatorData = typeof body.authenticatorData === 'string' ? body.authenticatorData : '';
         const signature = typeof body.signature === 'string' ? body.signature : '';
-        const chSnap = await userRef.collection('mfaChallenges').doc('current').get();
-        const chData = chSnap.data();
-        if (!chData || chData.type !== 'get' || chData.expiresAt < Date.now()) {
-          return NextResponse.json({ ok: false, error: 'Passkey challenge expired.' }, { status: 400 });
-        }
-        const pkSnap = await userRef.collection('mfaPasskeys').doc(credentialId).get();
-        if (!pkSnap.exists) {
-          return NextResponse.json({ ok: false, error: 'Unrecognized passkey credential.' }, { status: 403 });
-        }
-        const pkData = pkSnap.data() || {};
-        const assertCheck = verifyPasskeyAssertion({
-          req,
-          expectedChallenge: chData.challenge,
-          passkey: {
-            id: pkSnap.id,
-            label: pkData.label || 'Passkey',
-            createdAt: pkData.createdAt || '',
-            publicKeySpki: pkData.publicKeySpki,
-            publicKeyAlgorithm: pkData.publicKeyAlgorithm,
-            signCount: pkData.signCount,
-          },
-          clientDataJSON,
-          authenticatorData,
-          signature,
+
+        const chRef = userRef.collection('mfaChallenges').doc('current');
+        const pkRef = userRef.collection('mfaPasskeys').doc(credentialId);
+
+        // Atomic challenge consumption + monotonic signCount update; never swallow write errors
+        await adminDb.runTransaction(async (tx) => {
+          const [chSnap, pkSnap] = await Promise.all([tx.get(chRef), tx.get(pkRef)]);
+          const chData = chSnap.data();
+          if (!chData || chData.type !== 'get' || chData.expiresAt < Date.now()) {
+            throw new Error('CHALLENGE_EXPIRED');
+          }
+          if (!pkSnap.exists) {
+            throw new Error('UNKNOWN_PASSKEY');
+          }
+          const pkData = pkSnap.data() || {};
+          const assertCheck = verifyPasskeyAssertion({
+            req,
+            expectedChallenge: chData.challenge,
+            passkey: {
+              id: pkSnap.id,
+              label: pkData.label || 'Passkey',
+              createdAt: pkData.createdAt || '',
+              publicKeySpki: pkData.publicKeySpki,
+              publicKeyAlgorithm: pkData.publicKeyAlgorithm,
+              signCount: pkData.signCount,
+            },
+            clientDataJSON,
+            authenticatorData,
+            signature,
+          });
+          if (!assertCheck.ok) {
+            throw new Error(`VERIFY_FAILED:${assertCheck.error}`);
+          }
+          tx.delete(chRef);
+          tx.set(pkRef, { signCount: assertCheck.nextSignCount }, { merge: true });
         });
-        if (!assertCheck.ok) {
-          return NextResponse.json({ ok: false, error: assertCheck.error }, { status: 403 });
-        }
-        await Promise.all([
-          userRef.collection('mfaChallenges').doc('current').delete().catch(() => {}),
-          userRef
-            .collection('mfaPasskeys')
-            .doc(credentialId)
-            .set({ signCount: assertCheck.nextSignCount }, { merge: true })
-            .catch(() => {}),
-        ]);
+
         const stepUpToken = createStepUpToken({ uid, email, method: 'passkey' });
         return setMfaSessionCookie(
           req,
@@ -543,7 +585,7 @@ export async function POST(req: NextRequest) {
         ) {
           return NextResponse.json({ ok: false, error: 'Invalid or expired email code.' }, { status: 400 });
         }
-        await userRef.set({ secondaryOtpHash: null, secondaryOtpExpiresAt: null }, { merge: true });
+        await privRef.set({ secondaryOtpHash: null, secondaryOtpExpiresAt: null }, { merge: true });
         const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
         return setMfaSessionCookie(
           req,
@@ -577,6 +619,19 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: false, error: 'Unsupported action.' }, { status: 400 });
   } catch (err: any) {
+    const msg = String(err?.message || '');
+    if (msg === 'CHALLENGE_EXPIRED') {
+      return NextResponse.json({ ok: false, error: 'Passkey challenge expired.' }, { status: 400 });
+    }
+    if (msg === 'UNKNOWN_PASSKEY') {
+      return NextResponse.json({ ok: false, error: 'Unrecognized passkey credential.' }, { status: 403 });
+    }
+    if (msg.startsWith('VERIFY_FAILED:')) {
+      return NextResponse.json({ ok: false, error: msg.slice('VERIFY_FAILED:'.length) }, { status: 403 });
+    }
+    if (msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('revoked')) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json(
       { ok: false, error: 'Verification request could not be completed.' },
       { status: 400 }
@@ -587,5 +642,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE() {
   const res = NextResponse.json({ ok: true });
   res.cookies.delete(MFA_SESSION_COOKIE);
+  res.cookies.delete('revlet_session_hint');
+  res.cookies.delete('revlet_last_org');
   return res;
 }

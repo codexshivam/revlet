@@ -1,7 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import dynamic from "next/dynamic"
 import QRCode from "qrcode"
+
+const StepUpMfaDialog = dynamic(
+  () => import("@/components/security/step-up-mfa-dialog").then((m) => m.StepUpMfaDialog),
+  { ssr: false }
+)
 import { useUser } from "@/firebase"
 import { toast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -118,18 +124,37 @@ export function MfaEnrollmentCard() {
     })
     const data = await res.json()
     if (!res.ok || !data.ok) {
+      const rawErr = String(data.error || "")
+      if (rawErr.includes("MFA_STEP_UP_REQUIRED")) {
+        throw new Error(rawErr)
+      }
       throw new Error(sanitizeMfaMessage(data.error, "Verification request failed."))
     }
     return data
   }
 
-  const handleStartTotp = async () => {
+  const [stepUpOpen, setStepUpOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<
+    | null
+    | { type: "totp_setup" | "totp_disable" | "passkey_register" | "secondary_email_send"; label: string }
+    | { type: "passkey_remove"; id: string; label: string }
+  >(null)
+
+  const handleStartTotp = async (stepUpToken?: string) => {
     setBusy(true)
     try {
-      const data = await callMfa({ action: "totp_setup" })
+      const data = await callMfa({
+        action: "totp_setup",
+        ...(stepUpToken ? { stepUpToken } : {}),
+      })
       setPendingSecret(data.secret)
       setOtpauthUri(data.otpauthUri)
     } catch (err: any) {
+      if (String(err?.message || "").includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingAction({ type: "totp_setup", label: "configure your authenticator app" })
+        setStepUpOpen(true)
+        return
+      }
       toast({
         variant: "destructive",
         title: "Setup Failed",
@@ -163,13 +188,21 @@ export function MfaEnrollmentCard() {
     }
   }
 
-  const handleDisableTotp = async () => {
+  const handleDisableTotp = async (stepUpToken?: string) => {
     setBusy(true)
     try {
-      await callMfa({ action: "totp_disable" })
+      await callMfa({
+        action: "totp_disable",
+        ...(stepUpToken ? { stepUpToken } : {}),
+      })
       toast({ title: "Authenticator Disabled" })
       await loadStatus()
     } catch (err: any) {
+      if (String(err?.message || "").includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingAction({ type: "totp_disable", label: "disable your authenticator app" })
+        setStepUpOpen(true)
+        return
+      }
       toast({
         variant: "destructive",
         title: "Error",
@@ -180,7 +213,7 @@ export function MfaEnrollmentCard() {
     }
   }
 
-  const handleRegisterPasskey = async () => {
+  const handleRegisterPasskey = async (stepUpToken?: string) => {
     if (typeof window === "undefined" || !window.PublicKeyCredential) {
       toast({
         variant: "destructive",
@@ -191,7 +224,10 @@ export function MfaEnrollmentCard() {
     }
     setBusy(true)
     try {
-      const opt = await callMfa({ action: "passkey_register_options" })
+      const opt = await callMfa({
+        action: "passkey_register_options",
+        ...(stepUpToken ? { stepUpToken } : {}),
+      })
       const cred = (await navigator.credentials.create({
         publicKey: {
           challenge: b64uToBuf(opt.challenge),
@@ -236,6 +272,11 @@ export function MfaEnrollmentCard() {
       setShowAddPasskey(false)
       await loadStatus()
     } catch (err: any) {
+      if (String(err?.message || "").includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingAction({ type: "passkey_register", label: "register a new passkey" })
+        setStepUpOpen(true)
+        return
+      }
       toast({
         variant: "destructive",
         title: "Passkey Registration Failed",
@@ -246,13 +287,22 @@ export function MfaEnrollmentCard() {
     }
   }
 
-  const handleRemovePasskey = async (id: string) => {
+  const handleRemovePasskey = async (id: string, stepUpToken?: string) => {
     setBusy(true)
     try {
-      await callMfa({ action: "passkey_remove", credentialId: id })
+      await callMfa({
+        action: "passkey_remove",
+        credentialId: id,
+        ...(stepUpToken ? { stepUpToken } : {}),
+      })
       toast({ title: "Passkey Removed" })
       await loadStatus()
     } catch (err: any) {
+      if (String(err?.message || "").includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingAction({ type: "passkey_remove", id, label: "remove a passkey" })
+        setStepUpOpen(true)
+        return
+      }
       toast({
         variant: "destructive",
         title: "Error",
@@ -263,16 +313,25 @@ export function MfaEnrollmentCard() {
     }
   }
 
-  const handleSendSecondaryEmail = async () => {
+  const handleSendSecondaryEmail = async (stepUpToken?: string) => {
     setBusy(true)
     try {
-      await callMfa({ action: "secondary_email_send", secondaryEmail })
+      await callMfa({
+        action: "secondary_email_send",
+        secondaryEmail,
+        ...(stepUpToken ? { stepUpToken } : {}),
+      })
       setEmailCodeSent(true)
       toast({
         title: "Verification Code Sent",
         description: `Sent a 6-digit code to ${secondaryEmail}.`,
       })
     } catch (err: any) {
+      if (String(err?.message || "").includes("MFA_STEP_UP_REQUIRED")) {
+        setPendingAction({ type: "secondary_email_send", label: "update your recovery email" })
+        setStepUpOpen(true)
+        return
+      }
       toast({
         variant: "destructive",
         title: "Error",
@@ -391,7 +450,7 @@ export function MfaEnrollmentCard() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={handleDisableTotp}
+                      onClick={() => void handleDisableTotp()}
                       disabled={busy}
                       className="h-8 text-xs border-slate-200 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
                     >
@@ -401,7 +460,7 @@ export function MfaEnrollmentCard() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={handleStartTotp}
+                      onClick={() => void handleStartTotp()}
                       disabled={busy}
                       className="h-8 text-xs border-slate-200"
                     >
@@ -565,7 +624,7 @@ export function MfaEnrollmentCard() {
                     <Button
                       type="button"
                       size="sm"
-                      onClick={handleRegisterPasskey}
+                      onClick={() => void handleRegisterPasskey()}
                       disabled={busy}
                       className="h-9 text-xs bg-primary hover:bg-primary/90 text-white"
                     >
@@ -650,7 +709,7 @@ export function MfaEnrollmentCard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={handleSendSecondaryEmail}
+                    onClick={() => void handleSendSecondaryEmail()}
                     disabled={busy || !secondaryEmail.includes("@")}
                     className="h-9 text-xs border-slate-200 shrink-0"
                   >
@@ -682,6 +741,24 @@ export function MfaEnrollmentCard() {
           </>
         )}
       </CardContent>
+      <StepUpMfaDialog
+        open={stepUpOpen}
+        onOpenChange={(open) => {
+          setStepUpOpen(open)
+          if (!open) setPendingAction(null)
+        }}
+        actionLabel={pendingAction?.label || "modify your security factors"}
+        onVerified={(token) => {
+          const act = pendingAction
+          setPendingAction(null)
+          if (!act) return
+          if (act.type === "totp_setup") void handleStartTotp(token)
+          else if (act.type === "totp_disable") void handleDisableTotp(token)
+          else if (act.type === "passkey_register") void handleRegisterPasskey(token)
+          else if (act.type === "passkey_remove") void handleRemovePasskey(act.id, token)
+          else if (act.type === "secondary_email_send") void handleSendSecondaryEmail(token)
+        }}
+      />
     </Card>
   )
 }

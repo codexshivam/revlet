@@ -159,6 +159,8 @@ export function reportCrashException(
   }
 
   // 2. Dispatch structured crash report to Firestore via /api/telemetry/crash
+  // Strip query strings and fragments by default so action oobCodes and tokens never reach telemetry
+  const sanitizedUrl = `${window.location.origin}${window.location.pathname}`;
   const payload = {
     app: 'app.revlet.me',
     appId: firebaseConfig.appId,
@@ -169,7 +171,7 @@ export function reportCrashException(
     digest: meta.digest || (errObj as Error & { digest?: string }).digest || null,
     fatal,
     component: meta.component || 'runtime',
-    url: window.location.href,
+    url: sanitizedUrl,
     pathname: window.location.pathname,
     userAgent: navigator.userAgent,
     userId: meta.userId || null,
@@ -251,16 +253,18 @@ export function FirebaseTelemetryObserver({ app }: { app: FirebaseApp }) {
 
   useEffect(() => {
     if (!pathname) return;
+    // Exclude account-action routes (password reset / email verification / email change) from analytics
+    if (pathname.startsWith('/auth/action')) return;
     let cancelled = false;
 
     void initFirebaseTelemetry(app).then(({ analytics }) => {
       if (cancelled || !analytics) return;
       try {
-        const search = searchParams?.toString();
-        const pagePath = search ? `${pathname}?${search}` : pathname;
+        // Never send query strings or fragments to Analytics
+        const sanitizedLocation = `${window.location.origin}${pathname}`;
         logEvent(analytics, 'page_view', {
-          page_path: pagePath,
-          page_location: window.location.href,
+          page_path: pathname,
+          page_location: sanitizedLocation,
           page_title: document.title,
         });
       } catch {
@@ -271,7 +275,7 @@ export function FirebaseTelemetryObserver({ app }: { app: FirebaseApp }) {
     return () => {
       cancelled = true;
     };
-  }, [app, pathname, searchParams]);
+  }, [app, pathname]);
 
   return null;
 }

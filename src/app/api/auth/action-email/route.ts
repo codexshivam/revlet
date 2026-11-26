@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/firebase/admin';
+import { verifyStepUpToken } from '@/lib/mfa';
+import { getEnrolledFactorCounts, getPrivateMfaRef, readPrivateMfaState } from '@/lib/mfa-store';
 import { sendRevletAccountEmail } from '@/lib/revlet-alerts';
 
 function resolveActionBaseUrl(req: NextRequest): string {
@@ -85,14 +87,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1b. Password Updated Confirmation Email (Authenticated via Bearer token, or unauthenticated right after confirmPasswordReset)
+    // 1b. Password Updated Confirmation Email (Requires recent auth_time or recent password reset, deduplicated)
     if (type === 'password_updated') {
       const authHeader = req.headers.get('authorization') || '';
       const idToken = authHeader.replace(/^Bearer\s+/i, '').trim();
       let targetEmail = '';
+      let targetUid = '';
 
       if (idToken) {
-        const decoded = await adminAuth.verifyIdToken(idToken);
+        const decoded = await adminAuth.verifyIdToken(idToken, true);
+        const authAgeSec = Math.floor(Date.now() / 1000) - Number(decoded.auth_time || 0);
+        if (authAgeSec > 600) {
+          return NextResponse.json(
+            { ok: false, error: 'Recent authentication required to dispatch password change alert.' },
+            { status: 403 }
+          );
+        }
+        targetUid = decoded.uid;
         targetEmail = (decoded.email || '').trim().toLowerCase();
       } else {
         const requestedEmail =
@@ -107,18 +118,26 @@ export async function POST(req: NextRequest) {
         const validAfterMs = userRecord.tokensValidAfterTime
           ? Date.parse(userRecord.tokensValidAfterTime)
           : 0;
-        if (!validAfterMs || Date.now() - validAfterMs > 5 * 60 * 1000) {
+        if (!validAfterMs || Date.now() - validAfterMs > 3 * 60 * 1000) {
           return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
         }
+        targetUid = userRecord.uid;
         targetEmail = (userRecord.email || requestedEmail).trim().toLowerCase();
       }
 
-      if (!targetEmail) {
+      if (!targetEmail || !targetUid) {
         return NextResponse.json(
           { ok: false, error: 'Account email is required.' },
           { status: 400 }
         );
       }
+
+      // Deduplicate password-updated alerts within a 2-minute window
+      const state = await readPrivateMfaState(targetUid);
+      if (state.lastPasswordAlertAt && Date.now() - state.lastPasswordAlertAt < 2 * 60 * 1000) {
+        return NextResponse.json({ ok: true, sent: true, deduplicated: true });
+      }
+      await getPrivateMfaRef(targetUid).set({ lastPasswordAlertAt: Date.now() }, { merge: true });
 
       const sendResult = await sendRevletAccountEmail({
         to: targetEmail,
@@ -147,13 +166,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Authenticated actions below require a valid Firebase ID token
+    // Authenticated actions below require a revocation-checked Firebase ID token
     const authHeader = req.headers.get('authorization') || '';
     const idToken = authHeader.replace(/^Bearer\s+/i, '').trim();
     if (!idToken) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
-    const decoded = await adminAuth.verifyIdToken(idToken);
+    const decoded = await adminAuth.verifyIdToken(idToken, true);
     const currentEmail = (decoded.email || '').trim().toLowerCase();
 
     // 2a. Welcome Email on Account Creation
@@ -245,7 +264,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Verify & Change Primary Administrative Email
+    // 3. Verify & Change Primary Administrative Email (Requires fresh auth_time + fresh MFA step-up if enrolled)
     if (type === 'change_email') {
       const newEmail =
         typeof body.newEmail === 'string' ? body.newEmail.trim().toLowerCase() : '';
@@ -254,6 +273,27 @@ export async function POST(req: NextRequest) {
           { ok: false, error: 'A valid new email address is required.' },
           { status: 400 }
         );
+      }
+
+      // Enforce recent reauthentication (within 10 minutes)
+      const authAgeSec = Math.floor(Date.now() / 1000) - Number(decoded.auth_time || 0);
+      if (!decoded.auth_time || authAgeSec > 600) {
+        return NextResponse.json(
+          { ok: false, error: 'REAUTH_REQUIRED: Please re-enter your current password to confirm this email change.' },
+          { status: 403 }
+        );
+      }
+
+      // Enforce fresh MFA step-up proof for MFA-enrolled accounts
+      const counts = await getEnrolledFactorCounts(decoded.uid);
+      if (counts.totalFactors > 0) {
+        const stepUpToken = typeof body.stepUpToken === 'string' ? body.stepUpToken : '';
+        if (!verifyStepUpToken(stepUpToken, decoded.uid)) {
+          return NextResponse.json(
+            { ok: false, error: 'MFA_STEP_UP_REQUIRED: Complete 2-Step Verification before changing your account email.' },
+            { status: 403 }
+          );
+        }
       }
 
       const rawLink = await adminAuth.generateVerifyAndChangeEmailLink(
@@ -289,10 +329,30 @@ export async function POST(req: NextRequest) {
         ],
       });
 
+      // Notify the existing email address of the pending email-change request
+      if (sendResult.sent) {
+        void sendRevletAccountEmail({
+          to: currentEmail,
+          subject: 'Email address change requested on your Revlet account',
+          title: 'Security Notice: Email Change Requested',
+          subtitle: `A confirmation link was sent to ${newEmail} to update your Revlet login email.`,
+          summaryLines: [
+            `If you requested this change, confirm it from ${newEmail}.`,
+            'If you did not request this change, update your password and review your 2-Step Verification settings immediately.',
+          ],
+          ctaLabel: 'Review Account Security',
+          ctaUrl: `${baseUrl}/management/settings`,
+          details: [
+            { label: 'Current Email', value: currentEmail },
+            { label: 'Requested New Email', value: newEmail },
+          ],
+        }).catch(() => {});
+      }
+
       return NextResponse.json(
         sendResult.sent
           ? { ok: true, sent: true }
-          : { ok: false, sent: false, error: 'Failed to dispatch password reset email.' },
+          : { ok: false, sent: false, error: 'Failed to dispatch email change confirmation.' },
         { status: sendResult.sent ? 200 : 502 }
       );
     }

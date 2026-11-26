@@ -118,11 +118,11 @@ export default function SignupPage() {
       return
     }
 
-    if (userFormData.password.length < 6) {
+    if (userFormData.password.length < 12) {
       toast({
         variant: "destructive",
         title: "Password too short",
-        description: "Password must be at least 6 characters long.",
+        description: "Password must be at least 12 characters long.",
       })
       return
     }

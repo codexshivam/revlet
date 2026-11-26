@@ -121,11 +121,11 @@ function AuthActionContent() {
 
   const handlePasswordResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (newPassword.length < 6) {
+    if (newPassword.length < 12) {
       toast({
         variant: "destructive",
         title: "Password too short",
-        description: "Please choose a password with at least 6 characters.",
+        description: "Please choose a password with at least 12 characters.",
       })
       return
     }

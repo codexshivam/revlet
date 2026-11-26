@@ -167,9 +167,36 @@ service cloud.firestore {
     }
 
     // ─── User Profiles ────────────────────────────────────────────────────────
-    // Users can only read/write their own profile document.
+    // Users can only read/write safe profile fields on their own document.
+    // All MFA secrets, passkeys, challenges, and recovery OTP state live in
+    // server-only subcollections (privateMfa, mfaPasskeys, mfaChallenges).
     match /users/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'email', 'photoURL', 'theme', 'timezone', 'locale',
+          'lastActiveOrgId', 'createdAt', 'updatedAt'
+        ]);
+      allow update: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'email', 'photoURL', 'theme', 'timezone', 'locale',
+          'lastActiveOrgId', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /privateMfa/{docId} {
+        allow read, write: if false;
+      }
+
+      match /mfaPasskeys/{passkeyId} {
+        allow read, write: if false;
+      }
+
+      match /mfaChallenges/{challengeId} {
+        allow read, write: if false;
+      }
     }
   }
 }

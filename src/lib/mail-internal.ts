@@ -101,6 +101,16 @@ export async function callStalwartJmap(
   return Array.isArray(data?.methodResponses) ? data.methodResponses : [];
 }
 
+export async function findStalwartAccountById(accountId: string): Promise<any | null> {
+  const cleanId = String(accountId || '').trim();
+  if (!cleanId) return null;
+  const getRes = await callStalwartJmap([
+    ['x:Account/get', { accountId: 'b', ids: [cleanId] }, 'accById'],
+  ]);
+  const list: any[] = getRes.find((r) => r[0] === 'x:Account/get' && r[2] === 'accById')?.[1]?.list || [];
+  return list.find((a) => a?.id === cleanId) || null;
+}
+
 export async function findStalwartAccountByEmail(cleanEmail: string): Promise<any | null> {
   const queryRes = await callStalwartJmap([
     ['x:Account/query', { accountId: 'b', filter: { text: cleanEmail }, limit: 10 }, 'accQuery'],
@@ -260,13 +270,25 @@ export async function syncStalwartUserPrincipal(params: {
     throw new Error(`Could not resolve mail domain "${domainPart}" on provider.`);
   }
 
-  const existingAcc = await findStalwartAccountByEmail(cleanEmail);
+  let existingAcc = params.expectedPrincipalId
+    ? await findStalwartAccountById(params.expectedPrincipalId)
+    : null;
+  if (!existingAcc) {
+    existingAcc = await findStalwartAccountByEmail(cleanEmail);
+  }
 
+  // Never create a brand-new Stalwart mailbox when suspending or deleting an account
+  // that no longer exists on the mail server.
+  if (!existingAcc && params.disabled) {
+    return null;
+  }
+
+  const existingPrimaryEmail = String(existingAcc?.emailAddress || '').toLowerCase().trim();
   const aliasesMap: Record<string, unknown> = {};
   let aliasIdx = 0;
   for (const alias of params.aliases || []) {
     const cleanAlias = alias.toLowerCase().trim();
-    if (cleanAlias && cleanAlias !== cleanEmail) {
+    if (cleanAlias && cleanAlias !== cleanEmail && cleanAlias !== existingPrimaryEmail) {
       const [aLocal, aDomain] = cleanAlias.split('@');
       if (aLocal && aDomain) {
         const aDomId =
@@ -277,7 +299,7 @@ export async function syncStalwartUserPrincipal(params: {
           aliasesMap[String(aliasIdx++)] = {
             name: aLocal,
             domainId: aDomId,
-            enable: true,
+            enable: !params.disabled,
           };
         }
       }

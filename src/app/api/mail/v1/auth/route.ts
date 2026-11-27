@@ -81,8 +81,8 @@ export async function POST(req: NextRequest) {
 
     if (!orgDoc || !orgDoc.exists) {
       return NextResponse.json(
-        { ok: false, error: 'Organization domain not found.' },
-        { status: 404 }
+        { ok: false, error: 'Invalid email or password.' },
+        { status: 401 }
       );
     }
 
@@ -90,40 +90,39 @@ export async function POST(req: NextRequest) {
 
     if (!orgData.mailServiceActive) {
       return NextResponse.json(
-        { ok: false, error: 'Email Service is currently inactive for this organization.' },
-        { status: 403 }
+        { ok: false, error: 'Invalid email or password.' },
+        { status: 401 }
       );
     }
 
-    const usersSnap = await orgDoc.ref.collection('mailUsers').get();
-    const matchedDoc = usersSnap.docs.find((d) => {
-      const data = d.data();
-      if ((data.primaryEmail || '').toLowerCase() === emailInput) return true;
-      const aliases: string[] = Array.isArray(data.aliases) ? data.aliases : [];
-      return aliases.some((a) => a.toLowerCase() === emailInput);
-    });
+    // Use targeted indexed queries (primaryEmail / aliases) instead of scanning all mailboxes
+    let matchedDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    const primarySnap = await orgDoc.ref
+      .collection('mailUsers')
+      .where('primaryEmail', '==', emailInput)
+      .limit(1)
+      .get();
+    if (!primarySnap.empty) {
+      matchedDoc = primarySnap.docs[0];
+    } else {
+      const aliasSnap = await orgDoc.ref
+        .collection('mailUsers')
+        .where('aliases', 'array-contains', emailInput)
+        .limit(1)
+        .get();
+      if (!aliasSnap.empty) {
+        matchedDoc = aliasSnap.docs[0];
+      }
+    }
 
     if (!matchedDoc) {
-      return NextResponse.json({ ok: false, error: 'Invalid credentials.' }, { status: 401 });
+      return NextResponse.json({ ok: false, error: 'Invalid email or password.' }, { status: 401 });
     }
 
     const userData = matchedDoc.data();
-    if (userData.status !== 'active') {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            userData.status === 'suspended'
-              ? 'This email account is suspended by your organization administrator.'
-              : 'This email account is unavailable.',
-        },
-        { status: 403 }
-      );
-    }
-
     const isPasswordValid = verifyMailPasswordHash(passwordInput, userData.passwordHash);
-    if (!isPasswordValid) {
-      return NextResponse.json({ ok: false, error: 'Invalid credentials.' }, { status: 401 });
+    if (!isPasswordValid || userData.status !== 'active') {
+      return NextResponse.json({ ok: false, error: 'Invalid email or password.' }, { status: 401 });
     }
 
     const aliases: string[] = Array.isArray(userData.aliases) ? userData.aliases : [];

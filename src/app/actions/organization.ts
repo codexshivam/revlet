@@ -82,6 +82,17 @@ export async function createOrganizationWorkspace(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // Write authoritative UID-keyed owner membership subdoc
+    await docRef.collection('members').doc(uid).set({
+      uid,
+      email: ownerEmail || null,
+      role: 'owner',
+      permissions: ['*'],
+      status: 'Active',
+      joinedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
     return {
       success: true,
       data: {
@@ -152,6 +163,7 @@ export async function deleteOrganization(
     const [
       membersLegacySnap,
       membersArraySnap,
+      orgMembersSubSnap,
       mailUsersSnap,
       mailGroupsSnap,
       mailSharedSnap,
@@ -170,6 +182,7 @@ export async function deleteOrganization(
     ] = await Promise.all([
       adminDb.collection('teamMembers').where('organizationId', '==', orgId).get(),
       adminDb.collection('teamMembers').where('organizationIds', 'array-contains', orgId).get(),
+      orgRef.collection('members').get(),
       orgRef.collection('mailUsers').get(),
       orgRef.collection('mailGroups').get(),
       orgRef.collection('mailSharedMailboxes').get(),
@@ -301,6 +314,7 @@ export async function deleteOrganization(
     }
 
     const subRefs = [
+      ...orgMembersSubSnap.docs.map((d) => d.ref),
       ...mailUsersSnap.docs.map((d) => d.ref),
       ...mailGroupsSnap.docs.map((d) => d.ref),
       ...mailSharedSnap.docs.map((d) => d.ref),

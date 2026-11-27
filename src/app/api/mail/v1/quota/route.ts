@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
 
 // Short-TTL in-memory caches to cut Firestore reads by ~80% on outbound mail bursts
@@ -271,6 +271,7 @@ export async function POST(req: NextRequest) {
           fromEmail,
           recipientCount,
           createdAt: now.toISOString(),
+          expireAt: Timestamp.fromMillis(nowMs + 7 * 24 * 60 * 60 * 1000),
         });
       }
 

@@ -1,5 +1,6 @@
 "use client"
 
+import { useActiveOrg } from "@/hooks/use-active-org"
 import { useEffect, useState, useCallback, useRef } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
@@ -42,6 +43,7 @@ export default function JoinWorkspaceInvitePage() {
   const params = useParams<{ token: string }>()
   const rawToken = typeof params?.token === "string" ? decodeURIComponent(params.token) : ""
   const router = useRouter()
+  const { setActiveOrgId } = useActiveOrg()
   const auth = useAuth()
   const db = useFirestore()
   const { user, loading: userLoading } = useUser()
@@ -73,9 +75,8 @@ export default function JoinWorkspaceInvitePage() {
 
   const routeToAcceptedWorkspace = useCallback(
     (orgId: string, perms: string[]) => {
+      setActiveOrgId(orgId)
       if (typeof window !== "undefined") {
-        localStorage.setItem("selectedOrgId", orgId)
-        document.cookie = `revlet_last_org=${encodeURIComponent(orgId)}; path=/; max-age=2592000; samesite=lax`
         window.dispatchEvent(new Event("revlet-orgs-refresh"))
       }
       const onlyDns = perms.length > 0 && perms.every((p) => p.startsWith("DNS:"))
@@ -88,7 +89,7 @@ export default function JoinWorkspaceInvitePage() {
         router.replace("/account/home")
       }
     },
-    [router]
+    [router, setActiveOrgId]
   )
 
   const handleAccept = useCallback(

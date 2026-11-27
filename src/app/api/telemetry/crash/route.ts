@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '@/firebase/admin';
 
 const ALLOWED_ORIGINS = new Set([
@@ -140,6 +140,7 @@ export async function POST(req: NextRequest) {
       userId: verifiedUserId,
       userEmail: verifiedUserEmail,
       clientTimestamp: typeof body.timestamp === 'string' ? body.timestamp.slice(0, 64) : new Date().toISOString(),
+      expireAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000),
       createdAt: FieldValue.serverTimestamp(),
     });
 

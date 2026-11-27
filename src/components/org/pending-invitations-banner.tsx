@@ -1,5 +1,6 @@
 "use client"
 
+import { useActiveOrg } from "@/hooks/use-active-org"
 import { useEffect, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
@@ -25,6 +26,7 @@ interface PendingInviteItem {
 export function PendingInvitationsBanner() {
   const { user } = useUser()
   const router = useRouter()
+  const { setActiveOrgId } = useActiveOrg()
   const [invites, setInvites] = useState<PendingInviteItem[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [stepUpOpen, setStepUpOpen] = useState(false)
@@ -70,8 +72,7 @@ export function PendingInvitationsBanner() {
         description: "Your workspace access is now active.",
       })
       if (res.data?.primaryOrgId && typeof window !== "undefined") {
-        localStorage.setItem("selectedOrgId", res.data.primaryOrgId)
-        document.cookie = `revlet_last_org=${encodeURIComponent(res.data.primaryOrgId)}; path=/; max-age=2592000; samesite=lax`
+        setActiveOrgId(res.data.primaryOrgId)
         window.dispatchEvent(new Event("revlet-orgs-refresh"))
       }
       await loadPending()

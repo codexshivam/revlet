@@ -39,12 +39,16 @@ service cloud.firestore {
           'contactPhone', 'contactEmail', 'description',
           'status', 'createdAt', 'updatedAt', 'mailServiceActive'
         ]);
-      // Workspace access is strictly UID-bound (ownerId or memberIds); pending invitations
-      // are read from /teamMembers and bound to the verified UID upon acceptance.
+      // Workspace access is strictly UID-bound (ownerId, memberIds, or authoritative members/{uid});
+      // pending invitations are read from /teamMembers and bound to the verified UID upon acceptance.
       allow read: if isResourceOwner() || isSuperAdmin() || (
-        isAuthenticated() &&
-        'memberIds' in resource.data &&
-        request.auth.uid in resource.data.memberIds
+        isAuthenticated() && (
+          ('memberIds' in resource.data && request.auth.uid in resource.data.memberIds) ||
+          (
+            exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.status == 'Active'
+          )
+        )
       );
       allow update: if (isResourceOwner() || isSuperAdmin())
         && request.resource.data.ownerId == resource.data.ownerId
@@ -58,6 +62,15 @@ service cloud.firestore {
         );
       // Organization deletion must execute via the MFA-gated, legal-hold-checked Server Action.
       allow delete: if false;
+
+      // Authoritative UID-keyed membership records (written exclusively via Admin SDK Server Actions)
+      match /members/{memberUid} {
+        allow read: if isOwner(memberUid) || isSuperAdmin() || (
+          isAuthenticated() &&
+          get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid
+        );
+        allow write: if false;
+      }
 
       match /secrets/{secretId} {
         allow read, write: if false;

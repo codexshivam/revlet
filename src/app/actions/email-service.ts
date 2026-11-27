@@ -11,6 +11,7 @@ import {
 } from './dns-service';
 import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
 import { hashMailPassword, hashMailPasswordAsync } from '@/lib/security/mail-crypto';
+import { encryptToken, decryptToken } from '@/lib/security/encryption';
 import {
   assertActiveMailDomainBinding,
   isEmailAddressTakenInOrg,
@@ -586,9 +587,15 @@ async function prepareOrgDkimConfig(orgId: string, orgData: FirebaseFirestore.Do
     const secret = (await tx.get(secretRef)).data();
     const selector = secret?.selector || 'revlet';
     const publicKey = secret?.publicKey || pair.publicKey;
-    if (!secret?.publicKey || !secret?.privateKey) {
-      if (secret?.publicKey || secret?.privateKey) throw new Error('Domain signing configuration needs repair.');
-      tx.set(secretRef, { ...pair, selector, updatedAt: FieldValue.serverTimestamp() });
+    const hasPrivateKey = Boolean(secret?.privateKeyEncrypted?.ciphertext || secret?.privateKey);
+    if (!secret?.publicKey || !hasPrivateKey) {
+      if (secret?.publicKey || hasPrivateKey) throw new Error('Domain signing configuration needs repair.');
+      tx.set(secretRef, {
+        publicKey: pair.publicKey,
+        privateKeyEncrypted: encryptToken(pair.privateKey),
+        selector,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     }
     tx.update(orgRef, { mailDkimSelector: selector, mailDkimPublicKey: publicKey });
     return { mode: 'byodkim', selector, publicKey, tokens: [] };
@@ -806,10 +813,13 @@ export async function activateMailService(idToken: string, orgId: string) {
     await claimMailDomain(orgId, domain);
     if (dkimConfig.mode === 'byodkim') {
       const secret = (await adminDb.collection('organizations').doc(orgId).collection('privateSecrets').doc('dkim').get()).data();
-      if (!secret?.privateKey || secret.publicKey !== dkimConfig.publicKey) {
+      const dkimPrivateKey = secret?.privateKeyEncrypted?.ciphertext
+        ? decryptToken(secret.privateKeyEncrypted)
+        : secret?.privateKey;
+      if (!dkimPrivateKey || secret?.publicKey !== dkimConfig.publicKey) {
         return { success: false, error: 'Domain signing configuration needs repair. Contact support before activating.' };
       }
-      if (!(await provisionAwsSesByoDkim(orgId, domain, dkimConfig.selector, secret.privateKey, orgData.mailSesIdentityProvisioned === true))) {
+      if (!(await provisionAwsSesByoDkim(orgId, domain, dkimConfig.selector, dkimPrivateKey, orgData.mailSesIdentityProvisioned === true))) {
         return { success: false, error: 'The sending provider has not verified this domain. Check again shortly. If verification remains pending, contact support.' };
       }
     }

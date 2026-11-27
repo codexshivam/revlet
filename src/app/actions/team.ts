@@ -2,7 +2,7 @@
 
 import crypto from 'crypto';
 import { adminAuth, adminDb } from '@/firebase/admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { ORG_ADMIN_PERMISSION, ADMIN_ALL_PERMISSIONS } from '@/lib/team-permissions';
 import { verifyStepUpToken } from '@/lib/mfa';
 import { getEnrolledFactorCounts } from '@/lib/mfa-store';
@@ -87,9 +87,7 @@ export async function listTeamManagementData(idToken: string) {
 
     const [ownedSnap, memberSnap] = await Promise.all([
       adminDb.collection('organizations').where('ownerId', '==', caller.uid).get(),
-      caller.email
-        ? adminDb.collection('organizations').where('memberEmails', 'array-contains', caller.email).get()
-        : Promise.resolve(null),
+      adminDb.collection('organizations').where('memberIds', 'array-contains', caller.uid).get(),
     ]);
 
     const orgMap = new Map<string, any>();
@@ -288,6 +286,7 @@ export async function inviteTeamMember(
       status: initialStatus,
       inviteTokenHash,
       expiresAt,
+      expireAt: Timestamp.fromMillis(expiresAt),
       revoked: false,
       invitedAt: FieldValue.serverTimestamp(),
     });
@@ -558,14 +557,28 @@ export async function updateTeamMemberAccess(
             memberEmails: FieldValue.arrayRemove(targetEmail),
             [permKey]: FieldValue.delete(),
           });
+          batch.delete(oldDoc.ref.collection('members').doc(data.memberUid));
         }
       }
       for (const orgDoc of nextOrgDocs) {
+        const orgPerms = resolvedOrgPermissions[orgDoc.id] || nextPermissions;
         batch.update(orgDoc.ref, {
           memberIds: FieldValue.arrayUnion(data.memberUid),
           memberEmails: FieldValue.arrayUnion(targetEmail),
-          [permKey]: resolvedOrgPermissions[orgDoc.id] || nextPermissions,
+          [permKey]: orgPerms,
         });
+        batch.set(
+          orgDoc.ref.collection('members').doc(data.memberUid),
+          {
+            uid: data.memberUid,
+            email: targetEmail,
+            status: 'Active',
+            permissions: orgPerms,
+            accessMode,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
       }
       await batch.commit();
     }
@@ -650,6 +663,9 @@ export async function deleteTeamMember(idToken: string, memberId: string) {
         ...(data.memberUid ? { memberIds: FieldValue.arrayRemove(data.memberUid) } : {}),
         [permKey]: FieldValue.delete(),
       });
+      if (data.memberUid) {
+        batch.delete(orgRef.collection('members').doc(data.memberUid));
+      }
     }
     await batch.commit();
 
@@ -1036,12 +1052,14 @@ export async function acceptInvitationByToken(
         throw new Error('The inviter no longer has permission to grant access to this workspace.');
       }
 
-      // Keep inviteTokenHash on Active record so retrying the same link cleanly reopens the workspace
+      // Keep inviteTokenHash on Active record so retrying the same link cleanly reopens the workspace.
+      // Clear expireAt so accepted memberships are never removed by pending-invite TTL.
       tx.update(inviteRef, {
         status: 'Active',
         memberUid: caller.uid,
         organizationIds: authorizedOrgIds,
         organizationId: authorizedOrgIds[0],
+        expireAt: FieldValue.delete(),
         activatedAt: FieldValue.serverTimestamp(),
         acceptedAt: FieldValue.serverTimestamp(),
       });
@@ -1059,6 +1077,19 @@ export async function acceptInvitationByToken(
           memberEmails: FieldValue.arrayUnion(caller.email),
           ...(orgPerms.length > 0 ? { [permKey]: orgPerms } : {}),
         });
+        tx.set(
+          orgRef.collection('members').doc(caller.uid),
+          {
+            uid: caller.uid,
+            email: caller.email,
+            status: 'Active',
+            permissions: orgPerms,
+            accessMode: orgPerms.includes(ORG_ADMIN_PERMISSION) ? 'admin' : 'services',
+            joinedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
       }
 
       const primaryOrgId = authorizedOrgIds[0];

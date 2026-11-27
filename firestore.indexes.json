@@ -33,5 +33,39 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "mfaChallenges",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "crashReports",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailQuotaSubmissions",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "crashReports",
+      "fieldPath": "stack",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailQuarantine",
+      "fieldPath": "bodyText",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailQuarantine",
+      "fieldPath": "bodyHtml",
+      "indexes": []
+    }
+  ]
 }

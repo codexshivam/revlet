@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '@/firebase/admin';
 import {
   buildOtpAuthUri,
@@ -16,6 +17,8 @@ import {
 } from '@/lib/webauthn-verify';
 import {
   checkUserEnforceMfa,
+  decryptMfaSecret,
+  encryptMfaSecret,
   getEnrolledFactorCounts,
   getPrivateMfaRef,
   readPrivateMfaState,
@@ -175,7 +178,13 @@ export async function POST(req: NextRequest) {
         );
       }
       const secret = generateTotpSecret();
-      await privRef.set({ totpPendingSecret: secret }, { merge: true });
+      await privRef.set(
+        {
+          totpPendingSecret: FieldValue.delete(),
+          totpPendingSecretEncrypted: encryptMfaSecret(secret),
+        },
+        { merge: true }
+      );
       return NextResponse.json({
         ok: true,
         secret,
@@ -196,9 +205,11 @@ export async function POST(req: NextRequest) {
       const hadEnrolledMfa = counts.totalFactors > 0;
       await privRef.set(
         {
-          totpSecret: pendingSecret,
+          totpSecret: FieldValue.delete(),
+          totpSecretEncrypted: encryptMfaSecret(pendingSecret),
           totpEnabled: true,
-          totpPendingSecret: null,
+          totpPendingSecret: FieldValue.delete(),
+          totpPendingSecretEncrypted: null,
         },
         { merge: true }
       );
@@ -254,10 +265,12 @@ export async function POST(req: NextRequest) {
         );
       }
       const challenge = crypto.randomBytes(32).toString('base64url');
+      const challengeExpiresAt = Date.now() + 5 * 60 * 1000;
       await userRef.collection('mfaChallenges').doc('current').set({
         challenge,
         type: 'create',
-        expiresAt: Date.now() + 5 * 60 * 1000,
+        expiresAt: challengeExpiresAt,
+        expireAt: Timestamp.fromMillis(challengeExpiresAt),
       });
       const rpId = resolveExpectedRpId(req);
       return NextResponse.json({
@@ -369,10 +382,12 @@ export async function POST(req: NextRequest) {
         );
       }
       const challenge = crypto.randomBytes(32).toString('base64url');
+      const challengeExpiresAt = Date.now() + 5 * 60 * 1000;
       await userRef.collection('mfaChallenges').doc('current').set({
         challenge,
         type: 'get',
-        expiresAt: Date.now() + 5 * 60 * 1000,
+        expiresAt: challengeExpiresAt,
+        expireAt: Timestamp.fromMillis(challengeExpiresAt),
       });
       return NextResponse.json({
         ok: true,
@@ -552,10 +567,11 @@ export async function POST(req: NextRequest) {
           if (typeof data.mfaLockedUntil === 'number' && data.mfaLockedUntil > nowMs) {
             return { status: 'locked' as const, retryAfterSec: Math.ceil((data.mfaLockedUntil - nowMs) / 1000) };
           }
-          if (!data.totpEnabled || !data.totpSecret) {
+          const resolvedTotpSecret = decryptMfaSecret(data.totpSecretEncrypted, data.totpSecret);
+          if (!data.totpEnabled || !resolvedTotpSecret) {
             return { status: 'not_enrolled' as const };
           }
-          if (!verifyTotpCode(data.totpSecret, code)) {
+          if (!verifyTotpCode(resolvedTotpSecret, code)) {
             const nextAttempts = (Number(data.mfaFailedAttempts) || 0) + 1;
             tx.set(
               privRef,

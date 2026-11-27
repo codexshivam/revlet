@@ -107,7 +107,7 @@ function DashboardShellInner({
   className?: string
 }) {
   const { user, loading } = useUser()
-  const { orgs, setActiveOrgId, routeOrgKey, isRouteOrgResolving, isRouteOrgUnavailable } = useActiveOrg()
+  const { orgs, setActiveOrgId, routeOrgKey, isRouteOrgResolving, isRouteOrgUnavailable, error: orgsError, loading: orgsLoading, refreshOrgs } = useActiveOrg()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -271,7 +271,20 @@ function DashboardShellInner({
               )}
             >
               <div className="space-y-6 sm:space-y-8 flex-1 animate-fade-up-in motion-reduce:animate-none">
-                {isRouteOrgResolving ? (
+                {orgsError && (routeOrgKey || pathname === "/account/home" || pathname.startsWith("/services/")) ? (
+                  <div role="alert" className="mx-auto my-12 max-w-lg space-y-3 rounded-xl border border-slate-200 bg-white p-6 text-center">
+                    <h1 className="text-base font-semibold text-slate-900">Organizations unavailable</h1>
+                    <p className="text-sm text-slate-600">{orgsError}</p>
+                    <button
+                      type="button"
+                      disabled={orgsLoading}
+                      className="min-h-11 rounded-lg bg-slate-900 px-4 text-sm font-medium text-white disabled:opacity-50"
+                      onClick={() => void refreshOrgs()}
+                    >
+                      {orgsLoading ? "Trying again…" : "Try again"}
+                    </button>
+                  </div>
+                ) : isRouteOrgResolving ? (
                   <div className="space-y-4 py-6">
                     <div className="h-7 w-48 rounded bg-slate-200/80" />
                     <div className="h-36 w-full rounded-xl border border-slate-200 bg-white" />

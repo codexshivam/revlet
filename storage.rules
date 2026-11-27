@@ -34,6 +34,10 @@ service firebase.storage {
             (
               'memberIds' in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data &&
               request.auth.uid in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data.memberIds
+            ) ||
+            (
+              firestore.exists(/databases/(default)/documents/organizations/$(orgId)/members/$(request.auth.uid)) &&
+              firestore.get(/databases/(default)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.status == 'Active'
             )
           )
         )

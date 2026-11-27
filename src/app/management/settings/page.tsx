@@ -14,7 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, LogOut, Info } from "lucide-react"
+import { Loader2, LogOut, Info, Download, Trash2 } from "lucide-react"
+import { exportPersonalAccountData, deletePersonalAccount } from "@/app/actions/account-privacy"
 import { useUser, useAuth, useFirestore } from "@/firebase"
 import {
   updatePassword,
@@ -46,6 +47,78 @@ export default function SettingsPage() {
   // Profile name state
   const [name, setName] = useState(user?.displayName || "")
   const [isUpdatingName, setIsUpdatingName] = useState(false)
+
+  // Data & Privacy (export & erasure) state
+  const [isExportingData, setIsExportingData] = useState(false)
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false)
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState("")
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+  const [privacyStepUpAction, setPrivacyStepUpAction] = useState<"export" | "delete" | null>(null)
+
+  const handleExportAccountData = async (stepUpToken?: string) => {
+    if (!user) return
+    setIsExportingData(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await exportPersonalAccountData(idToken, stepUpToken)
+      if (!res.success) {
+        if (res.error?.includes("MFA_STEP_UP_REQUIRED")) {
+          setPrivacyStepUpAction("export")
+          return
+        }
+        throw new Error(res.error || "Could not export personal data.")
+      }
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `revlet-account-export-${Date.now()}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast({
+        title: "Account data exported",
+        description: "Your personal account export has been downloaded.",
+      })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Export failed",
+        description: err?.message || "Could not export account data.",
+      })
+    } finally {
+      setIsExportingData(false)
+    }
+  }
+
+  const handleDeletePersonalAccount = async (stepUpToken?: string) => {
+    if (!user) return
+    setIsDeletingAccount(true)
+    try {
+      const idToken = await user.getIdToken()
+      const res = await deletePersonalAccount(idToken, deleteConfirmEmail, stepUpToken)
+      if (!res.success) {
+        if (res.error?.includes("MFA_STEP_UP_REQUIRED")) {
+          setPrivacyStepUpAction("delete")
+          return
+        }
+        throw new Error(res.error || "Could not delete account.")
+      }
+      toast({
+        title: "Account deleted",
+        description: "Your personal account and profile data have been permanently erased.",
+      })
+      await signOut(auth).catch(() => {})
+      router.replace("/login")
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Account deletion failed",
+        description: err?.message || "Could not delete personal account.",
+      })
+    } finally {
+      setIsDeletingAccount(false)
+    }
+  }
 
   useEffect(() => {
     if (user?.displayName && !name) {
@@ -503,6 +576,44 @@ export default function SettingsPage() {
         {/* 4. Active Session */}
         <MfaEnrollmentCard />
 
+        {/* 5. Data & Privacy (Personal Export & Erasure) */}
+        <Card className="rounded-xl border border-slate-200/80 shadow-none bg-white">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-headline font-semibold text-slate-900">
+              Data &amp; Privacy
+            </CardTitle>
+            <CardDescription className="text-xs text-slate-500">
+              Download a machine-readable copy of your personal account data or permanently erase your account. Organization-owned records require ownership transfer or organization deletion first.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <Button
+              variant="outline"
+              onClick={() => void handleExportAccountData()}
+              disabled={isExportingData}
+              className="h-9 text-xs font-medium rounded-lg border-slate-200"
+            >
+              {isExportingData ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" strokeWidth={1.5} />
+              ) : (
+                <Download className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.5} />
+              )}
+              Export Personal Data (JSON)
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteConfirmEmail("")
+                setIsDeleteAccountOpen(true)
+              }}
+              className="h-9 text-xs font-medium rounded-lg border-rose-200 text-destructive hover:bg-rose-50 hover:text-destructive"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.5} />
+              Delete Personal Account
+            </Button>
+          </CardContent>
+        </Card>
+
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-sm font-headline font-semibold text-slate-900">
@@ -563,6 +674,71 @@ export default function SettingsPage() {
         actionLabel="change your account email address"
         onVerified={(token) => {
           void handleUpdateEmail(token)
+        }}
+      />
+
+      <AlertDialog open={isDeleteAccountOpen} onOpenChange={setIsDeleteAccountOpen}>
+        <AlertDialogContent className="bg-white border border-slate-200 rounded-xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
+              Delete Personal Account
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
+                <p>
+                  This permanently erases your personal Revlet profile, MFA factors, and memberships in shared workspaces. If you still own any organization, delete or transfer it first.
+                </p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-700">
+                    Type <span className="font-mono">{user?.email}</span> to confirm:
+                  </Label>
+                  <Input
+                    value={deleteConfirmEmail}
+                    onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                    placeholder={user?.email || "you@example.com"}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 pt-2">
+            <AlertDialogCancel disabled={isDeletingAccount} className="h-9 text-xs font-medium rounded-lg">
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={
+                isDeletingAccount ||
+                !user?.email ||
+                deleteConfirmEmail.trim().toLowerCase() !== user.email.toLowerCase()
+              }
+              onClick={() => void handleDeletePersonalAccount()}
+              className="h-9 text-xs font-medium rounded-lg"
+            >
+              {isDeletingAccount && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+              Permanently Delete Account
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <StepUpMfaDialog
+        open={Boolean(privacyStepUpAction)}
+        onOpenChange={(open) => { if (!open) setPrivacyStepUpAction(null) }}
+        actionLabel={
+          privacyStepUpAction === "delete"
+            ? "permanently delete your personal account"
+            : "export your personal account data"
+        }
+        onVerified={(token) => {
+          const act = privacyStepUpAction
+          setPrivacyStepUpAction(null)
+          if (act === "export") {
+            void handleExportAccountData(token)
+          } else if (act === "delete") {
+            void handleDeletePersonalAccount(token)
+          }
         }}
       />
     </DashboardShell>

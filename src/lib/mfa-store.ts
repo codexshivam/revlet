@@ -1,15 +1,36 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin';
+import { encryptToken, decryptToken, type EncryptedPayload } from '@/lib/security/encryption';
 
 export interface PrivateMfaState {
   totpEnabled?: boolean;
   totpSecret?: string | null;
+  totpSecretEncrypted?: EncryptedPayload | null;
   totpPendingSecret?: string | null;
+  totpPendingSecretEncrypted?: EncryptedPayload | null;
   secondaryEmail?: string;
   secondaryEmailVerified?: boolean;
   secondaryOtpHash?: string | null;
   secondaryOtpExpiresAt?: number | null;
   lastPasswordAlertAt?: number;
+}
+
+export function encryptMfaSecret(secret: string): EncryptedPayload {
+  return encryptToken(secret);
+}
+
+export function decryptMfaSecret(
+  encrypted?: EncryptedPayload | null,
+  legacyPlain?: string | null
+): string | null {
+  if (encrypted?.ciphertext && encrypted?.iv && encrypted?.tag) {
+    try {
+      return decryptToken(encrypted);
+    } catch {
+      return legacyPlain || null;
+    }
+  }
+  return legacyPlain || null;
 }
 
 const LEGACY_SECRET_KEYS = [
@@ -41,20 +62,32 @@ export async function readPrivateMfaState(uid: string): Promise<PrivateMfaState>
 
   const hasLegacyFields = LEGACY_SECRET_KEYS.some((k) => userData[k] !== undefined);
   if (!hasLegacyFields) {
-    return privData;
+    return {
+      ...privData,
+      totpSecret: decryptMfaSecret(privData.totpSecretEncrypted, privData.totpSecret),
+      totpPendingSecret: decryptMfaSecret(privData.totpPendingSecretEncrypted, privData.totpPendingSecret),
+    };
   }
 
   // Atomically migrate legacy secret fields into /users/{uid}/privateMfa/state
-  // and strip them from the client-readable /users/{uid} document in one transaction.
+  // (with AES-256-GCM envelope encryption for TOTP seeds) and strip them from
+  // the client-readable /users/{uid} document in one transaction.
   return await adminDb.runTransaction(async (tx) => {
     const [freshPriv, freshUser] = await Promise.all([tx.get(privRef), tx.get(userRef)]);
     const pData = (freshPriv.exists ? freshPriv.data() : {}) as PrivateMfaState;
     const uData = (freshUser.exists ? freshUser.data() : {}) as Record<string, any>;
 
-    const merged: PrivateMfaState = {
-      totpEnabled: pData.totpEnabled ?? Boolean(uData.totpEnabled && uData.totpSecret),
-      totpSecret: pData.totpSecret ?? uData.totpSecret ?? null,
-      totpPendingSecret: pData.totpPendingSecret ?? uData.totpPendingSecret ?? null,
+    const resolvedTotpSecret =
+      decryptMfaSecret(pData.totpSecretEncrypted, pData.totpSecret) ?? uData.totpSecret ?? null;
+    const resolvedPendingSecret =
+      decryptMfaSecret(pData.totpPendingSecretEncrypted, pData.totpPendingSecret) ?? uData.totpPendingSecret ?? null;
+
+    const storedDoc: Record<string, any> = {
+      totpEnabled: pData.totpEnabled ?? Boolean(uData.totpEnabled && resolvedTotpSecret),
+      totpSecret: FieldValue.delete(),
+      totpPendingSecret: FieldValue.delete(),
+      totpSecretEncrypted: resolvedTotpSecret ? encryptMfaSecret(resolvedTotpSecret) : null,
+      totpPendingSecretEncrypted: resolvedPendingSecret ? encryptMfaSecret(resolvedPendingSecret) : null,
       secondaryEmail: pData.secondaryEmail ?? uData.secondaryEmail ?? '',
       secondaryEmailVerified:
         pData.secondaryEmailVerified ??
@@ -70,12 +103,20 @@ export async function readPrivateMfaState(uid: string): Promise<PrivateMfaState>
       }
     }
 
-    tx.set(privRef, merged, { merge: true });
+    tx.set(privRef, storedDoc, { merge: true });
     if (freshUser.exists && Object.keys(deletePatch).length > 0) {
       tx.update(userRef, deletePatch);
     }
 
-    return merged;
+    return {
+      totpEnabled: storedDoc.totpEnabled,
+      totpSecret: resolvedTotpSecret,
+      totpPendingSecret: resolvedPendingSecret,
+      secondaryEmail: storedDoc.secondaryEmail,
+      secondaryEmailVerified: storedDoc.secondaryEmailVerified,
+      secondaryOtpHash: storedDoc.secondaryOtpHash,
+      secondaryOtpExpiresAt: storedDoc.secondaryOtpExpiresAt,
+    };
   });
 }
 

@@ -702,6 +702,12 @@ export async function resolveQuarantineItem(
           };
         }
 
+        if (!Array.isArray(fd.to) || fd.to.length === 0) {
+          return {
+            outcome: 'incomplete' as const,
+            error: 'Original To/Cc/Bcc recipient roles were not recorded for this quarantined item; automated release is blocked to prevent exposing Bcc recipients.',
+          };
+        }
         if (fd.bodyTruncated === true) {
           return {
             outcome: 'incomplete' as const,
@@ -762,6 +768,16 @@ export async function resolveQuarantineItem(
           const identityId = idList[0]?.id || 'b';
           const bodyText = String(itemData.bodyText || itemData.snippet || '');
           const bodyHtml = typeof itemData.bodyHtml === 'string' && itemData.bodyHtml.trim() ? itemData.bodyHtml : '';
+          const toList: string[] = Array.isArray(itemData.to)
+            ? itemData.to.map((r: unknown) => String(r || '').toLowerCase().trim()).filter((r: string) => r.includes('@'))
+            : [];
+          const ccList: string[] = Array.isArray(itemData.cc)
+            ? itemData.cc.map((r: unknown) => String(r || '').toLowerCase().trim()).filter((r: string) => r.includes('@'))
+            : [];
+          const bccList: string[] = Array.isArray(itemData.bcc)
+            ? itemData.bcc.map((r: unknown) => String(r || '').toLowerCase().trim()).filter((r: string) => r.includes('@'))
+            : [];
+          const envelopeRcpts = Array.from(new Set([...toList, ...ccList, ...bccList]));
           const jmapRes = await callStalwartJmap([
             [
               'Email/set',
@@ -772,7 +788,10 @@ export async function resolveQuarantineItem(
                     mailboxIds: { [sentMailboxId]: true },
                     keywords: { $seen: true },
                     from: [{ name: senderEmail.split('@')[0], email: senderEmail }],
-                    to: recipients.map((email) => ({ name: email.split('@')[0], email })),
+                    to: toList.map((email) => ({ name: email.split('@')[0], email })),
+                    ...(ccList.length > 0
+                      ? { cc: ccList.map((email) => ({ name: email.split('@')[0], email })) }
+                      : {}),
                     subject: String(itemData.subject || '(Released Message)'),
                     bodyValues: bodyHtml
                       ? { text: { value: bodyText }, html: { value: bodyHtml } }
@@ -794,7 +813,7 @@ export async function resolveQuarantineItem(
                     identityId,
                     envelope: {
                       mailFrom: { email: senderEmail, parameters: null },
-                      rcptTo: recipients.map((email) => ({ email, parameters: null })),
+                      rcptTo: envelopeRcpts.map((email) => ({ email, parameters: null })),
                     },
                   },
                 },

@@ -80,39 +80,44 @@ async function executeScheduledRun(request: NextRequest) {
         .get();
 
       for (const orgDoc of orgsSnap.docs) {
-        const orgData = orgDoc.data() || {};
-        const existingHourly: Record<string, number> = orgData.mailHourlyBuckets || {};
-        const activeHourly: Record<string, number> = {};
-        let rollingDailySent = 0;
-        for (const [key, count] of Object.entries(existingHourly)) {
-          const bucketTime = new Date(key + ':00:00.000Z').getTime();
-          if (!isNaN(bucketTime) && bucketTime >= oneDayAgo) {
-            const val = typeof count === 'number' ? count : 0;
-            activeHourly[key] = val;
-            rollingDailySent += val;
+        const rolled = await adminDb.runTransaction(async (tx) => {
+          const freshSnap = await tx.get(orgDoc.ref);
+          if (!freshSnap.exists) return false;
+          const orgData = freshSnap.data() || {};
+          const existingHourly: Record<string, number> = orgData.mailHourlyBuckets || {};
+          const activeHourly: Record<string, number> = {};
+          let rollingDailySent = 0;
+          for (const [key, count] of Object.entries(existingHourly)) {
+            const bucketTime = new Date(key + ':00:00.000Z').getTime();
+            if (!isNaN(bucketTime) && bucketTime >= oneDayAgo) {
+              const val = typeof count === 'number' ? count : 0;
+              activeHourly[key] = val;
+              rollingDailySent += val;
+            }
           }
-        }
 
-        const isNewMonth = Boolean(
-          orgData.mailMonthlyBucket && orgData.mailMonthlyBucket !== currentMonthKey
-        );
-        const updatePayload: Record<string, unknown> = {
-          mailHourlyBuckets: activeHourly,
-          mailDailySent: rollingDailySent,
-          mailQuotaSentToday: rollingDailySent,
-          mailDailyBucket: todayUtc,
-          mailQuotaLastResetAt: FieldValue.serverTimestamp(),
-        };
-        if (isNewMonth) {
-          updatePayload.mailMonthlySent = 0;
-          updatePayload.mailDailyBuckets = {};
-          updatePayload.mailMonthlyBucket = currentMonthKey;
-          monthlyRolloverCount++;
-        } else if (!orgData.mailMonthlyBucket) {
-          updatePayload.mailMonthlyBucket = currentMonthKey;
-        }
+          const isNewMonth = Boolean(
+            orgData.mailMonthlyBucket && orgData.mailMonthlyBucket !== currentMonthKey
+          );
+          const updatePayload: Record<string, unknown> = {
+            mailHourlyBuckets: activeHourly,
+            mailDailySent: rollingDailySent,
+            mailQuotaSentToday: rollingDailySent,
+            mailDailyBucket: todayUtc,
+            mailQuotaLastResetAt: FieldValue.serverTimestamp(),
+          };
+          if (isNewMonth) {
+            updatePayload.mailMonthlySent = 0;
+            updatePayload.mailDailyBuckets = {};
+            updatePayload.mailMonthlyBucket = currentMonthKey;
+          } else if (!orgData.mailMonthlyBucket) {
+            updatePayload.mailMonthlyBucket = currentMonthKey;
+          }
 
-        await orgDoc.ref.set(updatePayload, { merge: true });
+          tx.set(orgDoc.ref, updatePayload, { merge: true });
+          return isNewMonth;
+        });
+        if (rolled) monthlyRolloverCount++;
         reconciledOrgsCount++;
       }
 

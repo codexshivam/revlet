@@ -711,7 +711,10 @@ export async function resetOrgEmailQuota(
 ) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Admin']);
+    const auth = await verifyUserOrgAccess(idToken, orgId);
+    if (!auth.isOwner && !auth.permissions.includes('Organization Admin')) {
+      return { success: false, error: 'Unauthorized: Organization Owner or Organization Admin permission required to reset quotas.' };
+    }
     const now = new Date();
     const currentDayKey = now.toISOString().slice(0, 10);
     const currentMonthKey = now.toISOString().slice(0, 7);
@@ -904,23 +907,32 @@ export async function deactivateMailService(idToken: string, orgId: string, step
     const orgRef = adminDb.collection('organizations').doc(orgId);
     const usersSnap = await orgRef.collection('mailUsers').get();
 
-    // Immediately pause all active mailboxes at the provider boundary and revoke webmail sessions
+    // Immediately pause all active mailboxes at the provider boundary and fail closed if any pause fails
+    const pauseFailures: string[] = [];
     for (const uDoc of usersSnap.docs) {
       const uData = uDoc.data() || {};
       if (uData.primaryEmail && domain) {
-        await syncStalwartUserPrincipal({
-          primaryEmail: uData.primaryEmail,
-          displayName: uData.displayName || uData.firstName || '',
-          orgUnitPath: uData.orgUnitPath || '/',
-          aliases: Array.isArray(uData.aliases) ? uData.aliases : [],
-          domain,
-          isCatchAllTarget: false,
-          disabled: true,
-          expectedPrincipalId: uData.stalwartAccountId || null,
-        }).catch((err) => {
-          console.warn('[Mail Deactivate] Provider pause warning:', err?.message || err);
-        });
+        try {
+          await syncStalwartUserPrincipal({
+            primaryEmail: uData.primaryEmail,
+            displayName: uData.displayName || uData.firstName || '',
+            orgUnitPath: uData.orgUnitPath || '/',
+            aliases: Array.isArray(uData.aliases) ? uData.aliases : [],
+            domain,
+            isCatchAllTarget: false,
+            disabled: true,
+            expectedPrincipalId: uData.stalwartAccountId || null,
+          });
+        } catch (err: any) {
+          pauseFailures.push(`${uData.primaryEmail}: ${err?.message || 'provider pause failed'}`);
+        }
       }
+    }
+    if (pauseFailures.length > 0) {
+      return {
+        success: false,
+        error: `Failed to pause ${pauseFailures.length} mailbox(es) on the mail server. Retry deactivation.`,
+      };
     }
     for (let i = 0; i < usersSnap.docs.length; i += 400) {
       const batch = adminDb.batch();

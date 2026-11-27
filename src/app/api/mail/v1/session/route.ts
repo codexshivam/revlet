@@ -57,6 +57,12 @@ export async function GET(req: NextRequest) {
     if (orgData.status && String(orgData.status).toLowerCase() === 'suspended') {
       return NextResponse.json({ ok: false, active: false, error: 'Organization is suspended.' }, { status: 403 });
     }
+    if (orgData.mailServiceActive !== true) {
+      return NextResponse.json(
+        { ok: false, active: false, status: 'paused', error: 'Organization Email Service is paused.' },
+        { status: 403 }
+      );
+    }
 
     let userDoc = userSnapDirect && userSnapDirect.exists ? userSnapDirect : null;
     if (!userDoc && emailParam) {

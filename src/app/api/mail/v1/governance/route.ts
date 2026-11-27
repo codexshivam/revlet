@@ -58,8 +58,23 @@ export async function GET(req: NextRequest) {
       const snap = await adminDb.collection('organizations').doc(orgId).get();
       if (snap.exists) orgDoc = snap;
     } else if (domain) {
-      const snap = await adminDb.collection('organizations').where('domain', '==', domain).limit(1).get();
-      if (!snap.empty) orgDoc = snap.docs[0];
+      const bindingSnap = await adminDb.collection('mailDomainBindings').doc(domain).get();
+      if (bindingSnap.exists && typeof bindingSnap.data()?.orgId === 'string') {
+        const boundSnap = await adminDb.collection('organizations').doc(bindingSnap.data()!.orgId).get();
+        if (boundSnap.exists) orgDoc = boundSnap;
+      }
+      if (!orgDoc) {
+        const snap = await adminDb
+          .collection('organizations')
+          .where('domain', '==', domain)
+          .where('mailServiceActive', '==', true)
+          .limit(2)
+          .get();
+        if (snap.size > 1) {
+          return NextResponse.json({ ok: false, error: 'Ambiguous domain binding.' }, { status: 409 });
+        }
+        if (!snap.empty) orgDoc = snap.docs[0];
+      }
     }
 
     if (!orgDoc) {

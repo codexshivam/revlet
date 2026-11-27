@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser, useFirestore } from "@/firebase"
+import { reconcileUserOrgMemberships } from "@/app/actions/organization"
 import { collection, query, where, or, getDocs, onSnapshot, type Firestore, type QuerySnapshot } from "firebase/firestore"
 import { legacyWorkspaceDestination } from "@/lib/org-routes"
 
@@ -146,6 +147,13 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(true)
+    // Ensure any active organizations/{orgId}/members/{uid} grants are mirrored in memberIds
+    if (user) {
+      user
+        .getIdToken()
+        .then((tok) => reconcileUserOrgMemberships(tok))
+        .catch(() => {})
+    }
     const unsubscribe = onSnapshot(
       organizationsForUser(db, currentUid),
       (snap) => applyOrganizations(currentUid, snap),

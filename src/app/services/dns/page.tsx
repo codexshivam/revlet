@@ -234,6 +234,17 @@ export default function DNSManagementPage() {
   const canEditDns = canAdminDns || callerPerms.includes("DNS: Edit")
   const isViewOnly = Boolean(selectedOrg && user && !canEditDns)
 
+  // Immediately clear stale records and cancel pending MFA continuations on workspace/zone switch
+  useEffect(() => {
+    fetchSeqRef.current += 1
+    setRecords([])
+    setZoneDetails(null)
+    setConnectionError(null)
+    setPermissionWarning(null)
+    setIsRollbackMfaOpen(false)
+    setPendingMfaAction(null)
+  }, [orgId, zoneId])
+
   const fetchDNSData = useCallback(async () => {
     const currentUser = userRef.current
     if (!zoneId || !orgId || !currentUser) {

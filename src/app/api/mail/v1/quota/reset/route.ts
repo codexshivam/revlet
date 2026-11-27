@@ -116,48 +116,53 @@ export async function POST(req: NextRequest) {
         let resetCount = 0;
         let monthlyRolloverCount = 0;
         for (const orgDoc of orgsSnap.docs) {
-          const orgData = orgDoc.data() || {};
-          const isNewMonth = Boolean(
-            orgData.mailMonthlyBucket && orgData.mailMonthlyBucket !== currentMonthKey
-          );
-          const shouldResetMonthly =
-            systemScope === 'all' || systemScope === 'monthly' || isNewMonth;
+          const rolled = await adminDb.runTransaction(async (tx) => {
+            const freshSnap = await tx.get(orgDoc.ref);
+            if (!freshSnap.exists) return false;
+            const orgData = freshSnap.data() || {};
+            const isNewMonth = Boolean(
+              orgData.mailMonthlyBucket && orgData.mailMonthlyBucket !== currentMonthKey
+            );
+            const shouldResetMonthly =
+              systemScope === 'all' || systemScope === 'monthly' || isNewMonth;
 
-          const updatePayload: Record<string, any> = {
-            mailQuotaLastResetAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-          };
+            const updatePayload: Record<string, any> = {
+              mailQuotaLastResetAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            };
 
-          // Prune only expired (>24h) rolling hourly buckets so live 24-hour sends
-          // are never erased by a fixed-time daily cron run.
-          if (systemScope === 'all' || systemScope === 'daily') {
-            const existingHourly: Record<string, number> = orgData.mailHourlyBuckets || {};
-            const activeHourly: Record<string, number> = {};
-            let rollingDailySent = 0;
-            for (const [key, count] of Object.entries(existingHourly)) {
-              const bucketTime = new Date(key + ':00:00.000Z').getTime();
-              if (!isNaN(bucketTime) && bucketTime >= oneDayAgo) {
-                const val = typeof count === 'number' ? count : 0;
-                activeHourly[key] = val;
-                rollingDailySent += val;
+            // Prune only expired (>24h) rolling hourly buckets inside the transaction
+            // so concurrent sends can never be overwritten.
+            if (systemScope === 'all' || systemScope === 'daily') {
+              const existingHourly: Record<string, number> = orgData.mailHourlyBuckets || {};
+              const activeHourly: Record<string, number> = {};
+              let rollingDailySent = 0;
+              for (const [key, count] of Object.entries(existingHourly)) {
+                const bucketTime = new Date(key + ':00:00.000Z').getTime();
+                if (!isNaN(bucketTime) && bucketTime >= oneDayAgo) {
+                  const val = typeof count === 'number' ? count : 0;
+                  activeHourly[key] = val;
+                  rollingDailySent += val;
+                }
               }
+              updatePayload.mailHourlyBuckets = activeHourly;
+              updatePayload.mailDailySent = rollingDailySent;
+              updatePayload.mailDailyBucket = currentDayKey;
+              updatePayload.mailQuotaSentToday = rollingDailySent;
             }
-            updatePayload.mailHourlyBuckets = activeHourly;
-            updatePayload.mailDailySent = rollingDailySent;
-            updatePayload.mailDailyBucket = currentDayKey;
-            updatePayload.mailQuotaSentToday = rollingDailySent;
-          }
 
-          if (shouldResetMonthly) {
-            updatePayload.mailMonthlySent = 0;
-            updatePayload.mailDailyBuckets = {};
-            updatePayload.mailMonthlyBucket = currentMonthKey;
-            monthlyRolloverCount++;
-          } else if (!orgData.mailMonthlyBucket) {
-            updatePayload.mailMonthlyBucket = currentMonthKey;
-          }
+            if (shouldResetMonthly) {
+              updatePayload.mailMonthlySent = 0;
+              updatePayload.mailDailyBuckets = {};
+              updatePayload.mailMonthlyBucket = currentMonthKey;
+            } else if (!orgData.mailMonthlyBucket) {
+              updatePayload.mailMonthlyBucket = currentMonthKey;
+            }
 
-          await orgDoc.ref.update(updatePayload);
+            tx.update(orgDoc.ref, updatePayload);
+            return shouldResetMonthly;
+          });
+          if (rolled) monthlyRolloverCount++;
           resetCount++;
         }
 

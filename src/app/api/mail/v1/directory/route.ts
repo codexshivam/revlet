@@ -45,21 +45,36 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const orgSnap = await adminDb
-      .collection('organizations')
-      .where('domain', '==', domain)
-      .limit(1)
-      .get();
+    let orgDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+    const bindingSnap = await adminDb.collection('mailDomainBindings').doc(domain).get();
+    if (bindingSnap.exists && typeof bindingSnap.data()?.orgId === 'string') {
+      const boundSnap = await adminDb.collection('organizations').doc(bindingSnap.data()!.orgId).get();
+      if (boundSnap.exists) orgDoc = boundSnap;
+    }
+    if (!orgDoc) {
+      const orgSnap = await adminDb
+        .collection('organizations')
+        .where('domain', '==', domain)
+        .where('mailServiceActive', '==', true)
+        .limit(2)
+        .get();
+      if (orgSnap.size > 1) {
+        return NextResponse.json(
+          { ok: false, error: 'Ambiguous domain binding.' },
+          { status: 409 }
+        );
+      }
+      if (!orgSnap.empty) orgDoc = orgSnap.docs[0];
+    }
 
-    if (orgSnap.empty) {
+    if (!orgDoc || !orgDoc.exists) {
       return NextResponse.json(
         { ok: false, error: 'Organization domain not found.' },
         { status: 404 }
       );
     }
 
-    const orgDoc = orgSnap.docs[0];
-    const orgData = orgDoc.data();
+    const orgData = orgDoc.data() || {};
 
     const [usersSnap, groupsSnap, ousSnap, sharedSnap] = await Promise.all([
       orgDoc.ref.collection('mailUsers').get(),

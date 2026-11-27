@@ -109,6 +109,43 @@ export async function createOrganizationWorkspace(
   }
 }
 
+/**
+ * Reconciles active UID-bound organizations/{orgId}/members/{uid} subcollection grants
+ * into each parent organization's memberIds array so the realtime workspace picker
+ * never hides a shared organization during migration.
+ */
+export async function reconcileUserOrgMemberships(idToken: string) {
+  if (!idToken) return { success: false, reconciledCount: 0 };
+  try {
+    const decoded = await adminAuth.verifyIdToken(idToken, true);
+    const uid = decoded.uid;
+    const membersSnap = await adminDb
+      .collectionGroup('members')
+      .where('uid', '==', uid)
+      .where('status', '==', 'Active')
+      .limit(50)
+      .get();
+
+    let reconciledCount = 0;
+    for (const mDoc of membersSnap.docs) {
+      const orgRef = mDoc.ref.parent.parent;
+      if (!orgRef || orgRef.parent.id !== 'organizations') continue;
+      const orgSnap = await orgRef.get();
+      if (!orgSnap.exists) continue;
+      const memberIds: string[] = Array.isArray(orgSnap.data()?.memberIds)
+        ? orgSnap.data()!.memberIds
+        : [];
+      if (!memberIds.includes(uid)) {
+        await orgRef.update({ memberIds: FieldValue.arrayUnion(uid) });
+        reconciledCount++;
+      }
+    }
+    return { success: true, reconciledCount };
+  } catch {
+    return { success: false, reconciledCount: 0 };
+  }
+}
+
 export async function deleteOrganization(
   idToken: string,
   orgId: string,
@@ -235,9 +272,13 @@ export async function deleteOrganization(
           .map((m) => m.id)
           .filter(Boolean);
         if (domainMls.length > 0) {
-          await callStalwartJmap([
+          const mlDelRes = await callStalwartJmap([
             ['x:MailingList/set', { accountId: 'b', destroy: domainMls }, 'delMls'],
           ]);
+          const mlNotDestroyed = mlDelRes.find((r) => r[0] === 'x:MailingList/set' && r[2] === 'delMls')?.[1]?.notDestroyed;
+          if (mlNotDestroyed && Object.keys(mlNotDestroyed).length > 0) {
+            throw new Error('Mail server failed to remove one or more domain mailing lists.');
+          }
         }
         const domRes = await callStalwartJmap([
           ['x:Domain/get', { accountId: 'b', ids: null }, 'domList'],
@@ -245,12 +286,19 @@ export async function deleteOrganization(
         const domList: any[] = domRes.find((r) => r[0] === 'x:Domain/get')?.[1]?.list || [];
         const matchedDom = domList.find((d) => (d.name || '').toLowerCase() === domain);
         if (matchedDom?.id) {
-          await callStalwartJmap([
+          const domDelRes = await callStalwartJmap([
             ['x:Domain/set', { accountId: 'b', destroy: [matchedDom.id] }, 'delDom'],
           ]);
+          const domNotDestroyed = domDelRes.find((r) => r[0] === 'x:Domain/set' && r[2] === 'delDom')?.[1]?.notDestroyed;
+          if (domNotDestroyed && Object.keys(domNotDestroyed).length > 0) {
+            throw new Error('Mail server failed to remove the organization domain principal.');
+          }
         }
-      } catch (stalwartErr) {
-        console.warn('[Org Delete] Stalwart domain cleanup warning:', stalwartErr);
+      } catch (stalwartErr: any) {
+        return {
+          success: false,
+          error: stalwartErr?.message || 'Mail server cleanup failed; organization bindings were preserved for retry.',
+        };
       }
     }
 

@@ -702,6 +702,19 @@ export async function resolveQuarantineItem(
           };
         }
 
+        if (fd.bodyTruncated === true) {
+          return {
+            outcome: 'incomplete' as const,
+            error: 'This quarantined message body was truncated at capture and cannot be safely released automatically.',
+          };
+        }
+        if (Array.isArray(fd.attachments) && fd.attachments.length > 0) {
+          return {
+            outcome: 'incomplete' as const,
+            error: 'This quarantined message had attachments that are not preserved in quarantine storage and cannot be released intact.',
+          };
+        }
+
         tx.update(itemRef, {
           status: 'release_pending',
           releaseAttemptedBy: auth.email || auth.uid,
@@ -719,7 +732,11 @@ export async function resolveQuarantineItem(
       if (claimResult.outcome === 'deleted') {
         return { success: false, error: 'Deleted quarantine items cannot be released.' };
       }
-      if (claimResult.outcome === 'wrong_domain' || claimResult.outcome === 'missing_fields') {
+      if (
+        claimResult.outcome === 'wrong_domain' ||
+        claimResult.outcome === 'missing_fields' ||
+        claimResult.outcome === 'incomplete'
+      ) {
         return { success: false, error: claimResult.error };
       }
 

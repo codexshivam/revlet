@@ -124,19 +124,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update password hash in Firestore and revoke prior webmail sessions
-    const newHash = hashMailPassword(newPassword);
-    const nowMs = Date.now();
-    const nowIso = new Date(nowMs).toISOString();
-    await userRef.update({
-      passwordHash: newHash,
-      updatedAt: nowIso,
-      passwordUpdatedAt: nowIso,
-      sessionRevokedAt: nowMs,
-      sessionsRevokedAt: nowMs,
-    });
-
-    // Synchronize new credentials to Stalwart Mail Server
+    // Synchronize new credentials to Stalwart Mail Server FIRST so Firestore and Stalwart never diverge
     const orgData = orgDoc.data() || {};
     const domain = (orgData.domain || '').toLowerCase().trim();
 
@@ -149,10 +137,27 @@ export async function POST(req: NextRequest) {
         domain,
         isCatchAllTarget: orgData.mailCatchAllUserId === userId,
         plainPassword: newPassword,
+        expectedPrincipalId: userData.stalwartAccountId || null,
       });
     } catch (stalwartErr: any) {
       console.error('Failed to sync updated password to Stalwart:', stalwartErr);
+      return NextResponse.json(
+        { ok: false, error: 'Could not update mailbox password on the mail server. Please try again.' },
+        { status: 502 }
+      );
     }
+
+    // Commit password hash in Firestore and revoke prior webmail sessions only after provider sync succeeds
+    const newHash = hashMailPassword(newPassword);
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    await userRef.update({
+      passwordHash: newHash,
+      updatedAt: nowIso,
+      passwordUpdatedAt: nowIso,
+      sessionRevokedAt: nowMs,
+      sessionsRevokedAt: nowMs,
+    });
 
     // Send branded security notification email from accounts@revlet.me
     const targetEmail = (userData.primaryEmail || '').trim().toLowerCase();

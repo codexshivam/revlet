@@ -130,18 +130,21 @@ export default {
           headers: authHeader,
         });
         console.log(`[revlet-schedule-run] status=${res.status}`);
+        if (!res.ok) throw new Error(`revlet-schedule-run failed with HTTP ${res.status}`);
       } else if (cron === '5 0 * * *') {
         const res = await fetch(`${env.APP_URL}/api/mail/v1/quota/reset`, {
           method: 'POST',
           headers: authHeader,
         });
         console.log(`[revlet-quota-reset] status=${res.status}`);
+        if (!res.ok) throw new Error(`revlet-quota-reset failed with HTTP ${res.status}`);
       } else if (cron === '0 2 * * *') {
         const res = await fetch(`${env.APP_URL}/api/mail/v1/purge-expired`, {
           method: 'POST',
           headers: authHeader,
         });
         console.log(`[revlet-purge-expired] status=${res.status}`);
+        if (!res.ok) throw new Error(`revlet-purge-expired failed with HTTP ${res.status}`);
       } else if (cron === '*/15 * * * *') {
         const [purgeRes, health] = await Promise.all([
           fetch(`${env.WEBMAIL_URL}/api/cron/ephemeral-purge`, {
@@ -153,8 +156,12 @@ export default {
         console.log(
           `[revletmail-ephemeral-purge] status=${purgeRes.status} | [stalwart-monitor] ok=${health.ok} queued=${health.queuedCount} stuck=${health.stuckCount}`
         );
+        if (!purgeRes.ok) {
+          throw new Error(`revletmail-ephemeral-purge failed with HTTP ${purgeRes.status}`);
+        }
         if (!health.ok) {
           console.error('[ALERT] Stalwart health/queue issue detected:', JSON.stringify(health));
+          throw new Error('Stalwart health or queue check failed');
         }
       } else {
         const res = await fetch(`${env.APP_URL}/api/cron/schedule-run`, {
@@ -162,9 +169,11 @@ export default {
           headers: authHeader,
         });
         console.log(`[revlet-schedule-run fallback] status=${res.status}`);
+        if (!res.ok) throw new Error(`revlet-schedule-run fallback failed with HTTP ${res.status}`);
       }
     } catch (err: any) {
       console.error(`[Cron Error] schedule=${cron}:`, err?.message || err);
+      throw err;
     }
   },
 

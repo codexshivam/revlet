@@ -12,6 +12,9 @@
  *   npx tsx scripts/backfill-security-architecture.ts --apply    # commit writes
  */
 
+import { loadEnvConfig } from '@next/env';
+loadEnvConfig(process.cwd());
+
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '../src/firebase/admin';
 import { encryptToken } from '../src/lib/security/encryption';

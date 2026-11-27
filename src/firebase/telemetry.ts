@@ -253,8 +253,8 @@ export function FirebaseTelemetryObserver({ app }: { app: FirebaseApp }) {
 
   useEffect(() => {
     if (!pathname) return;
-    // Exclude account-action routes (password reset / email verification / email change) from analytics
-    if (pathname.startsWith('/auth/action')) return;
+    // Exclude account-action and invitation-token routes from analytics so tokens never leak
+    if (pathname.startsWith('/auth/action') || pathname.startsWith('/invite/')) return;
     let cancelled = false;
 
     void initFirebaseTelemetry(app).then(({ analytics }) => {

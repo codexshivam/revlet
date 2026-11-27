@@ -236,7 +236,11 @@ export default function DNSManagementPage() {
 
   const fetchDNSData = useCallback(async () => {
     const currentUser = userRef.current
-    if (!zoneId || !orgId || !currentUser) return
+    if (!zoneId || !orgId || !currentUser) {
+      setRecords([])
+      setZoneDetails(null)
+      return
+    }
     const seq = ++fetchSeqRef.current
     setIsLoadingRecords(true)
     setConnectionError(null)
@@ -263,6 +267,8 @@ export default function DNSManagementPage() {
         setZoneDetails(zoneRes.data)
         setIsNameserversExpanded(zoneRes.data.status !== "active")
       } else {
+        setRecords([])
+        setZoneDetails(null)
         // Preserve the zone binding on read failure and surface a clear Connection needs attention state
         setConnectionError(
           zoneRes.error || "Unable to read zone details from Cloudflare. Your binding has been preserved for investigation."
@@ -275,6 +281,7 @@ export default function DNSManagementPage() {
       if (dnsRes.success && dnsRes.data) {
         setRecords(dnsRes.data)
       } else {
+        setRecords([])
         setConnectionError(
           dnsRes.error || "Unable to load DNS records from Cloudflare. Your binding has been preserved."
         )
@@ -2157,6 +2164,7 @@ export default function DNSManagementPage() {
         </Dialog>
 
         <StepUpMfaDialog
+          key={orgId || "no-org"}
           open={isRollbackMfaOpen}
           onOpenChange={(open) => {
             setIsRollbackMfaOpen(open)
@@ -2166,6 +2174,7 @@ export default function DNSManagementPage() {
           onVerified={(token) => {
             const action = pendingMfaAction?.type || "rollback"
             setPendingMfaAction(null)
+            if (!orgId) return
             if (action === "connect") void handleConnectToken(token)
             else if (action === "disconnect") void handleDisconnectToken(token)
             else if (action === "import") void processImport(token)

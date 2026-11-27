@@ -245,49 +245,11 @@ export default function LoginPage() {
       await evaluateMfaGate(userCredential.user)
     } catch (error: any) {
       setTurnstileResetKey((k) => k + 1)
-      const code = error?.code || ""
-      if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
-        let emailExists = true
-        if (code === "auth/user-not-found") {
-          emailExists = false
-        } else {
-          try {
-            const checkRes = await fetch("/api/auth/check-email", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email: email.trim() }),
-            })
-            if (checkRes.ok) {
-              const checkData = await checkRes.json().catch(() => ({}))
-              if (checkData.ok && checkData.exists === false) {
-                emailExists = false
-              }
-            }
-          } catch {
-            // Fall through to standard error toast if check fails
-          }
-        }
-
-        if (!emailExists) {
-          if (typeof window !== "undefined") {
-            sessionStorage.setItem(
-              "revlet_prefill_signup",
-              JSON.stringify({ email: email.trim() })
-            )
-          }
-          toast({
-            title: "Account not found",
-            description: "Redirecting to sign up with your email prefilled.",
-          })
-          router.push("/signup")
-          return
-        }
-      }
-
+      // Never redirect to /signup or disclose whether an email address exists on failed sign-in.
       toast({
         variant: "destructive",
         title: "Authentication failed",
-        description: getFriendlyErrorMessage(error.code),
+        description: getFriendlyErrorMessage(error?.code),
       })
     } finally {
       setIsLoading(false)

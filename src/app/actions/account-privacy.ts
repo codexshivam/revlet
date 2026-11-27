@@ -124,7 +124,7 @@ export async function exportPersonalAccountData(idToken: string, stepUpToken?: s
           subject: v.subject || '',
           description: v.description || '',
           status: v.status || 'open',
-          createdAt: v.createdAt || null,
+          createdAt: v.createdAt || v.submittedAt || null,
         };
       }),
       telemetry: crashesSnap.docs.map((d) => {
@@ -183,6 +183,11 @@ export async function deletePersonalAccount(
         error: `You still own ${ownedOrgsSnap.size} organization(s) (${names}). Delete or transfer ownership of those organizations before deleting your personal account.`,
       };
     }
+
+    // Disable Firebase Auth identity FIRST so a mid-erasure failure can never leave
+    // an active account with its MFA factors stripped.
+    await adminAuth.updateUser(uid, { disabled: true });
+    await adminAuth.revokeRefreshTokens(uid);
 
     const userRef = adminDb.collection('users').doc(uid);
     const [memberOrgsSnap, teamSnap, privMfaSnap, passkeysSnap, challengesSnap] = await Promise.all([

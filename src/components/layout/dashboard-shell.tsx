@@ -146,8 +146,11 @@ function DashboardShellInner({
     [pathname, searchParams]
   )
 
+  const [mfaCheckError, setMfaCheckError] = React.useState<string | null>(null)
+
   const verifyMfa = React.useCallback(
     (activeUser: NonNullable<typeof user>, isCancelled: () => boolean) => {
+      setMfaCheckError(null)
       activeUser
         .getIdToken()
         .then((token) =>
@@ -159,11 +162,12 @@ function DashboardShellInner({
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (isCancelled()) return
-          // Fail closed: if MFA verification response is missing/unhealthy or MFA is required & unverified,
-          // do not allow entry into the dashboard.
+          // Fail closed with a retryable error screen on verification service failure
+          // (avoids login <-> dashboard redirect loops while never bypassing MFA).
           if (!data || !data.ok) {
             verifiedMfaUids.delete(activeUser.uid)
-            router.replace(buildLoginRedirect(true))
+            setMfaAllowed(false)
+            setMfaCheckError("Unable to verify your 2-Step Verification session. Please retry.")
             return
           }
           if (data.hasEnrolledMfa && !data.mfaSessionVerified) {
@@ -184,7 +188,8 @@ function DashboardShellInner({
         .catch(() => {
           if (!isCancelled()) {
             verifiedMfaUids.delete(activeUser.uid)
-            router.replace(buildLoginRedirect(true))
+            setMfaAllowed(false)
+            setMfaCheckError("Network error while verifying 2-Step Verification. Please retry.")
           }
         })
     },
@@ -222,6 +227,33 @@ function DashboardShellInner({
       }
     }
   }, [user, loading, router, buildLoginRedirect, verifyMfa])
+
+  if (mfaCheckError && user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="max-w-sm w-full rounded-xl border border-slate-200 bg-white p-6 space-y-4 text-center">
+          <h2 className="text-sm font-semibold text-slate-900">Security Check Unavailable</h2>
+          <p className="text-xs text-slate-600">{mfaCheckError}</p>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => verifyMfa(user, () => false)}
+              className="px-3.5 py-2 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800"
+            >
+              Retry Verification
+            </button>
+            <button
+              type="button"
+              onClick={() => router.replace(buildLoginRedirect(true))}
+              className="px-3.5 py-2 rounded-lg border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50"
+            >
+              Sign In Again
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (loading || !user || !mfaAllowed) {
     return <WorkspaceSkeleton />

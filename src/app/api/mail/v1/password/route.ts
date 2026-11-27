@@ -124,13 +124,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update password hash in Firestore
+    // Update password hash in Firestore and revoke prior webmail sessions
     const newHash = hashMailPassword(newPassword);
-    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
     await userRef.update({
       passwordHash: newHash,
       updatedAt: nowIso,
       passwordUpdatedAt: nowIso,
+      sessionRevokedAt: nowMs,
+      sessionsRevokedAt: nowMs,
     });
 
     // Synchronize new credentials to Stalwart Mail Server

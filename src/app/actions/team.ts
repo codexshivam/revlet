@@ -368,9 +368,9 @@ export async function updateTeamMemberStatus(
         docSnap.exists ? callerHasOrgAdmin(docSnap.id, docSnap.data(), caller) : Promise.resolve(false)
       )
     );
-    const canManage =
-      data.ownerId === caller.uid ||
-      (orgDocs.length > 0 && adminChecks.every(Boolean));
+    // Require current Org Owner or Org Admin authority over every affected workspace
+    // (never allow a former inviter who lost admin rights to modify access).
+    const canManage = orgDocs.length > 0 && adminChecks.every(Boolean);
     if (!canManage) {
       return { success: false, error: 'Only an organization owner or Admin of all assigned organizations can modify team member status.' };
     }
@@ -381,29 +381,65 @@ export async function updateTeamMemberStatus(
     const resolvedStatus: 'Active' | 'Pending' | 'Suspended' =
       newStatus === 'Active' && !data.memberUid ? 'Pending' : newStatus;
 
-    await memberRef.update({
-      status: resolvedStatus,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-
-    const batch = adminDb.batch();
-    for (const orgId of orgIds) {
-      const orgRef = adminDb.collection('organizations').doc(orgId);
-      if (resolvedStatus === 'Suspended' || resolvedStatus === 'Pending') {
-        batch.update(orgRef, {
-          memberEmails: FieldValue.arrayRemove(targetEmail),
-          ...(data.memberUid ? { memberIds: FieldValue.arrayRemove(data.memberUid) } : {}),
-        });
-      } else {
-        batch.update(orgRef, {
-          memberEmails: FieldValue.arrayUnion(targetEmail),
-          ...(data.memberUid ? { memberIds: FieldValue.arrayUnion(data.memberUid) } : {}),
-          [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]:
-            data.orgPermissions?.[orgId] || data.permissions || [],
-        });
+    // Atomically update teamMembers, organizations.{memberIds,memberEmails}, and
+    // authoritative organizations/{orgId}/members/{uid} in a single transaction.
+    await adminDb.runTransaction(async (tx) => {
+      const freshMember = await tx.get(memberRef);
+      if (!freshMember.exists) {
+        throw new Error('Team member record not found.');
       }
-    }
-    await batch.commit();
+      const fd = freshMember.data() || {};
+      const memberUid = typeof fd.memberUid === 'string' && fd.memberUid ? fd.memberUid : null;
+
+      tx.update(memberRef, {
+        status: resolvedStatus,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      for (const orgId of orgIds) {
+        const orgRef = adminDb.collection('organizations').doc(orgId);
+        const orgMemberRef = memberUid ? orgRef.collection('members').doc(memberUid) : null;
+        if (resolvedStatus === 'Suspended' || resolvedStatus === 'Pending') {
+          tx.update(orgRef, {
+            memberEmails: FieldValue.arrayRemove(targetEmail),
+            ...(memberUid ? { memberIds: FieldValue.arrayRemove(memberUid) } : {}),
+          });
+          if (orgMemberRef) {
+            tx.set(
+              orgMemberRef,
+              {
+                uid: memberUid,
+                email: targetEmail,
+                status: resolvedStatus,
+                updatedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
+        } else {
+          const orgPerms = fd.orgPermissions?.[orgId] || fd.permissions || [];
+          tx.update(orgRef, {
+            memberEmails: FieldValue.arrayUnion(targetEmail),
+            ...(memberUid ? { memberIds: FieldValue.arrayUnion(memberUid) } : {}),
+            [`memberPermissions.${targetEmail.replace(/\./g, '__DOT__')}`]: orgPerms,
+          });
+          if (orgMemberRef) {
+            tx.set(
+              orgMemberRef,
+              {
+                uid: memberUid,
+                email: targetEmail,
+                status: 'Active',
+                permissions: orgPerms,
+                accessMode: fd.accessMode || 'services',
+                updatedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
+        }
+      }
+    });
 
     if (targetEmail) {
       try {
@@ -643,9 +679,7 @@ export async function deleteTeamMember(idToken: string, memberId: string) {
         docSnap.exists ? callerHasOrgAdmin(docSnap.id, docSnap.data(), caller) : Promise.resolve(false)
       )
     );
-    const canManage =
-      data.ownerId === caller.uid ||
-      (orgDocs.length > 0 && delAdminChecks.every(Boolean));
+    const canManage = orgDocs.length > 0 && delAdminChecks.every(Boolean);
     if (!canManage) {
       return { success: false, error: 'Only an organization owner or Admin of all assigned organizations can remove team members.' };
     }
@@ -1218,15 +1252,33 @@ export async function acceptPendingInvitations(
       return { success: false, error: 'No pending invitations available to accept.' };
     }
 
-    // Require fresh MFA step-up if any selected invitation grants a privileged role
+    // Require fresh MFA (and enrollment if zero factors) if any selected invitation grants a privileged role
     const anyPrivileged = targetDocs.some((doc) => {
       const d = doc.data();
-      const flatPerms: string[] = Array.isArray(d.permissions) ? d.permissions : [];
-      return isPrivilegedGrant(flatPerms);
+      const orgIds: string[] = Array.isArray(d.organizationIds)
+        ? d.organizationIds
+        : d.organizationId
+        ? [d.organizationId]
+        : [];
+      const allPerms = orgIds.flatMap((oid) =>
+        Array.isArray(d.orgPermissions?.[oid])
+          ? (d.orgPermissions[oid] as string[])
+          : Array.isArray(d.permissions)
+          ? (d.permissions as string[])
+          : []
+      );
+      return isPrivilegedGrant(allPerms);
     });
-    if (anyPrivileged) {
-      const mfaCounts = await getEnrolledFactorCounts(caller.uid);
-      if (mfaCounts.totalFactors > 0 && !verifyStepUpToken(stepUpToken, caller.uid)) {
+    const mfaCounts = anyPrivileged ? await getEnrolledFactorCounts(caller.uid) : null;
+    if (anyPrivileged && mfaCounts) {
+      if (mfaCounts.totalFactors === 0) {
+        return {
+          success: false,
+          error:
+            'MFA_ENROLLMENT_REQUIRED: Enable 2-Step Verification in Account Settings before accepting privileged workspace access.',
+        };
+      }
+      if (!verifyStepUpToken(stepUpToken, caller.uid)) {
         return {
           success: false,
           error: 'MFA_STEP_UP_REQUIRED: Complete 2-Step Verification to accept privileged workspace access.',
@@ -1261,6 +1313,7 @@ export async function acceptPendingInvitations(
         if (!fresh.exists) return [] as string[];
         const d = fresh.data() || {};
         if (d.status !== 'Pending' || d.revoked === true) return [] as string[];
+        if (typeof d.expiresAt === 'number' && d.expiresAt < Date.now()) return [] as string[];
         if ((d.email || '').toLowerCase().trim() !== caller.email) return [] as string[];
 
         tx.update(docSnap.ref, {
@@ -1268,6 +1321,7 @@ export async function acceptPendingInvitations(
           memberUid: caller.uid,
           organizationIds: authorizedOrgIds,
           organizationId: authorizedOrgIds[0],
+          expireAt: FieldValue.delete(),
           activatedAt: FieldValue.serverTimestamp(),
           acceptedAt: FieldValue.serverTimestamp(),
         });
@@ -1285,6 +1339,19 @@ export async function acceptPendingInvitations(
             memberEmails: FieldValue.arrayUnion(caller.email),
             ...(orgPerms.length > 0 ? { [permKey]: orgPerms } : {}),
           });
+          tx.set(
+            orgRef.collection('members').doc(caller.uid),
+            {
+              uid: caller.uid,
+              email: caller.email,
+              status: 'Active',
+              permissions: orgPerms,
+              accessMode: orgPerms.includes(ORG_ADMIN_PERMISSION) ? 'admin' : 'services',
+              joinedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
         }
         return authorizedOrgIds;
       });

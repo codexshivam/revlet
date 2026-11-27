@@ -61,7 +61,9 @@ export async function createOrganizationWorkspace(
     const contactName = (input.contactName || ownerName).trim().slice(0, 120);
     const contactEmail = (input.contactEmail || ownerEmail).toLowerCase().trim();
 
-    const docRef = await adminDb.collection('organizations').add({
+    const docRef = adminDb.collection('organizations').doc();
+    const batch = adminDb.batch();
+    batch.set(docRef, {
       ownerId: uid,
       ownerName,
       ownerEmail: ownerEmail || null,
@@ -81,9 +83,8 @@ export async function createOrganizationWorkspace(
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-
-    // Write authoritative UID-keyed owner membership subdoc
-    await docRef.collection('members').doc(uid).set({
+    // Atomically write authoritative UID-keyed owner membership subdoc
+    batch.set(docRef.collection('members').doc(uid), {
       uid,
       email: ownerEmail || null,
       role: 'owner',
@@ -92,6 +93,7 @@ export async function createOrganizationWorkspace(
       joinedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    await batch.commit();
 
     return {
       success: true,

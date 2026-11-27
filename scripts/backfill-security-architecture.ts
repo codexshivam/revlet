@@ -137,29 +137,62 @@ async function main() {
     }
   }
 
-  // 2c. Backfill Active teamMembers into organizations/{orgId}/members/{uid}
-  const activeTeamSnap = await adminDb.collection('teamMembers').where('status', '==', 'Active').get();
-  for (const tDoc of activeTeamSnap.docs) {
+  // 2c. Backfill Active & Suspended teamMembers atomically into organizations/{orgId}/members/{uid} AND memberIds
+  const allTeamSnap = await adminDb.collection('teamMembers').get();
+  let suspendedReconciled = 0;
+  for (const tDoc of allTeamSnap.docs) {
     const tData = tDoc.data() || {};
     const uid = tData.memberUid;
     if (!uid) continue;
+    const status = String(tData.status || '');
+    if (status !== 'Active' && status !== 'Suspended') continue;
     const orgIds: string[] = Array.isArray(tData.organizationIds)
       ? tData.organizationIds
       : tData.organizationId
       ? [tData.organizationId]
       : [];
     for (const orgId of orgIds) {
+      const orgRef = adminDb.collection('organizations').doc(orgId);
+      const orgSnap = await orgRef.get();
+      if (!orgSnap.exists) continue;
+      const orgData = orgSnap.data() || {};
+      const currentMemberIds: string[] = Array.isArray(orgData.memberIds) ? orgData.memberIds : [];
+      const memberRef = orgRef.collection('members').doc(uid);
+      const memberSnap = await memberRef.get();
+
+      if (status === 'Suspended') {
+        const needsFix =
+          currentMemberIds.includes(uid) ||
+          (memberSnap.exists && memberSnap.data()?.status === 'Active');
+        if (needsFix) {
+          suspendedReconciled++;
+          if (apply) {
+            const batch = adminDb.batch();
+            batch.update(orgRef, { memberIds: FieldValue.arrayRemove(uid) });
+            batch.set(
+              memberRef,
+              { uid, status: 'Suspended', updatedAt: FieldValue.serverTimestamp() },
+              { merge: true }
+            );
+            await batch.commit();
+          }
+        }
+        continue;
+      }
+
       const perms = Array.isArray(tData.orgPermissions?.[orgId])
         ? tData.orgPermissions[orgId]
         : Array.isArray(tData.permissions)
         ? tData.permissions
         : [];
-      const memberRef = adminDb.collection('organizations').doc(orgId).collection('members').doc(uid);
-      const snap = await memberRef.get();
-      if (!snap.exists) {
+      const needsUpsert = !memberSnap.exists || !currentMemberIds.includes(uid);
+      if (needsUpsert) {
         memberDocsUpserted++;
         if (apply) {
-          await memberRef.set(
+          const batch = adminDb.batch();
+          batch.update(orgRef, { memberIds: FieldValue.arrayUnion(uid) });
+          batch.set(
+            memberRef,
             {
               uid,
               email: (tData.email || '').toLowerCase().trim() || null,
@@ -170,10 +203,12 @@ async function main() {
             },
             { merge: true }
           );
+          await batch.commit();
         }
       }
     }
   }
+  console.log(`[Backfill] Suspended memberships reconciled: ${suspendedReconciled}`);
 
   console.log(
     `[Backfill] Plaintext DKIM keys found: ${dkimPlaintextFound}, encrypted: ${dkimEncryptedCount}`

@@ -182,17 +182,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Missing source domain' }, { status: 400 });
     }
 
-    const orgSnap = await adminDb
-      .collection('organizations')
-      .where('domain', '==', domain)
-      .limit(1)
-      .get();
-
-    if (orgSnap.empty) {
-      return NextResponse.json({ ok: true, skipped: 'Domain not registered' });
+    // Resolve organization authoritatively via mailDomainBindings/{domain} first
+    let orgRef: FirebaseFirestore.DocumentReference | null = null;
+    const bindingSnap = await adminDb.collection('mailDomainBindings').doc(domain).get();
+    if (bindingSnap.exists && typeof bindingSnap.data()?.orgId === 'string') {
+      orgRef = adminDb.collection('organizations').doc(bindingSnap.data()!.orgId);
+    } else {
+      const orgSnap = await adminDb
+        .collection('organizations')
+        .where('domain', '==', domain)
+        .where('mailServiceActive', '==', true)
+        .limit(1)
+        .get();
+      if (!orgSnap.empty) orgRef = orgSnap.docs[0].ref;
     }
 
-    const orgRef = orgSnap.docs[0].ref;
+    if (!orgRef) {
+      return NextResponse.json({ ok: true, skipped: 'Domain not registered' });
+    }
     const isBounce = notificationType === 'Bounce';
     const isPermanentBounce = !isBounce || sesEvent.bounce?.bounceType === 'Permanent';
 

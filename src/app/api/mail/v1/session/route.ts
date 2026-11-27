@@ -133,7 +133,11 @@ export async function GET(req: NextRequest) {
         stalwartAccountId: typeof d.stalwartAccountId === 'string' && d.stalwartAccountId.trim()
           ? d.stalwartAccountId.trim()
           : null,
-        sessionsRevokedAt: typeof d.sessionsRevokedAt === 'number' ? d.sessionsRevokedAt : null,
+        sessionsRevokedAt:
+          Math.max(
+            typeof d.sessionsRevokedAt === 'number' ? d.sessionsRevokedAt : 0,
+            typeof d.sessionRevokedAt === 'number' ? d.sessionRevokedAt : 0
+          ) || null,
       },
     });
   } catch (err: any) {

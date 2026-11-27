@@ -278,7 +278,6 @@ export default function AccountHomePage() {
           name: formData.name.trim(),
           address: formData.address.trim(),
           phone: formData.phone.trim(),
-          currentEmail: formData.currentEmail.trim(),
           contactName: formData.contactName.trim(),
           contactPhone: formData.contactPhone.trim(),
           contactEmail: formData.contactEmail.trim(),

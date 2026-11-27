@@ -82,20 +82,24 @@ export async function notifySupportTicketEvent(
       ? await adminDb.collection('supportTickets').doc(params.ticketId).get()
       : null;
     const ticketData = ticketSnap?.exists ? ticketSnap.data() : null;
+    const ticketOwnerUid = String(ticketData?.ownerId || ticketData?.userId || '');
 
     let targetEmail = '';
     if (decoded.admin === true) {
-      targetEmail = String(ticketData?.userEmail || '').toLowerCase().trim();
-    } else if (ticketData && ticketData.userId === decoded.uid) {
+      targetEmail = String(ticketData?.userEmail || ticketData?.ownerEmail || '').toLowerCase().trim();
+    } else if (ticketData && ticketOwnerUid === decoded.uid) {
       targetEmail = supportInbox;
     } else {
       return { success: false };
     }
 
+    const storedSubject = String(ticketData?.subject || params.subject || 'Support Ticket');
+    const storedCategory = String(ticketData?.category || params.category || 'General');
+
     if (targetEmail) {
       await sendRevletAlertEmail({
         to: targetEmail,
-        subject: `[Revlet Support] New Reply on "${params.subject}"`,
+        subject: `[Revlet Support] New Reply on "${storedSubject}"`,
         title: 'Support Ticket Reply',
         subtitle: 'Revlet Help & Support',
         summaryLines: [
@@ -105,8 +109,8 @@ export async function notifySupportTicketEvent(
         ],
         details: [
           { label: 'Ticket ID', value: params.ticketId },
-          { label: 'Subject', value: params.subject },
-          { label: 'Category', value: params.category },
+          { label: 'Subject', value: storedSubject },
+          { label: 'Category', value: storedCategory },
         ],
         ctaUrl: 'https://app.revlet.me/support',
         ctaLabel: 'View Ticket Reply',

@@ -106,7 +106,7 @@ export async function listDNSRecords(idToken: string, orgId: string, zoneId: str
     let page = 1;
     let totalPages = 1;
 
-    while (page <= totalPages && page <= 10) { // Safety cap at 1,000 records
+    while (page <= totalPages && page <= 50) { // Paginate up to 5,000 records
       const data = await cfFetch(`/zones/${zoneId}/dns_records?per_page=100&page=${page}`, {}, verified.cfToken);
       if (Array.isArray(data.result)) {
         allRecords.push(...data.result);
@@ -769,10 +769,10 @@ export async function rollbackZoneSnapshot(
         error: 'This snapshot is incomplete (exceeded the 1,000-record capture cap) and cannot be used for a destructive restore.',
       };
     }
-    if (snapData?.zoneId && snapData.zoneId !== zoneId) {
+    if (!snapData?.zoneId || snapData.zoneId !== zoneId) {
       return {
         success: false,
-        error: 'This snapshot belongs to a different Cloudflare zone and cannot be restored onto the current zone.',
+        error: 'This snapshot is missing a matching zone ID or belongs to a different Cloudflare zone and cannot be restored here.',
       };
     }
     const targetRecords: any[] = snapData?.records || [];

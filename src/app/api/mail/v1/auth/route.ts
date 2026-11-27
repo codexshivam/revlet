@@ -62,21 +62,31 @@ export async function POST(req: NextRequest) {
     const atIndex = emailInput.lastIndexOf('@');
     const domain = emailInput.slice(atIndex + 1);
 
-    const orgSnap = await adminDb
-      .collection('organizations')
-      .where('domain', '==', domain)
-      .limit(1)
-      .get();
+    // Resolve organization authoritatively via mailDomainBindings/{domain} first
+    let orgDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+    const bindingSnap = await adminDb.collection('mailDomainBindings').doc(domain).get();
+    if (bindingSnap.exists && typeof bindingSnap.data()?.orgId === 'string') {
+      const boundSnap = await adminDb.collection('organizations').doc(bindingSnap.data()!.orgId).get();
+      if (boundSnap.exists) orgDoc = boundSnap;
+    }
+    if (!orgDoc) {
+      const orgSnap = await adminDb
+        .collection('organizations')
+        .where('domain', '==', domain)
+        .where('mailServiceActive', '==', true)
+        .limit(1)
+        .get();
+      if (!orgSnap.empty) orgDoc = orgSnap.docs[0];
+    }
 
-    if (orgSnap.empty) {
+    if (!orgDoc || !orgDoc.exists) {
       return NextResponse.json(
         { ok: false, error: 'Organization domain not found.' },
         { status: 404 }
       );
     }
 
-    const orgDoc = orgSnap.docs[0];
-    const orgData = orgDoc.data();
+    const orgData = orgDoc.data() || {};
 
     if (!orgData.mailServiceActive) {
       return NextResponse.json(

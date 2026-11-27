@@ -24,11 +24,8 @@ export function decryptMfaSecret(
   legacyPlain?: string | null
 ): string | null {
   if (encrypted?.ciphertext && encrypted?.iv && encrypted?.tag) {
-    try {
-      return decryptToken(encrypted);
-    } catch {
-      return legacyPlain || null;
-    }
+    // Fail closed if decryption fails so an enrolled TOTP factor never appears absent.
+    return decryptToken(encrypted);
   }
   return legacyPlain || null;
 }

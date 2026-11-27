@@ -670,43 +670,60 @@ export async function resolveQuarantineItem(
     if (decision === 'released') {
       const boundDomain = await assertActiveMailDomainBinding(orgId, auth.orgData);
 
-      // Enforce idempotent state transitions on quarantine items.
-      if (itemData.status === 'released') {
-        return { success: true };
-      }
-      if (itemData.status === 'release_pending') {
+      // Atomically claim release_pending inside a transaction so concurrent release
+      // clicks cannot submit duplicate messages.
+      const claimResult = await adminDb.runTransaction(async (tx) => {
+        const freshSnap = await tx.get(itemRef);
+        if (!freshSnap.exists) {
+          return { outcome: 'missing' as const };
+        }
+        const fd = freshSnap.data() || {};
+        if (fd.status === 'released') return { outcome: 'already_released' as const };
+        if (fd.status === 'release_pending') return { outcome: 'in_progress' as const };
+        if (fd.status === 'deleted') return { outcome: 'deleted' as const };
+
+        const senderEmail = String(fd.sender || '').toLowerCase().trim();
+        const senderDomain = (senderEmail.split('@')[1] || '').toLowerCase().trim();
+        if (!senderDomain || senderDomain !== boundDomain) {
+          return {
+            outcome: 'wrong_domain' as const,
+            error: `Sender "${senderEmail}" does not belong to this organization's verified domain (@${boundDomain}).`,
+          };
+        }
+        const recipients: string[] = Array.isArray(fd.recipients)
+          ? fd.recipients
+              .map((r: unknown) => String(r || '').toLowerCase().trim())
+              .filter((r: string) => r.includes('@'))
+          : [];
+        if (!senderEmail || recipients.length === 0) {
+          return {
+            outcome: 'missing_fields' as const,
+            error: 'Quarantined message is missing sender or recipient details and cannot be released.',
+          };
+        }
+
+        tx.update(itemRef, {
+          status: 'release_pending',
+          releaseAttemptedBy: auth.email || auth.uid,
+          releaseAttemptedAt: new Date().toISOString(),
+          releaseError: FieldValue.delete(),
+        });
+        return { outcome: 'claimed' as const, senderEmail, recipients };
+      });
+
+      if (claimResult.outcome === 'missing') return { success: false, error: 'Quarantine item not found.' };
+      if (claimResult.outcome === 'already_released') return { success: true };
+      if (claimResult.outcome === 'in_progress') {
         return { success: false, error: 'A release attempt is already in progress for this item.' };
       }
-      if (itemData.status === 'deleted') {
+      if (claimResult.outcome === 'deleted') {
         return { success: false, error: 'Deleted quarantine items cannot be released.' };
       }
-
-      const senderEmail = String(itemData.sender || '').toLowerCase().trim();
-      const senderDomain = (senderEmail.split('@')[1] || '').toLowerCase().trim();
-      if (!senderDomain || senderDomain !== boundDomain) {
-        return {
-          success: false,
-          error: `Sender "${senderEmail}" does not belong to this organization's verified domain (@${boundDomain}).`,
-        };
-      }
-      const recipients: string[] = Array.isArray(itemData.recipients)
-        ? itemData.recipients
-            .map((r: unknown) => String(r || '').toLowerCase().trim())
-            .filter((r: string) => r.includes('@'))
-        : [];
-      if (!senderEmail || recipients.length === 0) {
-        return {
-          success: false,
-          error: 'Quarantined message is missing sender or recipient details and cannot be released.',
-        };
+      if (claimResult.outcome === 'wrong_domain' || claimResult.outcome === 'missing_fields') {
+        return { success: false, error: claimResult.error };
       }
 
-      await itemRef.update({
-        status: 'release_pending',
-        releaseAttemptedBy: auth.email || auth.uid,
-        releaseAttemptedAt: new Date().toISOString(),
-        releaseError: FieldValue.delete(),
-      });
+      const { senderEmail, recipients } = claimResult;
 
       let deliveryError: string | null = null;
       try {

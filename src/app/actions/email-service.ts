@@ -829,8 +829,32 @@ export async function activateMailService(idToken: string, orgId: string) {
       disableAutoDkim: dkimConfig.mode === 'byodkim',
     });
 
+    // Re-enable any active mailboxes paused during prior deactivation
+    const existingUsersSnap = await adminDb
+      .collection('organizations')
+      .doc(orgId)
+      .collection('mailUsers')
+      .where('status', '==', 'active')
+      .get();
+    for (const uDoc of existingUsersSnap.docs) {
+      const uData = uDoc.data() || {};
+      if (uData.primaryEmail) {
+        await syncStalwartUserPrincipal({
+          primaryEmail: uData.primaryEmail,
+          displayName: uData.displayName || uData.firstName || '',
+          orgUnitPath: uData.orgUnitPath || '/',
+          aliases: Array.isArray(uData.aliases) ? uData.aliases : [],
+          domain,
+          isCatchAllTarget: orgData.mailCatchAllUserId === uDoc.id,
+          disabled: false,
+          expectedPrincipalId: uData.stalwartAccountId || null,
+        });
+      }
+    }
+
     await adminDb.collection('organizations').doc(orgId).update({
       mailServiceActive: true,
+      mailLifecycleState: 'active',
       emailForwardingActive: false,
       emailRoutingActive: false,
       emailServiceActive: false,
@@ -903,6 +927,7 @@ export async function deactivateMailService(idToken: string, orgId: string, step
       usersSnap.docs.slice(i, i + 400).forEach((uDoc) => {
         batch.update(uDoc.ref, {
           sessionRevokedAt: nowMs,
+      sessionsRevokedAt: nowMs,
           updatedAt: deactivatedAt,
         });
       });
@@ -1261,20 +1286,20 @@ export async function deleteMailOrgUnit(idToken: string, orgId: string, ouId: st
 export async function listMailUsers(idToken: string, orgId: string) {
   if (!orgId) return { success: false, error: 'Missing organization ID.' };
   try {
-    const { orgData } = await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Read', 'Email: Add', 'Email: Admin']);
+    await verifyUserOrgAccess(idToken, orgId, undefined, ['Email: Read', 'Email: Add', 'Email: Admin']);
     const colRef = adminDb.collection('organizations').doc(orgId).collection('mailUsers');
     const snap = await colRef.get();
 
     const nowMs = Date.now();
-    const expiredDocs: Array<{ ref: FirebaseFirestore.DocumentReference; email: string }> = [];
     const users: MailUserRecord[] = [];
 
+    // Strictly read-only: never delete expired mailboxes or Stalwart principals during
+    // a directory read. Permanent deletion is handled exclusively by the legal-hold-aware purge worker.
     for (const doc of snap.docs) {
       const d = doc.data();
       if (d.status === 'deleted' && d.recoverableUntil) {
         const expiryMs = new Date(d.recoverableUntil).getTime();
-        if (expiryMs <= nowMs) {
-          expiredDocs.push({ ref: doc.ref, email: d.primaryEmail || '' });
+        if (!Number.isNaN(expiryMs) && expiryMs <= nowMs) {
           continue;
         }
       }
@@ -1293,40 +1318,6 @@ export async function listMailUsers(idToken: string, orgId: string) {
         deletedAt: d.deletedAt ? toIsoSafe(d.deletedAt) : null,
         recoverableUntil: d.recoverableUntil ? toIsoSafe(d.recoverableUntil) : null,
       });
-    }
-
-    if (expiredDocs.length > 0) {
-      const batch = adminDb.batch();
-      expiredDocs.forEach((item) => batch.delete(item.ref));
-      await batch.commit();
-
-      // Purge expired principals from Stalwart Mail Server and notify organization owner
-      const ownerEmail = await resolveOrganizationOwnerEmail(orgData);
-      for (const item of expiredDocs) {
-        if (item.email) {
-          await dispatchStalwartApi(
-            'DELETE',
-            `/api/principal/${encodeURIComponent(item.email.toLowerCase().trim())}`
-          );
-          if (ownerEmail) {
-            await sendRevletAlertEmail({
-              to: ownerEmail,
-              subject: `Email account permanently deleted: ${item.email}`,
-              title: 'Email Account Permanently Deleted',
-              subtitle: '14-Day Retention Policy Notice',
-              summaryLines: [
-                `The email account ${item.email} for ${orgData.name || orgData.domain} has reached the end of its 14-day recovery window and has been permanently deleted from Revlet mail servers.`,
-                'All mailbox credentials and associated messages have been removed and cannot be recovered.',
-              ],
-              details: [
-                { label: 'Organization', value: orgData.name || orgData.domain || orgId },
-                { label: 'Deleted Account', value: item.email },
-                { label: 'Completed At', value: new Date().toISOString() },
-              ],
-            }).catch(() => {});
-          }
-        }
-      }
     }
 
     users.sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -1590,6 +1581,7 @@ export async function resetMailUserPassword(
       passwordUpdatedAt: nowIso,
       passwordUpdatedBy: email,
       sessionRevokedAt: nowMs,
+      sessionsRevokedAt: nowMs,
     });
 
     await logMailAuditEvent({
@@ -1656,6 +1648,7 @@ export async function resetMailUserMfa(
 
     await userRef.update({
       sessionRevokedAt: nowMs,
+      sessionsRevokedAt: nowMs,
       updatedAt: nowIso,
     });
 
@@ -1891,6 +1884,7 @@ export async function deleteMailUserAccount(idToken: string, orgId: string, user
       recoverableUntil,
       updatedAt: deletedAt,
       sessionRevokedAt: nowMs,
+      sessionsRevokedAt: nowMs,
     });
 
     if (orgData.mailCatchAllUserId === userId) {

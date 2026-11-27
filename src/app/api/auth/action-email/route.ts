@@ -364,10 +364,8 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     const code = err?.errorInfo?.code || err?.code || '';
     if (code === 'auth/user-not-found') {
-      return NextResponse.json(
-        { ok: false, error: 'No account found with this email address.', code },
-        { status: 404 }
-      );
+      // Return generic success on password reset / recovery to prevent account enumeration
+      return NextResponse.json({ ok: true, sent: true });
     }
     if (code === 'auth/email-already-exists') {
       return NextResponse.json(

@@ -8,6 +8,7 @@ import { assertStepUpMfa, hasOrgPermission, verifyUserOrgAccess } from './auth-h
 import {
   listDNSRecords,
   createDNSRecord,
+  deleteDNSRecord,
 } from './dns-service';
 import { validateAndSanitizeInput, stripScripts } from '@/lib/security/sanitize';
 import { hashMailPassword, hashMailPasswordAsync } from '@/lib/security/mail-crypto';
@@ -473,6 +474,20 @@ function buildRequiredDnsRecords(
   if (dkimConfig.mode === 'byodkim') {
     const recordName = `${dkimConfig.selector}._domainkey.${normalizedDomain}`;
     const recordContent = `v=DKIM1; k=rsa; p=${dkimConfig.publicKey}`;
+    const selectorTxtRecords = liveRecords.filter(
+      (record) =>
+        record.type === 'TXT' &&
+        record.name.toLowerCase().replace(/\.$/, '') === recordName.toLowerCase()
+    );
+    const matchesActiveDkimKey = (content: string) =>
+      content.replace(/^"|"$/g, '').split(';').some((tag) => {
+        const match = /^p\s*=\s*(.*)$/.exec(tag.trim());
+        return match?.[1].replace(/\s/g, '') === dkimConfig.publicKey;
+      });
+    const hasMatchingDkim = selectorTxtRecords.some((r) => matchesActiveDkimKey(r.content));
+    const hasConflictingDkim = selectorTxtRecords.some(
+      (r) => /v\s*=\s*dkim1/i.test(r.content) && !matchesActiveDkimKey(r.content)
+    );
     coreRecords.push({
       id: 'txt-dkim-1',
       purpose: 'Outbound Mail Signing (DKIM)',
@@ -480,14 +495,7 @@ function buildRequiredDnsRecords(
       name: recordName,
       content: recordContent,
       ttl: 'Auto',
-      verified: Boolean(dkimConfig.publicKey) && liveRecords.some((record) =>
-        record.type === 'TXT' &&
-        record.name.toLowerCase().replace(/\.$/, '') === recordName.toLowerCase() &&
-        record.content.replace(/^"|"$/g, '').split(';').some((tag) => {
-          const match = /^p\s*=\s*(.*)$/.exec(tag.trim());
-          return match?.[1].replace(/\s/g, '') === dkimConfig.publicKey;
-        })
-      ),
+      verified: Boolean(dkimConfig.publicKey) && hasMatchingDkim && !hasConflictingDkim,
       required: true,
     });
   } else {
@@ -643,6 +651,29 @@ async function provisionRequiredDnsRecordsOnZone(
     let addedCount = 0;
     const failures: string[] = [];
 
+    // Remove any stale/conflicting BYODKIM TXT records on the same selector so DKIM alignment never breaks.
+    if (dkimConfig.mode === 'byodkim' && dkimConfig.publicKey) {
+      const dkimRecordName = `${dkimConfig.selector}._domainkey.${normalizedDomain}`.toLowerCase();
+      const staleDkimRecords = currentRecords.filter((record: any) => {
+        if (record.type !== 'TXT' || !record.id) return false;
+        const name = String(record.name || '').toLowerCase().replace(/\.$/, '');
+        if (name !== dkimRecordName) return false;
+        const content = String(record.content || '');
+        const isDkimTxt = /v\s*=\s*dkim1/i.test(content);
+        const matchesActive = content.replace(/^"|"$/g, '').split(';').some((tag) => {
+          const match = /^p\s*=\s*(.*)$/.exec(tag.trim());
+          return match?.[1].replace(/\s/g, '') === dkimConfig.publicKey;
+        });
+        return isDkimTxt && !matchesActive;
+      });
+      for (const stale of staleDkimRecords) {
+        const delRes = await deleteDNSRecord(idToken, orgId, zoneId, stale.id);
+        if (!delRes.success) {
+          failures.push(`DELETE TXT ${dkimRecordName}: ${delRes.error || 'Delete rejected.'}`);
+        }
+      }
+    }
+
     // Only add missing required entries. Existing SPF and DMARC policies remain under the DNS owner's control.
     const requiredRecords = buildRequiredDnsRecords(normalizedDomain, dkimConfig, currentRecords);
 
@@ -653,6 +684,18 @@ async function provisionRequiredDnsRecordsOnZone(
     for (const req of publishOrder) {
       if (req.type === 'MX' && failures.length > 0) break;
       if (req.required !== false && !req.verified) {
+        // Avoid duplicating an already-present active BYODKIM TXT record when only a stale sibling was removed above.
+        if (req.id === 'txt-dkim-1' && dkimConfig.mode === 'byodkim' && dkimConfig.publicKey) {
+          const alreadyHasActive = currentRecords.some((record: any) =>
+            record.type === 'TXT' &&
+            String(record.name || '').toLowerCase().replace(/\.$/, '') === req.name.toLowerCase() &&
+            String(record.content || '').replace(/^"|"$/g, '').split(';').some((tag) => {
+              const match = /^p\s*=\s*(.*)$/.exec(tag.trim());
+              return match?.[1].replace(/\s/g, '') === dkimConfig.publicKey;
+            })
+          );
+          if (alreadyHasActive) continue;
+        }
         const createRes = await createDNSRecord(idToken, orgId, zoneId, {
           type: req.type,
           name: req.name,

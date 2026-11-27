@@ -147,22 +147,30 @@ export async function verifyUserOrgAccess(
 
   let cfToken: string | undefined = undefined;
   let secretData: any = null;
-  let encryptedTokenEnvelope = orgData?.cloudflareTokenEncrypted;
-  try {
-    const secretSnap = await orgDoc.ref.collection('secrets').doc('cloudflare').get();
-    if (secretSnap.exists && secretSnap.data()?.ciphertext) {
-      secretData = secretSnap.data();
-      encryptedTokenEnvelope = secretData;
-    }
-  } catch (e: any) {
-    console.warn("[Auth Helper] Failed to read Cloudflare secret subdoc:", e?.message);
-  }
+  const shouldLoadDnsCredentials =
+    expectedZoneId !== undefined ||
+    !requiredPermissions ||
+    (Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions])
+      .some((permission) => permission.startsWith('DNS:'));
 
-  if (encryptedTokenEnvelope?.ciphertext) {
+  if (shouldLoadDnsCredentials) {
+    let encryptedTokenEnvelope = orgData?.cloudflareTokenEncrypted;
     try {
-      cfToken = decryptToken(encryptedTokenEnvelope);
+      const secretSnap = await orgDoc.ref.collection('secrets').doc('cloudflare').get();
+      if (secretSnap.exists && secretSnap.data()?.ciphertext) {
+        secretData = secretSnap.data();
+        encryptedTokenEnvelope = secretData;
+      }
     } catch (e: any) {
-      console.error("[Auth Helper] Failed to decrypt organization Cloudflare token:", e?.message);
+      console.warn("[Auth Helper] Failed to read Cloudflare secret subdoc:", e?.message);
+    }
+
+    if (encryptedTokenEnvelope?.ciphertext) {
+      try {
+        cfToken = decryptToken(encryptedTokenEnvelope);
+      } catch (e: any) {
+        console.error("[Auth Helper] Failed to decrypt organization Cloudflare token:", e?.message);
+      }
     }
   }
 

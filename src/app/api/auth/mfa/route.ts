@@ -441,37 +441,82 @@ export async function POST(req: NextRequest) {
     if (action === 'secondary_email_verify') {
       const code = typeof body.code === 'string' ? body.code.trim() : '';
       const counts = await getEnrolledFactorCounts(uid);
-      const data = counts.state;
-      if (
-        !data.secondaryOtpHash ||
-        !data.secondaryOtpExpiresAt ||
-        data.secondaryOtpExpiresAt < Date.now()
-      ) {
+      const nowMs = Date.now();
+      const MAX_MFA_ATTEMPTS = 5;
+      const LOCKOUT_MS = 15 * 60 * 1000;
+
+      const txOutcome = await adminDb.runTransaction(async (tx) => {
+        const freshPriv = await tx.get(privRef);
+        const data = (freshPriv.exists ? freshPriv.data() : {}) as Record<string, any>;
+        if (typeof data.mfaLockedUntil === 'number' && data.mfaLockedUntil > nowMs) {
+          return { status: 'locked' as const, retryAfterSec: Math.ceil((data.mfaLockedUntil - nowMs) / 1000) };
+        }
+        if (
+          !data.secondaryOtpHash ||
+          !data.secondaryOtpExpiresAt ||
+          data.secondaryOtpExpiresAt < nowMs
+        ) {
+          return { status: 'expired' as const };
+        }
+        if (hashOtpCode(uid, code) !== data.secondaryOtpHash) {
+          const nextAttempts = (Number(data.mfaFailedAttempts) || 0) + 1;
+          tx.set(
+            privRef,
+            {
+              mfaFailedAttempts: nextAttempts,
+              ...(nextAttempts >= MAX_MFA_ATTEMPTS ? { mfaLockedUntil: nowMs + LOCKOUT_MS } : {}),
+            },
+            { merge: true }
+          );
+          return { status: 'invalid' as const, locked: nextAttempts >= MAX_MFA_ATTEMPTS };
+        }
+        tx.set(
+          privRef,
+          {
+            secondaryEmailVerified: true,
+            secondaryOtpHash: null,
+            secondaryOtpExpiresAt: null,
+            mfaFailedAttempts: 0,
+            mfaLockedUntil: null,
+          },
+          { merge: true }
+        );
+        return {
+          status: 'ok' as const,
+          wasAlreadyVerified: Boolean(data.secondaryEmailVerified),
+          secondaryEmail: String(data.secondaryEmail || ''),
+        };
+      });
+
+      if (txOutcome.status === 'locked') {
+        return NextResponse.json(
+          { ok: false, error: `Too many failed MFA attempts. Try again in ${Math.ceil(txOutcome.retryAfterSec / 60)} minute(s).` },
+          { status: 429 }
+        );
+      }
+      if (txOutcome.status === 'expired') {
         return NextResponse.json(
           { ok: false, error: 'Verification code expired. Please request a new one.' },
           { status: 400 }
         );
       }
-      if (hashOtpCode(uid, code) !== data.secondaryOtpHash) {
+      if (txOutcome.status === 'invalid') {
         return NextResponse.json(
-          { ok: false, error: 'Invalid 6-digit email verification code.' },
-          { status: 400 }
+          {
+            ok: false,
+            error: txOutcome.locked
+              ? 'Too many failed MFA attempts. Account MFA verification locked for 15 minutes.'
+              : 'Invalid 6-digit email verification code.',
+          },
+          { status: txOutcome.locked ? 429 : 400 }
         );
       }
-      const wasAlreadyVerified = Boolean(data.secondaryEmailVerified);
+
       const hadEnrolledMfa = counts.totalFactors > 0;
-      await privRef.set(
-        {
-          secondaryEmailVerified: true,
-          secondaryOtpHash: null,
-          secondaryOtpExpiresAt: null,
-        },
-        { merge: true }
-      );
       if (!hadEnrolledMfa) {
         try {
           await sendMfaStatusEmail({
-            to: email || data.secondaryEmail || '',
+            to: email || txOutcome.secondaryEmail || '',
             enabled: true,
           });
         } catch (mailErr) {
@@ -479,7 +524,7 @@ export async function POST(req: NextRequest) {
         }
       }
       // Do NOT mint stepUpToken when newly confirming a recovery address if other MFA factors existed
-      if (!wasAlreadyVerified && hadEnrolledMfa) {
+      if (!txOutcome.wasAlreadyVerified && hadEnrolledMfa) {
         return NextResponse.json({ ok: true });
       }
       const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
@@ -494,18 +539,60 @@ export async function POST(req: NextRequest) {
 
     if (action === 'step_up_verify') {
       const method = body.method as 'totp' | 'passkey' | 'secondary_email' | 'firebase_mfa';
+      const nowMs = Date.now();
+      const MAX_MFA_ATTEMPTS = 5;
+      const LOCKOUT_MS = 15 * 60 * 1000;
       const u = await readPrivateMfaState(uid);
 
       if (method === 'totp') {
         const code = typeof body.code === 'string' ? body.code : '';
-        if (!u.totpEnabled || !u.totpSecret) {
+        const totpResult = await adminDb.runTransaction(async (tx) => {
+          const freshPriv = await tx.get(privRef);
+          const data = (freshPriv.exists ? freshPriv.data() : {}) as Record<string, any>;
+          if (typeof data.mfaLockedUntil === 'number' && data.mfaLockedUntil > nowMs) {
+            return { status: 'locked' as const, retryAfterSec: Math.ceil((data.mfaLockedUntil - nowMs) / 1000) };
+          }
+          if (!data.totpEnabled || !data.totpSecret) {
+            return { status: 'not_enrolled' as const };
+          }
+          if (!verifyTotpCode(data.totpSecret, code)) {
+            const nextAttempts = (Number(data.mfaFailedAttempts) || 0) + 1;
+            tx.set(
+              privRef,
+              {
+                mfaFailedAttempts: nextAttempts,
+                ...(nextAttempts >= MAX_MFA_ATTEMPTS ? { mfaLockedUntil: nowMs + LOCKOUT_MS } : {}),
+              },
+              { merge: true }
+            );
+            return { status: 'invalid' as const, locked: nextAttempts >= MAX_MFA_ATTEMPTS };
+          }
+          tx.set(privRef, { mfaFailedAttempts: 0, mfaLockedUntil: null }, { merge: true });
+          return { status: 'ok' as const };
+        });
+
+        if (totpResult.status === 'locked') {
+          return NextResponse.json(
+            { ok: false, error: `Too many failed MFA attempts. Try again in ${Math.ceil(totpResult.retryAfterSec / 60)} minute(s).` },
+            { status: 429 }
+          );
+        }
+        if (totpResult.status === 'not_enrolled') {
           return NextResponse.json(
             { ok: false, error: 'Authenticator App is not enrolled on this account.' },
             { status: 400 }
           );
         }
-        if (!verifyTotpCode(u.totpSecret, code)) {
-          return NextResponse.json({ ok: false, error: 'Invalid authenticator code.' }, { status: 400 });
+        if (totpResult.status === 'invalid') {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: totpResult.locked
+                ? 'Too many failed MFA attempts. Account MFA verification locked for 15 minutes.'
+                : 'Invalid authenticator code.',
+            },
+            { status: totpResult.locked ? 429 : 400 }
+          );
         }
         const stepUpToken = createStepUpToken({ uid, email, method: 'totp' });
         return setMfaSessionCookie(
@@ -571,21 +658,68 @@ export async function POST(req: NextRequest) {
 
       if (method === 'secondary_email') {
         const code = typeof body.code === 'string' ? body.code.trim() : '';
-        if (!u.secondaryEmailVerified) {
+        const recResult = await adminDb.runTransaction(async (tx) => {
+          const freshPriv = await tx.get(privRef);
+          const data = (freshPriv.exists ? freshPriv.data() : {}) as Record<string, any>;
+          if (typeof data.mfaLockedUntil === 'number' && data.mfaLockedUntil > nowMs) {
+            return { status: 'locked' as const, retryAfterSec: Math.ceil((data.mfaLockedUntil - nowMs) / 1000) };
+          }
+          if (!data.secondaryEmailVerified) {
+            return { status: 'not_verified' as const };
+          }
+          if (
+            !data.secondaryOtpHash ||
+            !data.secondaryOtpExpiresAt ||
+            data.secondaryOtpExpiresAt < nowMs ||
+            hashOtpCode(uid, code) !== data.secondaryOtpHash
+          ) {
+            const nextAttempts = (Number(data.mfaFailedAttempts) || 0) + 1;
+            tx.set(
+              privRef,
+              {
+                mfaFailedAttempts: nextAttempts,
+                ...(nextAttempts >= MAX_MFA_ATTEMPTS ? { mfaLockedUntil: nowMs + LOCKOUT_MS } : {}),
+              },
+              { merge: true }
+            );
+            return { status: 'invalid' as const, locked: nextAttempts >= MAX_MFA_ATTEMPTS };
+          }
+          tx.set(
+            privRef,
+            {
+              secondaryOtpHash: null,
+              secondaryOtpExpiresAt: null,
+              mfaFailedAttempts: 0,
+              mfaLockedUntil: null,
+            },
+            { merge: true }
+          );
+          return { status: 'ok' as const };
+        });
+
+        if (recResult.status === 'locked') {
+          return NextResponse.json(
+            { ok: false, error: `Too many failed MFA attempts. Try again in ${Math.ceil(recResult.retryAfterSec / 60)} minute(s).` },
+            { status: 429 }
+          );
+        }
+        if (recResult.status === 'not_verified') {
           return NextResponse.json(
             { ok: false, error: 'Secondary email is not verified.' },
             { status: 400 }
           );
         }
-        if (
-          !u.secondaryOtpHash ||
-          !u.secondaryOtpExpiresAt ||
-          u.secondaryOtpExpiresAt < Date.now() ||
-          hashOtpCode(uid, code) !== u.secondaryOtpHash
-        ) {
-          return NextResponse.json({ ok: false, error: 'Invalid or expired email code.' }, { status: 400 });
+        if (recResult.status === 'invalid') {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: recResult.locked
+                ? 'Too many failed MFA attempts. Account MFA verification locked for 15 minutes.'
+                : 'Invalid or expired email code.',
+            },
+            { status: recResult.locked ? 429 : 400 }
+          );
         }
-        await privRef.set({ secondaryOtpHash: null, secondaryOtpExpiresAt: null }, { merge: true });
         const stepUpToken = createStepUpToken({ uid, email, method: 'secondary_email' });
         return setMfaSessionCookie(
           req,

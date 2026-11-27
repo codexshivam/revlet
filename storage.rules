@@ -14,6 +14,16 @@ service firebase.storage {
       return isAuthenticated() && request.auth.token.admin == true;
     }
 
+    function isOrgOwner(orgId) {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        (
+          firestore.exists(/databases/(default)/documents/organizations/$(orgId)) &&
+          firestore.get(/databases/(default)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid
+        )
+      );
+    }
+
     function isOrgOwnerOrMember(orgId) {
       return isAuthenticated() && (
         isSuperAdmin() ||
@@ -22,10 +32,8 @@ service firebase.storage {
           (
             firestore.get(/databases/(default)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid ||
             (
-              'memberEmails' in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data &&
-              request.auth.token.email_verified == true &&
-              request.auth.token.email != null &&
-              request.auth.token.email.lower() in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data.memberEmails
+              'memberIds' in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data &&
+              request.auth.uid in firestore.get(/databases/(default)/documents/organizations/$(orgId)).data.memberIds
             )
           )
         )
@@ -51,7 +59,7 @@ service firebase.storage {
     // ─── Organization Assets ──────────────────────────────────────────────────
     match /organizations/{orgId}/{allPaths=**} {
       allow read: if isOrgOwnerOrMember(orgId);
-      allow write: if isOrgOwnerOrMember(orgId)
+      allow write: if isOrgOwner(orgId)
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|application/pdf');
     }

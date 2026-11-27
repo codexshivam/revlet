@@ -791,6 +791,16 @@ export async function purgeExpiredMailData(): Promise<{
           }
 
           await uDoc.ref.delete();
+          // Purge mailbox-scoped settings and MFA state so reused addresses never inherit prior data
+          await Promise.all([
+            orgDoc.ref.collection('mailUserSettings').doc(uDoc.id).delete().catch(() => null),
+            userEmail
+              ? orgDoc.ref.collection('mailUserSettings').doc(encodeURIComponent(userEmail)).delete().catch(() => null)
+              : Promise.resolve(),
+            userEmail
+              ? orgDoc.ref.collection('mailUserMfa').doc(encodeURIComponent(userEmail)).delete().catch(() => null)
+              : Promise.resolve(),
+          ]);
           if (userEmail) {
             await dispatchStalwartApi('DELETE', `/api/principal/${encodeURIComponent(userEmail)}`);
           }

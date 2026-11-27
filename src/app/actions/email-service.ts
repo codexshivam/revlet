@@ -759,6 +759,7 @@ export async function getMailServiceState(idToken: string, orgId: string) {
         mailServiceActive: Boolean(orgData.mailServiceActive),
         dnsServiceActive,
         canManageMailService: hasOrgPermission(permissions, "Email: Admin"),
+        canCreateMailAccounts: hasOrgPermission(permissions, ["Email: Add", "Email: Admin"]),
         canDeactivateMailService: isOwner,
         canInviteTeamMembers: hasOrgPermission(permissions, "Org: Admin"),
         domain,

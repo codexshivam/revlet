@@ -44,31 +44,39 @@ export async function readPrivateMfaState(uid: string): Promise<PrivateMfaState>
     return privData;
   }
 
-  const merged: PrivateMfaState = {
-    totpEnabled: privData.totpEnabled ?? Boolean(userData.totpEnabled && userData.totpSecret),
-    totpSecret: privData.totpSecret ?? userData.totpSecret ?? null,
-    totpPendingSecret: privData.totpPendingSecret ?? userData.totpPendingSecret ?? null,
-    secondaryEmail: privData.secondaryEmail ?? userData.secondaryEmail ?? '',
-    secondaryEmailVerified:
-      privData.secondaryEmailVerified ??
-      Boolean(userData.secondaryEmailVerified && userData.secondaryEmail),
-    secondaryOtpHash: privData.secondaryOtpHash ?? userData.secondaryOtpHash ?? null,
-    secondaryOtpExpiresAt: privData.secondaryOtpExpiresAt ?? userData.secondaryOtpExpiresAt ?? null,
-  };
+  // Atomically migrate legacy secret fields into /users/{uid}/privateMfa/state
+  // and strip them from the client-readable /users/{uid} document in one transaction.
+  return await adminDb.runTransaction(async (tx) => {
+    const [freshPriv, freshUser] = await Promise.all([tx.get(privRef), tx.get(userRef)]);
+    const pData = (freshPriv.exists ? freshPriv.data() : {}) as PrivateMfaState;
+    const uData = (freshUser.exists ? freshUser.data() : {}) as Record<string, any>;
 
-  // Migrate to server-only doc and strip legacy secret fields from client-readable /users/{uid}
-  const deletePatch: Record<string, any> = {};
-  for (const k of LEGACY_SECRET_KEYS) {
-    if (userData[k] !== undefined) {
-      deletePatch[k] = FieldValue.delete();
+    const merged: PrivateMfaState = {
+      totpEnabled: pData.totpEnabled ?? Boolean(uData.totpEnabled && uData.totpSecret),
+      totpSecret: pData.totpSecret ?? uData.totpSecret ?? null,
+      totpPendingSecret: pData.totpPendingSecret ?? uData.totpPendingSecret ?? null,
+      secondaryEmail: pData.secondaryEmail ?? uData.secondaryEmail ?? '',
+      secondaryEmailVerified:
+        pData.secondaryEmailVerified ??
+        Boolean(uData.secondaryEmailVerified && uData.secondaryEmail),
+      secondaryOtpHash: pData.secondaryOtpHash ?? uData.secondaryOtpHash ?? null,
+      secondaryOtpExpiresAt: pData.secondaryOtpExpiresAt ?? uData.secondaryOtpExpiresAt ?? null,
+    };
+
+    const deletePatch: Record<string, any> = {};
+    for (const k of LEGACY_SECRET_KEYS) {
+      if (uData[k] !== undefined) {
+        deletePatch[k] = FieldValue.delete();
+      }
     }
-  }
-  await Promise.all([
-    privRef.set(merged, { merge: true }),
-    Object.keys(deletePatch).length > 0 ? userRef.update(deletePatch).catch(() => {}) : Promise.resolve(),
-  ]);
 
-  return merged;
+    tx.set(privRef, merged, { merge: true });
+    if (freshUser.exists && Object.keys(deletePatch).length > 0) {
+      tx.update(userRef, deletePatch);
+    }
+
+    return merged;
+  });
 }
 
 export async function getEnrolledFactorCounts(uid: string): Promise<{
@@ -97,16 +105,13 @@ export async function getEnrolledFactorCounts(uid: string): Promise<{
 }
 
 export async function checkUserEnforceMfa(uid: string): Promise<boolean> {
-  try {
-    const [orgsSnap, ownedSnap] = await Promise.all([
-      adminDb.collection('organizations').where('memberIds', 'array-contains', uid).get(),
-      adminDb.collection('organizations').where('ownerId', '==', uid).get(),
-    ]);
-    return (
-      orgsSnap.docs.some((d) => Boolean(d.data()?.enforceMfa)) ||
-      ownedSnap.docs.some((d) => Boolean(d.data()?.enforceMfa))
-    );
-  } catch {
-    return false;
-  }
+  // Fail closed on database errors rather than silently returning false.
+  const [orgsSnap, ownedSnap] = await Promise.all([
+    adminDb.collection('organizations').where('memberIds', 'array-contains', uid).get(),
+    adminDb.collection('organizations').where('ownerId', '==', uid).get(),
+  ]);
+  return (
+    orgsSnap.docs.some((d) => Boolean(d.data()?.enforceMfa)) ||
+    ownedSnap.docs.some((d) => Boolean(d.data()?.enforceMfa))
+  );
 }

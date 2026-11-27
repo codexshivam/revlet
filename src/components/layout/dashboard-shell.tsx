@@ -159,7 +159,14 @@ function DashboardShellInner({
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (isCancelled()) return
-          if (data?.ok && data.hasEnrolledMfa && !data.mfaSessionVerified) {
+          // Fail closed: if MFA verification response is missing/unhealthy or MFA is required & unverified,
+          // do not allow entry into the dashboard.
+          if (!data || !data.ok) {
+            verifiedMfaUids.delete(activeUser.uid)
+            router.replace(buildLoginRedirect(true))
+            return
+          }
+          if (data.hasEnrolledMfa && !data.mfaSessionVerified) {
             verifiedMfaUids.delete(activeUser.uid)
             if (typeof window !== "undefined") {
               try {
@@ -175,7 +182,10 @@ function DashboardShellInner({
           setMfaAllowed(true)
         })
         .catch(() => {
-          if (!isCancelled()) setMfaAllowed(true)
+          if (!isCancelled()) {
+            verifiedMfaUids.delete(activeUser.uid)
+            router.replace(buildLoginRedirect(true))
+          }
         })
     },
     [router, buildLoginRedirect]

@@ -74,12 +74,14 @@ async function resolveOrgAndVerifyUser(orgIdInput: string, emailInput: string) {
     return { error: 'Mailbox user not found in organization', status: 403 as const };
   }
 
-  const userData = userSnap.docs[0].data() || {};
-  if (userData.status === 'suspended' || userData.deleted === true) {
+  const userDoc = userSnap.docs[0];
+  const userData = userDoc.data() || {};
+  // Require an active mailbox (blocks suspended, soft-deleted, or otherwise inactive mailboxes)
+  if ((userData.status || 'active') !== 'active' || userData.deleted === true) {
     return { error: 'Mailbox user is suspended or deleted', status: 403 as const };
   }
 
-  return { orgDoc, email };
+  return { orgDoc, email, mailboxId: userDoc.id };
 }
 
 function getEmailDocId(email: string): string {
@@ -99,11 +101,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: resolved.error }, { status: resolved.status });
     }
 
-    const docRef = resolved.orgDoc.ref
-      .collection('mailUserSettings')
-      .doc(getEmailDocId(resolved.email));
-    const snap = await docRef.get();
-    const data = snap.exists ? snap.data() || {} : {};
+    const col = resolved.orgDoc.ref.collection('mailUserSettings');
+    const byIdSnap = await col.doc(resolved.mailboxId).get();
+    // Only fall back to legacy email-keyed settings if tagged with this mailboxId or untagged legacy
+    let data: Record<string, any> = {};
+    if (byIdSnap.exists) {
+      data = byIdSnap.data() || {};
+    } else {
+      const legacySnap = await col.doc(getEmailDocId(resolved.email)).get();
+      if (legacySnap.exists) {
+        const legacyData = legacySnap.data() || {};
+        if (!legacyData.mailboxId || legacyData.mailboxId === resolved.mailboxId) {
+          data = legacyData;
+        }
+      }
+    }
 
     return NextResponse.json({
       ok: true,
@@ -139,11 +151,12 @@ export async function PUT(req: NextRequest) {
 
     const docRef = resolved.orgDoc.ref
       .collection('mailUserSettings')
-      .doc(getEmailDocId(resolved.email));
+      .doc(resolved.mailboxId);
     const existingSnap = await docRef.get();
     const existing = existingSnap.exists ? existingSnap.data() || {} : {};
 
     const updatePayload: Record<string, unknown> = {
+      mailboxId: resolved.mailboxId,
       email: resolved.email,
       orgId: resolved.orgDoc.id,
       updatedAt: FieldValue.serverTimestamp(),

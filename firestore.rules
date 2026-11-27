@@ -39,14 +39,12 @@ service cloud.firestore {
           'contactPhone', 'contactEmail', 'description',
           'status', 'createdAt', 'updatedAt', 'mailServiceActive'
         ]);
+      // Workspace access is strictly UID-bound (ownerId or memberIds); pending invitations
+      // are read from /teamMembers and bound to the verified UID upon acceptance.
       allow read: if isResourceOwner() || isSuperAdmin() || (
         isAuthenticated() &&
+        'memberIds' in resource.data &&
         request.auth.uid in resource.data.memberIds
-      ) || (
-        isAuthenticated() &&
-        request.auth.token.email_verified == true &&
-        request.auth.token.email != null &&
-        request.auth.token.email.lower() in resource.data.memberEmails
       );
       allow update: if (isResourceOwner() || isSuperAdmin())
         && request.resource.data.ownerId == resource.data.ownerId
@@ -143,7 +141,10 @@ service cloud.firestore {
         isAuthenticated() &&
         resource.data.memberUid == request.auth.uid
       ) || (
+        // Verified email matching is permitted ONLY for unbound Pending invitations.
         isAuthenticated() &&
+        resource.data.status == 'Pending' &&
+        (!('memberUid' in resource.data) || resource.data.memberUid == null) &&
         request.auth.token.email_verified == true &&
         request.auth.token.email != null &&
         resource.data.email.lower() == request.auth.token.email.lower()

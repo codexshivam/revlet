@@ -27,6 +27,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { StepUpMfaDialog } from "@/components/security/step-up-mfa-dialog"
 import {
   getGovernanceOverview,
@@ -58,6 +68,12 @@ import {
   Search,
 } from "lucide-react"
 
+const sharedAccessLabels: Record<SharedMailboxDelegate["accessLevel"], string> = {
+  FULL_ACCESS: "Read and send",
+  SEND_AS: "Send only",
+  READ_ONLY: "Read only",
+}
+
 interface EmailGovernancePanelProps {
   orgId: string
   domain: string
@@ -66,7 +82,7 @@ interface EmailGovernancePanelProps {
 
 export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePanelProps) {
   const { user } = useUser()
-  const [activeSection, setActiveSection] = useState<"shared" | "quarantine" | "dlp" | "ediscovery" | "audit">(
+  const [requestedSection, setActiveSection] = useState<"shared" | "quarantine" | "dlp" | "ediscovery" | "audit">(
     mode || "quarantine"
   )
   useEffect(() => {
@@ -74,6 +90,11 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   }, [mode])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [capabilities, setCapabilities] = useState<{
+    canEmailAdmin: boolean
+    canSecurityAdmin: boolean
+    canComplianceAdmin: boolean
+  } | null>(null)
   const [legalHolds, setLegalHolds] = useState<LegalHoldRecord[]>([])
   const [dlpRules, setDlpRules] = useState<DlpRuleRecord[]>([])
   const [transportRules, setTransportRules] = useState<TransportRuleRecord[]>([])
@@ -95,6 +116,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   const [smLocalPart, setSmLocalPart] = useState("")
   const [smDelegateEmail, setSmDelegateEmail] = useState("")
   const [smDelegateAccess, setSmDelegateAccess] = useState<"FULL_ACCESS" | "SEND_AS" | "READ_ONLY">("FULL_ACCESS")
+  const [deletingSharedMailbox, setDeletingSharedMailbox] = useState<SharedMailboxRecord | null>(null)
   const [editingSharedMailbox, setEditingSharedMailbox] = useState<SharedMailboxRecord | null>(null)
   const [editingDelegates, setEditingDelegates] = useState<SharedMailboxDelegate[]>([])
   const [newDelegateEmail, setNewDelegateEmail] = useState("")
@@ -162,6 +184,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
       const idToken = await user.getIdToken()
       const res = await getGovernanceOverview(idToken, orgId)
       if (res.success && res.data) {
+        setCapabilities(res.data.capabilities)
         setLegalHolds(res.data.legalHolds)
         setDlpRules(res.data.dlpRules)
         setTransportRules(res.data.transportRules)
@@ -238,7 +261,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
   if (loadError) {
     return (
       <div role="alert" className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 text-sm">
-        <p>{loadError}</p>
+        <p>{/unauthorized|insufficient|access denied/i.test(loadError) ? "Ask your workspace administrator for access to these email tools." : loadError}</p>
         <Button variant="outline" size="sm" onClick={() => void loadData()}>Retry</Button>
       </div>
     )
@@ -276,44 +299,45 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
     )
   }
 
+  if (mode === "shared" && !capabilities?.canEmailAdmin) {
+    return <p className="rounded-xl border border-zinc-200 bg-white p-5 text-sm text-zinc-600">An email administrator can manage shared inboxes in this workspace.</p>
+  }
+
+  const securitySections = [
+    { id: "quarantine", label: "Held messages", available: capabilities?.canEmailAdmin || capabilities?.canSecurityAdmin },
+    { id: "dlp", label: "Mail protection rules", available: capabilities?.canEmailAdmin || capabilities?.canSecurityAdmin },
+    { id: "ediscovery", label: "Legal holds & discovery", available: capabilities?.canComplianceAdmin },
+    { id: "audit", label: "Activity log", available: capabilities?.canSecurityAdmin || capabilities?.canComplianceAdmin },
+  ] as const
+  const visibleSections = securitySections.filter((section) => section.available)
+  const activeSection = mode === "shared"
+    ? "shared"
+    : visibleSections.find((section) => section.id === requestedSection)?.id || visibleSections[0]?.id
+
+  const openCreateInbox = () => {
+    setSmDisplayName("")
+    setSmLocalPart("")
+    setSmDelegateEmail("")
+    setSmDelegateAccess("FULL_ACCESS")
+    setIsAddSharedOpen(true)
+  }
+
   return (
     <div className="space-y-4">
-      {/* Segmented Governance Navigation (omitted when rendered in standalone Shared Mailboxes tab) */}
       {mode !== "shared" && (
-        <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-slate-100/70 p-1">
-          {(
-            [
-              {
-                id: "quarantine",
-                label: "Quarantine",
-                count: quarantineItems.filter((q) => q.status === "quarantined").length,
-              },
-              { id: "dlp", label: "DLP & Mail Flow", count: dlpRules.length + transportRules.length },
-              { id: "ediscovery", label: "eDiscovery & Legal Hold", count: legalHolds.length },
-              { id: "audit", label: "SIEM & Audit Logs" },
-            ] as const
-          ).map((item) => {
-            const isActive = activeSection === item.id
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setActiveSection(item.id)}
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  isActive
-                    ? "bg-white text-slate-900 border border-slate-200/80"
-                    : "text-slate-600 hover:text-slate-900 border border-transparent"
-                }`}
-              >
-                <span>{item.label}</span>
-                {"count" in item && typeof item.count === "number" && (
-                  <span className="font-mono text-[11px] tabular-nums text-slate-400">
-                    {item.count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+        <div role="group" aria-label="Security and compliance tools" className="flex flex-wrap gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
+          {visibleSections.map(({ id, label }) => (
+            <Button
+              key={id}
+              type="button"
+              variant={activeSection === id ? "outline" : "ghost"}
+              aria-pressed={activeSection === id}
+              onClick={() => setActiveSection(id)}
+              className="min-h-11 text-sm"
+            >
+              {label}
+            </Button>
+          ))}
         </div>
       )}
 
@@ -322,19 +346,19 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
           <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
             <div className="p-4 border-b border-slate-200/80 bg-slate-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-0.5">
-                <h2 className="text-sm font-medium text-slate-900">
-                  Shared Mailboxes
+                <h2 className="text-base font-semibold text-zinc-950">
+                  Shared inboxes
                   <span className="ml-2 font-mono text-xs text-slate-400 tabular-nums">
                     {sharedMailboxes.length}
                   </span>
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Delegated team mailboxes with shared inbox access and send-as permissions
+                <p className="text-sm text-zinc-600">
+                  Give people access to one team inbox, such as support@ or billing@.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 sm:w-56">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative w-full sm:w-56">
                   <Search
                     className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
                     strokeWidth={1.5}
@@ -342,22 +366,15 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   <Input
                     value={sharedSearchQuery}
                     onChange={(e) => setSharedSearchQuery(e.target.value)}
-                    placeholder="Search shared mailboxes..."
-                    className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
+                    aria-label="Search shared inboxes"
+                    placeholder="Search shared inboxes"
+                    className="min-h-11 pl-9 text-base sm:text-sm border-slate-200 bg-white rounded-lg"
                   />
                 </div>
-                <Button
-                  onClick={() => {
-                    setSmDisplayName("")
-                    setSmLocalPart("")
-                    setSmDelegateEmail("")
-                    setSmDelegateAccess("FULL_ACCESS")
-                    setIsAddSharedOpen(true)
-                  }}
-                  className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
+                <Button onClick={openCreateInbox} className="min-h-11 w-full sm:w-auto"
                 >
                   <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                  Add Shared Mailbox
+                  Add shared inbox
                 </Button>
               </div>
             </div>
@@ -365,330 +382,130 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
             {filteredSharedMailboxes.length === 0 ? (
               <div className="py-16 px-4 text-center space-y-2">
                 <p className="text-sm font-medium text-slate-900">
-                  {sharedMailboxes.length === 0 ? "No Shared Mailboxes Created" : "No Matching Shared Mailboxes"}
+                  {sharedMailboxes.length === 0 ? "No shared inboxes yet" : "No matching shared inboxes"}
                 </p>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
                   {sharedMailboxes.length === 0
-                    ? "Create a delegated team mailbox so multiple team members can read and reply from a shared address"
-                    : "Adjust your search query to find a shared mailbox"}
+                    ? "Create an inbox your team can read and reply from together."
+                    : "Try a different name, address, or team member."}
                 </p>
                 {sharedMailboxes.length === 0 && (
                   <div className="pt-2">
                     <Button
                       size="sm"
-                      onClick={() => setIsAddSharedOpen(true)}
+                      onClick={openCreateInbox}
                       className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
                     >
                       <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                      Add Shared Mailbox
+                      Add shared inbox
                     </Button>
                   </div>
                 )}
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-white hover:bg-white border-b border-slate-200/80">
-                    <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                      Mailbox Name
-                    </TableHead>
-                    <TableHead className="text-xs font-medium py-3 text-slate-500">
-                      Address
-                    </TableHead>
-                    <TableHead className="text-xs font-medium py-3 text-slate-500">
-                      Delegates
-                    </TableHead>
-                    <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSharedMailboxes.map((sm) => (
-                    <TableRow
-                      key={sm.id}
-                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
-                    >
-                      <TableCell className="pl-6 py-3.5">
-                        <span className="text-xs font-medium text-slate-900">{sm.displayName}</span>
-                      </TableCell>
-                      <TableCell className="py-3.5">
-                        <span className="text-xs font-mono text-slate-700">{sm.email}</span>
-                      </TableCell>
-                      <TableCell className="py-3.5">
-                        <div className="flex flex-wrap gap-1.5">
-                          {sm.delegates.length === 0 ? (
-                            <span className="text-xs text-slate-400">No delegates assigned</span>
-                          ) : (
-                            sm.delegates.map((d, idx) => (
-                              <Badge key={idx} variant="secondary" className="text-[10px] font-normal">
-                                {d.email} ({d.accessLevel})
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right pr-6 py-3.5">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs"
-                            onClick={() => {
-                              setEditingSharedMailbox(sm)
-                              setEditingDelegates(Array.isArray(sm.delegates) ? [...sm.delegates] : [])
-                              setNewDelegateEmail("")
-                              setNewDelegateAccess("FULL_ACCESS")
-                            }}
-                          >
-                            Delegates
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-destructive hover:bg-rose-50"
-                            onClick={() =>
-                              runWithStepUp(`Delete shared mailbox ${sm.email}`, async (tok) => {
-                                const idToken = await user!.getIdToken()
-                                return deleteSharedMailbox(idToken, orgId, sm.id, tok)
-                              })
-                            }
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ul className="divide-y divide-zinc-100">
+                {filteredSharedMailboxes.map((mailbox) => (
+                  <li key={mailbox.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:px-5">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-medium text-zinc-950">{mailbox.displayName}</p>
+                      <p className="break-all text-sm text-zinc-600">{mailbox.email}</p>
+                    </div>
+                    <div className="min-w-0 text-sm text-zinc-600">
+                      <p>{mailbox.delegates.length ? `${mailbox.delegates.length} ${mailbox.delegates.length === 1 ? "person has" : "people have"} access` : "No one has access yet"}</p>
+                      {mailbox.delegates.length === 1 && <p className="break-all text-xs">{mailbox.delegates[0].email} · {sharedAccessLabels[mailbox.delegates[0].accessLevel]}</p>}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        className="min-h-11"
+                        onClick={() => {
+                          setEditingSharedMailbox(mailbox)
+                          setEditingDelegates([...mailbox.delegates])
+                          setNewDelegateEmail("")
+                          setNewDelegateAccess("FULL_ACCESS")
+                        }}
+                      >
+                        Manage access
+                      </Button>
+                      <Button variant="ghost" size="icon" className="size-11 text-destructive" aria-label={`Delete ${mailbox.email}`} onClick={() => setDeletingSharedMailbox(mailbox)}>
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 
-          <Dialog
-            open={Boolean(editingSharedMailbox)}
-            onOpenChange={(open) => {
-              if (!open) setEditingSharedMailbox(null)
-            }}
-          >
-            <DialogContent className="sm:max-w-md bg-white">
-              <DialogHeader>
-                <DialogTitle className="text-base font-semibold text-slate-900">
-                  Manage Delegates
-                </DialogTitle>
-                <DialogDescription className="text-xs text-slate-500">
-                  {editingSharedMailbox?.displayName} ({editingSharedMailbox?.email})
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-3 py-2">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Input
-                        value={newDelegateEmail}
-                        onFocus={() => setShowNewDelegateSuggestions(true)}
-                        onBlur={() => setTimeout(() => setShowNewDelegateSuggestions(false), 150)}
-                        onChange={(e) => {
-                          setNewDelegateEmail(e.target.value)
-                          setShowNewDelegateSuggestions(true)
-                        }}
-                        placeholder={`Search user in @${domain || "domain.com"}...`}
-                        className="h-9 text-xs w-full"
-                      />
-                      {showNewDelegateSuggestions && (() => {
-                        const suggestions = filterDomainUserSuggestions(newDelegateEmail, [
-                          editingSharedMailbox?.email || "",
-                          ...editingDelegates.map((d) => d.email),
-                        ])
-                        if (suggestions.length === 0) return null
-                        return (
-                          <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto divide-y divide-slate-100">
-                            {suggestions.map((u) => (
-                              <button
-                                key={u.email}
-                                type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault()
-                                  setNewDelegateEmail(u.email)
-                                  setShowNewDelegateSuggestions(false)
-                                }}
-                                className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between gap-2"
-                              >
-                                <span className="text-xs font-medium text-slate-800 truncate">{u.displayName}</span>
-                                <span className="text-[11px] font-mono text-slate-500 truncate">{u.email}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )
-                      })()}
-                    </div>
-                    <Select value={newDelegateAccess} onValueChange={(v) => setNewDelegateAccess(v as any)}>
-                      <SelectTrigger className="h-9 text-xs w-[150px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="FULL_ACCESS">Full Access</SelectItem>
-                        <SelectItem value="SEND_AS">Send As</SelectItem>
-                        <SelectItem value="READ_ONLY">Read Only</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-9 text-xs"
-                      disabled={
-                        !newDelegateEmail.trim() ||
-                        Boolean(getDelegateValidationError(newDelegateEmail, editingSharedMailbox?.email))
-                      }
-                      onClick={() => {
-                        const clean = newDelegateEmail.trim().toLowerCase()
-                        if (getDelegateValidationError(clean, editingSharedMailbox?.email)) return
-                        setEditingDelegates((prev) => {
-                          const filtered = prev.filter((d) => d.email.toLowerCase() !== clean)
-                          return [...filtered, { email: clean, accessLevel: newDelegateAccess }]
-                        })
-                        setNewDelegateEmail("")
-                        setShowNewDelegateSuggestions(false)
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                  {newDelegateEmail.trim() && getDelegateValidationError(newDelegateEmail, editingSharedMailbox?.email) && (
-                    <p className="text-[11px] text-rose-600">
-                      {getDelegateValidationError(newDelegateEmail, editingSharedMailbox?.email)}
-                    </p>
-                  )}
-                </div>
-
-                <div className="border border-slate-200/80 rounded-lg divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                  {editingDelegates.length === 0 ? (
-                    <p className="text-xs text-slate-400 text-center py-6">
-                      No delegates assigned to this shared mailbox.
-                    </p>
-                  ) : (
-                    editingDelegates.map((del) => (
-                      <div key={del.email} className="flex items-center justify-between gap-2 px-3 py-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-mono text-slate-800 truncate">{del.email}</p>
-                        </div>
-                        <Select
-                          value={del.accessLevel}
-                          onValueChange={(v) =>
-                            setEditingDelegates((prev) =>
-                              prev.map((d) =>
-                                d.email.toLowerCase() === del.email.toLowerCase()
-                                  ? { ...d, accessLevel: v as SharedMailboxDelegate["accessLevel"] }
-                                  : d
-                              )
-                            )
-                          }
-                        >
-                          <SelectTrigger className="h-7 text-[11px] w-[125px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="FULL_ACCESS">Full Access</SelectItem>
-                            <SelectItem value="SEND_AS">Send As</SelectItem>
-                            <SelectItem value="READ_ONLY">Read Only</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-slate-400 hover:text-destructive shrink-0"
-                          onClick={() =>
-                            setEditingDelegates((prev) =>
-                              prev.filter((d) => d.email.toLowerCase() !== del.email.toLowerCase())
-                            )
-                          }
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  <strong>Full Access:</strong> Read incoming mail &amp; send as address.{" "}
-                  <strong>Send As:</strong> Send only.{" "}
-                  <strong>Read Only:</strong> Receive &amp; read only.
-                </p>
-              </div>
-
-              <DialogFooter className="gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditingSharedMailbox(null)}
-                  className="text-xs"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={busy || !user || !editingSharedMailbox}
+          <AlertDialog open={Boolean(deletingSharedMailbox)} onOpenChange={(open) => { if (!open) setDeletingSharedMailbox(null) }}>
+            <AlertDialogContent className="max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete shared inbox?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  People will lose access to <span className="break-all font-medium">{deletingSharedMailbox?.email}</span>. Delete this inbox only if your team no longer needs it.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="min-h-11">Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="min-h-11 bg-destructive text-white hover:bg-destructive/90"
+                  disabled={busy}
                   onClick={() => {
-                    const targetSm = editingSharedMailbox
-                    if (!targetSm || !user) return
-                    const nextDelegates = [...editingDelegates]
-                    setEditingSharedMailbox(null)
-                    runWithStepUp(`Update delegates for ${targetSm.email}`, async (tok) => {
+                    const mailbox = deletingSharedMailbox
+                    if (!mailbox || !user) return
+                    void runWithStepUp(`Delete shared inbox ${mailbox.email}`, async (token) => {
                       const idToken = await user.getIdToken()
-                      return updateSharedMailboxDelegates(idToken, orgId, targetSm.id, nextDelegates, tok)
+                      return deleteSharedMailbox(idToken, orgId, mailbox.id, token)
                     })
                   }}
-                  className="bg-primary hover:bg-primary/95 !text-white text-white text-xs"
                 >
-                  Save Delegates
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                  Delete inbox
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           <Dialog open={isAddSharedOpen} onOpenChange={setIsAddSharedOpen}>
-            <DialogContent className="sm:max-w-md bg-white">
+            <DialogContent className="max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] overflow-y-auto rounded-xl bg-white sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-base font-semibold text-slate-900">
-                  Add Shared Mailbox
+                  Add shared inbox
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500">
-                  Provision a delegated team mailbox with shared access permissions.
+                  Choose an address and give the first person permission to use the inbox.
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-3 py-2">
                 <div>
-                  <Label className="text-xs">Display Name</Label>
+                  <Label htmlFor="shared-inbox-name" className="text-sm">Inbox name</Label>
                   <Input
+                    id="shared-inbox-name"
                     value={smDisplayName}
                     onChange={(e) => setSmDisplayName(e.target.value)}
                     placeholder="Support Desk"
-                    className="h-9 text-xs mt-1"
+                    className="mt-1 min-h-11 text-base sm:text-sm"
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Email Address</Label>
-                  <div className="flex items-center gap-1.5 mt-1">
+                  <Label htmlFor="shared-inbox-address" className="text-sm">Email address</Label>
+                  <div className="mt-1 flex flex-col gap-1.5 sm:flex-row sm:items-center">
                     <Input
+                      id="shared-inbox-address"
                       value={smLocalPart}
                       onChange={(e) => setSmLocalPart(e.target.value)}
                       placeholder="support"
-                      className="h-9 text-xs"
+                      className="min-h-11 text-base sm:text-sm"
                     />
-                    <span className="text-xs font-mono text-muted-foreground shrink-0">
+                    <span className="text-xs font-mono text-muted-foreground break-all">
                       @{domain || "example.com"}
                     </span>
                   </div>
                 </div>
                 <div className="relative">
-                  <Label className="text-xs">Initial Delegate Email</Label>
+                  <Label htmlFor="shared-inbox-person" className="text-sm">First person with access</Label>
                   <Input
+                    id="shared-inbox-person"
                     value={smDelegateEmail}
                     onFocus={() => setShowSmDelegateSuggestions(true)}
                     onBlur={() => setTimeout(() => setShowSmDelegateSuggestions(false), 150)}
@@ -697,7 +514,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                       setShowSmDelegateSuggestions(true)
                     }}
                     placeholder={`Search user in @${domain || "domain.com"}...`}
-                    className="h-9 text-xs mt-1"
+                    className="mt-1 min-h-11 text-base sm:text-sm"
                   />
                   {showSmDelegateSuggestions && (() => {
                     const smEmail = smLocalPart.trim() && domain ? `${smLocalPart.trim().toLowerCase()}@${domain.toLowerCase()}` : ""
@@ -730,15 +547,15 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   )}
                 </div>
                 <div>
-                  <Label className="text-xs">Delegate Access Level</Label>
-                  <Select value={smDelegateAccess} onValueChange={(v) => setSmDelegateAccess(v as any)}>
-                    <SelectTrigger className="h-9 text-xs mt-1">
+                  <Label htmlFor="shared-inbox-access" className="text-sm">What can they do?</Label>
+                  <Select value={smDelegateAccess} onValueChange={(v) => setSmDelegateAccess(v as SharedMailboxDelegate["accessLevel"])}>
+                    <SelectTrigger id="shared-inbox-access" className="mt-1 min-h-11 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="FULL_ACCESS">Full Access (Read &amp; Send As)</SelectItem>
-                      <SelectItem value="SEND_AS">Send As (Outbound Only)</SelectItem>
-                      <SelectItem value="READ_ONLY">Read Only (Inbound Read Only)</SelectItem>
+                      <SelectItem value="FULL_ACCESS">Read and send</SelectItem>
+                      <SelectItem value="SEND_AS">Send only</SelectItem>
+                      <SelectItem value="READ_ONLY">Read only</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -790,7 +607,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   }}
                   className="bg-primary hover:bg-primary/95 !text-white text-white text-xs"
                 >
-                  Create Shared Mailbox
+                  Create shared inbox
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -802,10 +619,10 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
         <Card className="border-slate-200/80 shadow-none">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-slate-900">
-              Spam & DLP Quarantine Console ({quarantineItems.filter((q) => q.status === "quarantined").length} pending)
+              Held messages ({quarantineItems.filter((q) => q.status === "quarantined").length} pending)
             </CardTitle>
             <CardDescription className="text-xs">
-              Review held messages flagged by DLP, phishing, or attachment rules. Release or delete requires verification.
+              Review messages held because they may contain unsafe content or sensitive information. Verify your identity to release or delete a message.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2.5">
@@ -864,13 +681,14 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
 
       {activeSection === "dlp" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {capabilities?.canSecurityAdmin && (
           <Card className="border-slate-200/80 shadow-none">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-slate-900">
-                Data Loss Prevention (DLP) Rules
+                Protect sensitive information
               </CardTitle>
               <CardDescription className="text-xs">
-                Inspect outbound mail for sensitive patterns (SSN, Credit Cards, API Keys, Regex).
+                Check outgoing email for sensitive information such as card numbers or API keys.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -923,7 +741,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   })
                 }
               >
-                Add DLP Rule
+                Add protection rule
               </Button>
               <div className="space-y-2 pt-2 border-t">
                 {dlpRules.map((r) => (
@@ -950,14 +768,15 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
               </div>
             </CardContent>
           </Card>
+          )}
 
           <Card className="border-slate-200/80 shadow-none">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-slate-900">
-                Transport & Mail Flow Rules
+                Rules for handling email
               </CardTitle>
               <CardDescription className="text-xs">
-                Enforce org disclaimers, external moderation, external link hardening, and attachment blocking.
+                Add disclaimers, block attachment types, or control how external messages are handled.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -998,7 +817,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                   })
                 }
               >
-                Add Transport Rule
+                Add mail rule
               </Button>
               <div className="space-y-2 pt-2 border-t">
                 {transportRules.map((r) => (
@@ -1051,7 +870,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
               </div>
               {!holdAll && (
                 <div>
-                  <Label className="text-xs">Custodian Emails (comma-separated)</Label>
+                  <Label className="text-xs">Email addresses to preserve (separated by commas)</Label>
                   <Input
                     value={holdCustodians}
                     onChange={(e) => setHoldCustodians(e.target.value)}
@@ -1144,7 +963,7 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
                         </Badge>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        {h.holdAllMailboxes ? "All organization mailboxes frozen" : `Custodians: ${h.custodianEmails.join(", ")}`} · {h.reason}
+                        {h.holdAllMailboxes ? "All organization mailboxes frozen" : `Protected addresses: ${h.custodianEmails.join(", ")}`} · {h.reason}
                       </p>
                     </div>
                     {h.status === "active" && (
@@ -1175,10 +994,10 @@ export function EmailGovernancePanel({ orgId, domain, mode }: EmailGovernancePan
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="space-y-1 min-w-0">
                 <CardTitle className="text-sm font-medium text-slate-900">
-                  Persistent SIEM & Security Audit Logs
+                  Security activity log
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
-                  Immutable audit trail across authentication, security policies, DLP, quarantine, legal holds, and mail actions.
+                  Review recorded sign-ins, policy changes, held messages, and email administration activity.
                 </CardDescription>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">

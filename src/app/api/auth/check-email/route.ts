@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth } from '@/firebase/admin';
 
+/**
+ * Non-enumerating email pre-check endpoint.
+ * Does not disclose whether an arbitrary email address is registered;
+ * sign-up and sign-in rely on authenticated Firebase responses instead.
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -8,18 +12,8 @@ export async function POST(req: NextRequest) {
     if (!email || !email.includes('@')) {
       return NextResponse.json({ ok: false, exists: false }, { status: 400 });
     }
-
-    try {
-      await adminAuth.getUserByEmail(email);
-      return NextResponse.json({ ok: true, exists: true });
-    } catch (err: any) {
-      const code = err?.errorInfo?.code || err?.code || '';
-      if (code === 'auth/user-not-found') {
-        return NextResponse.json({ ok: true, exists: false });
-      }
-      throw err;
-    }
+    return NextResponse.json({ ok: true, exists: false });
   } catch {
-    return NextResponse.json({ ok: false, exists: true }, { status: 500 });
+    return NextResponse.json({ ok: false, exists: false }, { status: 500 });
   }
 }

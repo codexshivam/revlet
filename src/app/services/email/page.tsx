@@ -3,7 +3,6 @@
 import Link from "next/link"
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -68,6 +67,11 @@ import {
   Eye,
   EyeOff,
   ShieldOff,
+  ArrowUpRight,
+  ChevronDown,
+  Inbox,
+  Settings2,
+  ShieldCheck,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
@@ -79,7 +83,7 @@ import { cn } from "@/lib/utils"
 import dynamic from "next/dynamic"
 import { PageHeader } from "@/components/layout/page-header"
 import { EmptyOrgState } from "@/components/services/empty-org-state"
-import { ServiceActivationCard } from "@/components/services/service-activation-card"
+import { EmailDomainRecords } from "@/components/services/email-domain-records"
 
 const EmailGovernancePanel = dynamic(
   () => import("@/components/services/email-governance-panel").then((m) => m.EmailGovernancePanel),
@@ -130,15 +134,26 @@ function getDaysRemaining(recoverableUntil: string | null): number {
   return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)))
 }
 
-const EMAIL_TAB_TITLES: Record<string, string> = {
-  users: "User Directory",
-  groups: "Groups",
-  shared: "Shared Mailboxes",
-  suspended: "Suspended Accounts",
-  routing: "Mail Routing",
-  domains: "Domains",
-  governance: "Governance & Security",
-  settings: "Email Settings",
+const EMAIL_SECTIONS = [
+  { value: "users", label: "Email accounts", icon: Mail },
+  { value: "groups", label: "Mailing groups", icon: Users },
+  { value: "shared", label: "Shared inboxes", icon: Inbox },
+  { value: "suspended", label: "Paused & deleted", icon: Ban },
+  { value: "governance", label: "Security & compliance", icon: ShieldCheck },
+  { value: "settings", label: "Settings", icon: Settings2 },
+] as const
+
+function SendingLimit({ label, sent, limit }: { label: string; sent: number; limit: number }) {
+  return (
+    <div className="min-w-0 space-y-2">
+      <p className="text-sm font-medium text-zinc-900">{label}</p>
+      <p className="text-sm tabular-nums text-zinc-600">
+        {sent.toLocaleString()} of {limit.toLocaleString()} sent
+      </p>
+      {limit > 0 && <progress className="block h-2 w-full accent-zinc-800" aria-label={label} max={limit} value={Math.min(sent, limit)} />}
+      <p className="text-sm text-zinc-600">{Math.max(0, limit - sent).toLocaleString()} sends remaining</p>
+    </div>
+  )
 }
 
 export default function EmailServiceAdminPage() {
@@ -146,10 +161,11 @@ export default function EmailServiceAdminPage() {
   const { orgs, activeOrg: selectedOrg, activeOrgId: selectedOrgId, loading: isLoadingOrgs } = useActiveOrg()
 
   // Core service state
-  const [isLoadingQuota, setIsLoadingQuota] = useState(false)
+  const [isLoadingQuota, setIsLoadingQuota] = useState(true)
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true)
   const [hasLoadedDirectory, setHasLoadedDirectory] = useState(false)
   const [directoryError, setDirectoryError] = useState<string | null>(null)
+  const [groupLoadError, setGroupLoadError] = useState<string | null>(null)
   const [credentialStepUp, setCredentialStepUp] = useState<{
     type: "password" | "mfa"
     orgId: string
@@ -165,23 +181,28 @@ export default function EmailServiceAdminPage() {
   const [lifecycleAccess, setLifecycleAccess] = useState<{
     orgId: string
     canManage: boolean
+    canCreateAccounts: boolean
     canDeactivate: boolean
     canInvite: boolean
   } | null>(null)
+  const canCreateAccounts = lifecycleAccess?.orgId === selectedOrgId && lifecycleAccess?.canCreateAccounts
   const canManageMailService = lifecycleAccess?.orgId === selectedOrgId && lifecycleAccess?.canManage
   const canDeactivateMailService = lifecycleAccess?.orgId === selectedOrgId && lifecycleAccess?.canDeactivate
   useEffect(() => {
     setSetupError(null)
     setDirectoryError(null)
+    setGroupLoadError(null)
+    setPendingSecurityPolicy(null)
     setDeactivationChallengeOrg(null)
     setCredentialStepUp(null)
     setRequiredDnsRecords([])
-    setHasScannedDns(false)
   }, [selectedOrgId])
   const [isSyncingDns, setIsSyncingDns] = useState(false)
 
-  const [serviceActive, setServiceActive] = useState<boolean>(() => Boolean(selectedOrg?.mailServiceActive))
-  const isEffectiveServiceActive = Boolean(selectedOrg?.mailServiceActive ?? serviceActive)
+  const [serviceState, setServiceState] = useState<{ orgId: string; active: boolean } | null>(null)
+  const isEffectiveServiceActive = serviceState?.orgId === selectedOrgId
+    ? serviceState.active
+    : Boolean(selectedOrg?.mailServiceActive)
 
   const [dnsServiceActive, setDnsServiceActive] = useState<boolean>(() => Boolean(selectedOrg?.cloudflareZoneId))
   const [monthlyOutboundLimit, setMonthlyOutboundLimit] = useState<number>(() => selectedOrg?.mailMonthlyLimit ?? 1000)
@@ -191,11 +212,9 @@ export default function EmailServiceAdminPage() {
   const [catchAllUserId, setCatchAllUserId] = useState<string | null>(() => selectedOrg?.mailCatchAllUserId ?? null)
   const [catchAllEmail, setCatchAllEmail] = useState<string | null>(() => selectedOrg?.mailCatchAllEmail ?? null)
   const [requiredDnsRecords, setRequiredDnsRecords] = useState<MailRequiredDnsRecord[]>([])
-  const [hasScannedDns, setHasScannedDns] = useState(false)
 
   useEffect(() => {
     if (selectedOrg) {
-      setServiceActive(Boolean(selectedOrg.mailServiceActive))
       setDnsServiceActive(Boolean(selectedOrg.cloudflareZoneId))
       setMonthlyOutboundLimit(selectedOrg.mailMonthlyLimit ?? 1000)
       setDailyOutboundLimit(selectedOrg.mailDailyLimit ?? 100)
@@ -206,93 +225,9 @@ export default function EmailServiceAdminPage() {
     }
   }, [selectedOrg])
 
-  // Pre-computed fallback DNS records for immediate display before network resolution
-  const fallbackDnsRecords = useMemo<MailRequiredDnsRecord[]>(() => {
-    const domain = (selectedOrg?.domain || "revlet.me").toLowerCase().trim()
-    const baseCoreRecords: MailRequiredDnsRecord[] = [
-      {
-        id: "mx-primary",
-        purpose: "Inbound Mail Routing (MX)",
-        type: "MX",
-        name: domain,
-        content: "mx.revlet.me",
-        priority: 10,
-        ttl: "Auto",
-        verified: false,
-        required: true,
-      },
-    ]
-
-    let dkimRecords: MailRequiredDnsRecord[] = []
-    if (
-      selectedOrg?.mailDkimMode === "easydkim" &&
-      selectedOrg?.mailDkimTokens &&
-      Array.isArray(selectedOrg.mailDkimTokens) &&
-      selectedOrg.mailDkimTokens.length === 3
-    ) {
-      dkimRecords = selectedOrg.mailDkimTokens.map((tok, idx) => ({
-        id: `cname-dkim-${idx + 1}`,
-        purpose: `Domain Signing Key #${idx + 1} (DKIM)`,
-        type: "CNAME" as const,
-        name: `${tok}._domainkey.${domain}`,
-        content: `${tok}.dkim.amazonses.com`,
-        ttl: "Auto",
-        verified: false,
-        required: true,
-      }))
-    } else {
-      const selector = selectedOrg?.mailDkimSelector || "revlet"
-      const publicKey = selectedOrg?.mailDkimPublicKey || ""
-      dkimRecords = [
-        {
-          id: "txt-dkim-1",
-          purpose: "Outbound Mail Signing (DKIM)",
-          type: "TXT",
-          name: `${selector}._domainkey.${domain}`,
-          content: publicKey ? `v=DKIM1; k=rsa; p=${publicKey}` : "v=DKIM1; k=rsa; p=...",
-          ttl: "Auto",
-          verified: false,
-          required: true,
-        },
-      ]
-    }
-
-    const optionalRecords: MailRequiredDnsRecord[] = [
-      {
-        id: "txt-spf",
-        purpose: "Sender Policy Authorization (SPF)",
-        type: "TXT",
-        name: domain,
-        content: "v=spf1 include:_spf.mx.revlet.me include:amazonses.com ~all",
-        ttl: "Auto",
-        verified: false,
-        required: false,
-      },
-      {
-        id: "txt-dmarc",
-        purpose: "Domain Authentication Policy (DMARC)",
-        type: "TXT",
-        name: `_dmarc.${domain}`,
-        content: "v=DMARC1; p=quarantine; pct=100;",
-        ttl: "Auto",
-        verified: false,
-        required: false,
-      },
-    ]
-
-    return [...baseCoreRecords, ...dkimRecords, ...optionalRecords]
-  }, [
-    selectedOrg?.domain,
-    selectedOrg?.mailDkimMode,
-    selectedOrg?.mailDkimSelector,
-    selectedOrg?.mailDkimPublicKey,
-    selectedOrg?.mailDkimTokens,
-  ])
-
-  const displayDnsRecords = requiredDnsRecords.length > 0 ? requiredDnsRecords : fallbackDnsRecords
   const coreDnsRecords = useMemo(
-    () => displayDnsRecords.filter((r) => r.required !== false && r.id !== "txt-spf" && r.id !== "txt-dmarc"),
-    [displayDnsRecords]
+    () => requiredDnsRecords.filter((r) => r.required !== false && r.id !== "txt-spf" && r.id !== "txt-dmarc"),
+    [requiredDnsRecords]
   )
   const verifiedCoreDnsCount = useMemo(
     () => coreDnsRecords.filter((r) => r.verified).length,
@@ -309,26 +244,32 @@ export default function EmailServiceAdminPage() {
   const emailPathname = usePathname()
   const emailSearchParams = useSearchParams()
   const legacySection = emailPathname.match(/^\/orgs\/[^/]+\/email\/([^/]+)/)?.[1]
-  const activeTab = emailSlugToTab(legacySection || emailSearchParams.get("tab")) || "users"
+  const requestedTab = emailSlugToTab(legacySection || emailSearchParams.get("tab"))
+  const activeTab = requestedTab === "routing" || requestedTab === "domains" ? "settings" : requestedTab || "users"
 
   useEffect(() => {
-    document.title = `${EMAIL_TAB_TITLES[activeTab]} | Revlet Platform`
-  }, [activeTab])
+    const sectionTitle = EMAIL_SECTIONS.find((section) => section.value === activeTab)?.label
+    document.title = isEffectiveServiceActive && sectionTitle
+      ? `${sectionTitle} · Email Service | Revlet Platform`
+      : "Email Service | Revlet Platform"
+  }, [activeTab, isEffectiveServiceActive])
 
-  const [enforceMfa, setEnforceMfa] = useState(false)
+  const [securityPolicy, setSecurityPolicy] = useState<{ orgId: string; enforceMfa: boolean } | null>(null)
   const [isUpdatingEnforceMfa, setIsUpdatingEnforceMfa] = useState(false)
-  const [mfaStepUpOpen, setMfaStepUpOpen] = useState(false)
-  const [pendingEnforceValue, setPendingEnforceValue] = useState<boolean | null>(null)
+  const [pendingSecurityPolicy, setPendingSecurityPolicy] = useState<{ orgId: string; enforceMfa: boolean } | null>(null)
 
   useEffect(() => {
     if (!user || !selectedOrgId) return
-    user.getIdToken().then((idToken) => {
-      getOrganizationSecurityPolicy(idToken, selectedOrgId).then((res) => {
-        if (res.success && typeof res.enforceMfa === "boolean") {
-          setEnforceMfa(res.enforceMfa)
+    let cancelled = false
+    user.getIdToken()
+      .then((token) => getOrganizationSecurityPolicy(token, selectedOrgId))
+      .then((res) => {
+        if (!cancelled && res.success && typeof res.enforceMfa === "boolean") {
+          setSecurityPolicy({ orgId: selectedOrgId, enforceMfa: res.enforceMfa })
         }
       })
-    }).catch(() => {})
+      .catch(() => {})
+    return () => { cancelled = true }
   }, [user, selectedOrgId])
 
   const handleToggleEnforceMfa = async (nextVal: boolean, stepUpToken?: string) => {
@@ -337,16 +278,16 @@ export default function EmailServiceAdminPage() {
     try {
       const idToken = await user.getIdToken()
       const res = await setOrganizationEnforceMfa(idToken, selectedOrgId, nextVal, stepUpToken)
+      if (lifecycleOrgRef.current !== selectedOrgId) return
       if (!res.success && typeof res.error === "string" && res.error.includes("MFA_STEP_UP_REQUIRED")) {
-        setPendingEnforceValue(nextVal)
-        setMfaStepUpOpen(true)
+        setPendingSecurityPolicy({ orgId: selectedOrgId, enforceMfa: nextVal })
         return
       }
       if (!res.success) {
         toast({ variant: "destructive", title: "Policy update failed", description: res.error })
         return
       }
-      setEnforceMfa(Boolean(res.enforceMfa))
+      setSecurityPolicy({ orgId: selectedOrgId, enforceMfa: Boolean(res.enforceMfa) })
       toast({
         title: res.enforceMfa ? "MFA Enforced" : "MFA Enforcement Disabled",
         description: res.enforceMfa
@@ -541,9 +482,9 @@ export default function EmailServiceAdminPage() {
     setOrgUnits([])
     setGroups([])
     setRequiredDnsRecords([])
-    setHasScannedDns(false)
     setMailPurgeScheduledAt(null)
     setSelectedUserOu("ALL")
+    setSelectedGroupOu("ALL")
     setHasLoadedDirectory(false)
     setIsLoadingDirectory(true)
     setIsLoadingQuota(true)
@@ -576,6 +517,7 @@ export default function EmailServiceAdminPage() {
 
         // Fetch directory collections (Users, OrgUnits, Groups) immediately in parallel
         setDirectoryError(null)
+        setGroupLoadError(null)
         const dirPromise = Promise.all([
           listMailOrgUnits(idToken, selectedOrgId),
           listMailUsers(idToken, selectedOrgId),
@@ -599,7 +541,7 @@ export default function EmailServiceAdminPage() {
             if (groupsRes.success && groupsRes.data) {
               setGroups(groupsRes.data)
             } else if (!groupsRes.success) {
-              failures.push(groupsRes.error || "Could not load email groups.")
+              setGroupLoadError(groupsRes.error || "Could not load mailing groups.")
             }
             setDirectoryError(failures.length > 0 ? failures[0] : null)
             setHasLoadedDirectory(true)
@@ -610,6 +552,7 @@ export default function EmailServiceAdminPage() {
             }
             console.error("Failed to load mail directory:", err)
             setDirectoryError(err?.message || "Could not load email directory.")
+            setGroupLoadError("Could not load mailing groups.")
             setHasLoadedDirectory(true)
           })
           .finally(() => {
@@ -628,10 +571,11 @@ export default function EmailServiceAdminPage() {
               setLifecycleAccess({
                 orgId: selectedOrgId,
                 canManage: stateRes.data.canManageMailService,
+                canCreateAccounts: stateRes.data.canCreateMailAccounts,
                 canDeactivate: stateRes.data.canDeactivateMailService,
                 canInvite: stateRes.data.canInviteTeamMembers,
               })
-              setServiceActive(stateRes.data.mailServiceActive)
+              setServiceState({ orgId: selectedOrgId, active: stateRes.data.mailServiceActive })
               setDnsServiceActive(stateRes.data.dnsServiceActive)
               setMonthlyOutboundLimit(stateRes.data.monthlyOutboundLimit)
               setDailyOutboundLimit(stateRes.data.dailyOutboundLimit)
@@ -650,6 +594,8 @@ export default function EmailServiceAdminPage() {
             if (loadRequestSeqRef.current !== requestSeq) {
               return
             }
+            setLifecycleAccess(null)
+            setSetupError("Could not load Email Service settings. Try again.")
             console.error("Failed to load mail state:", err)
           })
           .finally(() => {
@@ -661,6 +607,12 @@ export default function EmailServiceAdminPage() {
         await Promise.all([dirPromise, statePromise])
       } catch (err: any) {
         if (loadRequestSeqRef.current === requestSeq) {
+          setSetupError("Could not load Email Service settings. Try again.")
+          setDirectoryError("Could not load your email directory. Try again.")
+          setGroupLoadError("Could not load mailing groups. Try again.")
+          setHasLoadedDirectory(true)
+          setIsLoadingDirectory(false)
+          setIsLoadingQuota(false)
           toast({
             variant: "destructive",
             title: "Failed to load email service",
@@ -850,33 +802,6 @@ export default function EmailServiceAdminPage() {
     setTimeout(() => setCopiedKey(null), 1800)
   }
 
-  const handleCopyAllRecords = () => {
-    if (!selectedOrg?.domain) return
-    const recordsToCopy = serviceActive ? displayDnsRecords : coreDnsRecords
-
-    const text = recordsToCopy
-      .map((r, i) => {
-        const prio = (r as any).priority !== undefined ? ` (Priority ${(r as any).priority})` : ""
-        return `${i + 1}. [${r.type}${prio}] ${r.purpose}\n   Host: ${r.name}\n   Target / Value: ${r.content}`
-      })
-      .join("\n\n")
-
-    const full =
-      `Required DNS Records for ${selectedOrg.domain}:\n\n` +
-      text +
-      `\n\nAdd these records at your DNS provider to activate Email Service.`
-
-    navigator.clipboard.writeText(full)
-    setCopiedKey("all-records")
-    setTimeout(() => setCopiedKey(null), 2000)
-    toast({
-      title: "All DNS records copied",
-      description: serviceActive
-        ? "Copied all MX, DKIM, SPF, and DMARC records to clipboard."
-        : "Copied required Inbound (MX) and Outbound (DKIM) records to clipboard.",
-    })
-  }
-
   // Service activation / deactivation / DNS sync
   const handleActivateService = async () => {
     if (!user || !selectedOrgId || !canManageMailService || isActivating || isSyncingDns) return
@@ -887,14 +812,13 @@ export default function EmailServiceAdminPage() {
       if (lifecycleOrgRef.current !== selectedOrgId) return
       if (!res.success) throw new Error(res.error)
 
-      setServiceActive(true)
+      setServiceState({ orgId: selectedOrgId, active: true })
       window.dispatchEvent(new Event("revlet-orgs-refresh"))
       toast({
         title: "Email Service activated",
         description: `Mail is active for ${selectedOrg?.domain}.`,
       })
       await loadAllMailData(true)
-      if (lifecycleOrgRef.current === selectedOrgId) setHasScannedDns(true)
     } catch (err: any) {
       if (lifecycleOrgRef.current === selectedOrgId) {
         setSetupError(err.message || "Could not activate Email Service.")
@@ -918,7 +842,7 @@ export default function EmailServiceAdminPage() {
       }
       if (!res.success) throw new Error(res.error)
 
-      setServiceActive(false)
+      setServiceState({ orgId: selectedOrgId, active: false })
       setIsDeactivateConfirmOpen(false)
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("revlet-orgs-refresh"))
@@ -927,6 +851,7 @@ export default function EmailServiceAdminPage() {
         title: "Email Service deactivated",
         description: "Email Service has been paused for this organization.",
       })
+      await loadAllMailData(true)
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -963,7 +888,6 @@ export default function EmailServiceAdminPage() {
         })
       }
       await loadAllMailData(true)
-      if (lifecycleOrgRef.current === selectedOrgId) setHasScannedDns(true)
     } catch (err: any) {
       if (lifecycleOrgRef.current !== selectedOrgId) return
       setSetupError(err.message || "Could not check DNS records.")
@@ -978,22 +902,6 @@ export default function EmailServiceAdminPage() {
   }
 
   // Catch-all handlers
-  const handleCatchAllToggle = async (enabled: boolean) => {
-    if (!user || !selectedOrgId) return
-    const activeUsersList = users.filter((u) => u.status === "active")
-    if (enabled && activeUsersList.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "No active email accounts",
-        description: "Create at least one active user account before enabling catch-all routing.",
-      })
-      return
-    }
-
-    const targetId = enabled ? activeUsersList[0].id : null
-    await handleCatchAllTargetChange(targetId)
-  }
-
   const handleCatchAllTargetChange = async (nextUserId: string | null) => {
     if (!user || !selectedOrgId) return
     setIsUpdatingCatchAll(true)
@@ -1598,6 +1506,29 @@ export default function EmailServiceAdminPage() {
     return Array.from(paths)
   }, [orgUnits])
 
+  const openCreateAccount = () => {
+    setCreateUserForm({
+      firstName: "",
+      lastName: "",
+      emailPrefix: "",
+      password: "",
+      orgUnitPath: selectedUserOu === "ALL" ? "/" : selectedUserOu,
+    })
+    setShowCreatePassword(false)
+    setIsCreateUserOpen(true)
+  }
+
+  const openCreateGroup = () => {
+    setCreateGroupForm({
+      name: "",
+      emailPrefix: "",
+      orgUnitPath: selectedGroupOu === "ALL" ? "/" : selectedGroupOu,
+      memberEmails: [],
+    })
+    setNewGroupMemberInput("")
+    setIsCreateGroupOpen(true)
+  }
+
   const [usersPage, setUsersPage] = useState(1)
   const [usersPageSize, setUsersPageSize] = useState(25)
   const [groupsPage, setGroupsPage] = useState(1)
@@ -1647,12 +1578,10 @@ export default function EmailServiceAdminPage() {
   if (authLoading || (isLoadingOrgs && orgs.length === 0)) {
     return (
       <DashboardShell>
-        <div className="flex flex-col items-center justify-center min-h-[50vh] bg-white px-6">
-          <img
-            src="/logo-4k.png"
-            alt="Revlet"
-            className="h-20 sm:h-24 w-auto max-w-[82vw] object-contain select-none"
-          />
+        <div className="space-y-5" aria-busy="true">
+          <PageHeader title="Email Service" description={<span role="status">Loading your workspace…</span>} />
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-52 w-full rounded-xl" />
         </div>
       </DashboardShell>
     )
@@ -1679,267 +1608,100 @@ export default function EmailServiceAdminPage() {
       })
     : null
 
-  // Pre-activation screen: matches DNS Management layout & style
+  const setupBusy = isLoadingQuota || isSyncingDns || isActivating || isRefreshing
+  const hasDomainRecords = coreDnsRecords.length > 0
+  const domainStatus = isLoadingQuota
+    ? "Checking domain…"
+    : !lifecycleAccess || lifecycleAccess.orgId !== selectedOrgId
+      ? "Domain status unavailable"
+      : areCoreRecordsVerified
+        ? "Domain verified"
+        : hasDomainRecords
+          ? "Domain needs attention"
+          : "Domain setup needed"
+
   if (!isEffectiveServiceActive) {
+    const setupTitle = areCoreRecordsVerified
+      ? "Turn on email"
+      : dnsServiceActive
+        ? "Connect your domain"
+        : hasDomainRecords
+          ? "Add records at your domain provider"
+          : "Prepare your domain records"
+
     return (
       <DashboardShell>
-        <div className="space-y-6 animate-in fade-in duration-200">
-          <PageHeader title="Email Service" />
+        <div className="space-y-5">
+          <PageHeader title="Email Service" description={<span className="break-all text-sm">{selectedOrg.domain}</span>} />
 
-          {mailPurgeScheduledAt && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.75} />
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-amber-950">
-                    Email Service Deactivated — Permanent Deletion Scheduled for {purgeDateLabel}
-                  </p>
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    All mailboxes, aliases, groups, and stored email data for{" "}
-                    <span className="font-mono font-semibold">{selectedOrg.domain}</span> will be permanently deleted from our servers after the 14-day retention period. Reactivate Email Service to cancel deletion and preserve your data.
-                  </p>
-                </div>
+          {purgeDateLabel && (
+            <div role="status" className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <div className="space-y-1">
+                <p className="font-semibold">Email is paused. Deletion is scheduled for {purgeDateLabel}.</p>
+                <p>Turn email back on before that date to keep your mailboxes and messages.</p>
               </div>
             </div>
           )}
 
-          <div className="w-full space-y-6">
-            {/* Widget 1: Email Service Activation Widget (65% Blue Features / 35% Activation) */}
-            <ServiceActivationCard
-              domain={selectedOrg.domain}
-              domainIcon={<Mail className="w-3.5 h-3.5 text-white" />}
-              title="RevletMail Service"
-              description="Dedicated business email hosting for your organization with automated deliverability and centralized directory control."
-              features={[
-                {
-                  title: "Custom Business Email",
-                  description:
-                    "Build trust with professional addresses using your own domain name, like you@yourcompany.com.",
-                },
-                {
-                  title: "Work From Anywhere",
-                  description:
-                    "Access your inbox, send replies, and stay connected across desktop and mobile webmail.",
-                },
-                {
-                  title: "Team Groups & Aliases",
-                  description:
-                    "Create shared addresses like hello@ or support@ so inquiries always reach the right people.",
-                },
-                {
-                  title: "Spam & Delivery Protection",
-                  description:
-                    "Built-in authentication and sending safeguards keep your messages landing in primary inboxes.",
-                },
-              ]}
-              rightPanel={
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-slate-900">Activation</h3>
-                    <p className="text-xs text-slate-500">
-                      Enable email hosting for {selectedOrg.domain}.
-                    </p>
-                  </div>
-
-                  <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4" aria-busy={isSyncingDns || isActivating}>
-                    <div className="space-y-1.5">
-                      <p className="text-sm font-semibold text-zinc-950">
-                        {dnsServiceActive ? "Connected DNS" : "External DNS"}
-                      </p>
-                      <p className="text-sm leading-relaxed text-zinc-600">
-                        {dnsServiceActive
-                          ? "Publish the required MX and DKIM records. If another mail provider is configured, review the cutover in DNS Management first."
-                          : "Prepare the records below, publish them at your DNS provider, then check public DNS."}
-                      </p>
-                    </div>
-                    <p className="text-sm font-medium text-zinc-800" role="status">
-                      {coreDnsRecords.length === 0
-                        ? "DNS records are ready to prepare."
-                        : `${verifiedCoreDnsCount} of ${coreDnsRecords.length} required records verified in public DNS.`}
-                    </p>
-                    {setupError && (
-                      <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-                        {setupError}
-                      </p>
-                    )}
-                    {!isLoadingQuota && !canManageMailService && (
-                      <p className="text-sm text-zinc-600">An email administrator can complete setup for this organization.</p>
-                    )}
-                    <Button
-                      onClick={areCoreRecordsVerified ? handleActivateService : handleSyncDnsRecords}
-                      disabled={!canManageMailService || isLoadingQuota || isActivating || isSyncingDns}
-                      className="min-h-11 w-full rounded-lg bg-zinc-950 text-sm text-white hover:bg-zinc-800"
-                    >
-                      {(isActivating || isSyncingDns) && <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
-                      {isActivating ? "Checking Activation…" : isSyncingDns ? "Checking DNS…" : areCoreRecordsVerified
-                        ? "Activate Email Service" : dnsServiceActive ? "Publish Required Records"
-                          : coreDnsRecords.length === 0 ? "Prepare DNS Records" : "Check Public DNS"}
-                    </Button>
-                  </div>
-                </div>
-              }
-            />
-
-            {/* Widget 2: Required DNS Records */}
-            <Card className="bg-white border-slate-200 shadow-none rounded-xl overflow-hidden">
-              <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    Required DNS Records
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Mail routing and sender authentication records for {selectedOrg.domain}.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs text-slate-500 tabular-nums mr-1">
-                    {verifiedCoreDnsCount} of {coreDnsRecords.length} verified
+          <section aria-labelledby="mail-setup-heading" aria-busy={setupBusy} className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+            <div className="bg-zinc-950 p-5 text-white sm:p-8">
+              <h2 id="mail-setup-heading" className="text-xl font-semibold tracking-tight sm:text-2xl">Set up email for your domain</h2>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-300">
+                Connect <span className="break-all font-medium text-white">{selectedOrg.domain}</span> to RevletMail so your team can send and receive email at their work addresses.
+              </p>
+            </div>
+            <ol aria-label="Setup progress" className="grid gap-px border-b border-zinc-200 bg-zinc-200 text-sm sm:grid-cols-3">
+              {["Connect your domain", "Turn on email", "Create email accounts"].map((step, index) => (
+                <li key={step} aria-current={index === (areCoreRecordsVerified ? 1 : 0) ? "step" : undefined} className="flex items-center gap-2.5 bg-zinc-50 px-5 py-3.5 text-zinc-600 aria-[current=step]:bg-white aria-[current=step]:font-semibold aria-[current=step]:text-zinc-950">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full border border-zinc-200 bg-white text-xs tabular-nums">
+                    {index === 0 && areCoreRecordsVerified ? <Check className="size-3.5" aria-label="Complete" /> : index + 1}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyAllRecords}
-                    className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none"
-                  >
-                    {copiedKey === "all-records" ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 mr-1.5 text-slate-900" strokeWidth={1.5} />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
-                        Copy All
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSyncDnsRecords}
-                    disabled={!canManageMailService || isSyncingDns || isActivating}
-                    className="h-8 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none"
-                  >
-                    <RefreshCw
-                      className={cn("w-3.5 h-3.5 mr-1.5 text-slate-400", isSyncingDns && "animate-spin")}
-                      strokeWidth={1.5}
-                    />
-                    {isSyncingDns ? "Checking…" : dnsServiceActive ? "Publish Required Records" : "Check Public DNS"}
-                  </Button>
-                </div>
+                  {step}
+                </li>
+              ))}
+            </ol>
+            <div className="space-y-5 p-5 sm:p-8">
+              <div className="space-y-2">
+                <h3 className="text-base font-semibold text-zinc-950">{setupTitle}</h3>
+                <p className="max-w-2xl text-sm leading-relaxed text-zinc-600">
+                  {areCoreRecordsVerified
+                    ? "Your domain is verified. Turn on email to start creating addresses for your team."
+                    : dnsServiceActive
+                      ? "Revlet can add the settings needed to receive and send email. If you already use another email provider, review the move in DNS Management first."
+                      : hasDomainRecords
+                        ? "Open the DNS settings at the company that manages your domain. Add each record shown below, then return here to check them. If someone else manages your domain, share these records with them."
+                        : "Revlet will create the settings you need to add at your domain provider. Keep this page open while you make those changes."}
+                </p>
               </div>
-
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200/80">
-                      <TableHead className="text-xs font-medium py-2.5 pl-5 text-slate-500 w-[80px]">
-                        Type
-                      </TableHead>
-                      <TableHead className="text-xs font-medium py-2.5 text-slate-500 min-w-[200px]">
-                        Host / Name
-                      </TableHead>
-                      <TableHead className="text-xs font-medium py-2.5 text-slate-500 min-w-[260px]">
-                        Target / Value
-                      </TableHead>
-                      <TableHead className="text-xs font-medium py-2.5 text-slate-500 w-[80px]">
-                        Priority
-                      </TableHead>
-                      <TableHead className="text-xs font-medium py-2.5 text-right pr-5 text-slate-500 w-[90px]">
-                        Status
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoadingQuota || isSyncingDns ? (
-                      [...Array(2)].map((_, idx) => (
-                        <TableRow key={idx} className="border-b border-slate-100 last:border-0">
-                          <TableCell className="pl-5 py-3">
-                            <Skeleton className="h-5 w-12 bg-slate-100" />
-                          </TableCell>
-                          <TableCell className="py-3">
-                            <Skeleton className="h-3.5 w-44 bg-slate-100" />
-                          </TableCell>
-                          <TableCell className="py-3">
-                            <Skeleton className="h-3.5 w-56 bg-slate-100" />
-                          </TableCell>
-                          <TableCell className="py-3">
-                            <Skeleton className="h-3.5 w-10 bg-slate-100" />
-                          </TableCell>
-                          <TableCell className="text-right pr-5 py-3">
-                            <Skeleton className="h-3.5 w-16 ml-auto bg-slate-100" />
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      coreDnsRecords.map((rec) => (
-                      <TableRow key={rec.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/40">
-                        <TableCell className="pl-5 py-3">
-                          <span className="font-mono text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
-                            {rec.type}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs text-slate-700 break-all select-all">
-                              {rec.name}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(rec.name, `${rec.id}-pre-name`)}
-                              className="text-slate-400 hover:text-slate-700 shrink-0 p-1 rounded transition-colors cursor-pointer"
-                              title="Copy host"
-                            >
-                              {copiedKey === `${rec.id}-pre-name` ? (
-                                <Check className="w-3.5 h-3.5 text-slate-900" strokeWidth={1.5} />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
-                              )}
-                            </button>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs text-slate-700 break-all select-all">
-                              {rec.content}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(rec.content, `${rec.id}-pre-val`)}
-                              className="text-slate-400 hover:text-slate-700 shrink-0 p-1 rounded transition-colors cursor-pointer"
-                              title="Copy value"
-                            >
-                              {copiedKey === `${rec.id}-pre-val` ? (
-                                <Check className="w-3.5 h-3.5 text-slate-900" strokeWidth={1.5} />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
-                              )}
-                            </button>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-3 font-mono text-xs text-slate-600 tabular-nums">
-                          {rec.priority !== undefined ? rec.priority : "—"}
-                        </TableCell>
-                        <TableCell className="text-right pr-5 py-3">
-                          <span className="inline-flex items-center justify-end gap-1.5 font-mono text-xs text-slate-600">
-                            <span
-                              className={cn(
-                                "h-1.5 w-1.5 rounded-full",
-                                rec.verified ? "bg-slate-900" : "bg-amber-500"
-                              )}
-                            />
-                            <span>{rec.verified ? "Verified" : dnsServiceActive ? "Auto-apply" : "Pending"}</span>
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+              {hasDomainRecords && !areCoreRecordsVerified && (
+                <p role="status" className="text-sm text-zinc-600">
+                  {verifiedCoreDnsCount} of {coreDnsRecords.length} required records verified. Changes can take time to appear.
+                </p>
+              )}
+              {setupError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">{setupError}</p>}
+              {!isLoadingQuota && lifecycleAccess?.orgId === selectedOrgId && !canManageMailService && (
+                <p className="text-sm text-zinc-600">Ask an email administrator for this workspace to finish setup.</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={areCoreRecordsVerified ? handleActivateService : handleSyncDnsRecords} disabled={!canManageMailService || setupBusy} className="min-h-11 w-full bg-zinc-950 text-white hover:bg-zinc-800 sm:w-auto">
+                  {setupBusy && <Loader2 className="mr-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+                  {isActivating ? "Turning on email…" : isSyncingDns ? "Checking domain…" : isLoadingQuota
+                    ? "Loading setup…" : areCoreRecordsVerified ? "Turn on email" : dnsServiceActive
+                      ? "Add required records" : hasDomainRecords ? "Check my records" : "Prepare records"}
+                </Button>
+                {dnsServiceActive && !areCoreRecordsVerified && (
+                  <Button variant="outline" asChild className="min-h-11 w-full sm:w-auto">
+                    <Link href="/services/dns">Open DNS Management</Link>
+                  </Button>
+                )}
+                {!isLoadingQuota && !lifecycleAccess && (
+                  <Button variant="outline" className="min-h-11" onClick={() => loadAllMailData(true)} disabled={setupBusy}>Try again</Button>
+                )}
               </div>
-            </Card>
-          </div>
+              <EmailDomainRecords key={selectedOrgId} records={coreDnsRecords} domain={selectedOrg.domain} defaultOpen={!dnsServiceActive && !areCoreRecordsVerified} />
+            </div>
+          </section>
         </div>
       </DashboardShell>
     )
@@ -1949,273 +1711,62 @@ export default function EmailServiceAdminPage() {
   return (
     <DashboardShell>
       <div className="space-y-6 animate-in fade-in duration-300">
-        {/* Page header */}
         <PageHeader
           title="Email Service"
-          description={selectedOrg.domain}
+          description={<span className="break-all text-sm">{selectedOrg.domain}</span>}
           actions={
             <>
-              {lifecycleAccess?.orgId === selectedOrgId && lifecycleAccess?.canInvite && (
-                <Button asChild variant="outline" size="sm">
+              {lifecycleAccess?.orgId === selectedOrgId && lifecycleAccess.canInvite && (
+                <Button asChild variant="outline" className="min-h-11">
                   <Link href={`/management/team?inviteOrg=${encodeURIComponent(selectedOrgId)}&preset=email-viewer`}>
-                    Invite Member
+                    Invite to manage email
                   </Link>
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => loadAllMailData(true)}
-                disabled={isRefreshing}
-                className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
-              >
-                <RefreshCw
-                  className={cn("w-3.5 h-3.5 mr-2 text-slate-400", isRefreshing && "animate-spin")}
-                  strokeWidth={1.5}
-                />
-                Refresh
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsOuModalOpen(true)}
-                className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
-              >
-                Organizational Units
-                <span className="ml-2 font-mono text-slate-400 tabular-nums">
-                  {orgUnits.length + 1}
-                </span>
+              <Button asChild variant="outline" className="min-h-11">
+                <a href="https://mail.revlet.me" target="_blank" rel="noreferrer">
+                  Open RevletMail <ArrowUpRight className="ml-1.5 size-4" aria-label="Opens in a new tab" />
+                </a>
               </Button>
             </>
           }
         />
 
-        {/* Missing DNS Records Warning Banner */}
-        {!isLoadingQuota && hasScannedDns && missingDnsRecords.length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 sm:p-5 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-start gap-2.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.75} />
-                <div className="space-y-0.5">
-                  <p className="text-xs font-semibold text-amber-950">
-                    Missing Required DNS Records ({missingDnsRecords.length} of {coreDnsRecords.length} unverified)
-                  </p>
-                  <p className="text-xs text-amber-800">
-                    Mail delivery and authentication may fail for {selectedOrg.domain} until these records are published.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {dnsServiceActive ? (
-                  <Button
-                    size="sm"
-                    onClick={handleSyncDnsRecords}
-                    disabled={!canManageMailService || isSyncingDns || isActivating}
-                    className="h-8 px-3 bg-slate-900 hover:bg-black text-white text-xs font-medium rounded-lg shadow-none"
-                  >
-                    {isSyncingDns && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                    Add Missing Records
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleSyncDnsRecords}
-                    disabled={!canManageMailService || isSyncingDns || isActivating}
-                    className="h-8 px-3 border-amber-300 bg-white hover:bg-amber-50 text-amber-900 text-xs font-medium rounded-lg shadow-none"
-                  >
-                    {isSyncingDns && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                    Verify DNS
-                  </Button>
-                )}
-              </div>
+        {activeTab !== "settings" && (missingDnsRecords.length > 0 || setupError) && !isLoadingQuota && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <div className="flex min-w-0 items-start gap-2">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <p>{setupError ? "We couldn’t check your email settings." : "Your domain needs attention. Sending or receiving email may be affected."}</p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-              {missingDnsRecords.map((rec) => (
-                <div
-                  key={rec.id}
-                  className="bg-white/90 border border-amber-200/80 rounded-lg px-3 py-2 flex items-center justify-between gap-2 text-xs"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-[11px] font-semibold text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded">
-                        {rec.type}
-                      </span>
-                      <span className="font-medium text-slate-800 truncate">{rec.purpose}</span>
-                    </div>
-                    <p className="font-mono text-[11px] text-slate-500 truncate mt-0.5">
-                      {rec.name} → {rec.content}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(rec.content, `warn-${rec.id}`)}
-                    className="text-slate-400 hover:text-slate-700 p-1 rounded shrink-0"
-                    title="Copy value"
-                  >
-                    {copiedKey === `warn-${rec.id}` ? (
-                      <Check className="w-3.5 h-3.5 text-slate-900" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-              ))}
-            </div>
+            <Button variant="outline" className="min-h-11 bg-white" onClick={() => setActiveTab("settings")}>Review settings</Button>
           </div>
         )}
 
-        {/* Moment: Live domain routing & outbound quota ledger strip */}
-        <div className="rounded-xl border border-slate-200/80 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <div className="p-4 sm:p-5 space-y-1">
-            <div className="text-xs text-slate-500">Active Mailboxes</div>
-            {isLoadingDirectory || !hasLoadedDirectory ? (
-              <div className="space-y-1.5 pt-1">
-                <Skeleton className="h-7 w-16" />
-                <Skeleton className="h-3.5 w-32" />
-              </div>
-            ) : (
-              <>
-                <div className="text-2xl font-medium text-slate-900 tabular-nums">
-                  {activeUsers.length}
-                </div>
-                <div className="text-xs font-mono text-slate-400 tabular-nums">
-                  {groups.length} {groups.length === 1 ? "Group" : "Groups"} · {orgUnits.length + 1} Units
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="p-4 sm:p-5 space-y-1">
-            <div className="text-xs text-slate-500">Monthly Outbound Quota</div>
-            {isLoadingQuota ? (
-              <div className="space-y-1.5 pt-1">
-                <Skeleton className="h-7 w-24" />
-                <Skeleton className="h-3.5 w-36" />
-              </div>
-            ) : (
-              <>
-                <div className="text-2xl font-medium text-slate-900 tabular-nums">
-                  {monthlySentCount.toLocaleString()}{" "}
-                  <span className="text-sm font-normal text-slate-400">
-                    / {monthlyOutboundLimit.toLocaleString()}
-                  </span>
-                </div>
-                <div className="text-xs font-mono text-slate-400 tabular-nums">
-                  {(monthlyOutboundLimit - monthlySentCount).toLocaleString()} Remaining This Month
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="p-4 sm:p-5 space-y-1">
-            <div className="text-xs text-slate-500">Daily Outbound Limit</div>
-            {isLoadingQuota ? (
-              <div className="space-y-1.5 pt-1">
-                <Skeleton className="h-7 w-20" />
-                <Skeleton className="h-3.5 w-28" />
-              </div>
-            ) : (
-              <>
-                <div className="text-2xl font-medium text-slate-900 tabular-nums">
-                  {dailySentCount.toLocaleString()}{" "}
-                  <span className="text-sm font-normal text-slate-400">
-                    / {dailyOutboundLimit.toLocaleString()}
-                  </span>
-                </div>
-                <div className="text-xs font-mono text-slate-400 tabular-nums">
-                  24-Hour Rolling Window
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="p-4 sm:p-5 space-y-1">
-            <div className="text-xs text-slate-500">Domain Routing Status</div>
-            {isLoadingQuota ? (
-              <div className="space-y-1.5 pt-1">
-                <Skeleton className="h-7 w-36" />
-                <Skeleton className="h-3.5 w-24" />
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 pt-0.5">
-                  <span className="text-base font-medium text-slate-900 tabular-nums">
-                    {verifiedCoreDnsCount} of {coreDnsRecords.length} DNS Verified
-                  </span>
-                </div>
-                <div className="text-xs font-mono text-slate-400 truncate">
-                  {catchAllEmail ? `Catch-All → ${catchAllEmail}` : "Catch-All Disabled"}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Navigation tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <div className="border-b border-slate-200/80 overflow-x-auto scrollbar-none">
-            <TabsList className="bg-transparent p-0 h-auto gap-4 sm:gap-6 rounded-none inline-flex min-w-max">
-              <TabsTrigger
-                value="users"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                Users Directory
-                <span className="ml-2 font-mono text-slate-400 tabular-nums">
-                  {activeUsers.length}
-                </span>
+        <Tabs value={activeTab} onValueChange={setActiveTab} activationMode="manual" className="space-y-4">
+          <TabsList aria-label="Email service sections" className="grid h-auto w-full grid-cols-2 justify-start gap-1 rounded-xl bg-zinc-100 p-1 min-[420px]:grid-cols-3 xl:flex xl:flex-wrap">
+            {EMAIL_SECTIONS.map(({ value, label, icon: Icon }) => (
+              <TabsTrigger key={value} value={value} className="min-h-11 justify-start gap-2 whitespace-normal px-2 text-left text-sm font-medium text-zinc-600 data-[state=active]:text-zinc-950 sm:px-3">
+                <Icon className="size-4 shrink-0" aria-hidden="true" />{label}
               </TabsTrigger>
-
-              <TabsTrigger
-                value="groups"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                Groups
-                <span className="ml-2 font-mono text-slate-400 tabular-nums">
-                  {groups.length}
-                </span>
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="shared"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                Shared Mailboxes
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="suspended"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                Suspended Accounts
-                <span className="ml-2 font-mono text-slate-400 tabular-nums">
-                  {suspendedUsers.length + deletedUsers.length}
-                </span>
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="governance"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                Governance &amp; Security
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="settings"
-                className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-1 text-xs font-medium text-slate-500 hover:text-slate-800 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-900 data-[state=active]:shadow-none transition-colors"
-              >
-                Settings
-              </TabsTrigger>
-            </TabsList>
-          </div>
+            ))}
+          </TabsList>
 
           {/* =====================================================================
               TAB 1: USERS DIRECTORY
           ===================================================================== */}
           <TabsContent value="users" className="mt-0">
             <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
-              {/* Unified filter & action bar */}
+              <div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+                <div className="space-y-1">
+                  <h2 className="text-base font-semibold text-zinc-950">Email accounts</h2>
+                  <p className="text-sm text-zinc-600">Give each person their own address and inbox.</p>
+                </div>
+                {canCreateAccounts && (
+                  <Button className="min-h-11 w-full sm:w-auto" onClick={openCreateAccount}>
+                    <Plus className="mr-2 size-4" aria-hidden="true" /> Add email account
+                  </Button>
+                )}
+              </div>
               <div className="p-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/40">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="relative flex-1 sm:max-w-xs">
@@ -2226,8 +1777,9 @@ export default function EmailServiceAdminPage() {
                     <Input
                       value={userSearchQuery}
                       onChange={(e) => setUserSearchQuery(e.target.value)}
-                      placeholder="Search accounts..."
-                      className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
+                      aria-label="Search email accounts"
+                      placeholder="Search accounts"
+                      className="min-h-11 pl-9 text-base sm:text-sm border-slate-200 bg-white rounded-lg"
                     />
                   </div>
 
@@ -2237,16 +1789,16 @@ export default function EmailServiceAdminPage() {
                         variant="outline"
                         size="sm"
                         className={cn(
-                          "h-9 px-3 text-xs font-medium rounded-lg shrink-0 gap-1.5",
+                          "min-h-11 px-3 text-sm font-medium rounded-lg shrink-0 gap-1.5",
                           selectedUserOu !== "ALL"
                             ? "border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
                             : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                         )}
-                        title="Filter by Organizational Unit"
+                        aria-label="Filter accounts by department"
                       >
                         <Filter className="w-3.5 h-3.5" strokeWidth={1.5} />
                         <span className="hidden sm:inline">
-                          {selectedUserOu === "ALL" ? "Filter Unit" : selectedUserOu}
+                          {selectedUserOu === "ALL" ? "Department" : selectedUserOu === "/" ? "General" : selectedUserOu.slice(1)}
                         </span>
                       </Button>
                     </DropdownMenuTrigger>
@@ -2256,7 +1808,7 @@ export default function EmailServiceAdminPage() {
                         className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white"
                       >
                         <Check className={cn("w-3.5 h-3.5", selectedUserOu === "ALL" ? "opacity-100" : "opacity-0")} />
-                        <span className="flex-1">All Organizational Units</span>
+                        <span className="flex-1">All departments</span>
                         <span className="font-mono text-[11px] opacity-70">{activeUsers.length}</span>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -2269,19 +1821,21 @@ export default function EmailServiceAdminPage() {
                             className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white"
                           >
                             <Check className={cn("w-3.5 h-3.5", selectedUserOu === ouPath ? "opacity-100" : "opacity-0")} />
-                            <span className="font-mono flex-1 truncate">{ouPath}</span>
+                            <span className="font-mono flex-1 truncate">{ouPath === "/" ? "General" : ouPath.slice(1)}</span>
                             <span className="font-mono text-[11px] opacity-70">{count}</span>
                           </DropdownMenuItem>
                         )
                       })}
+                      {canManageMailService && <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onSelect={() => setIsOuModalOpen(true)}
                         className="group gap-2 py-2 text-xs cursor-pointer rounded-md focus:bg-primary focus:text-white data-[highlighted]:bg-primary data-[highlighted]:text-white"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Manage Units</span>
+                        <span>Manage departments</span>
                       </DropdownMenuItem>
+                      </>}
                     </DropdownMenuContent>
                   </DropdownMenu>
 
@@ -2292,50 +1846,34 @@ export default function EmailServiceAdminPage() {
                       className="inline-flex items-center gap-1 text-[11px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-md shrink-0"
                       title="Clear filter"
                     >
-                      <span>{selectedUserOu}</span>
+                      <span>{selectedUserOu === "/" ? "General" : selectedUserOu.slice(1)}</span>
                       <X className="w-3 h-3" />
                     </button>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Button
+                  {canCreateAccounts && <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       setBulkImportErrors([])
                       setIsBulkImportOpen(true)
                     }}
-                    className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shrink-0"
+                    className="min-h-11 px-3 text-sm font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shrink-0"
                   >
                     <Upload className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
-                    Import
-                  </Button>
+                    Import accounts
+                  </Button>}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleExportUsersCsv}
                     disabled={users.length === 0}
-                    className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shrink-0"
+                    className="min-h-11 px-3 text-sm font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shrink-0"
                   >
                     <Download className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
-                    Export
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setCreateUserForm({
-                        firstName: "",
-                        lastName: "",
-                        emailPrefix: "",
-                        password: "",
-                        orgUnitPath: selectedUserOu === "ALL" ? "/" : selectedUserOu,
-                      })
-                      setIsCreateUserOpen(true)
-                    }}
-                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
-                  >
-                    <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                    Add User
+                    Export accounts
                   </Button>
                 </div>
               </div>
@@ -2372,7 +1910,7 @@ export default function EmailServiceAdminPage() {
                         Aliases
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Organizational Unit
+                        Department
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                         Actions
@@ -2411,23 +1949,23 @@ export default function EmailServiceAdminPage() {
                 <div className="py-16 px-4 text-center space-y-2">
                   <p className="text-sm font-medium text-slate-900">
                     {activeUsers.length === 0
-                      ? "No Email Accounts Provisioned"
-                      : "No Matching Email Accounts"}
+                      ? "No email accounts yet"
+                      : "No matching accounts"}
                   </p>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">
                     {activeUsers.length === 0
-                      ? `Create an account on @${selectedOrg.domain} with sign-in credentials for Revlet Mail`
-                      : "Adjust the organizational unit filter or search query"}
+                      ? `Accounts created here can sign in to RevletMail with an @${selectedOrg.domain} address.`
+                      : "Try another search or clear the department filter."}
                   </p>
-                  {activeUsers.length === 0 && (
+                  {activeUsers.length === 0 && canCreateAccounts && !directoryError && (
                     <div className="pt-2">
                       <Button
                         size="sm"
-                        onClick={() => setIsCreateUserOpen(true)}
-                        className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
+                        onClick={openCreateAccount}
+                        className="bg-primary hover:bg-primary/95 !text-white text-white font-medium min-h-11 px-4 rounded-lg text-sm"
                       >
                         <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                        Add User
+                        Add email account
                       </Button>
                     </div>
                   )}
@@ -2449,7 +1987,7 @@ export default function EmailServiceAdminPage() {
                         Aliases
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Organizational Unit
+                        Department
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                         Actions
@@ -2512,7 +2050,7 @@ export default function EmailServiceAdminPage() {
                         </TableCell>
 
                         <TableCell className="text-right pr-6 py-3.5">
-                          <DropdownMenu>
+                          {canManageMailService && <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
@@ -2595,7 +2133,7 @@ export default function EmailServiceAdminPage() {
                                 <span>Delete Email Account</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
-                          </DropdownMenu>
+                          </DropdownMenu>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -2724,53 +2262,29 @@ export default function EmailServiceAdminPage() {
           ===================================================================== */}
           <TabsContent value="groups" className="mt-0">
             <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
-              <div className="p-4 border-b border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/40">
-                <div className="flex items-center gap-1 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedGroupOu("ALL")}
-                    className={cn(
-                      "h-8 px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
-                      selectedGroupOu === "ALL"
-                        ? "bg-white text-slate-900 border border-slate-200/90 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
-                    )}
-                  >
-                    <span>All Units</span>
-                    <span className="font-mono text-slate-400 tabular-nums">
-                      {groups.length}
-                    </span>
-                  </button>
-
-                  {allOuOptions.map((ouPath) => {
-                    const count = groups.filter((g) => g.orgUnitPath === ouPath).length
-                    return (
-                      <button
-                        key={ouPath}
-                        type="button"
-                        onClick={() => setSelectedGroupOu(ouPath)}
-                        className={cn(
-                          "h-8 px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
-                          selectedGroupOu === ouPath
-                            ? "bg-white text-slate-900 border border-slate-200/90 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
-                        )}
-                      >
-                        <span className="font-mono">{ouPath}</span>
-                        <span className="font-mono text-slate-400 tabular-nums">{count}</span>
-                      </button>
-                    )
-                  })}
-
-                  <button
-                    type="button"
-                    onClick={() => setIsOuModalOpen(true)}
-                    className="h-8 px-2.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 transition-colors flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span>New Unit</span>
-                  </button>
+              <div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+                <div className="space-y-1">
+                  <h2 className="text-base font-semibold text-zinc-950">Mailing groups</h2>
+                  <p className="text-sm text-zinc-600">Messages to a group address go to each member’s own inbox.</p>
                 </div>
+                {canManageMailService && (
+                  <Button className="min-h-11 w-full sm:w-auto" onClick={openCreateGroup}>
+                    <Plus className="mr-2 size-4" aria-hidden="true" /> Create mailing group
+                  </Button>
+                )}
+              </div>
+              <div className="p-4 border-b border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/40">
+                <Select value={selectedGroupOu} onValueChange={setSelectedGroupOu}>
+                  <SelectTrigger aria-label="Filter mailing groups by department" className="min-h-11 w-full text-sm lg:w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All departments</SelectItem>
+                    {allOuOptions.map((path) => (
+                      <SelectItem key={path} value={path}>{path === "/" ? "General" : path.slice(1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1 sm:w-56">
@@ -2781,48 +2295,43 @@ export default function EmailServiceAdminPage() {
                     <Input
                       value={groupSearchQuery}
                       onChange={(e) => setGroupSearchQuery(e.target.value)}
-                      placeholder="Search groups..."
-                      className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
+                      aria-label="Search mailing groups"
+                      placeholder="Search groups"
+                      className="min-h-11 pl-9 text-base sm:text-sm border-slate-200 bg-white rounded-lg"
                     />
                   </div>
-                  <Button
-                    onClick={() => {
-                      setCreateGroupForm({
-                        name: "",
-                        emailPrefix: "",
-                        orgUnitPath: selectedGroupOu === "ALL" ? "/" : selectedGroupOu,
-                        memberEmails: [],
-                      })
-                      setNewGroupMemberInput("")
-                      setIsCreateGroupOpen(true)
-                    }}
-                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
-                  >
-                    <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                    Create Group
-                  </Button>
                 </div>
               </div>
 
-              {filteredGroups.length === 0 ? (
+              {isLoadingDirectory || !hasLoadedDirectory ? (
+                <div className="space-y-3 p-5" aria-busy="true" aria-label="Loading mailing groups">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : groupLoadError ? (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm text-red-800">
+                  <p>{groupLoadError}</p>
+                  <Button variant="outline" onClick={() => loadAllMailData(false)}>Try again</Button>
+                </div>
+              ) : filteredGroups.length === 0 ? (
                 <div className="py-16 px-4 text-center space-y-2">
                   <p className="text-sm font-medium text-slate-900">
-                    {groups.length === 0 ? "No Distribution Groups Created" : "No Matching Distribution Groups"}
+                    {groups.length === 0 ? "No mailing groups yet" : "No matching mailing groups"}
                   </p>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">
                     {groups.length === 0
                       ? `Create shared addresses on @${selectedOrg.domain} that deliver incoming messages to multiple members`
-                      : "Adjust the organizational unit filter or search query"}
+                      : "Try another search or clear the department filter."}
                   </p>
-                  {groups.length === 0 && (
+                  {groups.length === 0 && canManageMailService && (
                     <div className="pt-2">
                       <Button
                         size="sm"
-                        onClick={() => setIsCreateGroupOpen(true)}
-                        className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs"
+                        onClick={openCreateGroup}
+                        className="bg-primary hover:bg-primary/95 !text-white text-white font-medium min-h-11 px-4 rounded-lg text-sm"
                       >
                         <Plus className="w-4 h-4 mr-1.5" strokeWidth={1.5} />
-                        Create Group
+                        Create mailing group
                       </Button>
                     </div>
                   )}
@@ -2844,7 +2353,7 @@ export default function EmailServiceAdminPage() {
                         Members
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Organizational Unit
+                        Department
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                         Actions
@@ -2888,7 +2397,7 @@ export default function EmailServiceAdminPage() {
                         </TableCell>
 
                         <TableCell className="text-right pr-6 py-3.5">
-                          <DropdownMenu>
+                          {canManageMailService && <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
@@ -2941,7 +2450,7 @@ export default function EmailServiceAdminPage() {
                                 <span>Delete Group</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
-                          </DropdownMenu>
+                          </DropdownMenu>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -2984,6 +2493,7 @@ export default function EmailServiceAdminPage() {
                             type="button"
                             variant="outline"
                             size="sm"
+                            disabled={!canManageMailService}
                             onClick={() => {
                               setEditingGroup(g)
                               setEditGroupForm({
@@ -3001,6 +2511,7 @@ export default function EmailServiceAdminPage() {
                             variant="outline"
                             size="icon"
                             aria-label="Delete group"
+                            disabled={!canManageMailService}
                             onClick={() => setDeletingGroup(g)}
                             className="h-8 w-8 ml-auto border-red-200 text-red-600 hover:bg-red-50 rounded-lg"
                           >
@@ -3031,13 +2542,13 @@ export default function EmailServiceAdminPage() {
               <div className="p-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/40">
                 <div className="space-y-0.5">
                   <h2 className="text-xs font-medium text-slate-900">
-                    Suspended Accounts
+                    Paused accounts
                     <span className="ml-2 font-mono text-slate-400 tabular-nums">
                       {filteredSuspendedUsers.length}
                     </span>
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Suspended accounts cannot sign in or send mail until reactivated
+                    People with paused accounts can sign in again after an administrator restores access.
                   </p>
                 </div>
 
@@ -3049,15 +2560,16 @@ export default function EmailServiceAdminPage() {
                   <Input
                     value={suspendedSearchQuery}
                     onChange={(e) => setSuspendedSearchQuery(e.target.value)}
-                    placeholder="Search suspended accounts..."
+                    aria-label="Search paused and deleted accounts"
+                    placeholder="Search paused and deleted accounts"
                     className="h-9 pl-9 text-xs border-slate-200 bg-white rounded-lg"
                   />
                 </div>
               </div>
 
-              {filteredSuspendedUsers.length === 0 ? (
+              {isLoadingDirectory ? <Skeleton className="m-4 h-12" /> : filteredSuspendedUsers.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-400">
-                  No Suspended Email Accounts
+                  No paused accounts
                 </div>
               ) : (
                 <>
@@ -3073,7 +2585,7 @@ export default function EmailServiceAdminPage() {
                         Primary Address
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-slate-500">
-                        Organizational Unit
+                        Department
                       </TableHead>
                       <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
                         Actions
@@ -3098,7 +2610,7 @@ export default function EmailServiceAdminPage() {
                           {u.orgUnitPath}
                         </TableCell>
                         <TableCell className="text-right pr-6 py-3.5">
-                          <DropdownMenu>
+                          {canManageMailService && <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
@@ -3129,7 +2641,7 @@ export default function EmailServiceAdminPage() {
                                 <span>Delete Email Account</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
-                          </DropdownMenu>
+                          </DropdownMenu>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -3137,7 +2649,7 @@ export default function EmailServiceAdminPage() {
                 </Table>
                   </div>
 
-                  {/* Mobile Suspended Accounts Card View */}
+                  {/* Mobile Paused accounts Card View */}
                   <div className="md:hidden divide-y divide-slate-100">
                     {paginatedSuspendedUsers.map((u) => (
                       <div key={u.id} className="p-4 space-y-3">
@@ -3162,6 +2674,7 @@ export default function EmailServiceAdminPage() {
                             type="button"
                             variant="outline"
                             size="sm"
+                            disabled={!canManageMailService}
                             onClick={() => handleSuspendOrReactivateUser(u, false)}
                             className="h-8 px-2.5 text-xs font-medium border-slate-200 text-slate-700 rounded-lg"
                           >
@@ -3172,6 +2685,7 @@ export default function EmailServiceAdminPage() {
                             type="button"
                             variant="outline"
                             size="sm"
+                            disabled={!canManageMailService}
                             onClick={() => setDeletingUser(u)}
                             className="h-8 px-2.5 ml-auto text-xs font-medium border-red-200 text-red-600 hover:bg-red-50 rounded-lg"
                           >
@@ -3208,7 +2722,7 @@ export default function EmailServiceAdminPage() {
                 </p>
               </div>
 
-              {filteredDeletedUsers.length === 0 ? (
+              {isLoadingDirectory ? <Skeleton className="m-4 h-12" /> : filteredDeletedUsers.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-400">
                   No deleted accounts in the 14-day recovery window
                 </div>
@@ -3256,7 +2770,8 @@ export default function EmailServiceAdminPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleRecoverDeletedUser(u)}
+                              disabled={!canManageMailService}
+                            onClick={() => handleRecoverDeletedUser(u)}
                               className="h-8 px-3 text-xs font-medium border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
                             >
                               Recover Account
@@ -3294,6 +2809,7 @@ export default function EmailServiceAdminPage() {
                           <Button
                             size="sm"
                             variant="outline"
+                            disabled={!canManageMailService}
                             onClick={() => handleRecoverDeletedUser(u)}
                             className="h-8 px-3 text-xs font-medium border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg w-full"
                           >
@@ -3319,375 +2835,102 @@ export default function EmailServiceAdminPage() {
           {/* =====================================================================
               TAB 4: SETTINGS (Domain Catch-All Routing + Required DNS Records)
           ===================================================================== */}
-          <TabsContent value="settings" className="space-y-6 mt-0">
-            {/* Domain catch-all routing */}
-            <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
-              <div className="p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <TabsContent value="settings" className="mt-0 space-y-4">
+            <section aria-labelledby="email-domain-heading" className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 sm:p-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <h2 className="text-sm font-headline font-semibold text-slate-900">
-                    Domain Catch-All Routing
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Deliver incoming messages addressed to any unmatched{" "}
-                    <span className="font-mono text-slate-700">@{selectedOrg.domain}</span>{" "}
-                    recipient to a designated fallback email account
-                  </p>
+                  <h2 id="email-domain-heading" className="text-base font-semibold text-zinc-950">Domain connection</h2>
+                  <p className="text-sm leading-relaxed text-zinc-600">{domainStatus}</p>
+                  {hasDomainRecords && !areCoreRecordsVerified && !isLoadingQuota && (
+                    <p className="text-sm text-zinc-600">{verifiedCoreDnsCount} of {coreDnsRecords.length} required records verified</p>
+                  )}
                 </div>
-
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-slate-500">
-                    {catchAllUserId ? "Enabled" : "Disabled"}
-                  </span>
-                  <Switch
-                    checked={Boolean(catchAllUserId)}
-                    disabled={isUpdatingCatchAll}
-                    onCheckedChange={handleCatchAllToggle}
-                  />
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" className="min-h-11" onClick={() => loadAllMailData(true)} disabled={setupBusy}>
+                    <RefreshCw className={cn("mr-2 size-4", isRefreshing && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+                    {isRefreshing ? "Refreshing…" : "Refresh status"}
+                  </Button>
+                  {canManageMailService && (
+                    <Button className="min-h-11" onClick={handleSyncDnsRecords} disabled={setupBusy}>
+                      {isSyncingDns ? "Checking domain…" : dnsServiceActive ? "Add required records" : hasDomainRecords ? "Check my records" : "Prepare records"}
+                    </Button>
+                  )}
                 </div>
               </div>
+              {setupError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">{setupError}</p>}
+              <EmailDomainRecords key={selectedOrgId} records={requiredDnsRecords} domain={selectedOrg.domain} />
+            </section>
 
-              <div className="p-6">
-                <div className="max-w-md space-y-2">
-                  <Label className="text-xs font-medium text-slate-700">
-                    Fallback Account
-                  </Label>
+            <section aria-labelledby="email-limits-heading" aria-busy={isLoadingQuota} className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6">
+              <h2 id="email-limits-heading" className="text-base font-semibold text-zinc-950">Sending limits</h2>
+              <p className="mt-1 text-sm text-zinc-600">These limits are shared by the whole workspace. An email sent to three recipients uses three sends.</p>
+              {isLoadingQuota ? <Skeleton className="mt-4 h-16" /> : lifecycleAccess?.orgId === selectedOrgId ? (
+                <div className="mt-4 grid gap-5 sm:grid-cols-2">
+                  <SendingLimit label="Last 24 hours" sent={dailySentCount} limit={dailyOutboundLimit} />
+                  <SendingLimit label="This calendar month (UTC)" sent={monthlySentCount} limit={monthlyOutboundLimit} />
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-zinc-600">Sending limits are unavailable. Refresh status to try again.</p>
+              )}
+            </section>
+
+            <details className="group rounded-xl border border-zinc-200 bg-white">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-zinc-950 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 sm:px-6 [&::-webkit-details-marker]:hidden">
+                Advanced email settings
+                <ChevronDown className="size-4 shrink-0 text-zinc-500 group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="divide-y divide-zinc-100 border-t border-zinc-200">
+                <section className="space-y-3 p-4 sm:p-6">
+                  <h3 className="text-sm font-semibold text-zinc-950">Mail sent to unknown addresses</h3>
+                  <p className="text-sm text-zinc-600">
+                    {catchAllEmail
+                      ? `Messages to unknown @${selectedOrg.domain} addresses go to ${catchAllEmail}.`
+                      : `Messages to unknown @${selectedOrg.domain} addresses are rejected.`}
+                  </p>
                   <Select
                     value={catchAllUserId || "NONE"}
-                    disabled={isUpdatingCatchAll || activeUsers.length === 0}
-                    onValueChange={(val) =>
-                      handleCatchAllTargetChange(val === "NONE" ? null : val)
-                    }
+                    disabled={!canManageMailService || isUpdatingCatchAll || isLoadingDirectory || !hasLoadedDirectory}
+                    onValueChange={(value) => handleCatchAllTargetChange(value === "NONE" ? null : value)}
                   >
-                    <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
-                      <SelectValue placeholder="Select an Active Email Account" />
+                    <SelectTrigger aria-label="Where to send mail for unknown addresses" className="min-h-11 w-full max-w-md text-left text-sm">
+                      <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border-slate-200">
-                      <SelectItem value="NONE" className="text-xs">
-                        Disabled (Reject Unmatched Recipients)
-                      </SelectItem>
-                      {activeUsers.map((u) => (
-                        <SelectItem key={u.id} value={u.id} className="text-xs">
-                          {u.displayName} ({u.primaryEmail})
-                        </SelectItem>
+                    <SelectContent>
+                      <SelectItem value="NONE">Reject these messages</SelectItem>
+                      {catchAllUserId && !activeUsers.some((account) => account.id === catchAllUserId) && (
+                        <SelectItem value={catchAllUserId} disabled>{catchAllEmail || "Current mailbox unavailable"}</SelectItem>
+                      )}
+                      {activeUsers.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>{account.displayName} ({account.primaryEmail})</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-slate-500">
-                    {catchAllEmail
-                      ? `Unmatched mail to @${selectedOrg.domain} routes to ${catchAllEmail}.`
-                      : `Unmatched mail to @${selectedOrg.domain} is rejected when catch-all is disabled.`}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Authentication & Deliverability Records (SPF, DKIM, DMARC) */}
-            <div className="rounded-xl border border-slate-200/80 bg-white overflow-hidden">
-              <div className="p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-headline font-semibold text-slate-900">
-                      Authentication & Deliverability (2 Required Records)
-                    </h2>
-                    <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500 tabular-nums">
-                      {verifiedCoreDnsCount} of {coreDnsRecords.length} Required Verified
-                    </span>
+                </section>
+                {securityPolicy?.orgId === selectedOrgId && (
+                  <section className="flex items-start justify-between gap-4 p-4 sm:p-6">
+                    <div className="space-y-1">
+                      <h3 id="email-two-step-label" className="text-sm font-semibold text-zinc-950">Require two-step verification</h3>
+                      <p className="text-sm text-zinc-600">Require an extra sign-in check for people in this workspace.</p>
+                    </div>
+                    <Switch
+                      aria-labelledby="email-two-step-label"
+                      checked={securityPolicy.enforceMfa}
+                      disabled={isUpdatingEnforceMfa}
+                      onCheckedChange={(checked) => handleToggleEnforceMfa(checked)}
+                    />
+                  </section>
+                )}
+                <section className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-6">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-zinc-950">Turn off email</h3>
+                    <p className="text-sm text-zinc-600">Pause email for this domain and schedule permanent deletion in 14 days.</p>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    2 core DNS records (Inbound MX and Outbound DKIM) are required for full mail sending and receiving on{" "}
-                    <span className="font-mono text-slate-700">{selectedOrg.domain}</span>. SPF and DMARC provide optional hardening.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyAllRecords}
-                    className="h-9 px-3 text-xs font-medium border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg shadow-none"
-                  >
-                    {copiedKey === "all-records" ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 mr-1.5 text-slate-900" strokeWidth={1.5} />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 mr-1.5 text-slate-400" strokeWidth={1.5} />
-                        Copy All
-                      </>
-                    )}
+                  <Button variant="outline" onClick={() => setIsDeactivateConfirmOpen(true)} disabled={!canDeactivateMailService} className="min-h-11 text-destructive hover:text-destructive">
+                    Deactivate email
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSyncDnsRecords}
-                    disabled={!canManageMailService || isSyncingDns || isActivating}
-                    className="bg-primary hover:bg-primary/95 !text-white text-white font-medium h-9 px-4 rounded-lg text-xs shrink-0 transition-colors"
-                  >
-                    {isSyncingDns ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" strokeWidth={1.5} />
-                        {dnsServiceActive ? "Checking Provider DNS…" : "Checking Public DNS…"}
-                      </>
-                    ) : dnsServiceActive ? (
-                      "Publish Required Records"
-                    ) : (
-                      "Check Public DNS"
-                    )}
-                  </Button>
-                </div>
+                </section>
               </div>
-
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/40 hover:bg-slate-50/40 border-b border-slate-200/80">
-                      <TableHead className="text-xs font-medium py-3 pl-6 text-slate-500">
-                        Purpose
-                      </TableHead>
-                    <TableHead className="text-xs font-medium py-3 text-slate-500">
-                      Type
-                    </TableHead>
-                    <TableHead className="text-xs font-medium py-3 text-slate-500">
-                      Host
-                    </TableHead>
-                    <TableHead className="text-xs font-medium py-3 text-slate-500">
-                      Value
-                    </TableHead>
-                    <TableHead className="text-xs font-medium py-3 text-right pr-6 text-slate-500">
-                      Status
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoadingQuota || isSyncingDns ? (
-                    [...Array(5)].map((_, idx) => (
-                      <TableRow key={idx} className="border-b border-slate-100 last:border-0">
-                        <TableCell className="pl-6 py-3.5">
-                          <Skeleton className="h-3.5 w-36 bg-slate-100" />
-                        </TableCell>
-                        <TableCell className="py-3.5">
-                          <Skeleton className="h-4 w-12 bg-slate-100" />
-                        </TableCell>
-                        <TableCell className="py-3.5">
-                          <Skeleton className="h-3.5 w-44 bg-slate-100" />
-                        </TableCell>
-                        <TableCell className="py-3.5">
-                          <Skeleton className="h-3.5 w-56 bg-slate-100" />
-                        </TableCell>
-                        <TableCell className="text-right pr-6 py-3.5">
-                          <Skeleton className="h-3.5 w-16 ml-auto bg-slate-100" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    requiredDnsRecords.map((rec) => (
-                    <TableRow key={rec.id} className="border-b border-slate-100 last:border-0">
-                      <TableCell className="pl-6 py-3.5 text-xs font-medium text-slate-800">
-                        <div className="flex items-center gap-2">
-                          <span>{rec.purpose}</span>
-                          {rec.required === false ? (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-500">
-                              Optional
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-white font-medium">
-                              Required
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3.5">
-                        <span className="text-xs font-mono text-slate-600 tabular-nums">
-                          {rec.type}
-                          {rec.priority !== undefined ? ` ${rec.priority}` : ""}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-3.5">
-                        <div className="flex items-center gap-2 max-w-[220px]">
-                          <span className="text-xs font-mono text-slate-700 truncate">
-                            {rec.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(rec.name, `${rec.id}-name`)}
-                            className="text-slate-400 hover:text-slate-700 shrink-0 transition-colors"
-                            title="Copy host"
-                          >
-                            {copiedKey === `${rec.id}-name` ? (
-                              <Check className="w-3.5 h-3.5 text-slate-900" strokeWidth={1.5} />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
-                            )}
-                          </button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3.5">
-                        <div className="flex items-center gap-2 max-w-[280px]">
-                          <span className="text-xs font-mono text-slate-700 truncate">
-                            {rec.content}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(rec.content, `${rec.id}-content`)}
-                            className="text-slate-400 hover:text-slate-700 shrink-0 transition-colors"
-                            title="Copy value"
-                          >
-                            {copiedKey === `${rec.id}-content` ? (
-                              <Check className="w-3.5 h-3.5 text-slate-900" strokeWidth={1.5} />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
-                            )}
-                          </button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right pr-6 py-3.5">
-                        <span className="inline-flex items-center justify-end gap-1.5 text-xs font-mono text-slate-600">
-                          <span
-                            className={cn(
-                              "h-1.5 w-1.5 rounded-full",
-                              rec.verified ? "bg-slate-900" : "bg-amber-500"
-                            )}
-                          />
-                          {rec.verified
-                            ? "Verified"
-                            : rec.required === false
-                            ? "Optional"
-                            : dnsServiceActive
-                            ? "Pending Sync"
-                            : "Unverified"}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  )))}
-                </TableBody>
-              </Table>
-              </div>
-
-              {/* Mobile DNS Deliverability Card View */}
-              <div className="md:hidden divide-y divide-slate-100">
-                {isLoadingQuota || isSyncingDns
-                  ? [...Array(3)].map((_, idx) => (
-                      <div key={idx} className="p-4 space-y-2.5">
-                        <Skeleton className="h-4 w-40 bg-slate-100" />
-                        <Skeleton className="h-3.5 w-full bg-slate-100" />
-                        <Skeleton className="h-3.5 w-3/4 bg-slate-100" />
-                      </div>
-                    ))
-                  : requiredDnsRecords.map((rec) => (
-                      <div key={rec.id} className="p-4 space-y-2.5 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                            <span className="font-semibold text-slate-900">{rec.purpose}</span>
-                            {rec.required === false ? (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-500">
-                                Optional
-                              </span>
-                            ) : (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-white font-medium">
-                                Required
-                              </span>
-                            )}
-                          </div>
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-600 shrink-0">
-                            <span
-                              className={cn(
-                                "h-1.5 w-1.5 rounded-full",
-                                rec.verified ? "bg-slate-900" : "bg-amber-500"
-                              )}
-                            />
-                            {rec.verified
-                              ? "Verified"
-                              : rec.required === false
-                              ? "Optional"
-                              : dnsServiceActive
-                              ? "Pending"
-                              : "Unverified"}
-                          </span>
-                        </div>
-                        <div className="space-y-1.5 rounded-lg bg-slate-50 border border-slate-200/70 p-2.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] text-slate-500 font-medium">
-                              Type: <strong className="font-mono text-slate-800">{rec.type}{rec.priority !== undefined ? ` (${rec.priority})` : ""}</strong>
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-mono text-[11px] text-slate-700 truncate">
-                              Host: {rec.name}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(rec.name, `${rec.id}-name`)}
-                              className="text-slate-400 hover:text-slate-700 shrink-0 p-1"
-                              title="Copy host"
-                            >
-                              {copiedKey === `${rec.id}-name` ? (
-                                <Check className="w-3.5 h-3.5 text-slate-900" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="font-mono text-[11px] text-slate-600 break-all">
-                              {rec.content}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(rec.content, `${rec.id}-content`)}
-                              className="text-slate-400 hover:text-slate-700 shrink-0 p-1"
-                              title="Copy value"
-                            >
-                              {copiedKey === `${rec.id}-content` ? (
-                                <Check className="w-3.5 h-3.5 text-slate-900" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-              </div>
-            </div>
-
-            {/* Enforce MFA Policy */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <h3 className="text-sm font-headline font-semibold text-slate-900">
-                  Enforce Multi-Factor Authentication (MFA)
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Require all users in {selectedOrg.domain} to enroll and verify 2-Step Verification (Authenticator App, Passkey, or Secondary Email) on sign-in to Revlet and Revlet Mail.
-                </p>
-              </div>
-              <Switch
-                checked={enforceMfa}
-                disabled={isUpdatingEnforceMfa}
-                onCheckedChange={(checked) => handleToggleEnforceMfa(checked)}
-              />
-            </div>
-
-            {/* Service deactivation */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <h3 className="text-sm font-headline font-semibold text-slate-900">
-                  Deactivate Email Service
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Pause mail for {selectedOrg.domain} and schedule permanent deletion after 14 days.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsDeactivateConfirmOpen(true)}
-                disabled={!canDeactivateMailService}
-                className="h-9 px-4 text-xs font-medium text-destructive border-slate-200 hover:bg-rose-50 hover:text-destructive rounded-lg shrink-0 transition-colors"
-              >
-                Deactivate Service
-              </Button>
-            </div>
+            </details>
           </TabsContent>
 
           <TabsContent value="shared" className="mt-0">
@@ -3736,13 +2979,14 @@ export default function EmailServiceAdminPage() {
         />
 
         <StepUpMfaDialog
-          open={mfaStepUpOpen}
-          onOpenChange={setMfaStepUpOpen}
-          actionLabel="Update Organization MFA Enforcement"
+          open={pendingSecurityPolicy?.orgId === selectedOrgId}
+          onOpenChange={(open) => { if (!open) setPendingSecurityPolicy(null) }}
+          actionLabel="Update two-step verification requirements"
           onVerified={async (freshToken) => {
-            if (pendingEnforceValue !== null) {
-              await handleToggleEnforceMfa(pendingEnforceValue, freshToken)
-              setPendingEnforceValue(null)
+            const pending = pendingSecurityPolicy
+            setPendingSecurityPolicy(null)
+            if (pending && lifecycleOrgRef.current === pending.orgId) {
+              await handleToggleEnforceMfa(pending.enforceMfa, freshToken)
             }
           }}
         />
@@ -3756,10 +3000,10 @@ export default function EmailServiceAdminPage() {
           <DialogContent className="max-w-lg bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Organizational Units
+                Departments
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Create and manage organizational units for accounts and groups
+                Organize email accounts and mailing groups by department.
               </DialogDescription>
             </DialogHeader>
 
@@ -3767,7 +3011,7 @@ export default function EmailServiceAdminPage() {
               <div className="space-y-3 bg-slate-50/70 p-4 rounded-lg border border-slate-200/80">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-slate-700">Unit Name</Label>
+                    <Label className="text-xs font-medium text-slate-700">Department name</Label>
                     <Input
                       value={newOuName}
                       onChange={(e) => setNewOuName(e.target.value)}
@@ -3797,7 +3041,7 @@ export default function EmailServiceAdminPage() {
                     {isSavingOu && (
                       <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" strokeWidth={1.5} />
                     )}
-                    Create Unit
+                    Create department
                   </Button>
                 </div>
               </div>
@@ -3805,8 +3049,8 @@ export default function EmailServiceAdminPage() {
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200/80 bg-white">
                   <div>
-                    <div className="text-xs font-mono font-medium text-slate-800">/</div>
-                    <div className="text-xs text-slate-400">Default root organizational unit</div>
+                    <div className="text-xs font-mono font-medium text-slate-800">General</div>
+                    <div className="text-xs text-slate-400">Default department for new accounts</div>
                   </div>
                   <span className="text-xs font-mono text-slate-400">Default</span>
                 </div>
@@ -3851,54 +3095,57 @@ export default function EmailServiceAdminPage() {
 
         {/* 2. Create user dialog */}
         <Dialog open={isCreateUserOpen} onOpenChange={setIsCreateUserOpen}>
-          <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+          <DialogContent className="max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-0">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Create Email Account
+                Add email account
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Create an address and password for signing in to Revlet Mail
+                This person will use the new address and password to sign in to RevletMail.
               </DialogDescription>
             </DialogHeader>
 
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">First Name</Label>
+                  <Label htmlFor="createUserForm-firstName" className="text-sm font-medium text-slate-700">First name</Label>
                   <Input
+                    id="createUserForm-firstName"
                     value={createUserForm.firstName}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, firstName: e.target.value }))
                     }
                     placeholder="Alex"
-                    className="h-9 text-xs border-slate-200 rounded-lg"
+                    className="min-h-11 text-base sm:text-sm border-slate-200 rounded-lg"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">Last Name</Label>
+                  <Label htmlFor="createUserForm-lastName" className="text-sm font-medium text-slate-700">Last name</Label>
                   <Input
+                    id="createUserForm-lastName"
                     value={createUserForm.lastName}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, lastName: e.target.value }))
                     }
                     placeholder="Morgan"
-                    className="h-9 text-xs border-slate-200 rounded-lg"
+                    className="min-h-11 text-base sm:text-sm border-slate-200 rounded-lg"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Email Address</Label>
-                <div className="flex items-center">
+                <Label htmlFor="createUserForm-emailPrefix" className="text-sm font-medium text-slate-700">Email address</Label>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-0">
                   <Input
+                    id="createUserForm-emailPrefix"
                     value={createUserForm.emailPrefix}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, emailPrefix: e.target.value }))
                     }
                     placeholder="alex"
-                    className="h-9 text-xs font-mono border-slate-200 rounded-l-lg rounded-r-none"
+                    className="min-h-11 text-base sm:text-sm font-mono border-slate-200 rounded-lg sm:rounded-r-none"
                   />
-                  <div className="h-9 px-3 bg-slate-50 border border-l-0 border-slate-200 rounded-r-lg flex items-center text-xs font-mono text-slate-500">
+                  <div className="min-h-11 px-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-l-none sm:border-l-0 flex items-center text-xs font-mono text-slate-500">
                     @{selectedOrg.domain}
                   </div>
                 </div>
@@ -3906,25 +3153,27 @@ export default function EmailServiceAdminPage() {
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <Label className="text-xs font-medium text-slate-700">Password</Label>
+                  <Label htmlFor="createUserForm-password" className="text-sm font-medium text-slate-700">Password</Label>
                   <button
                     type="button"
                     onClick={generateStrongPassword}
                     className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline cursor-pointer"
                   >
                     <RefreshCw className="w-3 h-3" strokeWidth={1.75} />
-                    <span>Generate Strong Password</span>
+                    <span>Generate password</span>
                   </button>
                 </div>
                 <div className="relative">
                   <Input
                     type={showCreatePassword ? "text" : "password"}
+                    id="createUserForm-password"
+                    autoComplete="new-password"
+                    aria-describedby="mailbox-password-rules"
                     value={createUserForm.password}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, password: e.target.value }))
                     }
-                    placeholder="8+ chars, letter & number/symbol"
-                    className="h-9 pr-9 text-xs font-mono border-slate-200 rounded-lg"
+                    className="min-h-11 pr-9 text-base sm:text-sm font-mono border-slate-200 rounded-lg"
                   />
                   <button
                     type="button"
@@ -3939,28 +3188,31 @@ export default function EmailServiceAdminPage() {
                     )}
                   </button>
                 </div>
+                <p id="mailbox-password-rules" className="text-sm text-zinc-600">Use 8–128 characters, including a letter and a number or symbol.</p>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
-                <Select
-                  value={createUserForm.orgUnitPath}
-                  onValueChange={(val) =>
-                    setCreateUserForm((prev) => ({ ...prev, orgUnitPath: val }))
-                  }
-                >
-                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-slate-200">
-                    {allOuOptions.map((ouPath) => (
-                      <SelectItem key={ouPath} value={ouPath} className="text-xs font-mono">
-                        {ouPath}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {orgUnits.length > 0 && (
+                <details className="rounded-lg border border-zinc-200 p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-zinc-700">Department (optional)</summary>
+                  <Select
+                    value={createUserForm.orgUnitPath}
+                    onValueChange={(val) =>
+                      setCreateUserForm((prev) => ({ ...prev, orgUnitPath: val }))
+                    }
+                  >
+                    <SelectTrigger aria-label="Department" className="mt-3 min-h-11 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200">
+                      {allOuOptions.map((ouPath) => (
+                        <SelectItem key={ouPath} value={ouPath} className="text-xs font-mono">
+                          {ouPath === "/" ? "General" : ouPath.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </details>
+              )}
             </div>
 
             <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 gap-2">
@@ -3986,7 +3238,7 @@ export default function EmailServiceAdminPage() {
                 {isCreatingUser && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Create Account
+                Create email account
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -4313,7 +3565,7 @@ export default function EmailServiceAdminPage() {
           <AlertDialogContent className="max-w-md bg-white rounded-xl border border-slate-200">
             <AlertDialogHeader>
               <AlertDialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Remove MFA Settings?
+                Reset two-step verification?
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-600 leading-relaxed">
                 This will remove all enrolled 2-Step Verification methods (Authenticator App, Passkeys, Secondary Recovery Email, and Backup Codes) for{" "}
@@ -4381,7 +3633,7 @@ export default function EmailServiceAdminPage() {
                   </div>
                   <Button
                     size="sm"
-                    disabled={isMutatingAlias || !newAliasPrefix.trim()}
+                    disabled={!canManageMailService || isMutatingAlias || !newAliasPrefix.trim()}
                     onClick={() =>
                       handleAliasAction("add", { aliasPrefix: newAliasPrefix.trim() })
                     }
@@ -4419,7 +3671,7 @@ export default function EmailServiceAdminPage() {
                             </div>
                             <Button
                               size="sm"
-                              disabled={isMutatingAlias || !editingAliasPrefix.trim()}
+                              disabled={!canManageMailService || isMutatingAlias || !editingAliasPrefix.trim()}
                               onClick={() =>
                                 handleAliasAction("update", {
                                   targetAlias: alias,
@@ -4449,7 +3701,7 @@ export default function EmailServiceAdminPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                disabled={isMutatingAlias}
+                                disabled={!canManageMailService || isMutatingAlias}
                                 onClick={() => {
                                   setEditingAliasOriginal(alias)
                                   setEditingAliasPrefix(alias.split("@")[0] || "")
@@ -4462,7 +3714,7 @@ export default function EmailServiceAdminPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                disabled={isMutatingAlias}
+                                disabled={!canManageMailService || isMutatingAlias}
                                 onClick={() =>
                                   handleAliasAction("remove", { targetAlias: alias })
                                 }
@@ -4534,66 +3786,70 @@ export default function EmailServiceAdminPage() {
 
         {/* 7. Create group dialog */}
         <Dialog open={isCreateGroupOpen} onOpenChange={setIsCreateGroupOpen}>
-          <DialogContent className="max-w-md bg-white p-0 overflow-hidden rounded-xl border border-slate-200">
+          <DialogContent className="max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-0">
             <DialogHeader className="p-6 border-b border-slate-100">
               <DialogTitle className="font-headline font-semibold text-base text-slate-900">
-                Create Group
+                Create mailing group
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Create a shared group email address that forwards to multiple members
+                Email sent to this address is forwarded to each member. The group has no inbox or sign-in.
               </DialogDescription>
             </DialogHeader>
 
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Group Name</Label>
+                <Label htmlFor="createGroupForm-name" className="text-sm font-medium text-slate-700">Group name</Label>
                 <Input
-                  value={createGroupForm.name}
+                  id="createGroupForm-name"
+                    value={createGroupForm.name}
                   onChange={(e) =>
                     setCreateGroupForm((prev) => ({ ...prev, name: e.target.value }))
                   }
                   placeholder="Admissions"
-                  className="h-9 text-xs border-slate-200 rounded-lg"
+                  className="min-h-11 text-base sm:text-sm border-slate-200 rounded-lg"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Group Address</Label>
-                <div className="flex items-center">
+                <Label htmlFor="createGroupForm-emailPrefix" className="text-sm font-medium text-slate-700">Group address</Label>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-0">
                   <Input
+                    id="createGroupForm-emailPrefix"
                     value={createGroupForm.emailPrefix}
                     onChange={(e) =>
                       setCreateGroupForm((prev) => ({ ...prev, emailPrefix: e.target.value }))
                     }
                     placeholder="admissions"
-                    className="h-9 text-xs font-mono border-slate-200 rounded-l-lg rounded-r-none"
+                    className="min-h-11 text-base sm:text-sm font-mono border-slate-200 rounded-lg sm:rounded-r-none"
                   />
-                  <div className="h-9 px-3 bg-slate-50 border border-l-0 border-slate-200 rounded-r-lg flex items-center text-xs font-mono text-slate-500">
+                  <div className="min-h-11 px-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-l-none sm:border-l-0 flex items-center text-xs font-mono text-slate-500">
                     @{selectedOrg.domain}
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-700">Organizational Unit</Label>
-                <Select
-                  value={createGroupForm.orgUnitPath}
-                  onValueChange={(val) =>
-                    setCreateGroupForm((prev) => ({ ...prev, orgUnitPath: val }))
-                  }
-                >
-                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white rounded-lg">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-slate-200">
-                    {allOuOptions.map((ouPath) => (
-                      <SelectItem key={ouPath} value={ouPath} className="text-xs font-mono">
-                        {ouPath}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {orgUnits.length > 0 && (
+                <details className="rounded-lg border border-zinc-200 p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-zinc-700">Department (optional)</summary>
+                  <Select
+                    value={createGroupForm.orgUnitPath}
+                    onValueChange={(val) =>
+                      setCreateGroupForm((prev) => ({ ...prev, orgUnitPath: val }))
+                    }
+                  >
+                    <SelectTrigger aria-label="Department" className="mt-3 min-h-11 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200">
+                      {allOuOptions.map((ouPath) => (
+                        <SelectItem key={ouPath} value={ouPath} className="text-xs font-mono">
+                          {ouPath === "/" ? "General" : ouPath.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </details>
+              )}
 
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-slate-700">
@@ -4604,7 +3860,7 @@ export default function EmailServiceAdminPage() {
                     value={newGroupMemberInput}
                     onChange={(e) => setNewGroupMemberInput(e.target.value)}
                     placeholder="member@example.com"
-                    className="h-9 text-xs font-mono border-slate-200 rounded-lg"
+                    className="min-h-11 text-base sm:text-sm font-mono border-slate-200 rounded-lg"
                   />
                   <Button
                     type="button"
@@ -4620,7 +3876,7 @@ export default function EmailServiceAdminPage() {
                         setNewGroupMemberInput("")
                       }
                     }}
-                    className="h-9 px-3 text-xs font-medium border-slate-200 rounded-lg"
+                    className="min-h-11 px-3 text-xs font-medium border-slate-200 rounded-lg"
                   >
                     Add
                   </Button>
@@ -4673,7 +3929,7 @@ export default function EmailServiceAdminPage() {
                 {isCreatingGroup && (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" strokeWidth={1.5} />
                 )}
-                Create Group
+                Create mailing group
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -4774,7 +4030,7 @@ export default function EmailServiceAdminPage() {
             </DialogHeader>
 
             <div className="p-6 space-y-4">
-              <div className="space-y-2">
+              {canManageMailService && <div className="space-y-2">
                 <Label className="text-xs font-medium text-slate-700">Member Address</Label>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
@@ -4874,7 +4130,7 @@ export default function EmailServiceAdminPage() {
                         <button
                           key={u.id}
                           type="button"
-                          disabled={isUpdatingGroupMembers}
+                          disabled={!canManageMailService || isUpdatingGroupMembers}
                           onClick={() => {
                             if (!membersTargetGroup) return
                             handleUpdateGroupMembersList([
@@ -4889,7 +4145,7 @@ export default function EmailServiceAdminPage() {
                       ))}
                   </div>
                 )}
-              </div>
+              </div>}
 
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {membersTargetGroup?.memberEmails.length === 0 ? (
@@ -4906,7 +4162,7 @@ export default function EmailServiceAdminPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        disabled={isUpdatingGroupMembers}
+                        disabled={!canManageMailService || isUpdatingGroupMembers}
                         onClick={() => {
                           if (!membersTargetGroup) return
                           handleUpdateGroupMembersList(

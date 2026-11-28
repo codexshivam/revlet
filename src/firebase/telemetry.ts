@@ -4,12 +4,12 @@ import { useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { FirebaseApp, getApps } from 'firebase/app';
 import { Analytics, getAnalytics, isSupported as isAnalyticsSupported, logEvent, setUserId, setUserProperties } from 'firebase/analytics';
+import { Crashlytics, getCrashlytics, recordError, breadcrumbs } from 'firebase/crashlytics';
 import { FirebasePerformance, getPerformance, trace as createPerfTrace } from 'firebase/performance';
-import { firebaseConfig } from './config';
 
 let analyticsInstance: Analytics | null = null;
 let performanceInstance: FirebasePerformance | null = null;
-let listenersAttached = false;
+let crashlyticsInstance: Crashlytics | null = null;
 
 export interface CrashReportMeta {
   fatal?: boolean;
@@ -20,24 +20,46 @@ export interface CrashReportMeta {
   extra?: Record<string, unknown>;
 }
 
+function getOrInitCrashlytics(app?: FirebaseApp): Crashlytics | null {
+  if (typeof window === 'undefined') return null;
+  if (crashlyticsInstance) return crashlyticsInstance;
+  const targetApp = app || getApps()[0];
+  if (!targetApp) return null;
+  try {
+    crashlyticsInstance = getCrashlytics(targetApp, {
+      appVersion: '1.0.0',
+      captureUnhandledErrors: true,
+      features: [breadcrumbs()],
+      customAttributes: { app: 'app.revlet.me' },
+    });
+  } catch {
+    // Ignore in unsupported environments (e.g. SSR/restricted browsers)
+  }
+  return crashlyticsInstance;
+}
+
 /**
- * Initializes Firebase Analytics, Firebase Performance Monitoring, and global
- * Web Crashlytics/Exception listeners in browser environments.
+ * Initializes Firebase Crashlytics, Firebase Performance Monitoring, and
+ * Firebase Analytics in browser environments.
  */
 export async function initFirebaseTelemetry(app?: FirebaseApp): Promise<{
   analytics: Analytics | null;
   performance: FirebasePerformance | null;
+  crashlytics: Crashlytics | null;
 }> {
   if (typeof window === 'undefined') {
-    return { analytics: null, performance: null };
+    return { analytics: null, performance: null, crashlytics: null };
   }
 
   const targetApp = app || getApps()[0];
   if (!targetApp) {
-    return { analytics: null, performance: null };
+    return { analytics: null, performance: null, crashlytics: null };
   }
 
-  // 1. Initialize Firebase Performance Monitoring
+  // 1. Initialize Firebase Crashlytics (Web SDK — automatic unhandled error & breadcrumb capture)
+  const crashlytics = getOrInitCrashlytics(targetApp);
+
+  // 2. Initialize Firebase Performance Monitoring
   if (!performanceInstance) {
     try {
       performanceInstance = getPerformance(targetApp);
@@ -46,7 +68,7 @@ export async function initFirebaseTelemetry(app?: FirebaseApp): Promise<{
     }
   }
 
-  // 2. Initialize Firebase Analytics
+  // 3. Initialize Firebase Analytics
   if (!analyticsInstance) {
     try {
       const supported = await isAnalyticsSupported();
@@ -58,39 +80,10 @@ export async function initFirebaseTelemetry(app?: FirebaseApp): Promise<{
     }
   }
 
-  // 3. Attach global unhandled error & promise rejection listeners (Crashlytics Web equivalent)
-  if (!listenersAttached) {
-    listenersAttached = true;
-
-    window.addEventListener('error', (event) => {
-      const err = event.error instanceof Error ? event.error : new Error(event.message || 'Unhandled window error');
-      reportCrashException(err, {
-        fatal: false,
-        component: 'window.onerror',
-        extra: {
-          filename: event.filename,
-          lineno: event.lineno,
-          colno: event.colno,
-        },
-      });
-    });
-
-    window.addEventListener('unhandledrejection', (event) => {
-      const reason = event.reason;
-      const err =
-        reason instanceof Error
-          ? reason
-          : new Error(typeof reason === 'string' ? reason : JSON.stringify(reason || 'Unhandled promise rejection'));
-      reportCrashException(err, {
-        fatal: false,
-        component: 'window.onunhandledrejection',
-      });
-    });
-  }
-
   return {
     analytics: analyticsInstance,
     performance: performanceInstance,
+    crashlytics,
   };
 }
 
@@ -128,8 +121,8 @@ export function setTelemetryUser(
 }
 
 /**
- * Reports an exception/crash to both Firebase Analytics (`exception` event) and
- * the Revlet Control Plane Crashlytics store (`/api/telemetry/crash`).
+ * Reports an exception/crash to Firebase Crashlytics (`recordError`) and
+ * Firebase Analytics (`exception` event).
  */
 export function reportCrashException(
   error: unknown,
@@ -145,7 +138,26 @@ export function reportCrashException(
   const description = `${errObj.name || 'Error'}: ${errObj.message || 'Unknown'}`.slice(0, 150);
   const fatal = Boolean(meta.fatal);
 
-  // 1. Log standard Firebase Analytics / Crashlytics exception event
+  const crashlytics = getOrInitCrashlytics();
+  if (crashlytics) {
+    try {
+      const attrs: Record<string, string | number | boolean> = {
+        app: 'app.revlet.me',
+        fatal,
+        component: meta.component || 'runtime',
+        pathname: window.location.pathname,
+      };
+      const digest = meta.digest || (errObj as Error & { digest?: string }).digest;
+      if (digest) attrs.digest = String(digest).slice(0, 120);
+      if (meta.userId) attrs.userId = String(meta.userId).slice(0, 128);
+      const orgId = meta.orgId || localStorage.getItem('revlet_active_org_id');
+      if (orgId) attrs.orgId = String(orgId).slice(0, 128);
+      recordError(crashlytics, errObj, attrs);
+    } catch {
+      // Non-fatal
+    }
+  }
+
   if (analyticsInstance) {
     try {
       logEvent(analyticsInstance, 'exception', {
@@ -156,45 +168,6 @@ export function reportCrashException(
     } catch {
       // Non-fatal
     }
-  }
-
-  // 2. Dispatch structured crash report to Firestore via /api/telemetry/crash
-  // Strip query strings and fragments by default so action oobCodes and tokens never reach telemetry
-  const sanitizedUrl = `${window.location.origin}${window.location.pathname}`;
-  const payload = {
-    app: 'app.revlet.me',
-    appId: firebaseConfig.appId,
-    projectId: firebaseConfig.projectId,
-    name: errObj.name || 'Error',
-    message: (errObj.message || 'Unknown error').slice(0, 2000),
-    stack: (errObj.stack || '').slice(0, 8000),
-    digest: meta.digest || (errObj as Error & { digest?: string }).digest || null,
-    fatal,
-    component: meta.component || 'runtime',
-    url: sanitizedUrl,
-    pathname: window.location.pathname,
-    userAgent: navigator.userAgent,
-    userId: meta.userId || null,
-    orgId: meta.orgId || localStorage.getItem('revlet_active_org_id') || null,
-    extra: meta.extra || null,
-    timestamp: new Date().toISOString(),
-  };
-
-  try {
-    const body = JSON.stringify(payload);
-    if (typeof navigator.sendBeacon === 'function') {
-      const blob = new Blob([body], { type: 'application/json' });
-      navigator.sendBeacon('/api/telemetry/crash', blob);
-    } else {
-      void fetch('/api/telemetry/crash', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-        keepalive: true,
-      }).catch(() => {});
-    }
-  } catch {
-    // Never throw from crash reporter
   }
 }
 

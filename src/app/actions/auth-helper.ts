@@ -83,7 +83,7 @@ export async function verifyUserOrgAccess(
       throw new Error("Unauthorized: Email verification is required to access shared organizations.");
     }
 
-    // 1. Authoritative UID-keyed membership record: organizations/{orgId}/members/{uid}
+    // Authoritative UID-keyed membership record: organizations/{orgId}/members/{uid}
     const memberDocRef = orgDoc.ref.collection('members').doc(decodedToken.uid);
     const memberDocSnap = await memberDocRef.get();
     if (memberDocSnap.exists) {
@@ -94,72 +94,6 @@ export async function verifyUserOrgAccess(
       if (mData.status === 'Active') {
         isMember = true;
         permissions = Array.isArray(mData.permissions) ? mData.permissions : [];
-      }
-    }
-
-    // 2. Legacy fallback for pre-migration teamMembers docs (lazily backfills members/{uid})
-    if (!isMember) {
-      const [byUidSnap, byEmailSnap] = await Promise.all([
-        adminDb
-          .collection('teamMembers')
-          .where('organizationIds', 'array-contains', orgId)
-          .where('memberUid', '==', decodedToken.uid)
-          .limit(5)
-          .get(),
-        adminDb
-          .collection('teamMembers')
-          .where('organizationIds', 'array-contains', orgId)
-          .where('email', '==', userEmail)
-          .limit(5)
-          .get(),
-      ]);
-
-      const candidateDocs = new Map<string, any>();
-      for (const d of [...byUidSnap.docs, ...byEmailSnap.docs]) {
-        candidateDocs.set(d.id, d.data());
-      }
-
-      for (const mData of candidateDocs.values()) {
-        const mOrgs: string[] = Array.isArray(mData.organizationIds)
-          ? mData.organizationIds
-          : mData.organizationId
-          ? [mData.organizationId]
-          : [];
-        if (!mOrgs.includes(orgId)) continue;
-
-        if (mData.status === 'Suspended' || mData.status === 'Inactive') {
-          throw new Error("Unauthorized: Your access to this organization has been suspended.");
-        }
-        if (mData.status !== 'Active') {
-          // Pending invitations must be explicitly accepted before granting access
-          continue;
-        }
-        // If bound to a UID, enforce exact UID match
-        if (mData.memberUid && mData.memberUid !== decodedToken.uid) {
-          continue;
-        }
-
-        isMember = true;
-        const perOrgPerms = mData.orgPermissions?.[orgId];
-        if (Array.isArray(perOrgPerms)) {
-          permissions = perOrgPerms;
-        } else if (Array.isArray(mData.permissions)) {
-          permissions = mData.permissions;
-        }
-        // Lazily materialize authoritative organizations/{orgId}/members/{uid} record
-        memberDocRef
-          .set(
-            {
-              uid: decodedToken.uid,
-              email: userEmail,
-              status: 'Active',
-              permissions,
-              updatedAt: new Date().toISOString(),
-            },
-            { merge: true }
-          )
-          .catch(() => {});
-        break;
       }
     }
   }

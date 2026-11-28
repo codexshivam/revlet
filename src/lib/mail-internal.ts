@@ -891,20 +891,8 @@ export async function assertActiveMailDomainBinding(
   const bindingRef = adminDb.collection('mailDomainBindings').doc(domain);
   const bindingSnap = await bindingRef.get();
 
-  if (bindingSnap.exists) {
-    if (bindingSnap.data()?.orgId !== orgId) {
-      throw new Error('This domain is bound to another organization.');
-    }
-    return domain;
-  }
-
-  // Legacy active orgs (activated prior to mailDomainBindings) must still be unambiguous.
-  const matching = await adminDb
-    .collection('organizations')
-    .where('domain', '==', domain)
-    .get();
-  if (matching.docs.some((doc) => doc.id !== orgId && doc.data()?.mailServiceActive === true)) {
-    throw new Error('This domain is already connected to another organization.');
+  if (!bindingSnap.exists || bindingSnap.data()?.orgId !== orgId) {
+    throw new Error('This domain does not have an active mail binding for this organization.');
   }
 
   return domain;

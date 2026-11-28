@@ -41,20 +41,9 @@
       "indexes": []
     },
     {
-      "collectionGroup": "crashReports",
-      "fieldPath": "expireAt",
-      "ttl": true,
-      "indexes": []
-    },
-    {
       "collectionGroup": "mailQuotaSubmissions",
       "fieldPath": "expireAt",
       "ttl": true,
-      "indexes": []
-    },
-    {
-      "collectionGroup": "crashReports",
-      "fieldPath": "stack",
       "indexes": []
     },
     {
@@ -65,6 +54,47 @@
     {
       "collectionGroup": "mailQuarantine",
       "fieldPath": "bodyHtml",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "snsProcessedEvents",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "dns_snapshots",
+      "fieldPath": "records",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailAuditLogs",
+      "fieldPath": "metadata",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "privateSecrets",
+      "fieldPath": "privateKeyEncrypted",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "privateSecrets",
+      "fieldPath": "publicKey",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "secrets",
+      "fieldPath": "ciphertext",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailUserSettings",
+      "fieldPath": "signatureHtml",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailUserSettings",
+      "fieldPath": "signatures",
       "indexes": []
     }
   ]

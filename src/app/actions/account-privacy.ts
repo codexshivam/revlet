@@ -29,7 +29,6 @@ export async function exportPersonalAccountData(idToken: string, stepUpToken?: s
       memberOrgsSnap,
       teamByUidSnap,
       ticketsSnap,
-      crashesSnap,
     ] = await Promise.all([
       adminAuth.getUser(uid),
       adminDb.collection('users').doc(uid).get(),
@@ -38,7 +37,6 @@ export async function exportPersonalAccountData(idToken: string, stepUpToken?: s
       adminDb.collection('organizations').where('memberIds', 'array-contains', uid).get(),
       adminDb.collection('teamMembers').where('memberUid', '==', uid).get(),
       adminDb.collection('supportTickets').where('ownerId', '==', uid).get(),
-      adminDb.collection('crashReports').where('userId', '==', uid).limit(100).get(),
     ]);
 
     const profileData = profileSnap.exists ? profileSnap.data() || {} : {};
@@ -86,7 +84,6 @@ export async function exportPersonalAccountData(idToken: string, stepUpToken?: s
           workspaces: workspaceMap.size,
           memberships: teamByUidSnap.size,
           supportTickets: ticketsSnap.size,
-          crashReports: crashesSnap.size,
         },
         retentionNotes:
           'Organization-owned mail archives, legal holds, and immutable compliance audit logs are retained under organization retention policies.',
@@ -125,15 +122,6 @@ export async function exportPersonalAccountData(idToken: string, stepUpToken?: s
           description: v.description || '',
           status: v.status || 'open',
           createdAt: v.createdAt || v.submittedAt || null,
-        };
-      }),
-      telemetry: crashesSnap.docs.map((d) => {
-        const v = d.data() || {};
-        return {
-          id: d.id,
-          app: v.app || '',
-          pathname: v.pathname || '',
-          clientTimestamp: v.clientTimestamp || null,
         };
       }),
     };

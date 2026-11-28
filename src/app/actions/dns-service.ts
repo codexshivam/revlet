@@ -31,16 +31,6 @@ async function claimZoneBindingTransaction(params: {
       throw new Error('This Cloudflare zone is already bound to another Revlet organization.');
     }
 
-    // Legacy guard: check if any other organization doc already references this zoneId
-    const legacyConflict = await adminDb
-      .collection('organizations')
-      .where('cloudflareZoneId', '==', params.zoneId)
-      .limit(2)
-      .get();
-    if (legacyConflict.docs.some((d) => d.id !== params.orgId)) {
-      throw new Error('This Cloudflare zone is already bound to another Revlet organization.');
-    }
-
     tx.set(
       bindingRef,
       {

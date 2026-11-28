@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
     }
 
     const notificationType = sesEvent.notificationType || sesEvent.eventType;
-    if (notificationType !== 'Bounce' && notificationType !== 'Complaint') {
+    if (!['Bounce', 'Complaint', 'Delivery', 'DeliveryDelay', 'Reject', 'Send'].includes(notificationType)) {
       return NextResponse.json({ ok: true, ignored: true });
     }
 
@@ -192,21 +192,42 @@ export async function POST(req: NextRequest) {
         .collection('organizations')
         .where('domain', '==', domain)
         .where('mailServiceActive', '==', true)
-        .limit(1)
+        .limit(2)
         .get();
-      if (!orgSnap.empty) orgRef = orgSnap.docs[0].ref;
+      if (orgSnap.size === 1) orgRef = orgSnap.docs[0].ref;
     }
 
     if (!orgRef) {
       return NextResponse.json({ ok: true, skipped: 'Domain not registered' });
     }
     const isBounce = notificationType === 'Bounce';
-    const isPermanentBounce = !isBounce || sesEvent.bounce?.bounceType === 'Permanent';
-
-    if (isBounce && !isPermanentBounce) {
-      // Transient soft bounces do not trigger auto-pause
-      return NextResponse.json({ ok: true, transient: true });
-    }
+    const isComplaint = notificationType === 'Complaint';
+    const isPermanentBounce = isBounce && sesEvent.bounce?.bounceType === 'Permanent';
+    const addresses = (values: unknown): string[] => Array.isArray(values)
+      ? Array.from(new Set(values.map((item) =>
+          (typeof item === 'string' ? item : String(item?.emailAddress || '')).toLowerCase().trim()
+        ).filter((email) => email.includes('@') && email.length <= 320))).slice(0, 100)
+      : [];
+    const affected = addresses(
+      isBounce ? sesEvent.bounce?.bouncedRecipients :
+      isComplaint ? sesEvent.complaint?.complainedRecipients :
+      notificationType === 'Delivery' ? sesEvent.delivery?.recipients :
+      notificationType === 'DeliveryDelay' ? sesEvent.deliveryDelay?.delayedRecipients :
+      sesEvent.mail?.destination
+    );
+    const statsBounce = isPermanentBounce && !['Suppressed', 'OnAccountSuppressionList', 'OnTenantSuppressionList', 'UnsubscribedRecipient', 'EmailValidationSuppressed'].includes(sesEvent.bounce?.bounceSubType);
+    const eventTimestamp = Date.parse(String(sesEvent.mail?.timestamp || ''));
+    const submissionHeader = Array.isArray(sesEvent.mail?.headers)
+      ? sesEvent.mail.headers.find((header: { name?: string }) => header.name?.toLowerCase() === 'x-revlet-submission')?.value
+      : undefined;
+    const signed = typeof submissionHeader === 'string' ? submissionHeader.match(/^([a-zA-Z0-9_-]{1,128})\.([a-f0-9]{64})$/) : null;
+    const correlationSecret = process.env.REVLET_MAIL_INTERNAL_SECRET?.trim();
+    const expectedSignature = signed && correlationSecret
+      ? crypto.createHmac('sha256', correlationSecret).update(`ses:${orgRef.id}:${signed[1]}`).digest()
+      : null;
+    const submissionRef = signed && expectedSignature && crypto.timingSafeEqual(expectedSignature, Buffer.from(signed[2], 'hex'))
+      ? orgRef.collection('mailQuotaSubmissions').doc(signed[1])
+      : null;
 
     const messageId = typeof body.MessageId === 'string' ? body.MessageId.trim() : '';
     if (body.Type === 'Notification' && !messageId) {
@@ -228,29 +249,50 @@ export async function POST(req: NextRequest) {
       const snap = await tx.get(orgRef);
       const d = snap.data() || {};
 
+      const submission = submissionRef ? (await tx.get(submissionRef)).data() : undefined;
       const currentMonthKey = new Date().toISOString().slice(0, 7);
       const sameMonth = d.mailBounceBucket === currentMonthKey;
-
-      const bounces = (sameMonth ? d.mailBounceCount ?? 0 : 0) + (isBounce ? 1 : 0);
-      const complaints = (sameMonth ? d.mailComplaintCount ?? 0 : 0) + (!isBounce ? 1 : 0);
-      const sentBaseline = Math.max(20, d.mailMonthlySent ?? 0);
-
+      const inCurrentCohort = Number.isFinite(eventTimestamp) &&
+        new Date(eventTimestamp).toISOString().slice(0, 7) === currentMonthKey;
+      const hasStats = inCurrentCohort && affected.length > 0 && (statsBounce || isComplaint);
+      const bounces = (sameMonth ? d.mailBounceCount ?? 0 : 0) + (hasStats && statsBounce ? affected.length : 0);
+      const complaints = (sameMonth ? d.mailComplaintCount ?? 0 : 0) + (hasStats && isComplaint ? affected.length : 0);
+      const sentBaseline = Math.max(20, d.mailMonthlyBucket === currentMonthKey ? d.mailMonthlySent ?? 0 : 0);
       const bounceRate = Number(((bounces / sentBaseline) * 100).toFixed(2));
       const complaintRate = Number(((complaints / sentBaseline) * 100).toFixed(2));
-
-      const shouldAutoPause = (bounces >= 5 && bounceRate > 5.0) || (complaints >= 2 && complaintRate > 0.1);
-
+      const shouldAutoPause = hasStats && ((bounces >= 5 && bounceRate > 5.0) || (complaints >= 2 && complaintRate > 0.1));
       const wasAlreadyPaused = Boolean(d.mailOutboundPaused);
+      if (hasStats) {
+        tx.update(orgRef, {
+          mailBounceCount: bounces, mailComplaintCount: complaints, mailBounceBucket: currentMonthKey,
+          mailBounceRate: bounceRate, mailComplaintRate: complaintRate,
+          ...(shouldAutoPause ? { mailOutboundPaused: true } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
 
-      tx.update(orgRef, {
-        mailBounceCount: bounces,
-        mailComplaintCount: complaints,
-        mailBounceBucket: currentMonthKey,
-        mailBounceRate: bounceRate,
-        mailComplaintRate: complaintRate,
-        ...(shouldAutoPause ? { mailOutboundPaused: true } : {}),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      if (submissionRef && submission && affected.length && Array.isArray(submission.recipients) && !isComplaint) {
+        const eventRecipients = new Set(affected);
+        const old = new Map<string, any>(
+          Array.isArray(submission.recipientStatus) ? submission.recipientStatus.map((entry: any) => [entry.email, entry]) : [],
+        );
+        const state = notificationType === 'Delivery' ? 'delivered'
+          : isBounce || notificationType === 'Reject' ? 'failed' : 'queued';
+        const update = submission.recipients.map((email: string) => {
+          const current = old.get(email) || { email, state: 'queued' };
+          if (!eventRecipients.has(email) || (state === 'queued' && current.state !== 'queued') ||
+              (state === 'delivered' && current.state === 'failed' && current.providerEvent)) return current;
+          return { email, state, providerEvent: notificationType };
+        });
+        const failedRecipients = update.filter((entry: any) => entry.state === 'failed');
+        const deliveryState = failedRecipients.length === update.length ? 'failed'
+          : failedRecipients.length ? 'partial'
+          : update.every((entry: any) => entry.state === 'delivered') ? 'delivered' : 'queued';
+        tx.update(submissionRef, {
+          recipientStatus: update, failedRecipients, deliveryState,
+          providerDeliveryUpdatedAt: new Date().toISOString(),
+        });
+      }
 
       if (dedupRef) {
         tx.set(dedupRef, {
@@ -278,7 +320,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (
-      isBounce &&
+      isPermanentBounce &&
       sourceEmail &&
       sourceEmail !== 'mailer-daemon@revlet.me' &&
       !sourceEmail.startsWith('mailer-daemon@')

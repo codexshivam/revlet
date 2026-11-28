@@ -248,10 +248,7 @@ export default function EmailServiceAdminPage() {
   const activeTab = requestedTab === "routing" || requestedTab === "domains" ? "settings" : requestedTab || "users"
 
   useEffect(() => {
-    const sectionTitle = EMAIL_SECTIONS.find((section) => section.value === activeTab)?.label
-    document.title = isEffectiveServiceActive && sectionTitle
-      ? `${sectionTitle} · Email Service | Revlet Platform`
-      : "Email Service | Revlet Platform"
+    document.title = "Email Service | Revlet Platform"
   }, [activeTab, isEffectiveServiceActive])
 
   const [securityPolicy, setSecurityPolicy] = useState<{ orgId: string; enforceMfa: boolean } | null>(null)
@@ -433,6 +430,7 @@ export default function EmailServiceAdminPage() {
   const [isDeletingGroup, setIsDeletingGroup] = useState(false)
 
   const [isUpdatingCatchAll, setIsUpdatingCatchAll] = useState(false)
+  const [catchAllSyncStatus, setCatchAllSyncStatus] = useState<'active' | 'pending' | 'failed'>('active')
   const [isDeactivateConfirmOpen, setIsDeactivateConfirmOpen] = useState(false)
   const [mailPurgeScheduledAt, setMailPurgeScheduledAt] = useState<string | null>(null)
 
@@ -583,6 +581,7 @@ export default function EmailServiceAdminPage() {
               setDailySentCount(stateRes.data.dailySentCount)
               setCatchAllUserId(stateRes.data.catchAllUserId)
               setCatchAllEmail(stateRes.data.catchAllEmail)
+              setCatchAllSyncStatus(stateRes.data.catchAllSyncStatus)
               setMailPurgeScheduledAt(stateRes.data.mailPurgeScheduledAt || null)
               setRequiredDnsRecords(stateRes.data.requiredDnsRecords)
             } else {
@@ -919,6 +918,7 @@ export default function EmailServiceAdminPage() {
           : `Unmatched mail to @${selectedOrg?.domain} will be rejected.`,
       })
     } catch (err: any) {
+      setCatchAllSyncStatus('failed')
       toast({
         variant: "destructive",
         title: "Update failed",
@@ -2387,6 +2387,8 @@ export default function EmailServiceAdminPage() {
                           >
                             <span className="font-mono tabular-nums font-semibold">{g.memberEmails.length}</span>
                             <span>{g.memberEmails.length === 1 ? "Member" : "Members"}</span>
+                            {g.routingStatus === 'pending' && <span className="ml-1 text-amber-800">Sync pending</span>}
+                            {g.routingStatus === 'failed' && <span className="ml-1 text-red-700">Sync failed</span>}
                           </button>
                         </TableCell>
 
@@ -2887,6 +2889,11 @@ export default function EmailServiceAdminPage() {
                       ? `Messages to unknown @${selectedOrg.domain} addresses go to ${catchAllEmail}.`
                       : `Messages to unknown @${selectedOrg.domain} addresses are rejected.`}
                   </p>
+                  {catchAllSyncStatus !== 'active' && (
+                    <p className="text-xs text-amber-800" role="status">
+                      {catchAllSyncStatus === 'pending' ? 'Updating mail routing…' : 'Routing could not be verified. Choose the target again to retry.'}
+                    </p>
+                  )}
                   <Select
                     value={catchAllUserId || "NONE"}
                     disabled={!canManageMailService || isUpdatingCatchAll || isLoadingDirectory || !hasLoadedDirectory}

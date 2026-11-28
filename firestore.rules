@@ -129,6 +129,10 @@ service cloud.firestore {
       match /mailUserMfa/{emailId} {
         allow read, write: if false;
       }
+
+      match /mailScheduledMessages/{jobId} {
+        allow read, write: if false;
+      }
     }
 
     match /system/{docId} {

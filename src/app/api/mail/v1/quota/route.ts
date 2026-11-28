@@ -62,6 +62,16 @@ export async function POST(req: NextRequest) {
     const fromEmail = (body.fromEmail || '').toLowerCase().trim();
     const explicitOrgId = typeof body.orgId === 'string' ? body.orgId.trim() : '';
     const submissionId = typeof body.submissionId === 'string' ? body.submissionId.trim().slice(0, 128) : '';
+    const actorUid = typeof body.actorUid === 'string' ? body.actorUid.trim().slice(0, 128) : '';
+    const ownerEmail = typeof body.ownerEmail === 'string' ? body.ownerEmail.toLowerCase().trim() : '';
+    const recipients = Array.isArray(body.recipients)
+      ? Array.from(new Set<string>(body.recipients
+          .filter((value: unknown) => typeof value === 'string' && value.length <= 320)
+          .map((value: string) => value.toLowerCase().trim()))).slice(0, 100)
+      : [];
+    if (submissionId && !/^[a-zA-Z0-9_-]{1,128}$/.test(submissionId)) {
+      return NextResponse.json({ ok: false, error: 'Invalid submission ID.' }, { status: 400 });
+    }
     const recipientCount = Math.max(1, Math.min(100, Number(body.recipientCount) || 1));
 
     if (!fromEmail || !fromEmail.includes('@')) {
@@ -180,11 +190,29 @@ export async function POST(req: NextRequest) {
       ]);
       const d = freshOrgDoc.data() || {};
 
-      // Idempotent reservation: return existing result if submissionId already charged
+      // Idempotent reservation: return existing submission state so callers reconcile instead of re-sending
       if (existingSubmissionSnap?.exists) {
+        const prev = existingSubmissionSnap.data() || {};
+        if (prev.fromEmail !== fromEmail || (prev.actorUid && prev.actorUid !== actorUid) ||
+            (prev.ownerEmail && prev.ownerEmail !== ownerEmail) ||
+            (Array.isArray(prev.recipients) && prev.recipients.length &&
+              (prev.recipients.length !== recipients.length || !recipients.every((email) => prev.recipients.includes(email))))) {
+          return { allowed: false, smtpCode: 553, smtpMessage: 'Submission ID is already bound to another message.' };
+        }
         return {
           allowed: true,
           idempotentReplay: true,
+          submissionRecord: {
+            submissionStatus: prev.submissionStatus || 'pending',
+            emailId: prev.emailId || null,
+            threadId: prev.threadId || null,
+            jmapSubmissionId: prev.jmapSubmissionId || null,
+            deliveryState: prev.deliveryState || null,
+            smtpMessage: prev.smtpMessage || null,
+            recipientStatus: Array.isArray(prev.recipientStatus) ? prev.recipientStatus : null,
+            failedRecipients: Array.isArray(prev.failedRecipients) ? prev.failedRecipients : null,
+            error: prev.error || null,
+          },
           dailySent: d.mailDailySent ?? 0,
           monthlySent: d.mailMonthlySent ?? 0,
           dailyLimit: d.mailDailyLimit ?? 100,
@@ -192,11 +220,11 @@ export async function POST(req: NextRequest) {
         };
       }
 
-      if (d.mailOutboundPaused || (typeof d.mailBounceRate === 'number' && d.mailBounceRate > 5.0)) {
+      if (d.mailOutboundPaused) {
         return {
           allowed: false,
           smtpCode: 451,
-          smtpMessage: '451 4.7.1 Outbound mail auto-paused: bounce rate exceeded 5.0% safety threshold.',
+          smtpMessage: '451 4.7.1 Outbound mail is paused. Review delivery and complaint rates in Revlet.',
           dailySent: d.mailDailySent ?? 0,
           monthlySent: d.mailMonthlySent ?? 0,
         };
@@ -269,8 +297,13 @@ export async function POST(req: NextRequest) {
       if (submissionRef) {
         tx.set(submissionRef, {
           fromEmail,
+          actorUid,
+          ownerEmail,
+          recipients,
           recipientCount,
+          submissionStatus: 'pending',
           createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
           expireAt: Timestamp.fromMillis(nowMs + 7 * 24 * 60 * 60 * 1000),
         });
       }
@@ -317,6 +350,92 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return NextResponse.json(
       { ok: false, error: err?.message || 'Quota verification failed.' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  if (!verifyInternalServiceSecret(req)) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+  const query = req.nextUrl.searchParams;
+  const orgId = query.get('orgId') || '';
+  const submissionId = query.get('submissionId') || '';
+  const actorUid = query.get('actorUid') || '';
+  const ownerEmail = (query.get('ownerEmail') || '').toLowerCase();
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(submissionId) || !orgId || orgId.includes('/') || !actorUid || !ownerEmail) {
+    return NextResponse.json({ ok: false, error: 'Invalid delivery lookup' }, { status: 400 });
+  }
+  const snapshot = await adminDb.collection('organizations').doc(orgId)
+    .collection('mailQuotaSubmissions').doc(submissionId).get();
+  const result = snapshot.data();
+  if (!result || result.actorUid !== actorUid || result.ownerEmail !== ownerEmail) {
+    return NextResponse.json({ ok: false, error: 'Delivery information unavailable' }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true,
+    deliveryState: result.deliveryState || 'queued',
+    providerDeliveryUpdatedAt: result.providerDeliveryUpdatedAt || null,
+    recipientStatus: Array.isArray(result.recipientStatus) ? result.recipientStatus : [],
+  });
+}
+
+/**
+ * PATCH /api/mail/v1/quota
+ * Persists the final submission outcome for a reserved submissionId so retries
+ * return the recorded result instead of sending duplicate emails.
+ */
+export async function PATCH(req: NextRequest) {
+  if (!verifyInternalServiceSecret(req)) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+  try {
+    const body = await req.json();
+    const orgId = typeof body.orgId === 'string' ? body.orgId.trim() : '';
+    const submissionId = typeof body.submissionId === 'string' ? body.submissionId.trim().slice(0, 128) : '';
+    const submissionStatus = body.submissionStatus === 'submitted' || body.submissionStatus === 'failed'
+      ? body.submissionStatus
+      : null;
+    if (!orgId || !submissionId || !submissionStatus) {
+      return NextResponse.json(
+        { ok: false, error: 'orgId, submissionId, and valid submissionStatus are required.' },
+        { status: 400 }
+      );
+    }
+
+    const docRef = adminDb
+      .collection('organizations')
+      .doc(orgId)
+      .collection('mailQuotaSubmissions')
+      .doc(submissionId);
+
+    const nowMs = Date.now();
+    await adminDb.runTransaction(async (tx) => {
+      const record = await tx.get(docRef);
+      if (!record.exists) throw new Error('Submission reservation is missing.');
+      const hasProviderEvents = Boolean(record.data()?.providerDeliveryUpdatedAt);
+      tx.set(docRef,
+      {
+        submissionStatus,
+        ...(typeof body.emailId === 'string' ? { emailId: body.emailId } : {}),
+        ...(typeof body.threadId === 'string' ? { threadId: body.threadId } : {}),
+        ...(typeof body.jmapSubmissionId === 'string' ? { jmapSubmissionId: body.jmapSubmissionId } : {}),
+        ...(!hasProviderEvents && typeof body.deliveryState === 'string' ? { deliveryState: body.deliveryState } : {}),
+        ...(typeof body.smtpMessage === 'string' ? { smtpMessage: body.smtpMessage.slice(0, 500) } : {}),
+        ...(!hasProviderEvents && Array.isArray(body.recipientStatus) ? { recipientStatus: body.recipientStatus } : {}),
+        ...(!hasProviderEvents && Array.isArray(body.failedRecipients) ? { failedRecipients: body.failedRecipients } : {}),
+        ...(typeof body.error === 'string' ? { error: body.error.slice(0, 500) } : {}),
+        updatedAt: new Date(nowMs).toISOString(),
+        expireAt: Timestamp.fromMillis(nowMs + 7 * 24 * 60 * 60 * 1000),
+      },
+      { merge: true }
+    );
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, error: err?.message || 'Failed to record submission outcome.' },
       { status: 500 }
     );
   }

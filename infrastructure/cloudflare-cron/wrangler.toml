@@ -17,8 +17,8 @@ binding = "BACKUP_BUCKET"
 bucket_name = "revlet-mail-backups"
 
 [[r2_buckets]]
-binding = "BLOB_BUCKET"
-bucket_name = "revlet-mail-blobs"
+binding = "UPLOAD_TICKETS"
+bucket_name = "revlet-mail-upload-tickets"
 
 [vars]
 APP_URL = "https://app.revlet.me"

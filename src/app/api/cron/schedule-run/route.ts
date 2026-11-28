@@ -147,29 +147,32 @@ async function executeScheduledRun(request: NextRequest) {
     results.quotaReset = { error: err?.message || 'Quota reconciliation failed' };
   }
 
-  // 3. Trigger RevletMail ephemeral purge if configured
   const webmailUrl = (process.env.NEXT_PUBLIC_WEBMAIL_URL || 'https://mail.revlet.me').replace(/\/$/, '');
   const cronSecret = process.env.CRON_SECRET || process.env.MAIL_INTERNAL_API_SECRET || '';
+
+  // 4. Dispatch due Scheduled Send messages via RevletMail (runs independently of any open browser)
   try {
-    const res = await fetch(`${webmailUrl}/api/cron/ephemeral-purge`, {
-      method: 'GET',
+    const schedRes = await fetch(`${webmailUrl}/api/cron/dispatch-scheduled`, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${cronSecret}`,
+        Authorization: `Bearer ${cronSecret || (process.env.REVLET_MAIL_INTERNAL_SECRET || '').trim()}`,
       },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) {
+    const schedBody = await schedRes.json().catch(() => ({}));
+    if (!schedRes.ok) {
       hasFailure = true;
     }
-    results.webmailEphemeralPurge = {
-      status: res.status,
-      ok: res.ok,
+    results.scheduledMailDispatch = {
+      status: schedRes.status,
+      ok: schedRes.ok,
+      ...schedBody,
     };
   } catch (err: any) {
     hasFailure = true;
-    results.webmailEphemeralPurge = {
+    results.scheduledMailDispatch = {
       ok: false,
-      reason: err?.message || 'Webmail unreachable',
+      reason: err?.message || 'Scheduled dispatch unreachable',
     };
   }
 

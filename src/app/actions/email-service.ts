@@ -73,6 +73,7 @@ export interface MailGroupRecord {
   groupEmail: string;
   orgUnitPath: string;
   memberEmails: string[];
+  routingStatus?: 'pending' | 'active' | 'failed';
   createdAt: string;
   updatedAt: string;
 }
@@ -179,15 +180,16 @@ async function syncStalwartGroupPrincipal(params: {
 }) {
   const cleanEmail = params.groupEmail.toLowerCase().trim();
   const [localPart, domainPart] = cleanEmail.split('@');
-  if (!localPart || !domainPart) return;
+  if (!localPart || !domainPart) throw new Error('Invalid group address.');
 
   const domainId = await ensureStalwartDomainId(domainPart);
-  if (!domainId) return;
+  if (!domainId) throw new Error('The group domain is unavailable on the mail server.');
 
   const mlResponses = await callStalwartJmap([
     ['x:MailingList/get', { accountId: 'b', ids: null }, 'mlList'],
   ]);
-  const mlList: any[] = mlResponses.find((r) => r[0] === 'x:MailingList/get')?.[1]?.list || [];
+  const mlList = mlResponses.find((r) => r[0] === 'x:MailingList/get' && r[2] === 'mlList')?.[1]?.list;
+  if (!Array.isArray(mlList)) throw new Error('Cannot verify existing mail groups.');
   const existingMl = mlList.find(
     (m) => (m.emailAddress || '').toLowerCase() === cleanEmail
   );
@@ -202,7 +204,7 @@ async function syncStalwartGroupPrincipal(params: {
   const recipientsMap: Record<string, boolean> = Object.fromEntries(recipientsEntries);
 
   if (!existingMl) {
-    await callStalwartJmap([
+    const result = await callStalwartJmap([
       [
         'x:MailingList/set',
         {
@@ -219,8 +221,10 @@ async function syncStalwartGroupPrincipal(params: {
         'createMl',
       ],
     ]);
+    const created = result.find(([method, , tag]) => method === 'x:MailingList/set' && tag === 'createMl')?.[1]?.created?.ml0;
+    if (!created?.id) throw new Error('The mail server did not create the group.');
   } else {
-    await callStalwartJmap([
+    const result = await callStalwartJmap([
       [
         'x:MailingList/set',
         {
@@ -235,10 +239,24 @@ async function syncStalwartGroupPrincipal(params: {
         'updMl',
       ],
     ]);
+    const updated = result.find(([method, , tag]) => method === 'x:MailingList/set' && tag === 'updMl')?.[1]?.updated;
+    if (!updated || !Object.hasOwn(updated, existingMl.id)) throw new Error('The mail server did not update the group.');
   }
 }
 
 // ============================================================================
+function validateGroupDestinations(groupEmail: string, members: string[], allowed: unknown) {
+  const domain = groupEmail.split('@')[1];
+  const approved = new Set(Array.isArray(allowed)
+    ? allowed.filter((address): address is string => typeof address === 'string').map((address) => address.toLowerCase().trim())
+    : []);
+  for (const member of members) {
+    if (member === groupEmail || (member.split('@')[1] !== domain && !approved.has(member))) {
+      throw new Error('Group recipients must be on this domain or explicitly approved for external forwarding.');
+    }
+  }
+}
+
 // AUTOMATED AWS SES v2 DOMAIN IDENTITY PROVISIONING (AWS SIGV4)
 // Automatically registers client domains in AWS SES and retrieves Easy DKIM tokens
 // so the platform owner never has to add client domains manually in the AWS Console.
@@ -822,6 +840,8 @@ export async function getMailServiceState(idToken: string, orgId: string) {
         dailySentCount: rolling.dailySentCount,
         catchAllUserId: orgData.mailCatchAllUserId || null,
         catchAllEmail: orgData.mailCatchAllEmail || null,
+        catchAllSyncStatus: orgData.mailCatchAllSyncStatus === 'pending' || orgData.mailCatchAllSyncStatus === 'failed'
+          ? orgData.mailCatchAllSyncStatus as 'pending' | 'failed' : 'active' as const,
         mailDeactivatedAt: orgData.mailDeactivatedAt || null,
         mailPurgeScheduledAt: orgData.mailPurgeScheduledAt || null,
         requiredDnsRecords,
@@ -1097,44 +1117,69 @@ export async function updateMailCatchAll(
       nextTargetData = userData;
     }
 
-    await adminDb.collection('organizations').doc(orgId).update({
-      mailCatchAllUserId: resolvedUserId,
-      mailCatchAllEmail: catchAllEmail,
-      updatedAt: FieldValue.serverTimestamp(),
+    const orgRef = adminDb.collection('organizations').doc(orgId);
+    const routingAttempt = crypto.randomUUID();
+    const orgUsers = orgRef.collection('mailUsers');
+    const oldTarget = previousCatchAllUserId && previousCatchAllUserId !== resolvedUserId
+      ? (await orgUsers.doc(previousCatchAllUserId).get()).data() : undefined;
+    const routeMailbox = async (data: FirebaseFirestore.DocumentData, value: boolean) => {
+      if (!data.stalwartAccountId) throw new Error('The catch-all mailbox has no confirmed mail server account.');
+      const accountId = await syncStalwartUserPrincipal({
+        primaryEmail: data.primaryEmail,
+        displayName: data.displayName || data.firstName,
+        orgUnitPath: data.orgUnitPath || '/',
+        aliases: Array.isArray(data.aliases) ? data.aliases : [],
+        domain,
+        isCatchAllTarget: value,
+        expectedPrincipalId: data.stalwartAccountId,
+      });
+      if (!accountId || accountId !== data.stalwartAccountId) throw new Error('The mail server did not confirm the route.');
+    };
+    await adminDb.runTransaction(async (tx) => {
+      const current = (await tx.get(orgRef)).data();
+      if (current?.mailCatchAllSyncStatus === 'pending' &&
+          Number(current.mailCatchAllRoutingStartedAt || 0) > Date.now() - 120000) {
+        throw new Error('A catch-all change is already being applied.');
+      }
+      if ((current?.mailCatchAllUserId || null) !== previousCatchAllUserId) {
+        throw new Error('The active catch-all target changed. Refresh and try again.');
+      }
+      tx.update(orgRef, { mailCatchAllSyncStatus: 'pending', mailCatchAllRoutingAttempt: routingAttempt,
+        mailCatchAllRoutingStartedAt: Date.now() });
     });
-
-    // Synchronize Stalwart principals if catch-all target changed
-    if (previousCatchAllUserId && previousCatchAllUserId !== resolvedUserId) {
-      const prevDoc = await adminDb
-        .collection('organizations')
-        .doc(orgId)
-        .collection('mailUsers')
-        .doc(previousCatchAllUserId)
-        .get();
-      if (prevDoc.exists) {
-        const prevData = prevDoc.data()!;
-        await syncStalwartUserPrincipal({
-          primaryEmail: prevData.primaryEmail,
-          displayName: prevData.displayName || prevData.firstName,
-          orgUnitPath: prevData.orgUnitPath || '/',
-          aliases: Array.isArray(prevData.aliases) ? prevData.aliases : [],
-          domain,
-          isCatchAllTarget: false,
-          expectedPrincipalId: prevData.stalwartAccountId || null,
+    let attemptedRemoval = false;
+    let attemptedAddition = false;
+    try {
+      if (oldTarget) {
+        attemptedRemoval = true;
+        await routeMailbox(oldTarget, false);
+      }
+      if (resolvedUserId && nextTargetData) {
+        attemptedAddition = resolvedUserId !== previousCatchAllUserId;
+        await routeMailbox(nextTargetData, true);
+      }
+      await adminDb.runTransaction(async (tx) => {
+        const current = await tx.get(orgRef);
+        if (current.data()?.mailCatchAllRoutingAttempt !== routingAttempt) {
+          throw new Error('Another routing change is pending. Refresh and retry.');
+        }
+        tx.update(orgRef, {
+          mailCatchAllUserId: resolvedUserId, mailCatchAllEmail: catchAllEmail,
+          mailCatchAllSyncStatus: 'active', updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+    } catch (error) {
+      if ((await orgRef.get()).data()?.mailCatchAllRoutingAttempt === routingAttempt) {
+        if (attemptedAddition && nextTargetData) await routeMailbox(nextTargetData, false).catch(() => null);
+        if (attemptedRemoval && oldTarget) await routeMailbox(oldTarget, true).catch(() => null);
+        await adminDb.runTransaction(async (tx) => {
+          const current = await tx.get(orgRef);
+          if (current.data()?.mailCatchAllRoutingAttempt === routingAttempt) {
+            tx.update(orgRef, { mailCatchAllSyncStatus: 'failed' });
+          }
         });
       }
-    }
-
-    if (resolvedUserId && nextTargetData) {
-      await syncStalwartUserPrincipal({
-        primaryEmail: nextTargetData.primaryEmail,
-        displayName: nextTargetData.displayName || nextTargetData.firstName,
-        orgUnitPath: nextTargetData.orgUnitPath || '/',
-        aliases: Array.isArray(nextTargetData.aliases) ? nextTargetData.aliases : [],
-        domain,
-        isCatchAllTarget: true,
-        expectedPrincipalId: nextTargetData.stalwartAccountId || null,
-      });
+      throw error;
     }
 
     await logMailAuditEvent({
@@ -2063,6 +2108,7 @@ export async function listMailGroups(idToken: string, orgId: string) {
         groupEmail: d.groupEmail || '',
         orgUnitPath: d.orgUnitPath || '/',
         memberEmails: Array.isArray(d.memberEmails) ? d.memberEmails : [],
+        routingStatus: d.routingStatus === 'pending' || d.routingStatus === 'failed' || d.routingStatus === 'active' ? d.routingStatus : undefined,
         createdAt: toIsoSafe(d.createdAt),
         updatedAt: toIsoSafe(d.updatedAt),
       };
@@ -2120,6 +2166,7 @@ export async function createMailGroup(
       )
     ).slice(0, MAX_MEMBERS_PER_GROUP);
 
+    validateGroupDestinations(groupEmail, memberEmails, orgData.mailApprovedForwardingAddresses);
     const now = new Date().toISOString();
 
     const docRef = await adminDb
@@ -2131,16 +2178,18 @@ export async function createMailGroup(
         groupEmail,
         orgUnitPath,
         memberEmails,
+        routingStatus: 'pending',
         createdAt: now,
         updatedAt: now,
       });
 
-    await syncStalwartGroupPrincipal({
-      groupEmail,
-      name,
-      memberEmails,
-      isCreate: true,
-    });
+    try {
+      await syncStalwartGroupPrincipal({ groupEmail, name, memberEmails, isCreate: true });
+      await docRef.update({ routingStatus: 'active' });
+    } catch (error) {
+      await docRef.update({ routingStatus: 'failed' });
+      throw error;
+    }
 
     await logMailAuditEvent({
       orgId,
@@ -2159,6 +2208,7 @@ export async function createMailGroup(
         groupEmail,
         orgUnitPath,
         memberEmails,
+        routingStatus: 'active' as const,
         createdAt: now,
         updatedAt: now,
       },
@@ -2230,20 +2280,23 @@ export async function updateMailGroup(
       memberEmails = Array.isArray(current.memberEmails) ? current.memberEmails : [];
     }
 
+    validateGroupDestinations(current.groupEmail, memberEmails, orgData.mailApprovedForwardingAddresses);
     const updatedAt = new Date().toISOString();
     await groupRef.update({
       name,
       orgUnitPath,
       memberEmails,
       updatedAt,
+      routingStatus: 'pending',
     });
 
-    await syncStalwartGroupPrincipal({
-      groupEmail: current.groupEmail,
-      name,
-      memberEmails,
-      isCreate: false,
-    });
+    try {
+      await syncStalwartGroupPrincipal({ groupEmail: current.groupEmail, name, memberEmails, isCreate: false });
+      await groupRef.update({ routingStatus: 'active' });
+    } catch (error) {
+      await groupRef.update({ routingStatus: 'failed' });
+      throw error;
+    }
 
     await logMailAuditEvent({
       orgId,
@@ -2262,6 +2315,7 @@ export async function updateMailGroup(
         groupEmail: current.groupEmail,
         orgUnitPath,
         memberEmails,
+        routingStatus: 'active' as const,
         updatedAt,
       },
     };

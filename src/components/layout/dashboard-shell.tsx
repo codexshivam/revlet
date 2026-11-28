@@ -44,57 +44,18 @@ function cacheMfaForUser(uid: string) {
 }
 
 function WorkspaceSkeleton() {
-  const [showProgress, setShowProgress] = React.useState(false)
-
-  React.useEffect(() => {
-    const t = setTimeout(() => setShowProgress(true), 150)
-    return () => clearTimeout(t)
-  }, [])
-
   return (
     <div
       role="status"
       aria-busy="true"
-      aria-label="Opening workspace"
-      className="h-screen h-[100dvh] w-full flex flex-col bg-slate-50 overflow-hidden select-none pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+      aria-label="Loading"
+      className="min-h-screen h-[100dvh] w-full flex items-center justify-center bg-white px-6 select-none"
     >
-      <div className="h-0.5 w-full bg-transparent overflow-hidden shrink-0">
-        {showProgress && (
-          <div className="h-full w-1/3 bg-zinc-900/70 motion-reduce:hidden animate-[pulse_1.2s_ease-in-out_infinite]" />
-        )}
-      </div>
-      <div className="flex-1 flex min-h-0">
-        <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white px-3 py-4 gap-3">
-          <div className="h-8 w-28 rounded-lg bg-slate-200/70" />
-          <div className="space-y-2 mt-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-8 w-full rounded-lg bg-slate-100" />
-            ))}
-          </div>
-        </aside>
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 shrink-0 border-b border-slate-200 bg-white px-4 flex items-center justify-between">
-            <div className="h-7 w-40 rounded-md bg-slate-100" />
-            <div className="flex items-center gap-3">
-              {showProgress && (
-                <span aria-live="polite" className="text-xs text-slate-500 font-medium">
-                  Opening workspace…
-                </span>
-              )}
-              <div className="h-8 w-8 rounded-full bg-slate-200" />
-            </div>
-          </header>
-          <div className="flex-1 p-6 max-w-6xl w-full mx-auto space-y-5">
-            <div className="h-8 w-56 rounded-lg bg-slate-200/70" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-28 rounded-xl border border-slate-200 bg-white" />
-              ))}
-            </div>
-            <div className="h-64 rounded-xl border border-slate-200 bg-white" />
-          </div>
-        </div>
-      </div>
+      <img
+        src="/logo-4k.png"
+        alt="Revlet"
+        className="h-20 sm:h-24 w-auto max-w-[82vw] object-contain select-none"
+      />
     </div>
   )
 }

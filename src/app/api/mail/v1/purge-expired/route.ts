@@ -1,27 +1,15 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { purgeExpiredMailData } from '@/lib/mail-internal';
+import { reconcileEphemeralMail } from '@/lib/mail-ephemeral-retention';
 
 function verifyCronSecret(req: NextRequest): boolean {
-  const configuredSecret = (
-    process.env.CRON_SECRET ||
-    process.env.REVLET_MAIL_INTERNAL_SECRET ||
-    ''
-  ).trim();
-  if (!configuredSecret) return false;
-
-  const authHeader = req.headers.get('authorization') || '';
-  const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (!bearerToken) return false;
-
-  try {
-    const a = Buffer.from(configuredSecret, 'utf8');
-    const b = Buffer.from(bearerToken, 'utf8');
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-  } catch {
-    return false;
-  }
+  const token = Buffer.from((req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim());
+  if (!token.length) return false;
+  return [process.env.CRON_SECRET, process.env.REVLET_MAIL_INTERNAL_SECRET].some((secret) => {
+    const expected = Buffer.from((secret || '').trim());
+    return expected.length === token.length && crypto.timingSafeEqual(token, expected);
+  });
 }
 
 /**
@@ -39,12 +27,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await purgeExpiredMailData();
+    const ephemeralOnly = req.nextUrl.searchParams.get('mode') === 'ephemeral';
+    const result = ephemeralOnly ? {} : await purgeExpiredMailData();
+    const ephemeral = await reconcileEphemeralMail();
+    const ok = ephemeral.failedMailboxes === 0;
     return NextResponse.json({
-      ok: true,
+      ok,
       ...result,
+      ephemeral,
       executedAt: new Date().toISOString(),
-    });
+    }, { status: ok ? 200 : 503 });
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || 'Failed to purge expired mail data.' },
